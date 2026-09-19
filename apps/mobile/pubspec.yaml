@@ -1,0 +1,31 @@
+name: semester_os
+description: "学期OS：课程导入与学期事务管理"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  cupertino_ui: 1.0.0
+  dio: ^5.11.1
+  drift: 2.28.2
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.4.3
+  flutter_secure_storage: ^11.2.0
+  go_router: ^18.0.1
+  material_ui: 1.0.0
+  path_provider: ^2.1.6
+  sqlite3_flutter_libs: 0.5.39
+  webview_flutter: ^4.14.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/haut_reader.js
