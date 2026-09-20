@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'controller.dart';
@@ -64,6 +65,9 @@ class _SemesterAppState extends ConsumerState<SemesterApp> {
   @override
   Widget build(BuildContext context) => MaterialApp.router(
     title: '学期OS',
+    locale: const Locale('zh', 'CN'),
+    supportedLocales: const [Locale('zh', 'CN')],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
     debugShowCheckedModeBanner: false,
     routerConfig: router,
     theme: ThemeData(
