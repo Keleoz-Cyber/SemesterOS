@@ -7,11 +7,20 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from . import academics, auth
+from . import academics, auth, items, capture
+from pathlib import Path
+from dotenv import dotenv_values
+from threading import Lock
+import os
 from .database import make_engine
 
 
 def create_app(database_url: str | None = None, *, initialize: bool = False) -> FastAPI:
+    if database_url is None:
+        local = dotenv_values(Path(__file__).resolve().parents[3] / '.env')
+        for key in ('DATABASE_URL', 'DEEPSEEK_API_KEY', 'DEEPSEEK_MODEL', 'DEEPSEEK_BASE_URL'):
+            if local.get(key):
+                os.environ.setdefault(key, local[key])
     engine = make_engine(database_url, initialize=initialize)
 
     @asynccontextmanager
@@ -21,6 +30,8 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
 
     app = FastAPI(title="SemesterOS", version="0.1.0", lifespan=lifespan)
     app.state.engine = engine
+    app.state.capture_attempts = defaultdict(deque)
+    app.state.capture_lock = Lock()
     attempts = defaultdict(deque)
 
     @app.middleware("http")
@@ -59,4 +70,6 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
 
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(academics.router, prefix="/api/v1")
+    app.include_router(items.router, prefix="/api/v1")
+    app.include_router(capture.router, prefix="/api/v1")
     return app

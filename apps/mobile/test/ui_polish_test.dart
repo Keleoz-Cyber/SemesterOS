@@ -177,27 +177,27 @@ Future<void> capture(WidgetTester tester, String name) async {
   }
 }
 
+Future<void> loadPreviewFonts() async {
+  if (output == null) return;
+  final path = Platform.environment['UI_PREVIEW_FONT'];
+  if (path != null && File(path).existsSync()) {
+    final loader = FontLoader('PreviewSans')
+      ..addFont(File(path).readAsBytes().then((b) => ByteData.sublistView(b)));
+    await loader.load();
+    previewFont = true;
+  }
+  final icons = Platform.environment['UI_PREVIEW_ICONS'];
+  if (icons != null && File(icons).existsSync()) {
+    await (FontLoader('MaterialIcons')..addFont(
+          File(icons).readAsBytes().then((b) => ByteData.sublistView(b)),
+        ))
+        .load();
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(() async {
-    if (output == null) return;
-    final path = Platform.environment['UI_PREVIEW_FONT'];
-    if (path != null && File(path).existsSync()) {
-      final loader = FontLoader(
-        'PreviewSans',
-      )..addFont(File(path).readAsBytes().then((b) => ByteData.sublistView(b)));
-      await loader.load();
-      previewFont = true;
-    }
-    final icons = Platform.environment['UI_PREVIEW_ICONS'];
-    if (icons != null && File(icons).existsSync()) {
-      await (FontLoader('MaterialIcons')..addFont(
-            File(icons).readAsBytes().then((b) => ByteData.sublistView(b)),
-          ))
-          .load();
-    }
-  });
-
+  setUpAll(loadPreviewFonts);
   testWidgets(
     'main views render sample data and course details remain accessible',
     (tester) async {

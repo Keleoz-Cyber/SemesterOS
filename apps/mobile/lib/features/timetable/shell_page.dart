@@ -8,10 +8,13 @@ import 'course_widgets.dart';
 import 'today_view.dart';
 import 'week_view.dart';
 import 'semester_view.dart';
+import '../items/items_controller.dart';
+import '../items/items_view.dart';
 
 class ShellPage extends StatefulWidget {
   final AppController controller;
-  const ShellPage({super.key, required this.controller});
+  final ItemsController? items;
+  const ShellPage({super.key, required this.controller, this.items});
   @override
   State<ShellPage> createState() => _ShellPageState();
 }
@@ -45,6 +48,15 @@ class _ShellPageState extends State<ShellPage> {
   void manual() =>
       context.push(c.semester == null ? '/semester/new' : '/manual');
 
+  Future<void> refresh() async {
+    if (tab == 1 && c.semester != null) {
+      await c.loadWeek(c.week);
+    } else {
+      await c.openSession();
+    }
+    await widget.items?.refresh();
+  }
+
   Future<void> add() async {
     if (c.semester == null) {
       context.push('/semester/new');
@@ -61,7 +73,7 @@ class _ShellPageState extends State<ShellPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              '把课程放进学期',
+              '把事情放进学期',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
@@ -74,6 +86,40 @@ class _ShellPageState extends State<ShellPage> {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
+                  if (widget.items != null) ...[
+                    ListTile(
+                      leading: const Icon(
+                        Icons.auto_awesome_outlined,
+                        color: CampusColors.primary,
+                      ),
+                      title: const Text('文字快速记录'),
+                      subtitle: const Text('一句话解析，核对后保存'),
+                      onTap: () {
+                        Navigator.pop(sheet);
+                        context.push('/capture');
+                      },
+                    ),
+                    for (final entry in {
+                      'assignment': '记录作业',
+                      'exam': '记录考试',
+                      'task': '记录个人任务',
+                    }.entries)
+                      ListTile(
+                        leading: Icon(
+                          entry.key == 'exam'
+                              ? Icons.school_outlined
+                              : Icons.edit_note_rounded,
+                          color: CampusColors.primary,
+                        ),
+                        title: Text(entry.value),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () {
+                          Navigator.pop(sheet);
+                          context.push('/items/new?kind=${entry.key}');
+                        },
+                      ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                  ],
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -229,6 +275,13 @@ class _ShellPageState extends State<ShellPage> {
           onCourse: (event) => showCourseDetails(context, event),
         );
       case 2:
+        if (widget.items != null) {
+          return ItemsView(
+            controller: widget.items!,
+            onCreate: add,
+            onOpen: (id) => context.push('/items/$id'),
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -263,6 +316,13 @@ class _ShellPageState extends State<ShellPage> {
         );
       default:
         return TodayView(
+          itemsBlock: widget.items == null
+              ? null
+              : TodayItems(
+                  controller: widget.items!,
+                  onAll: () => switchTab(2),
+                  onOpen: (id) => context.push('/items/$id'),
+                ),
           semester: c.semester!,
           events: c.events,
           now: DateTime.now(),
@@ -315,11 +375,7 @@ class _ShellPageState extends State<ShellPage> {
           ),
           actions: [
             IconButton(
-              onPressed: c.busy
-                  ? null
-                  : () => tab == 1 && c.semester != null
-                        ? c.loadWeek(c.week)
-                        : c.openSession(),
+              onPressed: c.busy ? null : refresh,
               tooltip: '同步课表',
               icon: c.busy
                   ? const SizedBox(
@@ -346,9 +402,7 @@ class _ShellPageState extends State<ShellPage> {
           ],
         ),
         body: RefreshIndicator(
-          onRefresh: () => tab == 1 && c.semester != null
-              ? c.loadWeek(c.week)
-              : c.openSession(),
+          onRefresh: refresh,
           child: ListView(
             key: PageStorageKey('semester-tab-$tab'),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 106),

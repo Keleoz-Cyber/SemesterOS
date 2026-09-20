@@ -12,6 +12,7 @@ dependencies:
   drift: 2.28.2
   flutter:
     sdk: flutter
+  flutter_local_notifications: 22.3.1
   flutter_localizations:
     sdk: flutter
   flutter_riverpod: ^3.4.3
@@ -20,6 +21,7 @@ dependencies:
   material_ui: 1.0.0
   path_provider: ^2.1.6
   sqlite3_flutter_libs: 0.5.39
+  timezone: ^0.11.1
   webview_flutter: ^4.14.1
 
 dev_dependencies:

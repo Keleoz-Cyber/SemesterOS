@@ -109,12 +109,16 @@ class SemesterApi {
     String path, {
     dynamic data,
     bool authenticated = true,
+    String? idempotencyKey,
+    Duration? receiveTimeout,
   }) async {
     final stamp = generation;
-    final key = List.generate(
-      20,
-      (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
-    ).join();
+    final key =
+        idempotencyKey ??
+        List.generate(
+          20,
+          (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+        ).join();
     for (var attempt = 0; attempt < 2; attempt++) {
       if (authenticated) checkSession(stamp);
       try {
@@ -123,6 +127,7 @@ class SemesterApi {
           data: data,
           options: Options(
             method: method,
+            receiveTimeout: receiveTimeout,
             headers: {
               if (authenticated)
                 'Authorization': 'Bearer ${session?['access_token']}',

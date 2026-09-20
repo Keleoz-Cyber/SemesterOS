@@ -79,3 +79,55 @@ class IdempotencyRecord(Base):
     request_hash: Mapped[str] = mapped_column(String(64))
     response: Mapped[dict] = mapped_column(JSON)
     __table_args__ = (UniqueConstraint("user_id", "operation", "key"),)
+
+
+class StudyItem(Base):
+    __tablename__ = 'study_items'
+    __table_args__ = (
+        ForeignKeyConstraint(['user_id', 'semester_id'], ['semesters.user_id', 'semesters.id']),
+        UniqueConstraint('user_id', 'id'),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    semester_id: Mapped[str] = mapped_column(String(36), index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    lifecycle: Mapped[str] = mapped_column(String(20), default='active')
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[str] = mapped_column(String(40))
+    updated_at: Mapped[str] = mapped_column(String(40))
+
+
+class ReminderRule(Base):
+    __tablename__ = 'reminder_rules'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'item_id'], ['study_items.user_id', 'study_items.id']),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    item_id: Mapped[str] = mapped_column(String(36), index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[str] = mapped_column(String(40))
+    updated_at: Mapped[str] = mapped_column(String(40))
+
+
+class ItemRevision(Base):
+    __tablename__ = 'item_revisions'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'item_id'], ['study_items.user_id', 'study_items.id']),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    item_id: Mapped[str] = mapped_column(String(36), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    reason: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class TextCandidate(Base):
+    __tablename__ = 'text_candidates'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'semester_id'], ['semesters.user_id', 'semesters.id']),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    semester_id: Mapped[str] = mapped_column(String(36))
+    source_text: Mapped[str] = mapped_column(String(10000))
+    payload: Mapped[dict] = mapped_column(JSON)
+    item_id: Mapped[str | None] = mapped_column(ForeignKey('study_items.id'), nullable=True)
+    created_at: Mapped[str] = mapped_column(String(40))

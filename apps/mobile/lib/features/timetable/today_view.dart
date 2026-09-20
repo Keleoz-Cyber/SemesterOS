@@ -10,10 +10,12 @@ class TodayView extends StatelessWidget {
   final DateTime now;
   final int week;
   final bool hasData;
+  final Widget? itemsBlock;
   final VoidCallback onTimetable, onImport, onManual;
   final void Function(Map<String, dynamic>) onCourse;
   const TodayView({
     super.key,
+    this.itemsBlock,
     required this.semester,
     required this.events,
     required this.now,
@@ -131,6 +133,7 @@ class TodayView extends StatelessWidget {
             CourseCard(event: event, now: now, onTap: () => onCourse(event)),
             const SizedBox(height: 12),
           ],
+        ?itemsBlock,
         const SectionHeading('这一周'),
         CampusPanel(
           child: Column(
