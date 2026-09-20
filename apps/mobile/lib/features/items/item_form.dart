@@ -6,6 +6,7 @@ import '../../ui/campus_widgets.dart';
 import 'items_controller.dart';
 import 'item_widgets.dart';
 import 'reminder_editor.dart';
+import '../planning/date_time_picker.dart';
 
 class ItemFormPage extends StatefulWidget {
   final ItemsController controller;
@@ -37,6 +38,9 @@ class _ItemFormPageState extends State<ItemFormPage> {
   String? course;
   DateTime? date, endDate;
   TimeOfDay? time;
+  DateTime? examEndAt, earliestAt;
+  String startPolicy = 'unconfirmed';
+  bool reserveTime = true;
   bool dayEnd = false, split = true, reviewed = false, busy = false;
   String? error, timeError, _requestKey, _requestBody;
   List<Map<String, dynamic>> reminders = [];
@@ -59,6 +63,12 @@ class _ItemFormPageState extends State<ItemFormPage> {
     notes.text = data['notes'] ?? '';
     source.text = data['source_text'] ?? widget.candidate?['source_text'] ?? '';
     split = data['splittable'] ?? true;
+    startPolicy = data['start_policy'] ?? 'unconfirmed';
+    if (data['earliest_start_at'] != null) {
+      earliestAt = DateTime.parse(data['earliest_start_at']);
+    }
+    if (t['end_at'] != null) examEndAt = DateTime.parse(t['end_at']);
+    reserveTime = data['reserve_time'] ?? true;
     dayEnd = t['day_end_confirmed'] ?? false;
     week.text = t['week']?.toString() ?? '';
     if (t['date'] != null) date = DateTime.parse(t['date']);
@@ -107,6 +117,14 @@ class _ItemFormPageState extends State<ItemFormPage> {
     if (precision == 'exact' && time == null) {
       throw const FormatException('请选择具体时刻；不确定时可改为仅日期');
     }
+    if (kind == 'exam' && precision == 'exact' && examEndAt != null) {
+      final start = DateTime.parse(
+        '${day(date!)}T${time!.hour.toString().padLeft(2, '0')}:${time!.minute.toString().padLeft(2, '0')}:00+08:00',
+      );
+      if (!examEndAt!.isAfter(start)) {
+        throw const FormatException('考试结束必须晚于开始时间');
+      }
+    }
     if (precision == 'range' && (endDate == null || endDate!.isBefore(date!))) {
       throw const FormatException('请核对日期范围');
     }
@@ -119,6 +137,9 @@ class _ItemFormPageState extends State<ItemFormPage> {
     }
     return {
       'precision': precision,
+      'end_at': kind == 'exam' && precision == 'exact'
+          ? examEndAt?.toIso8601String()
+          : null,
       if (precision == 'exact')
         'at':
             '${day(date!)}T${time!.hour.toString().padLeft(2, '0')}:${time!.minute.toString().padLeft(2, '0')}:00+08:00',
@@ -130,6 +151,10 @@ class _ItemFormPageState extends State<ItemFormPage> {
   }
 
   Future<void> save() async {
+    if (kind != 'exam' && startPolicy == 'at' && earliestAt == null) {
+      setState(() => error = '请选择最早开始时间，或将开始口径改为待确认');
+      return;
+    }
     final effortText = minutes.text.trim();
     final effort = int.tryParse(effortText);
     if (kind != 'exam' &&
@@ -157,6 +182,13 @@ class _ItemFormPageState extends State<ItemFormPage> {
       'course_id': course,
       'time': t,
       'certainty': certainty,
+      'start_policy': kind == 'exam' ? 'unconfirmed' : startPolicy,
+      'earliest_start_at': kind != 'exam' && startPolicy == 'at'
+          ? earliestAt?.toIso8601String()
+          : null,
+      'reserve_time': kind == 'exam' && certainty != 'formal'
+          ? reserveTime
+          : true,
       'remaining_minutes': kind == 'exam' || minutes.text.trim().isEmpty
           ? null
           : effort,
@@ -442,10 +474,42 @@ class _ItemFormPageState extends State<ItemFormPage> {
               ),
             ),
           const SizedBox(height: 12),
+          if (kind == 'exam' && precision == 'exact') ...[
+            OutlinedButton.icon(
+              key: const Key('exam-end'),
+              onPressed: () async {
+                final selected = await pickSchoolDateTime(
+                  context,
+                  initial: examEndAt,
+                );
+                if (mounted && selected != null) {
+                  setState(() => examEndAt = selected);
+                }
+              },
+              icon: const Icon(Icons.schedule_outlined),
+              label: Text(
+                examEndAt == null
+                    ? '补充考试结束时间'
+                    : '结束：${displayInstant(examEndAt!.toIso8601String())}',
+              ),
+            ),
+            if (examEndAt != null)
+              TextButton(
+                onPressed: () => setState(() => examEndAt = null),
+                child: const Text('结束时间改为待确认'),
+              ),
+            const Text(
+              '缺少结束时间可以先记录，相关余量会提示信息不足。',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+          ],
           DropdownButtonFormField<String>(
             initialValue: certainty,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: '通知是否确定'),
+            decoration: InputDecoration(
+              labelText: kind == 'exam' ? '考试是否确定' : '截止是否确定',
+            ),
             items: const [
               DropdownMenuItem(value: 'unknown', child: Text('待确认')),
               DropdownMenuItem(value: 'tentative', child: Text('暂定')),
@@ -509,9 +573,60 @@ class _ItemFormPageState extends State<ItemFormPage> {
           const SizedBox(height: 16),
           ExpansionTile(
             title: const Text('更多设置'),
+            initiallyExpanded: editing,
+            subtitle: kind == 'exam'
+                ? null
+                : Text(
+                    '最早开始：${startPolicy == 'now'
+                        ? '从现在起'
+                        : startPolicy == 'at'
+                        ? displayInstant(earliestAt?.toIso8601String())
+                        : '待确认'}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
             tilePadding: EdgeInsets.zero,
             childrenPadding: const EdgeInsets.only(bottom: 16),
             children: [
+              if (kind != 'exam') ...[
+                DropdownButtonFormField<String>(
+                  key: const Key('task-start-policy'),
+                  initialValue: startPolicy,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '最早何时可以开始'),
+                  items: const [
+                    DropdownMenuItem(value: 'unconfirmed', child: Text('待确认')),
+                    DropdownMenuItem(value: 'now', child: Text('从现在起可开始')),
+                    DropdownMenuItem(value: 'at', child: Text('指定最早开始时间')),
+                  ],
+                  onChanged: (v) => setState(() => startPolicy = v!),
+                ),
+                if (startPolicy == 'at')
+                  OutlinedButton(
+                    onPressed: () async {
+                      final selected = await pickSchoolDateTime(
+                        context,
+                        initial: earliestAt,
+                      );
+                      if (selected != null && mounted) {
+                        setState(() => earliestAt = selected);
+                      }
+                    },
+                    child: Text(
+                      earliestAt == null
+                          ? '选择最早开始时间'
+                          : displayInstant(earliestAt!.toIso8601String()),
+                    ),
+                  ),
+                const SizedBox(height: 14),
+              ],
+              if (kind == 'exam' && certainty != 'formal')
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('为尚未确定的考试预留时间'),
+                  subtitle: const Text('开始和结束完整后才扣除时段；信息缺失时提示核对。'),
+                  value: reserveTime,
+                  onChanged: (v) => setState(() => reserveTime = v),
+                ),
               if (kind != 'exam' &&
                   (widget.initial?['remaining_minutes'] ??
                           widget.candidate?['item']?['remaining_minutes']) ==

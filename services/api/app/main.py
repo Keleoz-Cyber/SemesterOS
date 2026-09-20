@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from . import academics, auth, items, capture
+from . import academics, auth, items, capture, planning
 from pathlib import Path
 from dotenv import dotenv_values
 from threading import Lock
@@ -72,4 +72,5 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
     app.include_router(academics.router, prefix="/api/v1")
     app.include_router(items.router, prefix="/api/v1")
     app.include_router(capture.router, prefix="/api/v1")
+    app.include_router(planning.router, prefix="/api/v1")
     return app

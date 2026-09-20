@@ -1,0 +1,137 @@
+from fastapi import APIRouter, Depends, Header
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from .academics import owned_semester, replay, remember
+from .auth import current_user, error
+from .capacity import analyze
+from .database import get_db
+from .items import owned_item, check_version, audit, serialize_item, rules_for
+from .models import AvailabilityRevision, CourseMeeting, ProgressEntry, StudyAvailability, StudyItem, User
+from .planning_schemas import AvailabilityApply, AvailabilityInput, ProgressApply, ProgressInput
+from .reminder_rules import utcnow
+
+router=APIRouter()
+
+
+def availability_row(db,user,sid):
+    return db.scalar(select(StudyAvailability).where(StudyAvailability.user_id==user.id,StudyAvailability.semester_id==sid))
+
+
+def availability_value(row,revision):
+    return {**(row.payload if row else {'weekly':[],'exclusions':[]}), 'configured':row is not None,
+            'version':row.version if row else 0,'revision':revision,'timezone':'Asia/Shanghai'}
+
+
+def validate_preferences(db,user,sid,body):
+    s=owned_semester(db,user,sid,lock=True)
+    row=availability_row(db,user,sid)
+    if (row.version if row else 0)!=body.expected_version:
+        error(409,'SNAPSHOT_STALE','学习时间已经更新，请重新打开设置核对')
+    return s,row
+
+
+@router.get('/semesters/{sid}/availability')
+def get_availability(sid:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    s=owned_semester(db,user,sid,lock=True)
+    return availability_value(availability_row(db,user,sid),s.revision)
+
+
+@router.post('/semesters/{sid}/availability/preview')
+def preview_availability(sid:str,body:AvailabilityInput,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    s,row=validate_preferences(db,user,sid,body)
+    return {'before':availability_value(row,s.revision),'after':body.normalized(),'base_revision':s.revision,
+            'settings_version':body.expected_version,'affected_plan_count':0}
+
+
+@router.put('/semesters/{sid}/availability')
+def put_availability(sid:str,body:AvailabilityApply,user:User=Depends(current_user),db:Session=Depends(get_db),
+                     idempotency_key:str|None=Header(default=None)):
+    s=owned_semester(db,user,sid,lock=True)
+    data=body.model_dump(mode='json')
+    operation='availability/'+sid
+    cached=replay(db,user,operation,idempotency_key,data)
+    if cached is not None:return cached
+    s,row=validate_preferences(db,user,sid,body)
+    if s.revision!=body.expected_revision:
+        error(409,'SNAPSHOT_STALE','学期安排已变化，请重新核对学习时间')
+    before=availability_value(row,s.revision)
+    now=utcnow().isoformat()
+    if row is None:
+        row=StudyAvailability(user_id=user.id,semester_id=sid,payload=body.normalized(),version=1,updated_at=now)
+        db.add(row)
+    else:
+        row.payload=body.normalized();row.version+=1;row.updated_at=now
+    s.revision+=1
+    result=availability_value(row,s.revision)
+    db.add(AvailabilityRevision(user_id=user.id,semester_id=sid,payload={'before':before,'after':result},created_at=now))
+    remember(db,user,operation,idempotency_key,data,result)
+    db.commit()
+    return result
+
+
+@router.get('/semesters/{sid}/risk')
+def get_risk(sid:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    # All writers lock this semester. Copy one consistent view, release the short
+    # database lock, then run calculations without holding a transaction open.
+    s=owned_semester(db,user,sid,lock=True)
+    revision=s.revision
+    calendar={'first_monday':s.first_monday,'total_weeks':s.total_weeks,'periods':s.periods}
+    preferences=availability_value(availability_row(db,user,sid),revision)
+    courses=[{**r.payload,'id':r.id} for r in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id==user.id,CourseMeeting.semester_id==sid))]
+    items=[{**r.payload,'id':r.id,'version':r.version,'lifecycle':r.lifecycle} for r in db.scalars(select(StudyItem).where(StudyItem.user_id==user.id,StudyItem.semester_id==sid).order_by(StudyItem.created_at,StudyItem.id))]
+    db.commit()
+    return {**analyze(calendar,preferences,courses,items,utcnow()),'semester_id':sid,'revision':revision,
+            'settings_version':preferences['version']}
+
+
+def progress_target(db,user,item_id,body):
+    item=owned_item(db,user,item_id,lock=True)
+    check_version(item,body.expected_version)
+    if item.payload['kind']=='exam' or item.lifecycle!='active':
+        error(422,'INVALID_PROGRESS','只能更新进行中的作业或个人任务')
+    return item,owned_semester(db,user,item.semester_id)
+
+
+@router.post('/items/{item_id}/progress/preview')
+def preview_progress(item_id:str,body:ProgressInput,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    item,s=progress_target(db,user,item_id,body)
+    return {'item_id':item.id,'item_version':item.version,'base_revision':s.revision,
+            'before_remaining_minutes':item.payload.get('remaining_minutes'),'after_remaining_minutes':body.remaining_minutes,
+            'actual_minutes':body.actual_minutes,'will_complete':body.remaining_minutes==0,'affected_plan_count':0}
+
+
+@router.post('/items/{item_id}/progress')
+def apply_progress(item_id:str,body:ProgressApply,user:User=Depends(current_user),db:Session=Depends(get_db),
+                   idempotency_key:str|None=Header(default=None)):
+    item=owned_item(db,user,item_id,lock=True)
+    request=body.model_dump(mode='json');operation='progress/'+item_id
+    cached=replay(db,user,operation,idempotency_key,request)
+    if cached is not None:return cached
+    item,s=progress_target(db,user,item_id,body)
+    if s.revision!=body.expected_revision:
+        error(409,'SNAPSHOT_STALE','预览后学期安排已变化，请重新核对进度')
+    if (body.remaining_minutes==0)!=body.confirm_complete:
+        error(422,'CONFIRM_COMPLETION','剩余为0时需明确确认完成并停用提醒')
+    before=item.payload.get('remaining_minutes')
+    item.payload={**item.payload,'remaining_minutes':body.remaining_minutes}
+    item.version+=1;item.updated_at=utcnow().isoformat()
+    if body.confirm_complete:
+        item.lifecycle='completed'
+        for rule in rules_for(db,item):
+            rule.payload={**rule.payload,'enabled':False};rule.version+=1;rule.updated_at=item.updated_at
+    s.revision+=1
+    db.add(ProgressEntry(user_id=user.id,item_id=item.id,payload={'before_remaining_minutes':before,
+        'remaining_minutes':body.remaining_minutes,'actual_minutes':body.actual_minutes,'note':body.note,'item_version':item.version},created_at=item.updated_at))
+    audit(db,item,'用户确认完成并更新进度' if body.confirm_complete else '用户更新剩余工作量')
+    result=serialize_item(db,item)
+    remember(db,user,operation,idempotency_key,request,result)
+    db.commit()
+    return result
+
+
+@router.get('/items/{item_id}/progress')
+def progress_history(item_id:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    item=owned_item(db,user,item_id)
+    return [{**r.payload,'created_at':r.created_at} for r in db.scalars(select(ProgressEntry).where(
+        ProgressEntry.user_id==user.id,ProgressEntry.item_id==item.id).order_by(ProgressEntry.created_at,ProgressEntry.id))]

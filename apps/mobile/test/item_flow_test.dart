@@ -105,14 +105,19 @@ void main() {
       final f = Fixture();
       await openForm(tester, f);
       await tester.enterText(find.byKey(const Key('item-title')), '测试任务');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text('更多设置'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('更多设置'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('item-minutes')), '1.5');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('更多设置'));
       await tester.tap(find.text('更多设置'));
       await tester.pumpAndSettle();

@@ -19,6 +19,7 @@ def main():
         ('2026年9月25日23:59前交Java报告，预计3小时', 'assignment', 'exact', 180),
         ('周五交Java报告', 'assignment', 'date', None),
         ('概率论暂定第14周考试', 'exam', 'week', None),
+        ('2026年9月25日9:00至11:00概率论考试', 'exam', 'exact', None),
     ]
     results = []
     for text, kind, precision, minutes in cases:
@@ -29,6 +30,9 @@ def main():
         assert item.remaining_minutes == minutes
         if precision == 'week':
             assert item.time.week == 14 and item.certainty == 'tentative'
+        if kind == 'exam' and precision == 'exact':
+            assert item.time.end_at is not None
+            assert int((item.time.end_at - item.time.at).total_seconds()) == 7200
         assert all(quote in text for quote in value['evidence'].values())
         results.append({'case': text, 'passed': True, 'kind': item.kind,
                         'precision': item.time.precision, 'metadata': metadata})

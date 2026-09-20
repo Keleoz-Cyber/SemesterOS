@@ -12,7 +12,10 @@ String itemTimeLabel(Map<String, dynamic> item) {
   final t = Map<String, dynamic>.from(item['time'] ?? {});
   final suffix = item['kind'] == 'exam' ? '开始' : '截止';
   return switch (t['precision']) {
-    'exact' => '${displayInstant(t['at'])} $suffix',
+    'exact' =>
+      item['kind'] == 'exam' && t['end_at'] != null
+          ? '${displayInstant(t['at'])} 至 ${displayInstant(t['end_at'])}'
+          : '${displayInstant(t['at'])} $suffix',
     'date' =>
       '${t['date']} $suffix${t['day_end_confirmed'] == true ? ' · 已确认当天结束前' : ' · 时刻待确认'}',
     'week' => '第${t['week']}周 · 具体日期待确认',
@@ -53,7 +56,13 @@ List<Map<String, dynamic>> orderedItems(List<Map<String, dynamic>> input) {
 class ItemCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onTap;
-  const ItemCard({super.key, required this.item, required this.onTap});
+  final Widget? riskFooter;
+  const ItemCard({
+    super.key,
+    required this.item,
+    required this.onTap,
+    this.riskFooter,
+  });
   @override
   Widget build(BuildContext context) {
     final palette = CoursePalette.forTitle(
@@ -137,6 +146,7 @@ class ItemCard extends StatelessWidget {
                     ),
                   ),
                 ],
+                ?riskFooter,
               ],
             ),
           ),

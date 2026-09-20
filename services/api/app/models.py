@@ -131,3 +131,35 @@ class TextCandidate(Base):
     payload: Mapped[dict] = mapped_column(JSON)
     item_id: Mapped[str | None] = mapped_column(ForeignKey('study_items.id'), nullable=True)
     created_at: Mapped[str] = mapped_column(String(40))
+
+
+class StudyAvailability(Base):
+    __tablename__ = 'study_availability'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'semester_id'], ['semesters.user_id', 'semesters.id']),
+                     UniqueConstraint('user_id', 'semester_id'))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    semester_id: Mapped[str] = mapped_column(String(36))
+    payload: Mapped[dict] = mapped_column(JSON)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[str] = mapped_column(String(40))
+
+
+class AvailabilityRevision(Base):
+    __tablename__ = 'availability_revisions'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'semester_id'], ['semesters.user_id', 'semesters.id']),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    semester_id: Mapped[str] = mapped_column(String(36))
+    payload: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class ProgressEntry(Base):
+    __tablename__ = 'progress_entries'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'item_id'], ['study_items.user_id', 'study_items.id']),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    item_id: Mapped[str] = mapped_column(String(36), index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[str] = mapped_column(String(40))

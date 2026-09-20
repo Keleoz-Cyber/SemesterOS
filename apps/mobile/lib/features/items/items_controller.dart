@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/api.dart';
 import '../../core/cache.dart';
 import 'reminder_sync.dart';
+import '../planning/risk_state.dart';
 
 class ItemsController extends ChangeNotifier {
   final SemesterApi api;
@@ -19,6 +20,48 @@ class ItemsController extends ChangeNotifier {
   bool _disposed = false;
   Map<String, dynamic> _saved = {};
   VoidCallback? onUnauthorized;
+  Map<String, dynamic>? analysis;
+  int? itemsRevision;
+  int? _observedRevision;
+  int _riskRequest = 0;
+  bool riskBusy = false;
+  String? riskNotice;
+
+  bool get hasCurrentRisk =>
+      !offline &&
+      (_observedRevision == null ||
+          (itemsRevision != null && itemsRevision! >= _observedRevision!)) &&
+      riskSnapshotUsable(analysis, semesterId, itemsRevision, DateTime.now());
+  Map<String, dynamic>? riskFor(Map<String, dynamic> item) {
+    if (!hasCurrentRisk || item['lifecycle'] != 'active') return null;
+    return rows(analysis?['items'])
+        .where(
+          (r) =>
+              r['item_id'] == item['id'] &&
+              r['item_version'] == item['version'],
+        )
+        .firstOrNull;
+  }
+
+  void invalidateRisk() {
+    analysis = null;
+    _riskRequest++;
+    riskBusy = false;
+  }
+
+  bool observeRevision(String sid, int revision) {
+    if (sid != semesterId) return false;
+    if (_observedRevision == null || revision > _observedRevision!) {
+      _observedRevision = revision;
+    }
+    if (itemsRevision != null && itemsRevision! < _observedRevision!) {
+      invalidateRisk();
+      riskNotice = '课表或安排已变化，正在更新余量';
+      changed();
+      return true;
+    }
+    return false;
+  }
 
   String? get owner => api.session?['user']?['id'] as String?;
   void changed() {
@@ -41,6 +84,10 @@ class ItemsController extends ChangeNotifier {
     }
     final previous = _owner;
     _epoch++;
+    invalidateRisk();
+    itemsRevision = null;
+    _observedRevision = null;
+    riskNotice = null;
     _owner = owner;
     semesterId = selected;
     _boundGeneration = api.generation;
@@ -82,6 +129,7 @@ class ItemsController extends ChangeNotifier {
     if (_owner == null || semesterId == null || owner != _owner) return;
     final epoch = _epoch, generation = api.generation, request = ++_request;
     final sid = semesterId!;
+    invalidateRisk();
     busy = true;
     changed();
     try {
@@ -93,6 +141,7 @@ class ItemsController extends ChangeNotifier {
       if (!valid(epoch, generation) || request != _request) return;
       if (result[2]['owner_id'] != _owner) throw ApiFailure('提醒清单账号不一致');
       items = rows(result[0]['items']);
+      itemsRevision = result[0]['revision'];
       courses = rows(result[1]);
       reminderFeed = rows(result[2]['reminders']);
       syncedAt = result[2]['synced_at'];
@@ -106,6 +155,9 @@ class ItemsController extends ChangeNotifier {
       });
       if (!valid(epoch, generation)) return;
       await syncNotifications();
+      if (valid(epoch, generation) && request == _request) {
+        await refreshRisk(reloadOnMismatch: false);
+      }
     } on ApiFailure catch (e) {
       if (!valid(epoch, generation) || request != _request) return;
       if (e.unauthorized) {
@@ -113,6 +165,8 @@ class ItemsController extends ChangeNotifier {
         return;
       }
       offline = true;
+      invalidateRisk();
+      riskNotice = '离线时不显示旧余量，联网后重新计算';
       notice = '事项同步未完成，正在显示本机记录；联网后可保存修改。';
       if (reminderFeed.isNotEmpty) await syncNotifications();
     } catch (_) {
@@ -166,6 +220,7 @@ class ItemsController extends ChangeNotifier {
       Map<String, dynamic>.from(await api.request('GET', '/items/$id'));
   Future<void> acceptItem(Map<String, dynamic> item) async {
     _request++;
+    invalidateRisk();
     final epoch = _epoch, generation = api.generation;
     if (_owner == null || owner != _owner) return;
     if (item['semester_id'] == semesterId) {
@@ -240,6 +295,103 @@ class ItemsController extends ChangeNotifier {
           receiveTimeout: const Duration(seconds: 60),
         ),
       );
+
+  Future<void> refreshRisk({bool reloadOnMismatch = true}) async {
+    if (owner == null ||
+        _owner != owner ||
+        semesterId == null ||
+        offline ||
+        itemsRevision == null) {
+      return;
+    }
+    final epoch = _epoch,
+        generation = api.generation,
+        request = ++_riskRequest,
+        inputs = _request;
+    riskBusy = true;
+    changed();
+    try {
+      final result = Map<String, dynamic>.from(
+        await api.request('GET', '/semesters/$semesterId/risk'),
+      );
+      if (!valid(epoch, generation) ||
+          request != _riskRequest ||
+          inputs != _request) {
+        return;
+      }
+      if (result['revision'] != itemsRevision ||
+          (_observedRevision != null &&
+              (result['revision'] as int) < _observedRevision!)) {
+        analysis = null;
+        riskNotice = '安排已变化，请刷新后重新分析';
+        if (reloadOnMismatch && !busy) await refresh();
+        return;
+      }
+      analysis = result;
+      riskNotice = null;
+    } catch (_) {
+      if (valid(epoch, generation) && request == _riskRequest) {
+        analysis = null;
+        riskNotice = '余量分析未完成，可重试；事项与提醒仍可使用';
+      }
+    } finally {
+      if (valid(epoch, generation) && request == _riskRequest) {
+        riskBusy = false;
+        changed();
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> getAvailability() async =>
+      Map<String, dynamic>.from(
+        await api.request('GET', '/semesters/$semesterId/availability'),
+      );
+  Future<Map<String, dynamic>> previewAvailability(
+    Map<String, dynamic> data,
+  ) async => Map<String, dynamic>.from(
+    await api.request(
+      'POST',
+      '/semesters/$semesterId/availability/preview',
+      data: data,
+    ),
+  );
+  Future<void> saveAvailability(
+    Map<String, dynamic> data, {
+    String? idempotencyKey,
+  }) async {
+    await api.request(
+      'PUT',
+      '/semesters/$semesterId/availability',
+      data: data,
+      idempotencyKey: idempotencyKey,
+    );
+    invalidateRisk();
+    changed();
+    await refresh();
+  }
+
+  Future<Map<String, dynamic>> previewProgress(
+    String id,
+    Map<String, dynamic> data,
+  ) async => Map<String, dynamic>.from(
+    await api.request('POST', '/items/$id/progress/preview', data: data),
+  );
+  Future<void> saveProgress(
+    String id,
+    Map<String, dynamic> data, {
+    String? idempotencyKey,
+  }) async {
+    final item = Map<String, dynamic>.from(
+      await api.request(
+        'POST',
+        '/items/$id/progress',
+        data: data,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+    await acceptItem(item);
+    await refresh();
+  }
 
   @override
   void dispose() {

@@ -111,7 +111,7 @@ def course_choices(sid: str, user: User = Depends(current_user), db: Session = D
 
 @router.get('/semesters/{sid}/items')
 def list_items(sid: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    s = owned_semester(db, user, sid)
+    s = owned_semester(db, user, sid, lock=True)
     rows = db.scalars(select(StudyItem).where(StudyItem.user_id == user.id,
         StudyItem.semester_id == sid).order_by(StudyItem.created_at.desc(), StudyItem.id))
     return {'revision': s.revision, 'items': [serialize_item(db, i) for i in rows]}
@@ -179,6 +179,18 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
         return cached
     check_version(item, body.expected_version)
     data, s = checked_payload(db, user, body)
+    # Older clients do not know the new optional planning fields. Preserve those
+    # unless this request explicitly changed them, rather than erasing user choices.
+    if not {'start_policy', 'earliest_start_at'} & body.model_fields_set:
+        for key in ('start_policy', 'earliest_start_at'):
+            if key in item.payload:
+                data[key] = item.payload[key]
+    if 'reserve_time' not in body.model_fields_set and body.certainty != 'formal' and 'reserve_time' in item.payload:
+        data['reserve_time'] = item.payload['reserve_time']
+    if ('end_at' not in body.time.model_fields_set and body.kind == 'exam'
+            and item.payload['time'].get('at') == data['time'].get('at')
+            and item.payload['time']['precision'] == data['time']['precision'] == 'exact'):
+        data['time']['end_at'] = item.payload['time'].get('end_at')
     # Original source/candidate evidence is immutable; corrections have their own audit reason.
     for key in ('source_text', 'candidate_id', 'parse_evidence'):
         if key in item.payload:
@@ -212,6 +224,8 @@ def set_lifecycle(item_id: str, body: LifecycleInput, user: User = Depends(curre
     if body.lifecycle == 'completed' and item.payload['kind'] == 'exam':
         error(422, 'INVALID_LIFECYCLE', '考试不是可完成的个人任务')
     item.lifecycle = body.lifecycle
+    if body.lifecycle == 'active' and item.payload.get('remaining_minutes') == 0:
+        item.payload = {**item.payload, 'remaining_minutes': None}
     item.version += 1
     item.updated_at = utcnow().isoformat()
     if body.lifecycle != 'active':

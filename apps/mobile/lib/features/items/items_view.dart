@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
 import 'items_controller.dart';
 import 'item_widgets.dart';
+import '../planning/risk_widgets.dart';
+import '../planning/availability_page.dart';
 
 class ItemsView extends StatefulWidget {
   final ItemsController controller;
@@ -35,6 +37,15 @@ class _ItemsViewState extends State<ItemsView> {
             title: '我的事项',
             subtitle: '作业、考试和个人任务\n记下来，也记得提醒',
           ),
+          RiskOverview(
+            controller: c,
+            onSettings: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AvailabilityPage(controller: c),
+              ),
+            ),
+          ),
           SectionHeading('学期事项', action: '添加事项', onAction: widget.onCreate),
           Wrap(
             spacing: 8,
@@ -65,7 +76,16 @@ class _ItemsViewState extends State<ItemsView> {
               onAction: widget.onCreate,
             ),
           for (final row in rows)
-            ItemCard(item: row, onTap: () => widget.onOpen(row['id'])),
+            ItemCard(
+              item: row,
+              onTap: () => widget.onOpen(row['id']),
+              riskFooter: row['kind'] == 'exam' || row['lifecycle'] != 'active'
+                  ? null
+                  : RiskBadge(
+                      risk: c.riskFor(row),
+                      onTap: () => showRiskDetails(context, c, row),
+                    ),
+            ),
           const SectionHeading('提醒状态'),
           SoftNotice(c.notificationStatus ?? '同步事项后更新本机提醒'),
           if (c.syncedAt != null)
@@ -82,7 +102,7 @@ class _ItemsViewState extends State<ItemsView> {
             label: const Text('开启或检查系统通知'),
           ),
           const SizedBox(height: 12),
-          const SoftNotice('自动排程和计划余量还在开发中。当前可以先记录耗时、截止和提醒。'),
+          const SoftNotice('余量按当前记录计算，自动排程尚未开放。可以先核对学习时间和任务进度。'),
         ],
       );
     },
@@ -117,7 +137,16 @@ class TodayItems extends StatelessWidget {
           if (rows.isEmpty)
             const CampusPanel(child: Text('暂无待处理事项，可以通过“＋记录”添加。')),
           for (final row in rows.take(3))
-            ItemCard(item: row, onTap: () => onOpen(row['id'])),
+            ItemCard(
+              item: row,
+              onTap: () => onOpen(row['id']),
+              riskFooter: row['kind'] == 'exam'
+                  ? null
+                  : RiskBadge(
+                      risk: controller.riskFor(row),
+                      onTap: () => showRiskDetails(context, controller, row),
+                    ),
+            ),
         ],
       );
     },

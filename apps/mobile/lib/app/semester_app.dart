@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,6 +30,8 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
   late final ItemsController items;
   late final AndroidNotifications notifications;
   ({String owner, String item})? pendingNotification;
+  Timer? riskClock;
+  bool foreground = true;
   @override
   void initState() {
     super.initState();
@@ -104,6 +107,15 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
       openNotification();
     };
     controller.initialize();
+    riskClock = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (foreground &&
+          controller.ready &&
+          controller.loggedIn &&
+          !items.busy &&
+          !items.riskBusy) {
+        items.refreshRisk();
+      }
+    });
   }
 
   void appChanged() {
@@ -112,6 +124,14 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
           ? (controller.semester?['id'])
           : null,
     );
+    final semester = controller.semester;
+    if (controller.ready &&
+        controller.loggedIn &&
+        semester != null &&
+        items.observeRevision(semester['id'], semester['revision']) &&
+        !items.busy) {
+      items.refresh();
+    }
     if (controller.ready) {
       notifications.consumeLaunch();
       openNotification();
@@ -147,6 +167,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    foreground = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.resumed &&
         controller.ready &&
         controller.loggedIn) {
@@ -156,6 +177,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
 
   @override
   void dispose() {
+    riskClock?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     controller.removeListener(appChanged);
     items.dispose();

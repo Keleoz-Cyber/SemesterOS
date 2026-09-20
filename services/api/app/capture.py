@@ -77,6 +77,8 @@ def capture_text(body: CaptureInput, request: Request, user: User = Depends(curr
             if item['time']['week'] and item['time']['week'] > s.total_weeks:
                 raise ValueError('周次越界')
             item['time']['day_end_confirmed'] = False
+            item['start_policy'] = 'unconfirmed'
+            item['earliest_start_at'] = None
             item['source_text'] = body.text
             item['candidate_id'] = None
             for key in ('title', 'time', 'remaining_minutes', 'course_id', 'certainty'):
