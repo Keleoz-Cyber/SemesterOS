@@ -276,11 +276,11 @@ void main() {
           ),
         ),
       );
-      expect(find.text('共同窗口至少缺 1小时'), findsOneWidget);
+      expect(find.text('这些任务合计至少缺 1小时'), findsOneWidget);
       expect(find.textContaining('单项余量 1小时30分钟'), findsOneWidget);
       await tester.tap(find.text('查看计算依据 ›'));
       await tester.pumpAndSettle();
-      expect(find.text('各任务可能都有正余量，但不能同时重复使用同一段空闲时间。'), findsOneWidget);
+      expect(find.text('单看每项任务，时间可能够用；放在一起时，它们会争用同一段空闲时间。'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await capture(tester, 'risk-details');
       f.c.analysis!['valid_until'] = DateTime.now()
@@ -327,11 +327,11 @@ void main() {
       await tester.enterText(find.byKey(const Key('progress-remaining')), '0');
       await tester.enterText(find.byKey(const Key('progress-actual')), '60');
       await tester.scrollUntilVisible(
-        find.text('预览进度更新'),
+        find.text('确认本次进度'),
         250,
         scrollable: find.byType(Scrollable).first,
       );
-      await ioTap(tester, find.text('预览进度更新'));
+      await ioTap(tester, find.text('确认本次进度'));
       expect(f.progressSaves, 0);
       expect(find.text('确认任务已经完成'), findsOneWidget);
       await capture(tester, 'progress-preview');

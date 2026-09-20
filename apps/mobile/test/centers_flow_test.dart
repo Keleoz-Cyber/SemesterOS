@@ -247,7 +247,7 @@ void main() {
       await settleIo(tester);
       expect(find.text('合成概率论考试'), findsOneWidget);
       await capture(tester, 'exam-center');
-      expect(find.textContaining('有效计划覆盖'), findsOneWidget);
+      expect(find.textContaining('已安排复习'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
     },

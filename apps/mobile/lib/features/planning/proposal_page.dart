@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../ui/campus_widgets.dart';
@@ -6,12 +7,12 @@ import '../items/item_widgets.dart';
 import 'risk_widgets.dart';
 
 String proposalStatus(String? status) => switch (status) {
-  'FEASIBLE_COMPLETE' => '本轮目标已排入候选',
-  'FEASIBLE_PARTIAL' => '仅安排了可排部分',
-  'INFEASIBLE' => '当前约束下排不下',
-  'CHUNKING_LIMITED' => '当前分块方式排不下',
-  'TIMEOUT' => '时限内未得到可行方案',
-  'INPUT_LIMIT' => '超出本轮输入范围',
+  'FEASIBLE_COMPLETE' => '已安排好这次的任务',
+  'FEASIBLE_PARTIAL' => '目前只能安排一部分',
+  'INFEASIBLE' => '现有时间安排不下',
+  'CHUNKING_LIMITED' => '单次学习时间太长，试试缩短一些',
+  'TIMEOUT' => '暂时没算出合适的方案',
+  'INPUT_LIMIT' => '任务较多，请分批安排',
   _ => '需要补齐或核对信息',
 };
 
@@ -82,7 +83,7 @@ class _ProposalPageState extends State<ProposalPage> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -101,7 +102,7 @@ class _ProposalPageState extends State<ProposalPage> {
       await widget.controller.acceptSchedule(p, partialConfirmed);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -128,16 +129,14 @@ class _ProposalPageState extends State<ProposalPage> {
         !stale &&
         same;
     return Scaffold(
-      appBar: AppBar(title: Text(replan ? '核对个人重排' : '核对候选计划')),
+      appBar: AppBar(title: Text(replan ? '查看调整方案' : '查看计划方案')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           CampusHero(
-            eyebrow: p['phase'] == 'ready'
-                ? 'PROPOSAL / 尚未应用'
-                : 'PROPOSAL / 候选记录',
+            eyebrow: p['phase'] == 'ready' ? '计划方案 / 等你确认' : '计划方案 / 历史记录',
             title: replan && p['status'] == 'FEASIBLE_COMPLETE'
-                ? (p['moved_tasks'] == 0 ? '现有安排无需移动' : '已生成个人重排方案')
+                ? (p['moved_tasks'] == 0 ? '现有安排无需移动' : '已生成调整方案')
                 : proposalStatus(p['status']),
             subtitle:
                 '${displayInstant(p['window_start'])}\n至 ${displayInstant(p['window_end'])}',
@@ -145,14 +144,14 @@ class _ProposalPageState extends State<ProposalPage> {
           const SizedBox(height: 16),
           if (p['valid_until'] != null)
             Text(
-              '候选有效至 ${displayInstant(p['valid_until'])}',
+              '请在此时间前确认： ${displayInstant(p['valid_until'])}',
               style: const TextStyle(fontSize: 12),
             ),
-          if (expired) const SoftNotice('候选时间已过，请重新生成后确认。', warning: true),
+          if (expired) const SoftNotice('方案中的时间已经过去，请重新生成。', warning: true),
           if (p['phase'] == 'stale' || stale)
-            const SoftNotice('生成后安排已变化，此候选不能应用，请重新生成。', warning: true),
+            const SoftNotice('你的安排已有变化，请重新生成计划。', warning: true),
           if (p['phase'] == 'applied' || p['phase'] == 'undone')
-            SoftNotice(p['phase'] == 'applied' ? '此候选已经应用' : '此候选已撤销'),
+            SoftNotice(p['phase'] == 'applied' ? '这个方案已保存到日程' : '这个方案已撤销'),
           for (final message in p['messages'] ?? [])
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -162,26 +161,29 @@ class _ProposalPageState extends State<ProposalPage> {
               ),
             ),
           if ((p['existing_conflict_count'] ?? 0) > 0)
-            const SoftNotice('固定安排已有冲突仍需核对，本轮不会移动课程或考试。', warning: true),
+            const SoftNotice('课程或考试存在时间冲突，请先核实。生成计划不会移动这些安排。', warning: true),
           if (partial)
             SoftNotice(
-              '仍有 ${minutesLabel(missing)} 本轮工作未安排。应用部分方案不会把任务标记完成。',
+              '仍有 ${minutesLabel(missing)}的工作还没安排。保存这部分计划后，剩余工作仍需另行安排。',
               warning: true,
             ),
           if (p['optimal'] == false && '${p['status']}'.startsWith('FEASIBLE'))
-            const Text('已通过约束校验，但未证明当前优化目标最优。', style: TextStyle(fontSize: 13)),
+            const Text(
+              '这份方案符合当前时间要求，但可能还有更合适的安排。',
+              style: TextStyle(fontSize: 13),
+            ),
           if (replan) ...[
             Text(
-              '移动 ${p['moved_tasks'] ?? 0} 项任务 · ${p['moved_blocks'] ?? 0} 段计划\n开始时刻偏移合计 ${p['shift_minutes'] ?? 0} 分钟',
+              '移动 ${p['moved_tasks'] ?? 0} 项任务 · ${p['moved_blocks'] ?? 0} 段计划\n开始时间共调整了 ${p['shift_minutes'] ?? 0} 分钟',
             ),
-            const SoftNotice('仅重排已有未来块。保持时长与锁定，不自动新增未覆盖工作；确认前原计划保持。'),
+            const SoftNotice('这里只调整已有计划的时间，每段时长不变，锁定的计划不移动。你确认后才会保存。'),
             for (final b in p['locked_conflicts'] ?? [])
               SoftNotice(
-                '${b['title'] ?? '个人计划'} · ${displayInstant(b['start_at'])}\n已锁定、开始、即将开始或未纳入移动范围，请明确处理。',
+                '${b['title'] ?? '个人计划'} · ${displayInstant(b['start_at'])}\n这段计划目前不能移动：可能已锁定、即将开始，或不在本次选择范围内。请到计划详情处理。',
                 warning: true,
               ),
           ] else
-            const SectionHeading('每项工作量'),
+            const SectionHeading('各任务安排了多久'),
           for (final task in p['tasks'] ?? [])
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -197,20 +199,20 @@ class _ProposalPageState extends State<ProposalPage> {
                       ),
                     ),
                     Text(
-                      '本轮目标 ${minutesLabel(task['target_minutes'])} · 已有覆盖 ${minutesLabel(task['existing_minutes'])}',
+                      '这次目标 ${minutesLabel(task['target_minutes'])} · 已安排 ${minutesLabel(task['existing_minutes'])}',
                     ),
                     Text(
-                      '本轮新增 ${minutesLabel(task['new_minutes'])} · 本轮未安排 ${minutesLabel(task['unarranged_minutes'])}',
+                      '新增 ${minutesLabel(task['new_minutes'])} · 仍未安排 ${minutesLabel(task['unarranged_minutes'])}',
                     ),
                     if ((task['outside_minutes'] ?? 0) > 0)
-                      Text('窗口外已有覆盖 ${minutesLabel(task['outside_minutes'])}'),
+                      Text('其他日期已安排 ${minutesLabel(task['outside_minutes'])}'),
                     if ((task['later_minutes'] ?? 0) > 0)
-                      Text('后续仍需安排 ${minutesLabel(task['later_minutes'])}'),
+                      Text('之后还需安排 ${minutesLabel(task['later_minutes'])}'),
                   ],
                 ),
               ),
             ),
-          SectionHeading('${replan ? '重排对照' : '新增时间块'}（${blocks.length}段）'),
+          SectionHeading('${replan ? '重排对照' : '新增安排'}（${blocks.length}段）'),
           for (final b in blocks)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -240,14 +242,14 @@ class _ProposalPageState extends State<ProposalPage> {
             CampusPanel(
               child: Text(
                 replan
-                    ? '未得到可应用的重排，原计划保持，请查看上方原因。'
-                    : '没有新增时间块。已有覆盖保持，未安排工作见上方说明。',
+                    ? '暂时没有合适的调整方案，原计划保留。原因见上方说明。'
+                    : '这次没有新增安排，原计划保留。尚未安排的任务见上方说明。',
               ),
             ),
           if (partial && canApply)
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text('我确认仅应用部分方案，仍有${minutesLabel(missing)}未安排'),
+              title: Text('我确认仅保存已安排部分，仍有${minutesLabel(missing)}未安排'),
               value: partialConfirmed,
               onChanged: busy
                   ? null
@@ -263,10 +265,10 @@ class _ProposalPageState extends State<ProposalPage> {
               onPressed: busy || (partial && !partialConfirmed) ? null : accept,
               child: Text(
                 partial
-                    ? '应用部分方案（仍有${minutesLabel(missing)}未安排）'
+                    ? '保存已安排部分（仍有${minutesLabel(missing)}未安排）'
                     : replan
-                    ? '确认应用个人计划重排'
-                    : '确认应用本轮计划',
+                    ? '确认调整计划'
+                    : '确认保存计划',
               ),
             ),
           if (!replan &&
@@ -285,11 +287,11 @@ class _ProposalPageState extends State<ProposalPage> {
               onPressed: busy
                   ? null
                   : () => regenerate(p['request']['allow_partial'] == true),
-              child: const Text('按当前条件重新生成'),
+              child: const Text('重新生成方案'),
             ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('返回调整条件'),
+            child: const Text('返回修改要求'),
           ),
         ],
       ),

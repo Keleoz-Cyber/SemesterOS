@@ -105,7 +105,7 @@ void main() {
         isEmpty,
       );
       await t.enterText(find.byKey(const Key('operation-text')), '还需要两小时');
-      await showButton(t, '解析修改请求');
+      await showButton(t, '让AI整理修改');
       expect(sent!['context_item_id'], 't');
       await t.pumpWidget(const SizedBox());
       await settleIo(t);
@@ -154,12 +154,12 @@ void main() {
         expect(f.generated, 0);
         expect(f.blocks, isEmpty);
         await t.scrollUntilVisible(
-          find.text(plan ? '确认范围，生成候选计划' : '确认应用修改'),
+          find.text(plan ? '按这个范围生成计划' : '确认保存修改'),
           180,
           scrollable: find.byType(Scrollable).first,
         );
         if (!plan) await capture(t, 'operation-task-preview');
-        await showButton(t, plan ? '确认范围，生成候选计划' : '确认应用修改');
+        await showButton(t, plan ? '按这个范围生成计划' : '确认保存修改');
         expect(applied, 1);
         if (plan) {
           expect(find.byType(ProposalPage), findsOneWidget);
@@ -167,7 +167,7 @@ void main() {
           expect(f.applied, 0);
           expect(f.blocks, isEmpty);
         } else {
-          expect(find.text('修改已经应用'), findsOneWidget);
+          expect(find.text('修改已保存'), findsOneWidget);
         }
         expect(t.takeException(), isNull);
         await t.pumpWidget(const SizedBox());
@@ -214,11 +214,11 @@ void main() {
       OperationPage(controller: f.c, initialText: p['source_text']),
     );
     await settleIo(t);
-    await showButton(t, '补充 / 核对提醒参数');
+    await showButton(t, '设置提醒时间');
     await ioTap(t, find.text('2小时前'));
     await ioTap(t, find.text('确认这条提醒'));
     await settleIo(t);
-    await showButton(t, '生成修改前后预览');
+    await showButton(t, '查看修改前后');
     expect(sent, isNotNull);
     expect(sent!['expected_item_version'], 1);
     expect(sent!['expected_reminder_version'], 3);
@@ -261,10 +261,10 @@ void main() {
       });
       await route(t, OperationPage(controller: f.c));
       await settleIo(t);
-      await showButton(t, '解析修改请求');
+      await showButton(t, '让AI整理修改');
       expect(sent!['source_id'], 'src');
       expect(sent!['source_version'], 2);
-      expect(find.text('确认应用修改'), findsNothing);
+      expect(find.text('确认保存修改'), findsNothing);
       await t.pumpWidget(const SizedBox());
       await settleIo(t);
       f.c.dispose();

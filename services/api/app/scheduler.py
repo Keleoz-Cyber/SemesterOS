@@ -40,13 +40,13 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
     base={'window_start':stamp(start),'window_end':stamp(end),'blocks':[],'tasks':[],
           'status':'INPUT_INVALID','messages':[],'solver_status':None,'optimal':False,
           'unarranged_minutes':0,'can_apply':False,'existing_conflict_count':len(context['conflicts'])}
-    if not preferences.get('configured'):base['messages']=['先确认可学习时间'];return base,None
-    if end<=start:base['messages']=['规划窗口不在本学期未来时间内'];return base,None
+    if not preferences.get('configured'):base['messages']=['请先设置每周的学习时间'];return base,None
+    if end<=start:base['messages']=['请选择本学期内尚未过去的时间'];return base,None
     if any(a<end*60 and b>start*60 and missing for a,b,missing,_ in context['uncertain']):
-        base['messages']=['规划窗口内有预留考试缺少完整时间，请先核对'];return base,None
+        base['messages']=['这段时间内有考试尚未填写开始或结束时间，请先补充'];return base,None
     future=[b for b in plans if b['status']=='active' and instant(b['end_at']).timestamp()>now.timestamp()]
     if len(request['tasks'])>100 or len(future)>300:
-        base.update(status='INPUT_LIMIT',messages=['每轮最多100个任务、300个未来计划块']);return base,None
+        base.update(status='INPUT_LIMIT',messages=['一次最多安排100项任务、300段计划，请分批安排']);return base,None
     valid,issues=classify(plans,items,context['free'].spans,context['begin'])
     if issues:
         base.update(messages=['已有计划不符合当前安排，请核对、取消或在后续重排中处理'],invalid_blocks=issues);return base,None
@@ -54,27 +54,27 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
     for choice in request['tasks']:
         item=by_id.get(choice['item_id'])
         if not item or item['kind']=='exam' or item['lifecycle']!='active' or item.get('remaining_minutes') is None or item.get('start_policy','unconfirmed')=='unconfirmed':
-            base['messages']=['所选任务需为活跃任务，并确认剩余耗时与最早开始'];return base,None
+            base['messages']=['请选择尚未完成的任务，并填写还需要多久、最早何时能开始'];return base,None
         remaining=item['remaining_minutes'];own=[b for b in valid if b['item_id']==item['id']]
         existing=sum(future_minutes(b,now.timestamp(),start*60,end*60) for b in own)
         total_existing=sum(future_minutes(b,now.timestamp()) for b in own)
         outside=total_existing-existing
         if total_existing>remaining:
-            base['messages']=['已有计划覆盖超过剩余工作量，请先通过进度更新核对取消哪些块'];return base,None
+            base['messages']=['已有计划的时长超过了任务剩余所需时间，请先更新进度并选择要取消的计划'];return base,None
         due=anchor_at(item) if item.get('certainty')=='formal' else None
         within=due is not None and due.timestamp()<=end*60
         target=choice.get('target_minutes')
         if within:
             required=remaining-outside
             if target is not None and target!=required:
-                base['messages']=['窗口内截止的任务须纳入全部未在窗口外覆盖的剩余工作量'];return base,None
+                base['messages']=['这项任务在所选日期内到期，请安排全部剩余工作；已排在其他日期的部分会自动扣除'];return base,None
             target=required
         elif target is None:
-            base['messages']=['无确定截止或截止在窗口外的任务，需要明确本轮目标分钟'];return base,None
+            base['messages']=['这项任务还没确定截止时间，或不在所选日期内到期，请填写这次想安排多久'];return base,None
         if target<existing or target>remaining-outside or target<=0:
-            base['messages']=['本轮目标应包含窗口内已有覆盖，且不超过尚需覆盖的工作量'];return base,None
+            base['messages']=['安排目标需包含这段时间内已有的计划，并且不能超过任务还需要的时间'];return base,None
         if not item.get('splittable',True) and (target!=remaining-outside or (total_existing and target>existing)):
-            base['messages']=['不可拆分任务应整段安排；已有部分覆盖时请先取消旧块再完整生成'];return base,None
+            base['messages']=['这项任务需要一次完成，请先取消已有的分段计划，再重新安排'];return base,None
         release=max(start,ceil(instant(item['earliest_start_at']).timestamp()/60)) if item.get('start_policy')=='at' else start
         deadline=min(end,floor(due.timestamp()/60)) if due else end
         selected.append({'item':item,'release':release,'deadline':deadline,'need':target-existing,
@@ -85,7 +85,7 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
     free=[(max(start,ceil(a/60)),min(end,floor(b/60))) for a,b in free]
     free=merge(free)
     if len(future)+sum(chunk_count(s['need'],request['chunk_minutes'],s['item'].get('splittable',True)) for s in selected)>300:
-        base.update(status='INPUT_LIMIT',messages=['生成块与已有未来块合计超过300，请缩小窗口或调整块长']);return base,None
+        base.update(status='INPUT_LIMIT',messages=['计划段数超过300，请缩短安排的日期范围，或增加单次学习时长']);return base,None
     blocks=[]
     for selected_task in selected:
         for length in chunks(selected_task['need'],request['chunk_minutes'],selected_task['item'].get('splittable',True)):
@@ -93,7 +93,7 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
             domains=[(a,b-1) for a,b in domains]
             blocks.append({'task':selected_task,'minutes':length,'domains':domains})
     if len(blocks)+len(future)>300:
-        base.update(status='INPUT_LIMIT',messages=['生成块与已有未来块合计超过300，请缩小窗口或调整块长']);return base,None
+        base.update(status='INPUT_LIMIT',messages=['计划段数超过300，请缩短安排的日期范围，或增加单次学习时长']);return base,None
     base['tasks']=[{'item_id':s['item']['id'],'title':s['item']['title'],'remaining_minutes':s['item']['remaining_minutes'],
         'target_minutes':s['target'],'existing_minutes':s['existing'],'outside_minutes':s['outside'],
         'new_minutes':0,'unarranged_minutes':s['need'],'later_minutes':s['item']['remaining_minutes']-s['outside']-s['target']} for s in selected]
@@ -146,7 +146,7 @@ def generate(calendar, preferences, courses, items, plans, request, now):
         domains=spec['domains']
         if not domains:
             if not optional:
-                result.update(status='CHUNKING_LIMITED',messages=['当前分块方式排不下，可缩短建议块长后重新生成'],unarranged_minutes=total);return result
+                result.update(status='CHUNKING_LIMITED',messages=['目前没有足够长的空闲时段，请缩短单次学习时长后重试'],unarranged_minutes=total);return result
             model.add(present==0);domains=[(context['start'],context['start'])]
         if not optional:model.add(present==1)
         start=model.new_int_var_from_domain(cp_model.Domain.from_intervals(domains),f'start_{index}')
@@ -182,7 +182,7 @@ def generate(calendar, preferences, courses, items, plans, request, now):
         values=[(solver.value(p),solver.value(s),spec) for p,s,_,spec in variables];optimal=status==cp_model.OPTIMAL
     else:
         result.update(status='CHUNKING_LIMITED' if status==cp_model.INFEASIBLE else 'TIMEOUT',solver_status=solver.status_name(status),
-            messages=['当前分块与约束下没有完整方案' if status==cp_model.INFEASIBLE else '时限内尚未得到可行方案'],unarranged_minutes=total);return result
+            messages=['按目前的学习时间和任务要求，暂时无法安排全部任务' if status==cp_model.INFEASIBLE else '暂时没算出合适的方案，请减少任务数量后重试'],unarranged_minutes=total);return result
     result['blocks']=[{'item_id':s['task']['item']['id'],'title':s['task']['item']['title'],'start_at':stamp(a),'end_at':stamp(a+s['minutes']),
         'minutes':s['minutes']} for present,a,s in values if present]
     result['blocks'].sort(key=lambda b:(b['start_at'],b['item_id']))
@@ -196,7 +196,7 @@ def generate(calendar, preferences, courses, items, plans, request, now):
     missing=sum(t['unarranged_minutes'] for t in result['tasks'])
     result.update(status='FEASIBLE_PARTIAL' if missing else 'FEASIBLE_COMPLETE',unarranged_minutes=missing,
         can_apply=bool(result['blocks']),solver_status=solver.status_name(reported_status),optimal=optimal,phases=phases,
-        elapsed_ms=round((time.monotonic()-started)*1000),messages=['已有计划保持原位，本轮只追加未覆盖部分'])
+        elapsed_ms=round((time.monotonic()-started)*1000),messages=['保留已有计划，只为尚未安排的工作补充时间'])
     if not validate_result(context,result,optional):
-        result.update(status='INPUT_INVALID',blocks=[],can_apply=False,messages=['求解结果未通过独立约束校验'])
+        result.update(status='INPUT_INVALID',blocks=[],can_apply=False,messages=['这份方案还有时间冲突，尚未保存，请重新生成'])
     return result

@@ -20,7 +20,7 @@ def prepare(calendar,preferences,courses,items,plans,request,now):
     if not preferences.get('configured') or not future:
         base['messages']=['先确认学习时间并建立个人计划，再进行重排'];return base,None
     if len(future)>300 or len({b['item_id'] for b in future})>100:
-        base.update(status='INPUT_LIMIT',messages=['本轮最多100项任务、300个未来块']);return base,None
+        base.update(status='INPUT_LIMIT',messages=['一次最多调整100项任务、300段计划，请减少任务数量']);return base,None
     if any(missing and a<end*60 and b>now.timestamp() for a,b,missing,_ in context['uncertain']):
         base['messages']=['需预留的考试缺少完整时间，请先核对'];return base,None
     tasks={i['id']:i for i in items}
@@ -45,7 +45,7 @@ def prepare(calendar,preferences,courses,items,plans,request,now):
     for id in {b['item_id'] for b in future}:
         item=tasks[id];coverage=sum(future_minutes(b,now.timestamp()) for b in future if b['item_id']==id)
         if item.get('remaining_minutes') is None or coverage>item['remaining_minutes']:
-            base['messages']=['已有覆盖超过剩余工作量或工作量待确认，请先更新进度'];return base,None
+            base['messages']=['任务进度尚未确认，或已安排的时长过多，请先更新进度'];return base,None
     base['valid_until']=stamp(min(max(floor(now.timestamp()/60)+1,s['original']) for s in specs))
     return base,{'specs':specs,'calendar':calendar,'preferences':preferences,'courses':courses,'items':items,'now':now}
 
@@ -67,7 +67,7 @@ def generate(calendar,preferences,courses,items,plans,request,now):
     if context is None:return base
     specs=context['specs']
     if any(not s['domains'] for s in specs):
-        base.update(status='INFEASIBLE',messages=['原块时长在最新约束下放不下；原计划保留，请核对学习时间、截止或拆分方式']);return base
+        base.update(status='INFEASIBLE',messages=['现有学习时段放不下这些计划，原计划已保留。请检查学习时间、任务截止，或调整分段时长']);return base
     model=cp_model.CpModel();variables=[];intervals=[];moves={};offsets=[]
     span=ceil((instant(base['window_end'])-now).total_seconds()/60)+525600
     for index,spec in enumerate(specs):
@@ -97,10 +97,10 @@ def generate(calendar,preferences,courses,items,plans,request,now):
     blocks=[{**s['before'],'start_at':stamp(a),'end_at':stamp(a+s['before']['minutes']),
         'before_start_at':s['before']['start_at'],'before_end_at':s['before']['end_at']} for a,s in zip(values,specs)]
     moved=[b for b in blocks if instant(b['start_at'])!=instant(b['before_start_at'])]
-    if not validate(context,blocks):base['messages']=['重排结果未通过独立校验'];return base
+    if not validate(context,blocks):base['messages']=['调整后的计划还有冲突，原计划已保留，请重新生成'];return base
     base.update(status='FEASIBLE_COMPLETE',can_apply=bool(moved),blocks=blocks,moved_tasks=len({b['item_id'] for b in moved}),
         moved_blocks=len(moved),shift_minutes=sum(abs(a-s['original']) for a,s in zip(values,specs)),optimal=optimal,
         phases=phases,solver_status=phases[-1]['status'],elapsed_ms=round((time.monotonic()-started)*1000),
-        messages=['重排范围为本学期全部已有的未来个人计划。'])
+        messages=['已检查本学期的后续个人计划，只调整允许移动的部分。'])
     base['valid_until']=stamp(min([floor(instant(base['valid_until']).timestamp()/60)]+[a for a,s in zip(values,specs) if not s['fixed']]))
     return base

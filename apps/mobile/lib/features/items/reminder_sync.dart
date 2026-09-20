@@ -27,7 +27,7 @@ class ReminderSync {
     final operation = _queue.catchError((Object _) {}).then((_) async {
       if (generation != _generation) return '提醒清单已更新';
       await port.cancelAll();
-      if (!await port.permission()) return '系统通知未开启，提醒规则已保留';
+      if (!await port.permission()) return '提醒已保存，请开启系统通知';
       final identifiers = <int>{};
       for (final rule in ready.take(450)) {
         if (generation != _generation) return '提醒清单已更新';
@@ -44,7 +44,7 @@ class ReminderSync {
       }
       return ready.length > 450
           ? '已安排最近450条系统提醒，其余仍在App内显示'
-          : '系统提醒已同步（普通定时，可能延迟）';
+          : '已设置系统提醒，可能受手机省电设置影响而延迟';
     });
     _queue = operation.then<void>((_) {});
     return operation;

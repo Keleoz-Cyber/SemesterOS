@@ -81,7 +81,7 @@ def exam_change_context(db,user,e,body):
             updated['course_title']=course.payload['title']
     fields={k:v for k,v in updated.items() if k in ItemFields.model_fields}
     try:ItemFields.model_validate(fields)
-    except ValidationError:error(422,'INVALID_EXAM','请核对考试时间精度、日末口径及正式考试占用')
+    except ValidationError:error(422,'INVALID_EXAM','请检查考试日期、开始和结束时间，确认是否已正式通知')
     if body.time.week and body.time.week>s.total_weeks:error(422,'INVALID_WEEK','周次超出当前学期')
     active=[r for r in reviews(db,user,e) if r.lifecycle=='active']
     after_tasks={}

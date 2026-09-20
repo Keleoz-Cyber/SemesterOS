@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -156,7 +157,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       await loadRecent();
       await checkJob(force: true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     }
   }
 
@@ -168,7 +169,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       );
       if (mounted && same) setState(() => recent = widget.controller.rows(r));
     } catch (_) {
-      if (mounted && same) setState(() => error = '来源列表暂未同步，本机草稿仍可继续编辑');
+      if (mounted && same) setState(() => error = '暂时加载不了上传记录，你可以继续编辑本机草稿');
     }
   }
 
@@ -209,7 +210,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       if (file != null && mounted && same) await adopt(file, 'image');
       await saveDraft();
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -242,7 +243,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
         if (seconds >= 119) stopRecording();
       });
     } catch (e) {
-      if (mounted) setState(() => error = '录音无法开始：$e');
+      if (mounted) setState(() => error = '暂时无法开始录音，请检查麦克风权限后重试。');
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -259,7 +260,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
         await input.release(file);
       }
     } catch (e) {
-      if (mounted) setState(() => error = '录音保存失败：$e');
+      if (mounted) setState(() => error = '录音暂时没能保存，请重试。');
     }
   }
 
@@ -279,7 +280,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       );
       if (!mounted || !same || stamp != op || source?['id'] != id) return;
       if (dirty && r['version'] != source!['version']) {
-        setState(() => error = '来源在另一处有更新，本机文稿已保留。请从来源列表重新打开核对后再保存。');
+        setState(() => error = '这份内容在其他地方被修改了。本机文字已保留，请从上传记录打开最新内容再保存。');
         return;
       }
       setState(() {
@@ -290,7 +291,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
         }
         if (r['status'] == 'failed') {
           error =
-              '识别未完成，可重试或手工校对文字。${r['error_code'] == 'MODEL_OR_FILE_MISSING' ? '服务端模型或文件尚未就绪。' : ''}';
+              '识别未完成，可重试或手工校对文字。${r['error_code'] == 'MODEL_OR_FILE_MISSING' ? '识别服务暂不可用，请稍后重试。' : ''}';
         }
       });
       await saveDraft();
@@ -344,7 +345,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       await loadRecent();
     } catch (e) {
       reconcile = true;
-      if (mounted && same && stamp == op) setState(() => error = '$e');
+      if (mounted && same && stamp == op) setState(() => error = userError(e));
     } finally {
       if (mounted && stamp == op) setState(() => busy = false);
     }
@@ -368,7 +369,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
         );
         if (mounted && same && stamp == op) setState(() => source = r);
       } catch (e) {
-        if (mounted && same) setState(() => error = '$e');
+        if (mounted && same) setState(() => error = userError(e));
       }
     }
     await saveDraft();
@@ -408,7 +409,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
     try {
       await saveText();
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -421,16 +422,16 @@ class _MediaCapturePageState extends State<MediaCapturePage>
         final discard = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('载入账号来源？'),
-            content: const Text('本机修改尚未保存到账号。载入会替换当前文稿；可以返回复制文字或继续编辑。'),
+            title: const Text('打开已保存的内容？'),
+            content: const Text('当前文字还没保存。继续打开会替换它；你也可以返回，先复制或保存当前文字。'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('保留本机修改'),
+                child: const Text('继续编辑当前文字'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('放弃本机修改并载入'),
+                child: const Text('放弃当前修改并打开'),
               ),
             ],
           ),
@@ -544,7 +545,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
         if (mounted) Navigator.pop(context, true);
       }
     } catch (e) {
-      if (mounted && same && stamp == op) setState(() => error = '$e');
+      if (mounted && same && stamp == op) setState(() => error = userError(e));
     } finally {
       if (mounted && stamp == op) setState(() => busy = false);
     }
@@ -585,13 +586,13 @@ class _MediaCapturePageState extends State<MediaCapturePage>
               padding: const EdgeInsets.all(20),
               children: [
                 const CampusHero(
-                  eyebrow: 'CAPTURE / 保留来源',
+                  eyebrow: '保留来源',
                   title: '从通知到事项',
                   subtitle: '先识别内容，再对照核对\n只有你确认后才保存事项',
                 ),
                 const SizedBox(height: 16),
                 const SoftNotice(
-                  '单张图片最多10MB；录音最长120秒。原媒体在服务端本地识别，结构化解析只向DeepSeek发送核对文字与课程候选。',
+                  '图片最多10MB，录音最长2分钟。文件上传后会转成文字；你确认的文字和课程名称会发送给AI，用于整理事项。',
                 ),
                 Wrap(
                   spacing: 8,
@@ -624,7 +625,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
                       height: 220,
                       fit: BoxFit.contain,
                       errorBuilder: (_, _, _) =>
-                          const Text('本机原图不可用，请重新选择或从账号来源查看'),
+                          const Text('本机找不到原图，请重新选择，或打开已上传的原图'),
                     ),
                   ),
                 if (local != null && kind == 'audio')
@@ -670,7 +671,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
                 if (source != null &&
                     (source!['original_text'] as String? ?? '').isNotEmpty)
                   ExpansionTile(
-                    title: const Text('本轮机器识别原文'),
+                    title: const Text('查看AI识别的原文'),
                     children: [SelectableText(source!['original_text'])],
                   ),
                 const SectionHeading('核对识别文字'),
@@ -697,21 +698,19 @@ class _MediaCapturePageState extends State<MediaCapturePage>
                           text.text.trim().isEmpty
                       ? null
                       : () => parse(),
-                  child: const Text('保存核对文稿并解析事项'),
+                  child: const Text('用这些文字整理事项'),
                 ),
                 TextButton(
                   onPressed: busy || working ? null : () => parse(manual: true),
-                  child: Text(
-                    source == null ? '直接手工填写（未上传文件不关联）' : '保存文稿并手工填写事项',
-                  ),
+                  child: Text(source == null ? '不上传文件，直接手动填写' : '保存文字并手动填写事项'),
                 ),
                 TextButton(
                   onPressed: busy || working || source == null
                       ? null
                       : saveOnly,
-                  child: const Text('仅将核对文稿保存到账号'),
+                  child: const Text('先保存文字，稍后整理'),
                 ),
-                const SectionHeading('最近50份账号来源'),
+                const SectionHeading('最近上传的图片和录音（最多50份）'),
                 for (final row in recent)
                   ListTile(
                     key: ValueKey('source-${row['id']}'),

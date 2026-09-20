@@ -489,7 +489,7 @@ class ItemsController extends ChangeNotifier {
         receiveTimeout: const Duration(seconds: 30),
       ),
     );
-    if (sid != semesterId) throw ApiFailure('学期已切换，请重新打开候选');
+    if (sid != semesterId) throw ApiFailure('学期已切换，请重新打开计划方案');
     return result;
   }
 

@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
 import '../items/items_controller.dart';
@@ -69,7 +70,7 @@ class _ChangesPageState extends State<ChangesPage> {
     try {
       await fn();
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -236,9 +237,9 @@ class _ChangesPageState extends State<ChangesPage> {
       padding: const EdgeInsets.all(20),
       children: [
         const CampusHero(
-          eyebrow: 'CHANGE / 现实先行',
+          eyebrow: '现实先行',
           title: '学校安排变了',
-          subtitle: '先确认现实变化\n再核对个人计划调整',
+          subtitle: '先确认课程或活动的新安排\n再看看个人计划要不要调整',
         ),
         const SizedBox(height: 16),
         TextField(
@@ -246,17 +247,17 @@ class _ChangesPageState extends State<ChangesPage> {
           minLines: 3,
           maxLines: 6,
           decoration: const InputDecoration(
-            labelText: '原始通知 / 手工核对依据',
+            labelText: '变更通知或修改原因',
             hintText: '粘贴调课、停课、补课、放假或活动通知',
           ),
         ),
         TextButton.icon(
           onPressed: busy ? null : parse,
           icon: const Icon(Icons.auto_awesome_outlined),
-          label: const Text('解析通知，稍后核对'),
+          label: const Text('让AI整理通知'),
         ),
         if (suggestion != null) ...[
-          const SoftNotice('AI只提供待核对建议。请逐项确认课次、日期和起止时间；解析不会保存现实安排。'),
+          const SoftNotice('AI已整理出通知内容。请检查课程、日期和时间，确认后才会保存。'),
           for (final q in suggestion!['questions'] ?? []) Text('需核对：$q'),
           for (final e in (suggestion!['evidence'] as Map? ?? {}).entries)
             Text('来源片段：${e.value}'),
@@ -342,7 +343,7 @@ class _ChangesPageState extends State<ChangesPage> {
             ),
             subtitle: Text(
               p['phase'] == 'applied'
-                  ? '现实变化已确认'
+                  ? '新安排已保存'
                   : p['phase'] == 'stale'
                   ? '旧预览已失效'
                   : '待确认',
@@ -434,7 +435,7 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
         if (mounted && same) setState(() => applied = true);
       }
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -457,7 +458,7 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
       p['base_revision'],
     );
     return Scaffold(
-      appBar: AppBar(title: Text(applied ? '现实变化已确认' : '核对现实变化')),
+      appBar: AppBar(title: Text(applied ? '新安排已保存' : '确认课程或活动变更')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -511,7 +512,7 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
             const Text('此处列出前30处冲突，其余请在课表核对。'),
           if (conflict && !applied)
             CheckboxListTile(
-              title: const Text('我已核对，确认记录存在冲突的现实安排'),
+              title: const Text('我已核实通知，确认保存并保留时间冲突提示'),
               value: confirmConflict,
               onChanged: busy
                   ? null
@@ -531,10 +532,10 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
               child: const Text('确认现实变化，暂不移动个人计划'),
             ),
           if (applied) ...[
-            const SoftNotice('现实变化已经保存。下面只生成个人重排候选，核对后再独立确认。'),
+            const SoftNotice('新安排已保存。接下来可以调整受影响的个人计划，查看方案后再确认。'),
             FilledButton(
               onPressed: busy || !same ? null : () => act(true),
-              child: const Text('分析最新安排并生成重排候选'),
+              child: const Text('查看个人计划调整方案'),
             ),
           ],
         ],

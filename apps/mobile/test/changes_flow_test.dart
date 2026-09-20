@@ -65,7 +65,7 @@ void main() {
         ChangePreviewPage(controller: f.c, preview: change(f, conflict: true)),
       );
       await tester.scrollUntilVisible(
-        find.text('我已核对，确认记录存在冲突的现实安排'),
+        find.text('我已核实通知，确认保存并保留时间冲突提示'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
@@ -151,17 +151,17 @@ void main() {
       expect(calendarRefresh, 1);
       expect(replans, 0);
       expect(f.applied, 0);
-      await ioTap(tester, find.text('分析最新安排并生成重排候选'));
+      await ioTap(tester, find.text('查看个人计划调整方案'));
       expect(replans, 1);
       expect(f.applied, 0);
       expect(find.byType(ProposalPage), findsOneWidget);
       await capture(tester, 'replan-preview');
       await tester.scrollUntilVisible(
-        find.text('确认应用个人计划重排'),
+        find.text('确认调整计划'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      await ioTap(tester, find.text('确认应用个人计划重排'));
+      await ioTap(tester, find.text('确认调整计划'));
       expect(f.applied, 1);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();

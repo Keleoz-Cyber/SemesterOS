@@ -57,7 +57,7 @@ async def upload(sid:str,request:Request,kind:Literal['image','audio'],user:User
     owned_semester(db,user,sid,lock=True)
     old=db.scalar(select(MediaSource).where(MediaSource.user_id==user.id,MediaSource.semester_id==sid,MediaSource.upload_key==idempotency_key))
     if old:
-        if old.input_hash!=digest or old.kind!=kind:error(409,'UPLOAD_KEY_CONFLICT','同一上传标识不能替换不同文件')
+        if old.input_hash!=digest or old.kind!=kind:error(409,'UPLOAD_KEY_CONFLICT','上传的文件已变化，请重新选择文件后上传')
         return value(old)
     sanitized,mime,ext,metadata=await run_in_threadpool(sanitize,bytes(data),kind)
     count,size=db.execute(select(func.count(),func.coalesce(func.sum(MediaSource.size),0)).where(MediaSource.user_id==user.id,MediaSource.file_deleted==False)).one()

@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
@@ -32,7 +33,7 @@ class PlanningEntry extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionHeading(
-          today ? '今日个人计划' : '个人时间块',
+          today ? '今日个人计划' : '个人计划',
           action: today ? '查看全部' : '生成计划',
           onAction: () => Navigator.push(
             context,
@@ -100,7 +101,7 @@ class _PlanListPageState extends State<PlanListPage> {
     try {
       await action();
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -112,7 +113,7 @@ class _PlanListPageState extends State<PlanListPage> {
       builder: (context) => AlertDialog(
         title: Text(b['locked'] == true ? '解锁并取消这段计划？' : '取消这段计划？'),
         content: Text(
-          '${b['title']}\n${displayInstant(b['start_at'])}\n任务剩余工作量保持原值，可以重新安排。',
+          '${b['title']}\n${displayInstant(b['start_at'])}\n取消安排不会改变任务进度，你可以之后重新安排。',
         ),
         actions: [
           TextButton(
@@ -143,7 +144,7 @@ class _PlanListPageState extends State<PlanListPage> {
       builder: (context) => AlertDialog(
         title: const Text('撤销最近一轮计划？'),
         content: const Text(
-          '新增方案撤销其新增块；重排方案尝试恢复移动前位置。仅处理未开始、未被修改的块，且必须符合最新现实安排。课程、考试和任务进度保持。',
+          '撤销新增计划会删除本次新增的安排；撤销调整会尝试恢复原时间。只有尚未开始、之后没有修改且仍无冲突的计划才能撤销。课程、考试和任务进度不会改变。',
         ),
         actions: [
           TextButton(
@@ -189,9 +190,9 @@ class _PlanListPageState extends State<PlanListPage> {
           padding: const EdgeInsets.all(20),
           children: [
             const CampusHero(
-              eyebrow: 'PLAN / 个人安排',
+              eyebrow: '个人安排',
               title: '接下来做什么',
-              subtitle: '计划不等于完成\n按实际进展更新剩余工作量',
+              subtitle: '安排好时间后\n记得按实际完成情况更新进度',
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -204,9 +205,9 @@ class _PlanListPageState extends State<PlanListPage> {
                       ),
                     ),
               icon: const Icon(Icons.auto_awesome_outlined),
-              label: const Text('生成新的候选计划'),
+              label: const Text('生成新的计划方案'),
             ),
-            if (!current) SoftNotice(c.planNotice ?? '计划正在同步，旧时间块暂不展示'),
+            if (!current) SoftNotice(c.planNotice ?? '正在更新计划，请稍候'),
             OutlinedButton.icon(
               onPressed: busy
                   ? null
@@ -240,7 +241,7 @@ class _PlanListPageState extends State<PlanListPage> {
                     ),
                   ),
                 ),
-                child: const Text('查看最近一次候选'),
+                child: const Text('查看上次的计划方案'),
               ),
             if (feed?['latest_applied'] != null)
               TextButton(
@@ -274,7 +275,7 @@ class _PlanListPageState extends State<PlanListPage> {
                       ),
                       if (invalid.contains(b['id']))
                         const SoftNotice(
-                          '此计划与当前约束冲突，请核对或取消后重新生成。',
+                          '这段计划与当前安排冲突，可以取消后重新安排。',
                           warning: true,
                         ),
                       if (!DateTime.parse(b['end_at']).isAfter(DateTime.now()))
@@ -314,7 +315,7 @@ class _PlanListPageState extends State<PlanListPage> {
                 ),
               ),
             if (current && blocks.isEmpty)
-              const CampusPanel(child: Text('还没有个人计划，可以先生成候选并核对。')),
+              const CampusPanel(child: Text('还没有个人计划，试试让系统帮你安排时间。')),
           ],
         );
       },

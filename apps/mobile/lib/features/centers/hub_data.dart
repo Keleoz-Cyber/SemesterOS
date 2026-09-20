@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
@@ -74,7 +75,7 @@ class _HubDataState extends State<HubData> {
     } catch (e) {
       if (mounted && stamp == request) {
         setState(() {
-          error = '$e';
+          error = userError(e);
           data = null;
         });
       }

@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../media/source_view.dart';
@@ -59,7 +60,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     }
   }
 
@@ -78,7 +79,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
           item;
       await load();
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -90,7 +91,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
     try {
       preview = await widget.controller.previewLifecycle(target, state);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
       return;
     }
     if (!mounted) return;
@@ -376,7 +377,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                           ),
                           if (widget.controller.syncedAt != null)
                             Text(
-                              '清单最近同步：${displayInstant(widget.controller.syncedAt)}',
+                              '提醒最近更新：${displayInstant(widget.controller.syncedAt)}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           TextButton.icon(
@@ -439,7 +440,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                             );
                           }
                         } catch (e) {
-                          if (mounted) setState(() => error = '$e');
+                          if (mounted) setState(() => error = userError(e));
                         }
                       },
                       children: [

@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
 import '../items/items_controller.dart';
@@ -62,7 +63,7 @@ class _SchedulePageState extends State<SchedulePage> {
       final text = targets[id]!.text.trim();
       final value = text.isEmpty ? null : int.tryParse(text);
       if (text.isNotEmpty && (value == null || value < 1)) {
-        setState(() => error = '本轮目标请填写正整数分钟，或留空由确定截止计算');
+        setState(() => error = '请输入大于0的分钟数；所选日期内到期的任务也可以留空。');
         return;
       }
       choices.add({'item_id': id, 'target_minutes': value});
@@ -93,7 +94,7 @@ class _SchedulePageState extends State<SchedulePage> {
       );
       if (mounted && applied == true) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -106,11 +107,11 @@ class _SchedulePageState extends State<SchedulePage> {
       padding: const EdgeInsets.all(20),
       children: [
         const CampusHero(
-          eyebrow: 'PLAN / 先预览再确认',
+          eyebrow: '先预览再确认',
           title: '把任务放进时间',
-          subtitle: '已有安排保持原位\n本轮补充尚未覆盖的工作',
+          subtitle: '保留已有安排\n为还没排好的任务找时间',
         ),
-        const SectionHeading('本轮范围'),
+        const SectionHeading('安排哪几天'),
         Wrap(
           spacing: 8,
           children: [
@@ -126,7 +127,7 @@ class _SchedulePageState extends State<SchedulePage> {
         DropdownButtonFormField<int>(
           initialValue: lead,
           isExpanded: true,
-          decoration: const InputDecoration(labelText: '开始前留出核对时间'),
+          decoration: const InputDecoration(labelText: '最早从什么时候开始'),
           items: [
             for (final n in [0, 5, 10, 15])
               DropdownMenuItem(value: n, child: Text('$n分钟后开始')),
@@ -137,7 +138,7 @@ class _SchedulePageState extends State<SchedulePage> {
         DropdownButtonFormField<int>(
           initialValue: chunk,
           isExpanded: true,
-          decoration: const InputDecoration(labelText: '可拆分任务的建议块长'),
+          decoration: const InputDecoration(labelText: '每次想学习多久'),
           items: [
             for (final n in [15, 30, 45, 60, 90])
               DropdownMenuItem(value: n, child: Text('$n分钟')),
@@ -145,10 +146,10 @@ class _SchedulePageState extends State<SchedulePage> {
           onChanged: busy ? null : (v) => setState(() => chunk = v!),
         ),
         const SizedBox(height: 12),
-        const SoftNotice('尾段不足15分钟会并入前一块；总工作量不足15分钟保留实际长度。不可拆分任务会安排成连续一段。'),
-        const SectionHeading('选择任务与本轮目标'),
+        const SoftNotice('系统会尽量按你选择的时长分段，最后一段可稍作调整。需要一次完成的任务会安排在同一个时段。'),
+        const SectionHeading('选择任务和安排时长'),
         const Text(
-          '窗口内有确定截止的任务，留空即安排全部剩余工作量。无确定截止或截止在窗口外时，请明确本轮目标。目标包含已有覆盖，不是额外加时。',
+          '所选日期内到期的任务，留空会安排剩余的全部工作；其他任务请填写这次想安排多久。已安排的时间也算在目标内。',
           style: TextStyle(fontSize: 13),
         ),
         const SizedBox(height: 12),
@@ -189,7 +190,7 @@ class _SchedulePageState extends State<SchedulePage> {
                       enabled: !busy,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
-                        labelText: '本轮覆盖目标（分钟，可留空）',
+                        labelText: '这次计划安排多久（分钟，可留空）',
                       ),
                     ),
                 ],
@@ -201,7 +202,7 @@ class _SchedulePageState extends State<SchedulePage> {
         if (busy) ...[
           const LinearProgressIndicator(),
           const SizedBox(height: 12),
-          const Text('正在读取约束并求解候选，求解预算约10秒…'),
+          const Text('正在结合课表和空闲时间安排，请稍候…'),
         ],
         if (error != null) ...[
           SoftNotice(error!, warning: true),
@@ -209,10 +210,10 @@ class _SchedulePageState extends State<SchedulePage> {
         ],
         FilledButton(
           onPressed: busy || selected.isEmpty ? null : generate,
-          child: Text(busy ? '正在生成…' : '生成候选计划'),
+          child: Text(busy ? '正在生成…' : '生成计划方案'),
         ),
         const SizedBox(height: 10),
-        const Text('生成不会写入正式日程，核对后再确认应用。', style: TextStyle(fontSize: 12)),
+        const Text('先看看方案，确认后才会保存到日程。', style: TextStyle(fontSize: 12)),
       ],
     ),
   );

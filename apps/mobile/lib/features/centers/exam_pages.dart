@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
@@ -59,7 +60,7 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const CampusHero(
-                eyebrow: 'EXAMS / 提前准备',
+                eyebrow: '提前准备',
                 title: '考试有安排，复习有余量',
                 subtitle: '考试是固定安排\n复习是独立的个人任务',
               ),
@@ -114,8 +115,8 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
                       if ((row['reviews'] as List).isNotEmpty)
                         Text(
                           fresh
-                              ? '有效计划覆盖 ${minutesLabel(row['review_planned_minutes'])} · 未覆盖 ${row['review_unplanned_minutes'] == null ? '待确认' : minutesLabel(row['review_unplanned_minutes'])}'
-                              : '计划覆盖待刷新',
+                              ? '已安排复习 ${minutesLabel(row['review_planned_minutes'])} · 还需安排 ${row['review_unplanned_minutes'] == null ? '待确认' : minutesLabel(row['review_unplanned_minutes'])}'
+                              : '复习安排待更新',
                         ),
                       if ((row['completed_review_count'] ?? 0) > 0)
                         Text('已确认完成 ${row['completed_review_count']} 项复习任务'),
@@ -286,7 +287,7 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
       await c.refresh();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -358,7 +359,7 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
               key: const Key('review-minutes'),
               controller: minutes,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '复习剩余工作量（分钟，可自定义）'),
+              decoration: const InputDecoration(labelText: '预计还需复习多久（分钟）'),
             ),
             DropdownButtonFormField<String>(
               initialValue: mode,
@@ -395,7 +396,7 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
               ),
             CheckboxListTile(
               title: const Text('我确认从现在起即可安排复习'),
-              subtitle: const Text('不勾选则保持最早开始待确认'),
+              subtitle: const Text('暂不勾选也能保存，生成计划前再确认开始时间'),
               value: startNow,
               onChanged: busy ? null : (v) => setState(() => startNow = v!),
             ),
@@ -404,7 +405,7 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
           if (busy) const LinearProgressIndicator(),
           FilledButton(
             onPressed: busy ? null : save,
-            child: Text(link ? '确认关联，保留任务原工作量与截止' : '确认创建复习任务'),
+            child: Text(link ? '关联这项任务，保留原进度和截止时间' : '确认创建复习任务'),
           ),
         ],
       ),
@@ -541,7 +542,7 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
       );
       if (applied == true && mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -567,7 +568,7 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
         DropdownButtonFormField<String>(
           initialValue: precision,
           isExpanded: true,
-          decoration: const InputDecoration(labelText: '新时间精度'),
+          decoration: const InputDecoration(labelText: '新通知提供的时间'),
           items:
               {
                     'exact': '具体时刻',
@@ -624,7 +625,7 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
           ),
         DropdownButtonFormField<String>(
           initialValue: certainty,
-          decoration: const InputDecoration(labelText: '确定性'),
+          decoration: const InputDecoration(labelText: '时间是否确定'),
           items: {'formal': '正式', 'tentative': '暂定', 'unknown': '待确认'}.entries
               .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
               .toList(),
@@ -647,8 +648,8 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
           ),
         if (certainty == 'formal' && precision == 'exact')
           CheckboxListTile(
-            title: const Text('同步未完成复习任务的截止为新考试开始'),
-            subtitle: const Text('只修改截止，不改变工作量，也不移动个人计划'),
+            title: const Text('将相关复习任务的截止时间一起改到考试开始前'),
+            subtitle: const Text('只更新复习截止时间，保留原进度和计划安排'),
             value: align,
             onChanged: (v) => setState(() => align = v!),
           ),
@@ -715,7 +716,7 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
       );
       if (mounted) setState(() => applied = true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -775,7 +776,7 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
               '${b['title']} · ${displayInstant(b['start_at'])}${b['locked'] == true ? ' · 已锁定' : ''}',
             ),
           if ((p['affected_blocks'] as List).isEmpty)
-            const Text('未发现已有个人块违反新时间约束'),
+            const Text('现有个人计划没有与新考试时间冲突'),
           for (final r in p['risk_changes'])
             Text(
               '${r['title']}：余量 ${r['before_slack'] ?? '待确认'} → ${r['after_slack'] ?? '待确认'} 分钟',
@@ -787,13 +788,13 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
             ),
           if (conflict && !applied)
             CheckboxListTile(
-              title: const Text('我确认记录存在固定冲突的新考试安排'),
+              title: const Text('我已核实新考试时间，确认保存并保留冲突提示'),
               value: confirmConflict,
               onChanged: busy
                   ? null
                   : (v) => setState(() => confirmConflict = v!),
             ),
-          const SoftNotice('确认后更新考试与所选复习截止。已有时间块保持原位，需要调整时再独立核对重排。'),
+          const SoftNotice('确认后保存考试和所选复习任务的新时间。已有计划暂不移动，你可以接着查看并调整。'),
           if (stale && !applied)
             const SoftNotice('账号、学期或安排已变化，请重新预览', warning: true),
           if (error != null) SoftNotice(error!, warning: true),

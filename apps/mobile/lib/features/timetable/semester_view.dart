@@ -21,7 +21,7 @@ class SemesterView extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const CampusHero(
-        eyebrow: 'SEMESTER / 我的时间',
+        eyebrow: '我的时间',
         title: '我的学期',
         subtitle: '从第一周开始\n把每一段安排放好',
       ),

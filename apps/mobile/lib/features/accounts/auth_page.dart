@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 
@@ -88,7 +89,7 @@ class _AuthPageState extends State<AuthPage> {
         await widget.controller.openSession(data);
       }
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -121,7 +122,7 @@ class _AuthPageState extends State<AuthPage> {
                   const Text('把分散的安排，整理成自己的学期', textAlign: TextAlign.center),
                   const SizedBox(height: 8),
                   const Text(
-                    '课表与事项测试版',
+                    '测试版',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Color(0xFF667085), fontSize: 14),
                   ),

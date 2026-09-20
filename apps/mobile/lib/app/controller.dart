@@ -58,7 +58,7 @@ class AppController extends ChangeNotifier {
       await api.restore();
       if (loggedIn) await openSession();
     } catch (e) {
-      notice = '$e';
+      notice = userError(e);
     }
     ready = true;
     notifyListeners();
@@ -92,7 +92,7 @@ class AppController extends ChangeNotifier {
             : [];
       }
       ready = true;
-      notice = '正在同步，先显示本机保存的课表';
+      notice = '正在更新，先显示本机保存的课表';
       notifyListeners();
     } else {
       semesters = [];

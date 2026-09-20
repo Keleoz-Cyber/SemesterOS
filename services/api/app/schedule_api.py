@@ -25,7 +25,7 @@ router=APIRouter()
 def solver_slot(app,user_id):
     with app.state.planner_lock:
         if user_id in app.state.planner_users or not app.state.planner_slots.acquire(blocking=False):
-            error(429,'PLANNER_BUSY','已有排程请求正在处理，请稍后查看最近候选或重试')
+            error(429,'PLANNER_BUSY','正在生成计划，请稍后查看最近的方案，或过一会再试')
         app.state.planner_users.add(user_id)
     try:yield
     finally:
@@ -54,7 +54,7 @@ def proposal_value(p):
 
 def owned_proposal(db,user,id):
     p=db.scalar(select(PlanProposal).where(PlanProposal.id==id,PlanProposal.user_id==user.id))
-    if not p:error(404,'NOT_FOUND','找不到这个候选计划')
+    if not p:error(404,'NOT_FOUND','找不到这个计划方案，请重新生成')
     return p
 
 
@@ -108,18 +108,18 @@ def accept_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),d
     p=owned_proposal(db,user,id);s=owned_semester(db,user,p.semester_id,lock=True);db.refresh(p)
     if p.phase=='applied':return p.receipt
     if p.phase!='ready' or p.version!=body.expected_version or s.revision!=p.base_revision or s.revision!=body.expected_revision:
-        error(409,'SNAPSHOT_STALE','候选或学期安排已变化，请重新生成')
+        error(409,'SNAPSHOT_STALE','你的安排已经更新，请重新生成方案')
     result=p.payload['result']
-    if result.get('valid_until') and instant(result['valid_until'])<=utcnow():error(409,'PLAN_EXPIRED','候选已过有效时刻，请重新生成')
+    if result.get('valid_until') and instant(result['valid_until'])<=utcnow():error(409,'PLAN_EXPIRED','方案中的时间已经过去，请重新生成')
     if result['status']=='FEASIBLE_PARTIAL' and (not body.confirm_partial or body.unarranged_minutes!=result['unarranged_minutes']):
         error(422,'CONFIRM_PARTIAL','这是部分方案，请明确确认仍有多少分钟未安排')
-    if not result['can_apply']:error(422,'NOTHING_TO_APPLY','本轮没有需要新增的时间块')
+    if not result['can_apply']:error(422,'NOTHING_TO_APPLY','这次没有可以保存的新安排')
     if result.get('mode')=='replan':return apply_replan(db,user,s,p,result)
     request={**p.payload['request'],'_window_start':floor(instant(result['window_start']).timestamp()/60),
              '_window_end':floor(instant(result['window_end']).timestamp()/60)}
     now=utcnow();_,context=prepare(*snapshot(db,user,s),request,now)
     if context is None or not validate_result(context,result,p.payload['request']['allow_partial']):
-        error(409,'PLAN_EXPIRED','候选已过期或不再满足最新约束，请重新生成')
+        error(409,'PLAN_EXPIRED','这个方案已不适合当前安排，请重新生成')
     ids=[]
     for block in result['blocks']:
         row=PlanBlock(user_id=user.id,semester_id=s.id,item_id=block['item_id'],proposal_id=p.id,
@@ -153,7 +153,7 @@ def undo_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),db:
 def apply_replan(db,user,s,p,result):
     now=utcnow();_,context=replanner.prepare(*snapshot(db,user,s),p.payload['request'],now)
     if context is None or not replanner.validate(context,result['blocks']):
-        error(409,'PLAN_EXPIRED','重排候选不再满足最新约束，请重新生成')
+        error(409,'PLAN_EXPIRED','当前安排已有变化，请重新生成调整方案')
     rows={r.id:r for r in plan_rows(db,user,s.id)};before=[];applied_versions={}
     for block in result['blocks']:
         row=rows[block['id']]

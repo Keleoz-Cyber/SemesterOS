@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../app/controller.dart';
@@ -141,7 +142,7 @@ class _CapturePageState extends State<CapturePage> {
       }
       await openForm(candidate: candidate);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -176,9 +177,9 @@ class _CapturePageState extends State<CapturePage> {
       padding: const EdgeInsets.all(20),
       children: [
         const CampusHero(
-          eyebrow: 'CAPTURE / 一句话记录',
+          eyebrow: '一句话记录',
           title: '把通知变成事项',
-          subtitle: '先解析，再核对\n确认后才会保存',
+          subtitle: 'AI帮你整理\n你确认后再保存',
         ),
         const SizedBox(height: 18),
         TextField(
@@ -209,7 +210,7 @@ class _CapturePageState extends State<CapturePage> {
           style: TextStyle(fontSize: 13),
         ),
         const SizedBox(height: 16),
-        const SoftNotice('本次文字和当前学期课程候选会发送至DeepSeek进行解析。请只粘贴需要记录的通知内容。'),
+        const SoftNotice('这段文字和本学期的课程名称会发送给AI，用于整理事项。请只粘贴本次需要记录的内容。'),
         const SizedBox(height: 16),
         if (busy)
           const Padding(
@@ -218,7 +219,7 @@ class _CapturePageState extends State<CapturePage> {
               children: [
                 LinearProgressIndicator(),
                 SizedBox(height: 12),
-                Text('正在解析文字并核对字段…'),
+                Text('AI正在整理事项、时间和提醒…'),
               ],
             ),
           ),
@@ -228,7 +229,7 @@ class _CapturePageState extends State<CapturePage> {
         ],
         FilledButton(
           onPressed: busy ? null : parse,
-          child: const Text('解析并核对'),
+          child: const Text('让AI整理'),
         ),
         TextButton(
           onPressed: busy ? null : () => openForm(),

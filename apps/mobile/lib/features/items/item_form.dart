@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -153,7 +154,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
 
   Future<void> save() async {
     if (kind != 'exam' && startPolicy == 'at' && earliestAt == null) {
-      setState(() => error = '请选择最早开始时间，或将开始口径改为待确认');
+      setState(() => error = '请选择最早开始时间，暂时不确定也可以选择“待确认”');
       return;
     }
     final effortText = minutes.text.trim();
@@ -266,7 +267,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -340,7 +341,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
           CampusHero(
-            eyebrow: editing ? '修改后会更新相关提醒' : 'CAPTURE / 把事情记下来',
+            eyebrow: editing ? '修改后会更新相关提醒' : '把事情记下来',
             title: editing ? '核对修改内容' : '先记下重要的事',
             subtitle: '不确定的信息可以保留\n时间与提醒由你确认',
           ),
@@ -359,7 +360,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
                       .isNotEmpty)
                     const Padding(
                       padding: EdgeInsets.only(top: 10),
-                      child: Text('包含AI推断或未直接摘录的字段，请逐项核对。'),
+                      child: Text('有些内容是AI根据上下文推测的，请重点检查下面标出的信息。'),
                     ),
                   Wrap(
                     spacing: 6,
@@ -371,7 +372,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
                               .map((f) => '$f'.split('.').first)
                               .toSet())
                         StatusPill(
-                          '核对${{'title': '标题', 'time': '时间', 'remaining_minutes': '耗时', 'course_id': '课程关联', 'certainty': '确定性', 'kind': '事项类型'}[field] ?? '解析字段'}',
+                          '核对${{'title': '标题', 'time': '时间', 'remaining_minutes': '耗时', 'course_id': '课程关联', 'certainty': '时间是否确定', 'kind': '事项类型'}[field] ?? '这项信息'}',
                         ),
                     ],
                   ),
@@ -432,7 +433,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
             ],
             onChanged: (v) => setState(() => course = v),
           ),
-          const SectionHeading('时间与确定性'),
+          const SectionHeading('时间安排'),
           Wrap(
             spacing: 8,
             runSpacing: 6,
@@ -496,8 +497,8 @@ class _ItemFormPageState extends State<ItemFormPage> {
           if (precision == 'date' && kind != 'exam')
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('按当天结束前作为截止口径'),
-              subtitle: const Text('用于提醒和后续规划；原通知仍保留日期精度。'),
+              title: const Text('在这一天结束前完成'),
+              subtitle: const Text('用于计算提醒和安排计划，原通知只写了日期的情况也会保留。'),
               value: dayEnd,
               onChanged: (v) => setState(() => dayEnd = v!),
             ),

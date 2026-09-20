@@ -203,7 +203,7 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
         data['time']['end_at'] = item.payload['time'].get('end_at')
     coverage=sum(b['future_minutes'] for b in preview_blocks(db,item,utcnow()))
     if coverage and (data.get('remaining_minutes') is None or data['remaining_minutes']<coverage):
-        error(409,'PLAN_CONFIRMATION_REQUIRED','已有未来计划超过新剩余工作量，请通过更新进度选择需取消的块')
+        error(409,'PLAN_CONFIRMATION_REQUIRED','已有计划的时长超过了任务还需要的时间，请在“更新进度”中选择要取消的安排')
     # Original source/candidate evidence is immutable; corrections have their own audit reason.
     for key in ('source_text', 'candidate_id', 'parse_evidence', 'review_exam_id','source_id'):
         if key in item.payload:
@@ -279,7 +279,7 @@ def create_reminder(item_id: str, body: ReminderCreate, user: User = Depends(cur
         return cached
     check_version(item, body.expected_item_version)
     if len(rules_for(db, item)) >= 20:
-        error(422, 'LIMIT_REACHED', '每条事项最多20条提醒，请修改已有规则')
+        error(422, 'LIMIT_REACHED', '每件事最多设置20条提醒，请调整已有提醒')
     rule = add_rule(db, item, body.model_dump(mode='json', exclude={'expected_item_version'}))
     audit(db, item, '用户增加提醒')
     result = serialize_rule(rule, item)

@@ -86,7 +86,7 @@ def capture_text(body: CaptureInput, request: Request, user: User = Depends(curr
         elif parsed.item is not None:
             raise ValueError('非新增不能附带写入事项')
     except (ValidationError, ValueError, TypeError):
-        error(502, 'INVALID_MODEL_OUTPUT', '解析字段未通过校验，原文已保留，请重试或手工填写')
+        error(502, 'INVALID_MODEL_OUTPUT', 'AI整理的内容还不完整，原文已保留。请重试或手动填写')
     data = {'intent': parsed.intent, 'item': item, 'evidence': parsed.evidence,
             'inferred_fields': parsed.inferred_fields, 'questions': parsed.questions,
             'reference_at': body.reference_at.isoformat(), 'metadata': metadata, 'review_state': 'pending'}

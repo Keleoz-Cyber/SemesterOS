@@ -163,8 +163,8 @@ void main() {
       );
       f.c.observeRevision('s', 2);
       await tester.pumpAndSettle();
-      expect(find.text('生成后安排已变化，此候选不能应用，请重新生成。'), findsOneWidget);
-      expect(find.text('确认应用本轮计划'), findsNothing);
+      expect(find.text('你的安排已有变化，请重新生成计划。'), findsOneWidget);
+      expect(find.text('确认保存计划'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
     },
@@ -177,21 +177,21 @@ void main() {
     await route(tester, SchedulePage(controller: f.c));
     await capture(tester, 'schedule-input');
     await tester.scrollUntilVisible(
-      find.text('生成候选计划'),
+      find.text('生成计划方案'),
       350,
       scrollable: find.byType(Scrollable).first,
     );
-    await ioTap(tester, find.text('生成候选计划'));
+    await ioTap(tester, find.text('生成计划方案'));
     expect(f.generated, 1);
     expect(f.applied, 0);
-    expect(find.text('核对候选计划'), findsOneWidget);
+    expect(find.text('查看计划方案'), findsOneWidget);
     await capture(tester, 'schedule-proposal');
     await tester.scrollUntilVisible(
-      find.text('确认应用本轮计划'),
+      find.text('确认保存计划'),
       350,
       scrollable: find.byType(Scrollable).first,
     );
-    await ioTap(tester, find.text('确认应用本轮计划'));
+    await ioTap(tester, find.text('确认保存计划'));
     expect(f.applied, 1);
     expect(f.c.items.single['remaining_minutes'], 120);
     await tester.pumpWidget(const SizedBox());
@@ -207,11 +207,11 @@ void main() {
         ProposalPage(controller: f.c, proposal: f.proposal(partial: true)),
       );
       await tester.scrollUntilVisible(
-        find.text('应用部分方案（仍有45分钟未安排）'),
+        find.text('保存已安排部分（仍有45分钟未安排）'),
         350,
         scrollable: find.byType(Scrollable).first,
       );
-      final button = find.widgetWithText(FilledButton, '应用部分方案（仍有45分钟未安排）');
+      final button = find.widgetWithText(FilledButton, '保存已安排部分（仍有45分钟未安排）');
       expect(tester.widget<FilledButton>(button).onPressed, isNull);
       expect(f.applied, 0);
       await tester.ensureVisible(find.byType(CheckboxListTile));

@@ -40,7 +40,7 @@ String reminderState(String? value) => switch (value) {
 String reminderLabel(Map<String, dynamic> r) => r['mode'] == 'absolute'
     ? '指定时刻'
     : (r['lead_minutes'] == 0
-          ? '事项开始时'
+          ? '到时间时'
           : '提前${(r['lead_minutes'] as int) % 1440 == 0
                 ? '${r['lead_minutes'] ~/ 1440}天'
                 : (r['lead_minutes'] as int) % 60 == 0

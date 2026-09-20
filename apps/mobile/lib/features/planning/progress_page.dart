@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
@@ -71,9 +72,9 @@ class _ProgressPageState extends State<ProgressPage> {
           ? null
           : await confirmPlanChange(
               context,
-              title: complete ? '确认任务已经完成' : '确认新的剩余工作量',
+              title: complete ? '确认任务已经完成' : '确认现在还需要多久',
               message:
-                  '原剩余：${minutesLabel(preview['before_remaining_minutes'])}\n新剩余：${minutesLabel(preview['after_remaining_minutes'])}\n实际投入单独记录。',
+                  '原来还需：${minutesLabel(preview['before_remaining_minutes'])}\n现在还需：${minutesLabel(preview['after_remaining_minutes'])}\n实际投入单独记录。',
               confirmLabel: complete ? '确认完成并停止提醒' : '确认更新进度',
               blocks: blocks,
               cancelAll: complete,
@@ -85,7 +86,7 @@ class _ProgressPageState extends State<ProgressPage> {
           : await showDialog<bool>(
               context: context,
               builder: (context) => AlertDialog(
-                title: Text(complete ? '确认任务已经完成' : '确认新的剩余工作量'),
+                title: Text(complete ? '确认任务已经完成' : '确认现在还需要多久'),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -94,7 +95,7 @@ class _ProgressPageState extends State<ProgressPage> {
                       Text('${widget.item['title']}'),
                       const SizedBox(height: 12),
                       Text(
-                        '原剩余：${minutesLabel(preview['before_remaining_minutes'])}\n新剩余：${minutesLabel(preview['after_remaining_minutes'])}',
+                        '原来还需：${minutesLabel(preview['before_remaining_minutes'])}\n现在还需：${minutesLabel(preview['after_remaining_minutes'])}',
                       ),
                       if (preview['actual_minutes'] != null)
                         Text(
@@ -135,7 +136,7 @@ class _ProgressPageState extends State<ProgressPage> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -150,7 +151,7 @@ class _ProgressPageState extends State<ProgressPage> {
         padding: const EdgeInsets.all(20),
         children: [
           CampusHero(
-            eyebrow: 'PROGRESS / 以实际工作为准',
+            eyebrow: '以实际工作为准',
             title: '还需要多少时间',
             subtitle: '${widget.item['title']}',
           ),
@@ -162,7 +163,7 @@ class _ProgressPageState extends State<ProgressPage> {
             controller: remaining,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-              labelText: '新的预计剩余分钟（必填）',
+              labelText: '预计还需要多久（分钟，必填）',
               helperText: '填0后，还需明确确认完成',
             ),
             validator: (v) => number(v, required: true),
@@ -172,7 +173,7 @@ class _ProgressPageState extends State<ProgressPage> {
             key: const Key('progress-actual'),
             controller: actual,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: '本次实际投入分钟（可留空）'),
+            decoration: const InputDecoration(labelText: '这次实际用了多久（分钟，可留空）'),
             validator: number,
           ),
           const SizedBox(height: 16),
@@ -188,7 +189,7 @@ class _ProgressPageState extends State<ProgressPage> {
           ],
           FilledButton(
             onPressed: busy ? null : save,
-            child: Text(busy ? '正在核对…' : '预览进度更新'),
+            child: Text(busy ? '正在核对…' : '确认本次进度'),
           ),
           const SizedBox(height: 16),
           ExpansionTile(
@@ -206,7 +207,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   );
                 }
               } catch (e) {
-                if (mounted) setState(() => error = '$e');
+                if (mounted) setState(() => error = userError(e));
               }
             },
             children: [

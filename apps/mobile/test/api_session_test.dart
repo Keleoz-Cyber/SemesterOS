@@ -36,6 +36,55 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   test(
+    'user errors preserve recovery instructions without raw exception details',
+    () {
+      expect(userError(ApiFailure('登录已过期，请重新登录')), '登录已过期，请重新登录');
+      expect(userError(Exception('请选择提醒时间')), '请选择提醒时间');
+      expect(userError(const FormatException('请填写正确的日期')), '请填写正确的日期');
+      final hidden = userError(StateError('private plugin diagnostics'));
+      expect(hidden, isNot(contains('StateError')));
+      expect(hidden, isNot(contains('private')));
+      expect(userError(ApiFailure('Internal Server Error')), hidden);
+      expect(hidden, contains('重试'));
+    },
+  );
+  test(
+    'HTTP failure and connection failure give different recovery messages',
+    () async {
+      final api = SemesterApi()..session = account('preview');
+      api.dio.httpClientAdapter = ControlledTransport(
+        (r) async => body('upstream error', 500),
+      );
+      await expectLater(
+        api.request('GET', '/items'),
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.message,
+            'message',
+            contains('服务暂时不可用'),
+          ),
+        ),
+      );
+      api.dio.httpClientAdapter = ControlledTransport(
+        (r) async => throw DioException(
+          requestOptions: r,
+          type: DioExceptionType.connectionError,
+        ),
+      );
+      await expectLater(
+        api.request('GET', '/items'),
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.message,
+            'message',
+            contains('检查网络'),
+          ),
+        ),
+      );
+      api.dio.close();
+    },
+  );
+  test(
     'a delayed response from account A cannot be used by account B',
     () async {
       final api = SemesterApi();

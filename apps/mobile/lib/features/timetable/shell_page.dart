@@ -311,7 +311,7 @@ class _ShellPageState extends State<ShellPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const CampusHero(
-            eyebrow: 'HELLO / 新的开始',
+            eyebrow: '新的开始',
             title: '我的新学期',
             subtitle: '从一张课表开始\n让安排清晰起来',
           ),
@@ -355,19 +355,19 @@ class _ShellPageState extends State<ShellPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const CampusHero(
-              eyebrow: 'PLAN / 给重要的事留时间',
+              eyebrow: '给重要的事留时间',
               title: '个人计划',
               subtitle: '课程先安顿好\n再安排自己的时间',
             ),
             const SizedBox(height: 22),
             const Align(
               alignment: Alignment.centerLeft,
-              child: StatusPill('暂未开放', icon: Icons.construction_rounded),
+              child: StatusPill('暂时无法加载', icon: Icons.construction_rounded),
             ),
             const SizedBox(height: 12),
             EmptyPanel(
-              title: '规划能力正在准备中',
-              message: '当前版本已支持真实课表导入与查看。个人任务和AI规划还没有开放，课程不会被自动移动。',
+              title: '计划暂时无法加载',
+              message: '可以先查看课表，稍后重新打开App再试。',
               action: '查看本周课表',
               onAction: () => switchTab(1),
               icon: Icons.checklist_rounded,

@@ -71,28 +71,28 @@ def prepare(db,user,p,s,selection):
     data=deepcopy(p.payload);suggestion=data['suggestion'];intent=suggestion['intent']
     source_guard(db,user,data.get('source'),s.id,True)
     if data.get('source',{}).get('kind')=='image' and not selection.confirm_direct_request:
-        error(422,'DIRECT_REQUEST_REQUIRED','请确认这是你本人希望执行的修改，而非图片通知中的命令')
+        error(422,'DIRECT_REQUEST_REQUIRED','请先勾选确认：你希望按图片中的内容修改自己的安排')
     if intent in ('clarify','unsupported'):error(422,'UNSUPPORTED_OPERATION','请重新描述修改请求，或使用对应的手工入口')
     selected=selection.model_dump(mode='json');preview={'intent':intent,'affected_blocks':[]}
     if intent=='request_plan':
-        if not selection.tasks:error(422,'CHOOSE_TASKS','请选择任务，并核对它们真实的剩余工作量')
+        if not selection.tasks:error(422,'CHOOSE_TASKS','请先选择任务，并确认每项还需要多久')
         tasks=[]
         for target in selection.tasks:
             item=owned_item(db,user,target.item_id)
             if item.semester_id!=s.id or item.lifecycle!='active' or item.payload['kind']=='exam':error(422,'INVALID_TARGET','只能选择本学期活跃的个人任务或作业')
-            if item.payload.get('remaining_minutes') is None or item.payload.get('start_policy','unconfirmed')=='unconfirmed':error(422,'PLAN_INPUT_INCOMPLETE','请先在事项详情确认剩余工作量与最早开始，再核对规划请求')
-            if target.target_minutes is not None and target.target_minutes>item.payload['remaining_minutes']:error(422,'TARGET_EXCEEDS_WORK','本轮目标不能超过剩余工作量；增加工作量需要另行确认')
+            if item.payload.get('remaining_minutes') is None or item.payload.get('start_policy','unconfirmed')=='unconfirmed':error(422,'PLAN_INPUT_INCOMPLETE','请先到任务详情填写还需要多久，以及最早什么时候能开始')
+            if target.target_minutes is not None and target.target_minutes>item.payload['remaining_minutes']:error(422,'TARGET_EXCEEDS_WORK','安排时长不能超过任务还需要的时间。如果工作增加了，请先更新任务进度')
             tasks.append(serialize_item(db,item))
         mode=selection.plan_mode or suggestion['plan_mode'];selected['plan_mode']=mode
         if mode=='replan':
             if selection.window_start_at or selection.window_end_at or (suggestion['needs_window'] and not selection.use_default_window):
-                error(422,'REPLAN_WINDOW_UNSUPPORTED','重排按既有学习时间与截止约束进行；若要限定新时段，请选择新增安排或明确采用原可学习范围')
+                error(422,'REPLAN_WINDOW_UNSUPPORTED','调整已有计划会使用你设置的学习时间。想指定新时段，请改选“安排还没排好的任务”')
             request=ReplanInput(task_ids=[i['id'] for i in tasks],lead_minutes=selection.lead_minutes).model_dump(mode='json')
         else:
-            if suggestion['needs_window'] and not selection.window_start_at and not selection.use_default_window:error(422,'CHOOSE_WINDOW','请明确起止时刻，或明确改用默认规划窗口')
+            if suggestion['needs_window'] and not selection.window_start_at and not selection.use_default_window:error(422,'CHOOSE_WINDOW','请选择开始和结束时间，或勾选使用已设置的学习时间')
             try:request=ScheduleInput(days=selection.days,chunk_minutes=selection.chunk_minutes,lead_minutes=selection.lead_minutes,tasks=selection.tasks,
                 window_start_at=selection.window_start_at,window_end_at=selection.window_end_at).model_dump(mode='json')
-            except ValidationError:error(422,'INVALID_WINDOW','请核对任务目标和规划窗口，起止应完整且跨度不超过28天')
+            except ValidationError:error(422,'INVALID_WINDOW','请检查任务时长、开始和结束时间，安排范围不能超过28天')
         preview.update(tasks=tasks,planning_request=request)
     else:
         if not selection.target_item_id:error(422,'CHOOSE_TARGET','请明确选择要修改的事项')
@@ -119,12 +119,12 @@ def prepare(db,user,p,s,selection):
             if action=='disable':payload['enabled']=False
             elif selection.reminder:
                 if selection.expected_item_version!=item.version or (rule is not None and selection.expected_reminder_version!=rule.version):
-                    error(409,'REMINDER_EDITOR_STALE','提醒编辑期间事项或规则已变化，请刷新所选事项后重新核对')
+                    error(409,'REMINDER_EDITOR_STALE','提醒或事项已有更新，请刷新后重新设置')
                 payload=selection.reminder.model_dump(mode='json')
             else:
                 requested=suggestion['reminder_patch']
                 if (requested['mode']=='absolute' and requested['trigger_at'] is None) or (requested['mode']=='relative' and requested['lead_minutes'] is None):
-                    error(422,'REMINDER_INCOMPLETE','请明确新的提醒时刻或提前量，不能沿用旧值假装完成修改')
+                    error(422,'REMINDER_INCOMPLETE','请设置新的提醒时间，或填写希望提前多久提醒')
                 payload.update({k:v for k,v in suggestion['reminder_patch'].items() if v is not None})
                 if payload.get('mode')=='absolute':payload['lead_minutes']=None
                 if payload.get('mode')=='relative':payload['trigger_at']=None
@@ -132,7 +132,7 @@ def prepare(db,user,p,s,selection):
             except ValidationError:error(422,'REMINDER_INCOMPLETE','请明确提醒模式、提前量或具体时刻')
             if action=='add' and len(rules)>=20:error(422,'LIMIT_REACHED','每条事项最多20条提醒')
             validate_rule(db,item,payload,skip=rule.id if rule else None)
-            if rule and rule.payload==payload:error(422,'NO_CHANGES','提醒参数没有变化，请补充要修改的时刻、用途或开关')
+            if rule and rule.payload==payload:error(422,'NO_CHANGES','这条提醒没有变化。你可以调整时间、用途，或关闭提醒')
             from types import SimpleNamespace
             after=serialize_rule(SimpleNamespace(id=rule.id if rule else 'new',version=rule.version if rule else 0,payload=payload),item)
             preview.update(reminder_action=action,reminder_before=serialize_rule(rule,item,rules) if rule else None,reminder_after=after,reminder_payload=payload)
@@ -155,7 +155,7 @@ def parse_operation(body:OperationParse,request:Request,user:User=Depends(curren
         source={'id':origin.id,'version':origin.version,'kind':origin.kind,'original_text':origin.original_text,'reviewed_text':origin.text}
     admission(request,user)
     model=getattr(request.app.state,'operation_model',None)
-    raw,metadata=model(body.text,body.reference_at.isoformat(),[]) if model else deepseek_text(body.text,body.reference_at.isoformat(),[],system_prompt=PROMPT,prompt_version='operation-v1')
+    raw,metadata=model(body.text,body.reference_at.isoformat(),[]) if model else deepseek_text(body.text,body.reference_at.isoformat(),[],system_prompt=PROMPT,prompt_version='operation-v2')
     suggestion=validate_suggestion(raw,body.text)
     db.expire_all();s=owned_semester(db,user,body.semester_id,lock=True);source_guard(db,user,source,s.id,True)
     rows=eligible(db,user,s.id,suggestion['intent']);q=''.join(suggestion['target_query'].casefold().split()).strip('“”"\'')
@@ -195,7 +195,7 @@ def resolve(id:str,body:OperationResolve,user:User=Depends(current_user),db:Sess
 def reject(id:str,body:OperationAction,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p,s=own(db,user,id)
     if p.phase=='rejected':return output(db,user,p,s)
-    if p.phase=='applied' or p.version!=body.expected_version:error(409,'OPERATION_STALE','已应用的操作不能通过拒绝回滚，请新建修改')
+    if p.phase=='applied' or p.version!=body.expected_version:error(409,'OPERATION_STALE','这次修改已经保存。如果还想调整，请发起一次新的修改')
     p.phase='rejected';p.version+=1;db.commit();return output(db,user,p,s)
 
 

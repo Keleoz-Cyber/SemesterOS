@@ -158,7 +158,7 @@ class _ReminderEditorState extends State<ReminderEditor> {
             decoration: const InputDecoration(labelText: '提前多少分钟'),
           ),
           const SizedBox(height: 12),
-          const SoftNotice('提前1天表示24小时。事项只有日期或周次时，请补充时间口径，或选择指定时刻。'),
+          const SoftNotice('提前1天就是提前24小时。如果还不知道事项的具体时间，可以直接指定提醒日期和时刻。'),
         ] else
           OutlinedButton.icon(
             onPressed: pick,
@@ -195,7 +195,7 @@ class _ReminderEditorState extends State<ReminderEditor> {
         FilledButton(onPressed: save, child: const Text('确认这条提醒')),
         const SizedBox(height: 8),
         const Text(
-          '规则保存后可单独开启系统通知。普通定时提醒可能受系统省电影响而延迟。',
+          '保存后，请开启系统通知。手机省电设置可能让提醒延迟。',
           style: TextStyle(fontSize: 12),
         ),
       ],

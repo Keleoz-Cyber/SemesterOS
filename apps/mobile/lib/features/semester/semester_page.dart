@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
@@ -81,7 +82,7 @@ class _SemesterPageState extends State<SemesterPage> {
       await widget.controller.openSession(null, '${created['id']}');
       if (mounted) context.go('/');
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }

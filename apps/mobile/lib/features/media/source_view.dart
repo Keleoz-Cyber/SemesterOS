@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
@@ -72,7 +73,7 @@ class _SourceViewPageState extends State<SourceViewPage> {
       }
       if (mounted) setState(() {});
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     }
   }
 
@@ -97,7 +98,7 @@ class _SourceViewPageState extends State<SourceViewPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除原图 / 原录音？'),
-        content: const Text('服务端原文件将删除；识别文字、核对文稿和已经保存的事项仍保留。'),
+        content: const Text('将删除账号中保存的原图或录音。识别文字、修改记录和已保存的事项会保留。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -127,7 +128,7 @@ class _SourceViewPageState extends State<SourceViewPage> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     }
   }
 
@@ -167,9 +168,9 @@ class _SourceViewPageState extends State<SourceViewPage> {
                   ),
                 ),
               if (source != null) ...[
-                const SectionHeading('机器识别原文'),
+                const SectionHeading('AI识别的原文'),
                 SelectableText(source!['original_text'] ?? ''),
-                const SectionHeading('最近核对文稿'),
+                const SectionHeading('你确认的文字'),
                 SelectableText(source!['text'] ?? ''),
               ],
               if (source != null && source!['file_deleted'] != true)

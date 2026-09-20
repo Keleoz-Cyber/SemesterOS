@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -48,7 +49,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     }
   }
 
@@ -106,14 +107,14 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
     );
     if (end == null || !mounted) return;
     if (!end.isAfter(start)) {
-      setState(() => error = '禁排结束必须晚于开始');
+      setState(() => error = '结束时间需要晚于开始时间');
       return;
     }
     final label = TextEditingController(text: original?['label'] ?? '');
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('禁排原因（可留空）'),
+        title: const Text('这段时间做什么（可留空）'),
         content: TextField(
           controller: label,
           maxLength: 120,
@@ -154,10 +155,12 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
       ),
     if ((data['weekly'] as List).isEmpty)
       Text(
-        data['configured'] == false ? '尚未确认学习时间，暂不计算容量' : '确认没有可学习时段，容量按0计算',
+        data['configured'] == false
+            ? '还没设置学习时间，暂时无法估算空闲时长'
+            : '没有设置任何学习时段，暂时无法安排任务',
       ),
     const SizedBox(height: 8),
-    Text('${(data['exclusions'] as List).length}条临时禁排'),
+    Text('${(data['exclusions'] as List).length}条临时不可用时段'),
     for (final row in data['exclusions'])
       Text(
         '${displayInstant(row['start_at'])} 至 ${displayInstant(row['end_at'])} ${row['label']}',
@@ -206,7 +209,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                 if ((preview['affected_plan_count'] ?? 0) > 0) ...[
                   const SizedBox(height: 12),
                   Text(
-                    '新设置会使${preview['affected_plan_count']}段已有计划不再满足约束。确认后会标出冲突，计划保持原位，需要另行处理。',
+                    '调整后，${preview['affected_plan_count']}段已有计划将落在不可用时段。保存后会标出冲突，你可以再调整这些计划。',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -251,7 +254,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -276,7 +279,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
             padding: const EdgeInsets.all(20),
             children: [
               const CampusHero(
-                eyebrow: 'TIME / 给自己留出时间',
+                eyebrow: '给自己留出时间',
                 title: '什么时候能学习',
                 subtitle: '只在你确认的时段内\n计算可规划时间',
               ),
@@ -351,7 +354,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                   ),
                 ),
               SectionHeading(
-                '临时禁排',
+                '临时不可用时段',
                 action: '添加',
                 onAction: busy ? null : () => editExclusion(),
               ),
@@ -369,7 +372,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                       subtitle: Text('${row['label']}'),
                       onTap: busy ? null : () => editExclusion(row),
                       trailing: IconButton(
-                        tooltip: '移除此禁排',
+                        tooltip: '移除此不可用时段',
                         onPressed: busy
                             ? null
                             : () => setState(() => exclusions.remove(row)),

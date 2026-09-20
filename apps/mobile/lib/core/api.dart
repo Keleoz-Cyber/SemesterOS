@@ -16,6 +16,24 @@ class ApiFailure implements Exception {
   String toString() => message;
 }
 
+/// Keep actionable messages, without exposing plugin errors or stack details.
+String userError(Object error) {
+  if (error is ApiFailure &&
+      RegExp(r'[\u4e00-\u9fff]').hasMatch(error.message)) {
+    return error.message;
+  }
+  if (error is FormatException &&
+      RegExp(r'[\u4e00-\u9fff]').hasMatch(error.message)) {
+    return error.message;
+  }
+  final text = error.toString();
+  if (text.startsWith('Exception: ')) {
+    final message = text.substring('Exception: '.length);
+    if (RegExp(r'[\u4e00-\u9fff]').hasMatch(message)) return message;
+  }
+  return '暂时没能完成，请重试。如果仍有问题，可以返回后重新打开。';
+}
+
 class SemesterApi {
   final Dio dio;
   final FlutterSecureStorage storage;
@@ -100,7 +118,7 @@ class SemesterApi {
       if (e.response?.statusCode == 401) {
         throw ApiFailure('登录已过期，请重新登录', unauthorized: true);
       }
-      throw ApiFailure('暂时无法刷新登录，请稍后重试；本机课表仍保留');
+      throw ApiFailure('暂时无法验证登录状态，请稍后重试。本机课表仍可查看。');
     }
   }
 
@@ -157,9 +175,14 @@ class SemesterApi {
         }
         final response = e.response?.data;
         throw ApiFailure(
-          response is Map
-              ? '${response['message'] ?? '操作未完成，请重试'}'
-              : '无法连接服务，请检查网络；已保存课表仍可查看',
+          response is Map && response['message'] is String
+              ? response['message'] as String
+              : e.type == DioExceptionType.receiveTimeout ||
+                    e.type == DioExceptionType.sendTimeout
+              ? '等待时间有点长，请稍后重试。已保存的内容不受影响。'
+              : e.response != null
+              ? '服务暂时不可用，请稍后重试。已保存的内容不受影响。'
+              : '暂时连接不上，请检查网络后重试。已保存的课表仍可查看。',
           unauthorized: e.response?.statusCode == 401 && authenticated,
         );
       }

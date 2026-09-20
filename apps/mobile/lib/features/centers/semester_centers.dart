@@ -103,7 +103,7 @@ class CourseHubPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               CampusHero(
-                eyebrow: 'COURSE / 课程事务',
+                eyebrow: '课程事务',
                 title: course['title'],
                 subtitle: '${course['teacher'] ?? '教师待补充'}\n作业、考试与每一次课程变化',
               ),
@@ -171,7 +171,7 @@ class CourseHubPage extends StatelessWidget {
                 changeCard(change),
               ExpansionTile(
                 title: Text(
-                  '本学期有效课次（${controller.rows(data['occurrences']).length}次）',
+                  '本学期上课安排（${controller.rows(data['occurrences']).length}次）',
                 ),
                 children: [
                   for (final e in controller.rows(data['occurrences']))
@@ -230,7 +230,7 @@ class SemesterHome extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           CampusHero(
-            eyebrow: 'SEMESTER / 看见整个学期',
+            eyebrow: '看见整个学期',
             title: semester['name'],
             subtitle: '重要节点按周排列\n不确定的时间继续保留待确认',
           ),
@@ -286,9 +286,7 @@ class SemesterHome extends StatelessWidget {
             ],
           ),
           const SectionHeading('学期时间轴'),
-          const SoftNotice(
-            '按截止周归集的剩余工作可提前完成，不等于必须在该周投入。负荷按有效计划占用计算；含高风险事项时单独提示。',
-          ),
+          const SoftNotice('任务显示在截止日期所在周，也可以提前完成。每周忙不忙，按已安排的计划估算；紧急任务会单独提醒。'),
           for (final week in controller.rows(data['weeks']))
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -314,7 +312,7 @@ class SemesterHome extends StatelessWidget {
                         children: [
                           if (fresh) ...[
                             Text(
-                              '未来可学习 ${week['available_minutes'] == null ? '待确认' : minutesLabel(week['available_minutes'])} · 有效计划 ${minutesLabel(week['planned_minutes'])}',
+                              '未来可学习 ${week['available_minutes'] == null ? '待确认' : minutesLabel(week['available_minutes'])} · 已安排 ${minutesLabel(week['planned_minutes'])}',
                             ),
                             Text(
                               '本周明确截止的已知剩余工作 ${minutesLabel(week['known_due_remaining_minutes'])}',

@@ -262,7 +262,7 @@ class _ImportPageState extends State<ImportPage> {
         leading: IconButton(
           onPressed: leave,
           icon: const Icon(Icons.arrow_back),
-          tooltip: '返回并清理教务会话',
+          tooltip: '返回并退出教务登录',
         ),
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,

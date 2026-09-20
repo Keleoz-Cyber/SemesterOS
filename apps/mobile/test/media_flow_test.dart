@@ -99,11 +99,11 @@ void main() {
       await route(tester, page(f));
       await settleIo(tester);
       await tester.scrollUntilVisible(
-        find.text('直接手工填写（未上传文件不关联）'),
+        find.text('不上传文件，直接手动填写'),
         250,
         scrollable: find.byType(Scrollable).first,
       );
-      await ioTap(tester, find.text('直接手工填写（未上传文件不关联）'));
+      await ioTap(tester, find.text('不上传文件，直接手动填写'));
       expect(find.byType(ItemFormPage), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
@@ -210,11 +210,11 @@ void main() {
       await route(tester, page(f));
       await settleIo(tester);
       await tester.scrollUntilVisible(
-        find.text('仅将核对文稿保存到账号'),
+        find.text('先保存文字，稍后整理'),
         250,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.runAsync(() => tester.tap(find.text('仅将核对文稿保存到账号')));
+      await tester.runAsync(() => tester.tap(find.text('先保存文字，稍后整理')));
       await tester.pump(const Duration(milliseconds: 100));
       await tester.scrollUntilVisible(
         find.text('取消当前处理，保留草稿'),

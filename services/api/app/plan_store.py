@@ -34,7 +34,7 @@ def cancel_for_change(db,user,item,now,ids,confirm_locked,remaining=None,all_req
     if any(b.locked and b.id in selected for b in blocks) and not confirm_locked:
         error(422,'LOCKED_CONFIRMATION','包含锁定计划，需明确确认解锁并取消')
     kept=sum(future_minutes(block_value(b),now.timestamp()) for b in blocks if b.id not in selected)
-    if remaining is not None and kept>remaining:error(422,'PLAN_OVER_COVERAGE','保留的未来计划超过新剩余工作量，请选择需取消的块')
+    if remaining is not None and kept>remaining:error(422,'PLAN_OVER_COVERAGE','保留计划的总时长超过了任务还需要的时间，请再取消几段计划')
     before=[block_value(b) for b in blocks if b.id in selected]
     for b in blocks:
         if b.id in selected:b.status='cancelled';b.locked=False;b.version+=1;b.updated_at=now.isoformat()

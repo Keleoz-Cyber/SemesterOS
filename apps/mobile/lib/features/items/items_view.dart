@@ -35,7 +35,7 @@ class _ItemsViewState extends State<ItemsView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const CampusHero(
-            eyebrow: 'PLAN / 从记录开始',
+            eyebrow: '从记录开始',
             title: '我的事项',
             subtitle: '作业、考试和个人任务\n记下来，也记得提醒',
           ),
@@ -103,7 +103,7 @@ class _ItemsViewState extends State<ItemsView> {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                '清单最近同步：${displayInstant(c.syncedAt)}',
+                '提醒最近更新：${displayInstant(c.syncedAt)}',
                 style: const TextStyle(fontSize: 12),
               ),
             ),
@@ -113,7 +113,7 @@ class _ItemsViewState extends State<ItemsView> {
             label: const Text('开启或检查系统通知'),
           ),
           const SizedBox(height: 12),
-          const SoftNotice('新增和重排都先核对候选，再确认应用。安排过不代表工作已经完成。'),
+          const SoftNotice('先查看计划方案，再确认保存。任务完成后，记得更新进度。'),
         ],
       );
     },

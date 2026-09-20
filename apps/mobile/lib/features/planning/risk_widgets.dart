@@ -16,8 +16,8 @@ String minutesLabel(dynamic value) {
 String riskLabel(String? value) => switch (value) {
   'high' => '需优先处理',
   'medium' => '需要留意',
-  'low' => '当前记录下余量充足',
-  _ => '信息未齐',
+  'low' => '按当前安排，时间较充裕',
+  _ => '还需补充信息',
 };
 Color riskColor(String? value) => switch (value) {
   'high' => const Color(0xFFAA3A35),
@@ -28,21 +28,21 @@ Color riskColor(String? value) => switch (value) {
 String reasonLabel(String code) =>
     const {
       'needs_availability': '先确认每周可学习时间',
-      'other_tasks_incomplete': '其他任务信息未齐，整体负荷尚不能确定',
-      'plan_conflict': '已有个人计划与当前时间约束冲突，请核对',
-      'plan_overcoverage': '已有计划超过剩余工作量，请通过更新进度核对',
+      'other_tasks_incomplete': '其他任务还需补充信息，整体负荷尚不能确定',
+      'plan_conflict': '已有计划与课程、考试或学习时间冲突，请查看并调整',
+      'plan_overcoverage': '安排的时长超过了剩余所需时间，请更新进度并调整计划',
       'needs_estimate': '补充预计剩余耗时',
-      'needs_deadline': '确认截止日期及具体时刻或当天结束口径',
+      'needs_deadline': '请补充截止时间，或确认在当天结束前完成',
       'needs_start': '确认任务最早什么时候可以开始',
-      'needs_deadline_confirmation': '截止仍暂定或待确认，先核实确定性',
+      'needs_deadline_confirmation': '截止时间尚未确定，请先核实',
       'needs_exam_time': '相关考试缺少明确开始或结束时间',
       'outside_semester': '截止超过当前学期分析范围',
       'analysis_limit': '事项超过本次分析上限，暂未完成分析',
       'uncertain_exam': '附近有尚未正式确定的考试安排',
       'fixed_conflict': '相关固定安排或暂定预留存在时间冲突',
       'overdue': '已过确认的截止时间，仍有剩余工作',
-      'window_overload': '多项任务争用的窗口存在工作量缺口',
-      'no_contiguous_slot': '不可拆分任务没有足够长的连续空档',
+      'window_overload': '这些任务需要的总时间超过了同期可用时间',
+      'no_contiguous_slot': '这项任务需要一次完成，但目前没有足够长的连续空闲时间',
       'start_after_deadline': '最早开始时间不早于截止，请核对',
     }[code] ??
     '请核对相关时间信息';
@@ -75,7 +75,7 @@ class RiskBadge extends StatelessWidget {
               r == null
                   ? '计划余量待更新'
                   : gap > 0
-                  ? '共同窗口至少缺 ${minutesLabel(gap)}'
+                  ? '这些任务合计至少缺 ${minutesLabel(gap)}'
                   : slack == null
                   ? '计划余量待补齐信息'
                   : '计划余量 ${minutesLabel(slack)}',
@@ -98,7 +98,7 @@ class RiskBadge extends StatelessWidget {
             if (r?['planned_minutes'] != null &&
                 r?['unplanned_minutes'] != null)
               Text(
-                '有效未来覆盖 ${minutesLabel(r!['planned_minutes'])} · 尚待安排 ${minutesLabel(r['unplanned_minutes'])}',
+                '后续已安排 ${minutesLabel(r!['planned_minutes'])} · 尚待安排 ${minutesLabel(r['unplanned_minutes'])}',
                 style: const TextStyle(fontSize: 12, color: CampusColors.muted),
               ),
           ],
@@ -154,7 +154,7 @@ class RiskOverview extends StatelessWidget {
                 c.riskNotice ??
                     (data == null
                         ? '安排变化或分析过期后，需要重新计算。'
-                        : '${summary['active_task_count']}项待处理任务 · ${summary['incomplete_count']}项信息未齐'),
+                        : '${summary['active_task_count']}项待处理任务 · ${summary['incomplete_count']}项还需补充信息'),
               ),
               if (data != null) ...[
                 const SizedBox(height: 8),
@@ -195,7 +195,7 @@ class RiskOverview extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    '共享窗口：${displayInstant(summary['critical_window']['start_at'])} 至 ${displayInstant(summary['critical_window']['end_at'])}\n'
+                    '这些任务共同需要的时间段：${displayInstant(summary['critical_window']['start_at'])} 至 ${displayInstant(summary['critical_window']['end_at'])}\n'
                     '任务需 ${minutesLabel(summary['critical_window']['demand_minutes'])}，${summary['critical_window']['capacity_is_upper_bound'] == true ? '最多可用' : '可用'} ${minutesLabel(summary['critical_window']['capacity_minutes'])}',
                     style: const TextStyle(fontSize: 13),
                   ),
@@ -204,7 +204,7 @@ class RiskOverview extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        const SoftNotice('总时长足够，也可能没有合适的连续空档。容量检查后，可在“生成计划”中核对具体安排。'),
+        const SoftNotice('总时间够用，也可能缺少一整段空闲时间。可以点击“生成计划”，看看具体能怎么安排。'),
       ],
     );
   }
@@ -258,7 +258,7 @@ Future<void> showRiskDetails(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              '计划余量依据',
+              '时间够不够，怎么算的',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
@@ -280,12 +280,15 @@ Future<void> showRiskDetails(
                 CampusPanel(
                   child: Column(
                     children: [
-                      fact('窗口内可学习时间', risk['capacity_before_fixed_minutes']),
-                      fact('固定安排与禁排占用（合并重叠）', risk['fixed_occupied_minutes']),
+                      fact(
+                        '截止前可用于学习的时间',
+                        risk['capacity_before_fixed_minutes'],
+                      ),
+                      fact('课程、考试和不可用时段占用', risk['fixed_occupied_minutes']),
                       const Divider(),
-                      fact('扣除固定占用后的时间', risk['capacity_after_fixed_minutes']),
-                      fact('其他任务有效计划占用', risk['other_plan_minutes']),
-                      fact('当前任务剩余工作量', risk['remaining_minutes']),
+                      fact('扣除这些安排后可用', risk['capacity_after_fixed_minutes']),
+                      fact('已安排给其他任务的时间', risk['other_plan_minutes']),
+                      fact('这项任务还需要', risk['remaining_minutes']),
                       const Divider(),
                       fact('单项计划余量', risk['task_slack_minutes']),
                       fact('最长连续空档', risk['max_contiguous_minutes']),
@@ -293,7 +296,7 @@ Future<void> showRiskDetails(
                   ),
                 ),
               if (risk['critical_window'] != null) ...[
-                const SectionHeading('共同窗口的缺口'),
+                const SectionHeading('这些任务一起做，时间够吗'),
                 CampusPanel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -309,12 +312,12 @@ Future<void> showRiskDetails(
                         risk['critical_window']['capacity_is_upper_bound'] ==
                                 true
                             ? '已知安排下最多可用'
-                            : '共同窗口可用',
+                            : '这段时间内可用',
                         risk['critical_window']['capacity_minutes'],
                       ),
                       fact('至少缺少', risk['critical_window']['gap_minutes']),
                       const Text(
-                        '各任务可能都有正余量，但不能同时重复使用同一段空闲时间。',
+                        '单看每项任务，时间可能够用；放在一起时，它们会争用同一段空闲时间。',
                         style: TextStyle(fontSize: 13),
                       ),
                     ],
@@ -341,7 +344,7 @@ Future<void> showRiskDetails(
             ],
             const SizedBox(height: 16),
             const Text(
-              '分析按当前记录和完整分钟保守估算。只扣其他任务的有效计划，自己的覆盖不重复扣；已安排不等于已完成。',
+              '根据当前记录估算，重叠的占用时间只计算一次。本任务已经安排的时间仍算可用，实际进度以你填写的剩余时间为准。',
               style: TextStyle(fontSize: 12, color: CampusColors.muted),
             ),
             const SizedBox(height: 14),

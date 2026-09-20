@@ -64,7 +64,7 @@ void main() {
       final port = FakeNotifications()..allowed = false;
       final sync = ReminderSync(port);
       final result = await sync.replace('a', [rule('one')]);
-      expect(result, '系统通知未开启，提醒规则已保留');
+      expect(result, '提醒已保存，请开启系统通知');
       expect(port.scheduled, isEmpty);
     },
   );

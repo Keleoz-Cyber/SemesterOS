@@ -1,3 +1,4 @@
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
@@ -73,7 +74,7 @@ class _ImportPreviewState extends State<ImportPreview> {
       );
       if (mounted) setState(() => batch = result);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -96,7 +97,7 @@ class _ImportPreviewState extends State<ImportPreview> {
       await widget.controller.openSession();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -256,7 +257,7 @@ class _ImportPreviewState extends State<ImportPreview> {
                 SoftNotice(error!, warning: true),
                 TextButton(
                   onPressed: busy ? null : load,
-                  child: const Text('重新校验预览'),
+                  child: const Text('重新检查课表'),
                 ),
               ],
               FilledButton(

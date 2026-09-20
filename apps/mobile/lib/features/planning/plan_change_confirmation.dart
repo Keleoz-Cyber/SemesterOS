@@ -43,7 +43,9 @@ Future<Map<String, dynamic>?> confirmPlanChange(
                 Text(message),
                 if (blocks.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Text(cancelAll ? '以下未来计划将一并取消' : '选择要取消的未来计划；保留覆盖不能超过新剩余工作量'),
+                  Text(
+                    cancelAll ? '以下未来计划将一并取消' : '选择要取消的未来计划；保留的总时长不能超过剩余所需时间',
+                  ),
                   for (final block in blocks)
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
@@ -64,8 +66,8 @@ Future<Map<String, dynamic>?> confirmPlanChange(
                   if (!enough)
                     Text(
                       maxKeptBlocks != null && keptCount > maxKeptBlocks
-                          ? '不可拆分设置最多保留一段未来计划，请选择需取消的块'
-                          : '仍保留 ${minutesLabel(kept)}，超过新的剩余工作量',
+                          ? '需要一次完成的任务只能保留一段计划，请取消多余安排'
+                          : '保留的计划共${minutesLabel(kept)}，超过了任务还需要的时间',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                       ),
