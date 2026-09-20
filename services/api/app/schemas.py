@@ -10,7 +10,7 @@ class Input(BaseModel):
 
 class Credentials(Input):
     username: str = Field(pattern=r"^[a-zA-Z0-9_]{4,32}$")
-    password: str = Field(min_length=12, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
 
     @field_validator("username")
     @classmethod
@@ -25,7 +25,7 @@ class Refresh(Input):
 class Recovery(Input):
     username: str = Field(min_length=4, max_length=32)
     recovery_code: str = Field(min_length=16, max_length=200)
-    new_password: str = Field(min_length=12, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class Logout(Input):

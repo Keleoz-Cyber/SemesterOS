@@ -1,14 +1,15 @@
 """Real OCR/ASR -> reviewed transcript -> DeepSeek -> confirmed synthetic item."""
 from pathlib import Path
 from datetime import datetime,timedelta,timezone
-import json,time,secrets
+import json,time,secrets,os
 import httpx
 
 
 def main():
     repo=Path(__file__).resolve().parents[1];now=datetime.now(timezone(timedelta(hours=8)))
     username='qa_media_'+secrets.token_hex(4);results=[]
-    with httpx.Client(base_url='http://127.0.0.1:8871/api/v1',timeout=65) as api:
+    base=os.environ.get('SEMESTEROS_API_URL','http://127.0.0.1:8871').rstrip('/')
+    with httpx.Client(base_url=base+'/api/v1',timeout=65) as api:
         session=api.post('/auth/register',json={'username':username,'password':secrets.token_urlsafe(24)}).json();api.headers['Authorization']='Bearer '+session['access_token']
         monday=now.date()-timedelta(days=now.weekday())
         s=api.post('/semesters',json={'name':'QA多来源录入（合成）','first_monday':monday.isoformat(),'total_weeks':20,'periods':[{'number':1,'start':'08:00','end':'08:50'}]}).json()
@@ -42,7 +43,7 @@ def main():
                 'transcript':source['text'],'parsed_minutes':180,'item':item.json()})
         assert len(api.get(f"/semesters/{s['id']}/items").json()['items'])==2
         api.post('/auth/logout',json={'logout_token':session['logout_token']})
-    report={'passed':True,'source':'synthetic_image_and_windows_tts','account':username,'at':now.isoformat(),
+    report={'passed':True,'base_url':base,'source':'synthetic_image_and_windows_tts','account':username,'at':now.isoformat(),
         'cases':[{k:v for k,v in r.items() if k!='item'} for r in results],
         'checks':['private_upload','upload_idempotency','durable_worker','real_ocr','real_asr','no_automatic_item','reviewed_text_saved',
             'real_deepseek','date_and_effort','confirm_required','source_link_preserved','recognition_provenance']}

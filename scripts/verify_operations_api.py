@@ -1,7 +1,7 @@
 """Real DeepSeek + PostgreSQL smoke, isolated synthetic account, no credentials logged."""
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
-import json,secrets
+import json,secrets,os
 import httpx
 
 
@@ -10,7 +10,8 @@ def main():
     def check(condition,label):
         assert condition,label
         checks.append(label)
-    with httpx.Client(base_url='http://127.0.0.1:8871/api/v1',timeout=90) as api:
+    base=os.environ.get('SEMESTEROS_API_URL','http://127.0.0.1:8871').rstrip('/')
+    with httpx.Client(base_url=base+'/api/v1',timeout=90) as api:
         def request(method,path,**kw):
             r=api.request(method,path,**kw)
             assert r.is_success,{'path':path,'status':r.status_code,'code':r.json().get('code')}
@@ -48,7 +49,7 @@ def main():
         request('POST','/plan-proposals/'+proposal['id']+'/accept',json={'expected_version':proposal['version'],'expected_revision':proposal['base_revision']})
         check(sum(b['minutes'] for b in request('GET',sp+'/plans')['blocks'])==120,'separate_confirmation_writes_plan')
         request('POST','/auth/logout',json={'logout_token':session['logout_token']})
-    report={'passed':True,'at':now.isoformat(),'model':'deepseek-flash','data':'isolated synthetic account','checks':checks}
+    report={'passed':True,'at':now.isoformat(),'base_url':base,'model':'deepseek-flash','data':'isolated synthetic account','checks':checks}
     path=Path(__file__).resolve().parents[1]/'output/verification/operations-api.json';path.parent.mkdir(parents=True,exist_ok=True)
     path.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps({'passed':True,'checks':len(checks)}))

@@ -35,6 +35,19 @@ Map<String, dynamic> account(String id) => {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  test('cloud base URL preserves the HTTPS deployment path', () async {
+    final api = SemesterApi(baseUrl: 'https://keleoz.com/semesteros')
+      ..session = account('preview');
+    api.dio.httpClientAdapter = ControlledTransport((r) async {
+      expect(
+        r.uri.toString(),
+        'https://keleoz.com/semesteros/api/v1/semesters',
+      );
+      return body([]);
+    });
+    expect(await api.request('GET', '/semesters'), isEmpty);
+    api.dio.close();
+  });
   test(
     'user errors preserve recovery instructions without raw exception details',
     () {

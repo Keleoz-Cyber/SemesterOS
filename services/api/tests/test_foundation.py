@@ -40,6 +40,22 @@ def register(client, username="student_a"):
     return data, {"Authorization": f"Bearer {data['access_token']}"}
 
 
+def test_eight_character_password_registration_login_and_recovery(client):
+    def signup(password):
+        return client.post('/api/v1/auth/register',json={'username':'eight_chars','password':password})
+    assert signup('short77').status_code==422
+    response=signup('eight888')
+    assert response.status_code==201,response.text
+    session=response.json()
+    assert client.post('/api/v1/auth/login',json={'username':'eight_chars','password':'eight888'}).status_code==200
+    recovery={'username':'eight_chars','recovery_code':session['recovery_code'],'new_password':'short77'}
+    assert client.post('/api/v1/auth/recover',json=recovery).status_code==422
+    recovery['new_password']='changed8'
+    assert client.post('/api/v1/auth/recover',json=recovery).status_code==200
+    assert client.post('/api/v1/auth/login',json={'username':'eight_chars','password':'changed8'}).status_code==200
+    assert client.post('/api/v1/auth/login',json={'username':'eight_chars','password':'eight888'}).status_code==401
+
+
 def semester(client, headers):
     response = client.post("/api/v1/semesters", headers=headers, json={
         "name": "测试学期", "first_monday": "2026-08-31", "total_weeks": 20,

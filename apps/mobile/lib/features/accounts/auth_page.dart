@@ -171,7 +171,7 @@ class _AuthPageState extends State<AuthPage> {
                     autocorrect: false,
                     decoration: InputDecoration(
                       labelText: mode == 2 ? '新密码' : '密码',
-                      helperText: '至少12个字符；与学校教务密码无关',
+                      helperText: '至少8位；这是学期OS账号的密码',
                       suffixIcon: IconButton(
                         onPressed: () => setState(() => obscure = !obscure),
                         icon: Icon(
@@ -181,9 +181,9 @@ class _AuthPageState extends State<AuthPage> {
                       ),
                     ),
                     validator: (v) =>
-                        (v?.length ?? 0) >= 12 && (v?.length ?? 0) <= 128
+                        (v?.length ?? 0) >= 8 && (v?.length ?? 0) <= 128
                         ? null
-                        : '密码需为12—128个字符',
+                        : '密码需要8—128位',
                   ),
                   const SizedBox(height: 20),
                   if (error != null)

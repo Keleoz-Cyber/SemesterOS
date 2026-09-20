@@ -8,7 +8,10 @@ from .runtime_paths import PROJECT_ROOT
 @lru_cache(maxsize=1)
 def ocr_engine():
     from rapidocr import RapidOCR
-    return RapidOCR()
+    params={'EngineConfig.onnxruntime.intra_op_num_threads':2,'EngineConfig.onnxruntime.inter_op_num_threads':1}
+    folder=os.environ.get('RAPIDOCR_MODEL_DIR')
+    if folder:params['Global.model_root_dir']=folder
+    return RapidOCR(params=params)
 
 
 @lru_cache(maxsize=1)
