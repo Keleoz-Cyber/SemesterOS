@@ -480,7 +480,9 @@ class _ShellPageState extends State<ShellPage> {
         body: RefreshIndicator(
           onRefresh: refresh,
           child: ListView(
-            key: PageStorageKey('semester-tab-$tab'),
+            key: PageStorageKey(
+              'semester-tab-${c.user['id']}-${c.semester?['id']}-$tab',
+            ),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 106),
             physics: const AlwaysScrollableScrollPhysics(),
             children: [

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/centers/semester_centers.dart';
 import 'package:semester_os/features/centers/exam_pages.dart';
+import 'package:semester_os/features/timetable/shell_page.dart';
+import 'package:semester_os/app/controller.dart';
 import 'schedule_flow_test.dart' show ScheduleFixture;
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'planning_flow_test.dart' show route, ioTap;
@@ -102,6 +104,41 @@ Future<void> settleIo(WidgetTester tester) async {
 
 void main() {
   setUpAll(loadPreviewFonts);
+  testWidgets('semester expansions do not overwrite tab scroll position', (
+    tester,
+  ) async {
+    final f = await fixture(tester);
+    final app = AppController(f.api, f.c.cache, clearSchoolSession: () async {})
+      ..ready = true
+      ..semester = {...semester(), 'periods': <Map<String, dynamic>>[]}
+      ..semesters = [semester()];
+    await mount(tester, ShellPage(controller: app, items: f.c));
+    Future<void> tab(int index) async {
+      await tester.tap(find.byType(NavigationDestination).at(index));
+      await settleIo(tester);
+      expect(tester.takeException(), isNull);
+    }
+
+    await tab(3);
+    await tester.ensureVisible(find.text('课程事务（1门）'));
+    await tester.tap(find.text('课程事务（1门）'));
+    await tester.pumpAndSettle();
+    expect(find.text('合成概率论'), findsOneWidget);
+    await tab(1);
+    await tab(3);
+    expect(find.text('合成概率论'), findsOneWidget);
+    expect(find.text('合成概率论考试'), findsNothing);
+    await tester.ensureVisible(find.text('第14周 · 2026-11-30'));
+    await tester.tap(find.text('第14周 · 2026-11-30'));
+    await tester.pumpAndSettle();
+    await tab(1);
+    await tab(3);
+    expect(find.text('合成概率论考试'), findsOneWidget);
+    expect(find.text('合成概率论'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    f.c.dispose();
+    app.dispose();
+  });
   testWidgets('course hub renders related work and stale risk is labelled', (
     tester,
   ) async {

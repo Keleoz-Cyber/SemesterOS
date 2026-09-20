@@ -261,6 +261,8 @@ class SemesterHome extends StatelessWidget {
             ],
           ),
           ExpansionTile(
+            // Keep the expansion flag separate from the parent tab's scroll offset.
+            key: PageStorageKey('semester-courses-${semester['id']}'),
             title: Text('课程事务（${controller.rows(data['courses']).length}门）'),
             children: [
               for (final course in controller.rows(data['courses']))
@@ -293,6 +295,9 @@ class SemesterHome extends StatelessWidget {
               child: CampusPanel(
                 padding: EdgeInsets.zero,
                 child: ExpansionTile(
+                  key: PageStorageKey(
+                    'semester-week-${semester['id']}-${week['week']}',
+                  ),
                   title: Text('第${week['week']}周 · ${week['start_date']}'),
                   subtitle: Text(
                     !fresh
