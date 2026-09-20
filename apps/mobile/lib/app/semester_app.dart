@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'controller.dart';
+import '../ui/campus_theme.dart';
 import '../features/accounts/auth_page.dart';
 import '../features/semester/semester_page.dart';
 import '../features/timetable/shell_page.dart';
@@ -70,37 +71,6 @@ class _SemesterAppState extends ConsumerState<SemesterApp> {
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
     debugShowCheckedModeBanner: false,
     routerConfig: router,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),
-      scaffoldBackgroundColor: const Color(0xFFF7F8FC),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFFF7F8FC),
-        surfaceTintColor: Colors.transparent,
-      ),
-      cardTheme: CardThemeData(
-        elevation: 0,
-        color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(minimumSize: const Size(48, 52)),
-      ),
-      textTheme: const TextTheme(
-        bodyMedium: TextStyle(
-          fontSize: 16,
-          height: 1.45,
-          color: Color(0xFF1F2937),
-        ),
-      ),
-      useMaterial3: true,
-    ),
+    theme: campusTheme(),
   );
 }

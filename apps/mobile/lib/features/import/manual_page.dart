@@ -49,7 +49,9 @@ class _ManualPageState extends State<ManualPage> {
         context.go('/');
       }
     } catch (e) {
-      if (mounted) setState(() => error = e is FormatException ? e.message : '$e');
+      if (mounted) {
+        setState(() => error = e is FormatException ? e.message : '$e');
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }

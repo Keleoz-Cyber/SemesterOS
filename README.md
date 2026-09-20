@@ -6,7 +6,9 @@
 
 当前为 **0.1.0 课表导入测试版**，已实现 Android 工程、注册登录与恢复、学期设置、手工录课、教务原站读取入口、导入预览确认、周课表/列表和按账号隔离的本机缓存。第一版面向 Android，iOS 后续适配。
 
-已接入 Flutter、FastAPI 和 PostgreSQL，依赖锁在`apps/mobile/pubspec.lock`及`services/api/requirements.lock`。AI解析、提醒、个人任务和 OR-Tools 规划尚未实现；这些仍按设计文档推进。本人教务登录与当前页面的课表字段提取已验证，导入预览、保存及完整性仍待核对，不能把字段读取成功算作整条导入流程通过。
+已接入 Flutter、FastAPI 和 PostgreSQL，依赖锁在`apps/mobile/pubspec.lock`及`services/api/requirements.lock`。AI解析、提醒、个人任务和 OR-Tools 规划尚未实现；这些仍按设计文档推进。用户于2026-09-20确认本人教务课表已成功导入；逐项完整性、其他认证入口和物理手机兼容性仍需分别核对。
+
+界面已按03的校园活力风调整：今日课程状态与彩色卡片、可切换的周视图/日程、课程详情、学期管理和导入确认。周视图将重叠课程并列显示，大字体自动使用完整日程列表；示例界面截图在本机`output/verification/ui/`，来自Flutter渲染测试，不含真实学生数据。
 
 ## 项目文档
 

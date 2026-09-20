@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
 import 'semester_validation.dart';
+import '../../ui/campus_widgets.dart';
 
 class SemesterPage extends StatefulWidget {
   final AppController controller;
@@ -121,12 +122,14 @@ class _SemesterPageState extends State<SemesterPage> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text(
-            '先确认时间骨架',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          const CampusHero(
+            eyebrow: '学期设置',
+            title: '新的学期',
+            subtitle: '把课程安排\n放在正确的日期',
           ),
-          const Text('课程会按你的校历和节次显示。下面的作息仅为可编辑示例，请与学校核对。'),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          const SoftNotice('下面的作息仅为可编辑示例。请按学校校历核对第1周与节次时间。'),
+          const SectionHeading('基本信息'),
           TextFormField(
             key: nameField,
             controller: name,
