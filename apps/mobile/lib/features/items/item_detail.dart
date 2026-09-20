@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../media/source_view.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/campus_widgets.dart';
 import 'items_controller.dart';
@@ -214,6 +215,20 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                               ),
                             ),
                     ),
+                    if (data['source_id'] != null)
+                      TextButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SourceViewPage(
+                              controller: widget.controller,
+                              id: data['source_id'],
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.attachment),
+                        label: const Text('查看原图 / 原录音与识别文稿'),
+                      ),
                     if (data['kind'] == 'exam')
                       TextButton.icon(
                         onPressed: () => context.push('/exams/${data['id']}'),

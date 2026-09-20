@@ -4,6 +4,7 @@ import '../../core/api.dart';
 import '../../core/cache.dart';
 import 'reminder_sync.dart';
 import '../planning/risk_state.dart';
+import '../media/drafts.dart';
 
 class ItemsController extends ChangeNotifier {
   final SemesterApi api;
@@ -127,6 +128,11 @@ class ItemsController extends ChangeNotifier {
       }
       if (previous != null && previous != _owner) {
         await cache.clear('items:$previous');
+        try {
+          await CaptureDrafts.clearUser(cache, previous);
+        } catch (_) {
+          notice = '本机来源草稿清理未完成，请重新打开App';
+        }
       }
     }
     if (!valid(epoch, generation) || _owner == null || selected == null) return;

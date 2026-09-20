@@ -15,6 +15,7 @@ function Check-Exit([string]$Step) {
 
 if ($Action -eq 'Android') {
     . (Join-Path $PSScriptRoot 'android-device.ps1')
+    Set-SemesterGradleJava
     $resolvedDevice = Resolve-SemesterAndroidDevice -ProjectRoot $projectRoot -Device $Device -Emulator $Emulator -WaitSeconds $WaitSeconds
     Push-Location apps/mobile
     try {

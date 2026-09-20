@@ -18,6 +18,7 @@ import '../features/items/item_detail.dart';
 import '../features/items/capture_page.dart';
 import '../features/centers/semester_centers.dart';
 import '../features/centers/exam_pages.dart';
+import '../features/media/media_capture_page.dart';
 
 class SemesterApp extends ConsumerStatefulWidget {
   const SemesterApp({super.key});
@@ -62,6 +63,16 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
         return null;
       },
       routes: [
+        GoRoute(
+          path: '/capture/media',
+          builder: (_, state) => controller.semester == null
+              ? SemesterPage(controller: controller)
+              : MediaCapturePage(
+                  controller: items,
+                  semester: controller.semester!,
+                  kind: state.uri.queryParameters['kind'] ?? 'image',
+                ),
+        ),
         GoRoute(
           path: '/courses/:id',
           builder: (_, state) => CourseHubPage(

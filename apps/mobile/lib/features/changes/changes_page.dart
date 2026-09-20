@@ -4,6 +4,7 @@ import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import '../planning/date_time_picker.dart';
 import '../planning/proposal_page.dart';
+import '../media/source_view.dart';
 
 const changeNames = {
   'move': '调课',
@@ -16,10 +17,13 @@ const changeNames = {
 class ChangesPage extends StatefulWidget {
   final ItemsController controller;
   final String initialText;
+  final String? initialSourceId, initialReferenceAt;
   const ChangesPage({
     super.key,
     required this.controller,
     this.initialText = '',
+    this.initialSourceId,
+    this.initialReferenceAt,
   });
   @override
   State<ChangesPage> createState() => _ChangesPageState();
@@ -86,7 +90,9 @@ class _ChangesPageState extends State<ChangesPage> {
       data: {
         'semester_id': sid,
         'text': source.text.trim(),
-        'reference_at': DateTime.now().toUtc().toIso8601String(),
+        'reference_at':
+            widget.initialReferenceAt ??
+            DateTime.now().toUtc().toIso8601String(),
       },
     );
     if (!mounted || !same) return;
@@ -127,6 +133,7 @@ class _ChangesPageState extends State<ChangesPage> {
         'targets': targets.toList(),
         'title': title.text.trim(),
         'source_text': source.text.trim(),
+        if (widget.initialSourceId != null) 'source_id': widget.initialSourceId,
         'location': location.text.trim(),
         if (['move', 'add', 'block'].contains(kind)) ...{
           'start_at': start!.toUtc().toIso8601String(),
@@ -459,6 +466,19 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SectionHeading('原始依据'),
+          if (p['request']['source_id'] != null)
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SourceViewPage(
+                    controller: widget.controller,
+                    id: p['request']['source_id'],
+                  ),
+                ),
+              ),
+              child: const Text('查看原图 / 原录音'),
+            ),
           Text(p['request']['source_text']),
           const SectionHeading('变化前'),
           for (final e in patch['before']) event(e),

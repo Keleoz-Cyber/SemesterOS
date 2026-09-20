@@ -25,6 +25,8 @@ class CaptureInput(Input):
     semester_id: str = Field(min_length=1, max_length=36)
     text: str = Field(min_length=1, max_length=10000)
     reference_at: datetime = Field(default_factory=utcnow)
+    source_id:str|None=Field(default=None,max_length=36)
+    source_version:int|None=Field(default=None,ge=1)
 
     @field_validator('reference_at')
     @classmethod
@@ -43,6 +45,14 @@ class Parsed(Input):
 @router.post('/capture/text')
 def capture_text(body: CaptureInput, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     s = owned_semester(db, user, body.semester_id)
+    source=None
+    if body.source_id:
+        from .media import owned_source,version
+        source=owned_source(db,user,body.source_id)
+        if source.semester_id!=s.id:error(404,'NOT_FOUND','来源不属于当前学期')
+        version(source,body.source_version)
+        if source.status in ('queued','running') or source.text!=body.text or source.reference_at!=body.reference_at.isoformat():
+            error(409,'SOURCE_STALE','请先保存并核对当前来源文稿，再解析')
     admission(request,user)
     courses = [{'id': c.id, 'title': c.payload['title'], 'teacher': c.payload['teacher']}
         for c in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id == user.id,
@@ -69,6 +79,7 @@ def capture_text(body: CaptureInput, request: Request, user: User = Depends(curr
             item['earliest_start_at'] = None
             item['source_text'] = body.text
             item['candidate_id'] = None
+            item['source_id'] = None
             for key in ('title', 'time', 'remaining_minutes', 'course_id', 'certainty'):
                 if key not in parsed.evidence and key not in parsed.inferred_fields and item.get(key) is not None:
                     parsed.inferred_fields.append(key)
@@ -79,6 +90,12 @@ def capture_text(body: CaptureInput, request: Request, user: User = Depends(curr
     data = {'intent': parsed.intent, 'item': item, 'evidence': parsed.evidence,
             'inferred_fields': parsed.inferred_fields, 'questions': parsed.questions,
             'reference_at': body.reference_at.isoformat(), 'metadata': metadata, 'review_state': 'pending'}
+    if source is not None:
+        db.refresh(source,with_for_update=True)
+        version(source,body.source_version)
+        data['media_source']={'id':source.id,'version':source.version,'kind':source.kind,'original_text':source.original_text,
+            'corrected_text':body.text,'recognition':source.metadata_json}
+        if item is not None:item['source_id']=source.id
     candidate = TextCandidate(user_id=user.id, semester_id=s.id, source_text=body.text,
         payload=data, created_at=utcnow().isoformat())
     db.add(candidate)

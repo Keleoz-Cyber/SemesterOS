@@ -200,6 +200,9 @@ class _ItemFormPageState extends State<ItemFormPage> {
       'source_text': source.text.trim(),
       'candidate_id':
           widget.candidate?['id'] ?? widget.initial?['candidate_id'],
+      'source_id':
+          widget.candidate?['item']?['source_id'] ??
+          widget.initial?['source_id'],
       if (!editing)
         'reminders': reminders
             .map(

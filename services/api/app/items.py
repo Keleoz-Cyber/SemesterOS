@@ -67,6 +67,10 @@ def checked_payload(db, user, body):
         error(422, 'INVALID_WEEK', '周次超出当前学期，请核对')
     data = body.model_dump(mode='json', exclude={'reminders', 'expected_version', 'change_reason'})
     data['course_title'] = ''
+    if body.source_id:
+        from .media import owned_source
+        source=owned_source(db,user,body.source_id)
+        if source.semester_id!=s.id:error(404,'NOT_FOUND','来源不属于当前学期')
     if body.course_id:
         course = db.scalar(select(CourseMeeting).where(CourseMeeting.id == body.course_id,
             CourseMeeting.user_id == user.id, CourseMeeting.semester_id == s.id))
@@ -149,8 +153,13 @@ def create_item(body: ItemCreate, user: User = Depends(current_user), db: Sessio
             error(422, 'INVALID_CANDIDATE', '这份解析不是新增事项草稿')
         if candidate.item_id:
             error(409, 'ALREADY_APPLIED', '这份草稿已经保存，请打开已有事项')
+        if candidate.payload.get('media_source'):
+            from .media import owned_source,version
+            origin=candidate.payload['media_source']
+            version(owned_source(db,user,origin['id'],True),origin['version'])
         data['source_text'] = candidate.source_text
         data['parse_evidence'] = candidate.payload
+        if candidate.payload.get('media_source'):data['source_id']=candidate.payload['media_source']['id']
     now = utcnow().isoformat()
     item = StudyItem(user_id=user.id, semester_id=s.id, payload=data, created_at=now, updated_at=now)
     db.add(item)
@@ -196,7 +205,7 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
     if coverage and (data.get('remaining_minutes') is None or data['remaining_minutes']<coverage):
         error(409,'PLAN_CONFIRMATION_REQUIRED','已有未来计划超过新剩余工作量，请通过更新进度选择需取消的块')
     # Original source/candidate evidence is immutable; corrections have their own audit reason.
-    for key in ('source_text', 'candidate_id', 'parse_evidence', 'review_exam_id'):
+    for key in ('source_text', 'candidate_id', 'parse_evidence', 'review_exam_id','source_id'):
         if key in item.payload:
             data[key] = item.payload[key]
     changed_anchor = item.payload['time'] != data['time']

@@ -1,3 +1,24 @@
+function Set-SemesterGradleJava {
+    $javaCandidates = @($env:SEMESTEROS_JDK_HOME, $env:JAVA_HOME)
+    foreach ($vendorFolder in @('Microsoft', 'Java', 'Eclipse Adoptium')) {
+        $javaVendorPath = Join-Path $env:ProgramFiles $vendorFolder
+        if (Test-Path -LiteralPath $javaVendorPath) {
+            $javaCandidates += Get-ChildItem -LiteralPath $javaVendorPath -Directory | Select-Object -ExpandProperty FullName
+        }
+    }
+    foreach ($javaCandidate in $javaCandidates) {
+        if (!$javaCandidate) { continue }
+        $javaRelease = Join-Path $javaCandidate 'release'
+        if ((Test-Path -LiteralPath $javaRelease) -and (Select-String -LiteralPath $javaRelease -Pattern '^JAVA_VERSION="21\.' -Quiet)) {
+            $resolvedJava = (Resolve-Path -LiteralPath $javaCandidate).Path
+            $env:GRADLE_OPTS = (($env:GRADLE_OPTS, "-Dorg.gradle.java.installations.paths=`"$resolvedJava`"") -join ' ').Trim()
+            Write-Host '已为本次构建定位 JDK 21（不修改全局 Java 配置）。'
+            return
+        }
+    }
+    throw '未找到本机 JDK 21。请安装 JDK 21，或用 SEMESTEROS_JDK_HOME 指定其目录。'
+}
+
 function Get-SemesterAndroidSdk([string]$ProjectRoot) {
     $candidates = @()
     $properties = Join-Path $ProjectRoot 'apps/mobile/android/local.properties'

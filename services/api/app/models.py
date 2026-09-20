@@ -222,3 +222,30 @@ class RealityChange(Base):
     payload: Mapped[dict]=mapped_column(JSON)
     receipt: Mapped[dict | None]=mapped_column(JSON,nullable=True)
     created_at: Mapped[str]=mapped_column(String(40))
+
+
+class MediaSource(Base):
+    __tablename__='media_sources'
+    __table_args__=(ForeignKeyConstraint(['user_id','semester_id'],['semesters.user_id','semesters.id']),
+        UniqueConstraint('user_id','semester_id','upload_key'),)
+    id: Mapped[str]=mapped_column(String(36),primary_key=True,default=new_id)
+    user_id: Mapped[str]=mapped_column(String(36),index=True)
+    semester_id: Mapped[str]=mapped_column(String(36),index=True)
+    upload_key: Mapped[str]=mapped_column(String(120))
+    input_hash: Mapped[str]=mapped_column(String(64))
+    kind: Mapped[str]=mapped_column(String(10))
+    mime: Mapped[str]=mapped_column(String(40))
+    size: Mapped[int]=mapped_column(Integer)
+    storage_key: Mapped[str]=mapped_column(String(80))
+    file_deleted: Mapped[bool]=mapped_column(Boolean,default=False)
+    version: Mapped[int]=mapped_column(Integer,default=1)
+    status: Mapped[str]=mapped_column(String(20),default='uploaded',index=True)
+    lease_token: Mapped[str | None]=mapped_column(String(36),nullable=True)
+    lease_until: Mapped[int]=mapped_column(Integer,default=0)
+    attempts: Mapped[int]=mapped_column(Integer,default=0)
+    text: Mapped[str]=mapped_column(String(10000),default='')
+    original_text: Mapped[str]=mapped_column(String(10000),default='')
+    reference_at: Mapped[str]=mapped_column(String(40))
+    metadata_json: Mapped[dict]=mapped_column(JSON,default=dict)
+    error_code: Mapped[str | None]=mapped_column(String(50),nullable=True)
+    created_at: Mapped[str]=mapped_column(String(40))

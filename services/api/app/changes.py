@@ -75,6 +75,9 @@ def list_changes(sid:str,user:User=Depends(current_user),db:Session=Depends(get_
 @router.post('/semesters/{sid}/changes',status_code=201)
 def preview_change(sid:str,body:ChangeInput,user:User=Depends(current_user),db:Session=Depends(get_db),idempotency_key:str|None=Header(default=None)):
     s=owned_semester(db,user,sid,lock=True);data=body.model_dump(mode='json');op='preview-change/'+sid
+    if body.source_id:
+        from .media import owned_source
+        if owned_source(db,user,body.source_id).semester_id!=sid:error(404,'NOT_FOUND','来源不属于当前学期')
     cached=replay(db,user,op,idempotency_key,data)
     if cached is not None:return cached
     now=utcnow();source=source_snapshot(db,user,s);patch=make_patch(source,data,now)

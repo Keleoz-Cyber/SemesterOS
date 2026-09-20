@@ -86,6 +86,7 @@ class ItemFields(Input):
     notes: str = Field(default='', max_length=3000)
     source_text: str = Field(default='', max_length=10000)
     candidate_id: str | None = Field(default=None, max_length=36)
+    source_id:str|None=Field(default=None,max_length=36)
 
     @field_validator('earliest_start_at')
     @classmethod

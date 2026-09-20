@@ -111,6 +111,8 @@ class SemesterApi {
     bool authenticated = true,
     String? idempotencyKey,
     Duration? receiveTimeout,
+    String? contentType,
+    ResponseType? responseType,
   }) async {
     final stamp = generation;
     final key =
@@ -128,6 +130,8 @@ class SemesterApi {
           options: Options(
             method: method,
             receiveTimeout: receiveTimeout,
+            contentType: contentType,
+            responseType: responseType,
             headers: {
               if (authenticated)
                 'Authorization': 'Bearer ${session?['access_token']}',

@@ -6,7 +6,7 @@
 
 当前为 **0.1.0 课表与事项测试版**，已实现 Android 工程、注册登录与恢复、学期设置、教务导入、周课表/列表、作业/考试/个人任务、文字AI解析确认、本机提醒，以及可学习时间、进度更新、计划余量分析、自动排程、课次变化确认和个人计划最小扰动重排。课程事务中心、考试复习与改期确认、学期时间轴已接入。第一版面向 Android，iOS 后续适配。
 
-已接入 Flutter、FastAPI、PostgreSQL、服务端DeepSeek文字解析和OR-Tools CP-SAT排程，依赖锁在`apps/mobile/pubspec.lock`及`services/api/requirements.lock`。图片/语音解析、自然语言修改个人任务/提醒尚未实现。用户于2026-09-20确认本人教务课表已成功导入；逐项完整性、其他认证入口和物理手机兼容性仍需分别核对。
+已接入 Flutter、FastAPI、PostgreSQL、服务端DeepSeek文字解析、OR-Tools CP-SAT排程，以及本地OCR/ASR媒体录入。依赖锁在`apps/mobile/pubspec.lock`及`services/api/requirements.lock`。自然语言修改个人任务/提醒尚未实现。用户于2026-09-20确认本人教务课表已成功导入；逐项完整性、其他认证入口和物理手机兼容性仍需分别核对。
 
 界面已按03的校园活力风调整：今日课程状态与彩色卡片、可切换的周视图/日程、课程详情、学期管理和导入确认。周视图将重叠课程并列显示，大字体自动使用完整日程列表；示例界面截图在本机`output/verification/ui/`，来自Flutter渲染测试，不含真实学生数据。
 
@@ -24,6 +24,21 @@
 - [第四批自动排程候选与确认验证](docs/09-自动排程候选与确认验证.md)
 - [第五批现实变化与最小扰动重排验证](docs/10-现实变化与最小扰动重排验证.md)
 - [第六批课程考试中心与学期时间轴验证](docs/11-课程考试中心与学期时间轴验证.md)
+- [第七批图片语音与来源恢复验证](docs/12-图片语音与来源恢复验证.md)
+
+## 图片通知与语音快速记录
+
+“＋记录 → 图片通知录入 / 语音快速记录”：选图或录音，上传并识别后，对照原图/回放录音修正文稿，核对原消息时间，再解析并确认事项。图片支持单张JPEG/PNG/WebP，输入最多10MB、2000万像素；App录音为16kHz单声道WAV，最多120秒/20MB，进入后台会停止录音。多条通知先在文稿中选定需要处理的一条，不承诺一次导入整张课表或整场考试表。
+
+OCR使用RapidOCR，语音使用SenseVoice，均在API主机的独立worker进程运行；原媒体不发送给DeepSeek，结构化解析只发送校对文字与课程候选。来源与文字草稿按账号/学期保存，重启可恢复，退出账号清理本机缓存。识别可取消或重试，取消后的迟到结果不会覆盖新文稿；没有录音权限或识别失败时仍可手工填写。
+
+事项详情可回看关联来源；删除服务端原文件会保留识别文字、校对稿及已保存事项。私有媒体在`.local-data/media`，模型在`.local-data/models`，两者都不进入Git。首次准备好API环境后，另开终端下载语音模型（本机已完成）：
+
+```powershell
+& services/api/.venv/Scripts/python.exe scripts/setup_media_models.py
+```
+
+API默认管理一个独立识别worker，数据库保存排队状态与租约。异常中断的作业在租约过期后可重新领取；已开始的底层推理不保证立即停止，但取消后不接纳其结果。数据库与私有媒体目录需一起持久化；Compose已配置媒体卷及只读模型目录，容器镜像完整构建仍待独立验收。
 
 ## 课程、考试与学期时间轴
 
@@ -88,6 +103,8 @@ API使用`http://127.0.0.1:8871`，模拟器通过`http://10.0.2.2:8871`访问�
 
 Android启动脚本优先使用唯一已连接设备；没有设备时默认启动`Medium_Phone_33`，等待Android系统和安装服务就绪后再运行App。多个设备时用`-Device`指定，其他虚拟设备用`-Emulator`指定；原来的`-Device emulator-5554`命令也支持自动启动该端口的模拟器。启动日志保存在`tmp/android-start/`，默认等待150秒，不清空模拟器数据。
 
+启动脚本会为本次构建定位本机JDK 21；也可通过`SEMESTEROS_JDK_HOME`明确指定，不修改全局Java配置。图片/录音/回放涉及原生插件，更新后需完整重新运行App，单纯热重载不足以加载新插件。
+
 用 Android Studio 打开`apps/mobile`目录。当前验证设备为`Medium_Phone_33`（Android 13）。本次导出的调试包只含x86_64，用于该模拟器；物理手机需另构建适合其架构的包。调试包允许本地HTTP，正式发布需要HTTPS入口和独立签名配置；本批不发布正式签名包。
 
 完整容器运行配置在`deploy/compose.yaml`，可执行`docker compose --env-file .env -f deploy/compose.yaml up --build`；当前实测组合为PostgreSQL容器加本机Python API，API镜像构建未作为本批完成证据。
@@ -110,6 +127,8 @@ Android启动脚本优先使用唯一已连接设备；没有设备时默认启�
 构建JVM由`apps/mobile/android/gradle/gradle-daemon-jvm.properties`固定为 **Java 21**，需要本机安装JDK 21。它优先于Android Studio自带JBR和`JAVA_HOME`选择Gradle构建进程，因此IDE升级到JBR 25后仍使用兼容的构建JVM；不修改全局Flutter或Java配置。本机已检测到`C:\Program Files\Microsoft\jdk-21.0.4.7-hotspot`，仓库不硬编码这个路径。若出现只写着`25.0.x`的构建异常，先检查此配置是否存在；依赖列表的“有新版本”提示不是同一个问题。[Gradle JVM规则](https://docs.gradle.org/current/userguide/gradle_daemon.html#sec:daemon_jvm_criteria)
 
 固定`material_ui`/`cupertino_ui` 1.0.0以适配当前Flutter SDK；较新版本引用了此SDK没有的注解。Drift 2.28.2与sqlite3_flutter_libs 0.5.39避免当前网络下SQLite 3.x原生资源下载失败。更新依赖需重新验证，不能直接清除锁文件升级。
+
+媒体插件固定`image_picker 1.2.0`、`image_picker_android 0.8.13+5`、`record 6.1.2`、`record_android 1.4.5`、`just_audio 0.10.5`和`audio_session 0.2.2`，保持与本项目Gradle 8.14/JDK 21兼容；当前更高版本的部分插件使用AGP 9，不能直接只升级Dart依赖。插件构建脚本也使用项目现有HTTPS Maven镜像。
 
 ## 数据与开发约定
 

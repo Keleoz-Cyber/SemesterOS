@@ -130,6 +130,23 @@ class _ShellPageState extends State<ShellPage> {
               child: Column(
                 children: [
                   if (widget.items != null) ...[
+                    for (final type in {
+                      'image': '图片通知录入',
+                      'audio': '语音快速记录',
+                    }.entries)
+                      ListTile(
+                        leading: Icon(
+                          type.key == 'image'
+                              ? Icons.image_outlined
+                              : Icons.mic_none,
+                        ),
+                        title: Text(type.value),
+                        subtitle: const Text('保留来源，识别后核对'),
+                        onTap: () {
+                          Navigator.pop(sheet);
+                          context.push('/capture/media?kind=${type.key}');
+                        },
+                      ),
                     ListTile(
                       leading: const Icon(
                         Icons.auto_awesome_outlined,

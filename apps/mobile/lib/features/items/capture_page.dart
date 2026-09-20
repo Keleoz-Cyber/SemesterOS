@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../../app/controller.dart';
 import '../../ui/campus_widgets.dart';
 import 'items_controller.dart';
 import 'item_form.dart';
 import 'item_widgets.dart';
 import '../changes/changes_page.dart';
+import '../media/drafts.dart';
 
 class CapturePage extends StatefulWidget {
   final ItemsController controller;
@@ -23,8 +25,40 @@ class _CapturePageState extends State<CapturePage> {
   String referenceAt = DateTime.now().toUtc().toIso8601String();
   bool busy = false;
   String? error;
+  Timer? autosave;
+  bool completed = false;
+  late final generation = widget.controller.api.generation;
+  late final drafts = CaptureDrafts(
+    widget.controller.cache,
+    widget.controller.owner!,
+    () => generation == widget.controller.api.generation,
+  );
+  String get draftKey => 'text:${widget.semester['id']}';
+  @override
+  void initState() {
+    super.initState();
+    restore();
+  }
+
+  Future<void> restore() async {
+    final data = await drafts.read(draftKey);
+    if (mounted &&
+        generation == widget.controller.api.generation &&
+        text.text.isEmpty &&
+        data != null) {
+      setState(() {
+        text.text = data['text'] ?? '';
+        referenceAt = data['reference_at'] ?? referenceAt;
+      });
+    }
+  }
+
+  Future<void> saveDraft() =>
+      drafts.save(draftKey, {'text': text.text, 'reference_at': referenceAt});
   @override
   void dispose() {
+    autosave?.cancel();
+    if (!completed) saveDraft();
     text.dispose();
     super.dispose();
   }
@@ -44,7 +78,12 @@ class _CapturePageState extends State<CapturePage> {
         ),
       ),
     );
-    if (mounted && result == true) Navigator.pop(context, true);
+    if (mounted && result == true) {
+      completed = true;
+      autosave?.cancel();
+      await drafts.save(draftKey, null);
+      if (mounted) Navigator.pop(context, true);
+    }
   }
 
   Future<void> parse() async {
@@ -69,6 +108,7 @@ class _CapturePageState extends State<CapturePage> {
             builder: (_) => ChangesPage(
               controller: widget.controller,
               initialText: text.text,
+              initialReferenceAt: referenceAt,
             ),
           ),
         );
@@ -107,6 +147,7 @@ class _CapturePageState extends State<CapturePage> {
         () => referenceAt =
             '${date.toIso8601String().substring(0, 10)}T${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:00+08:00',
       );
+      await saveDraft();
     }
   }
 
@@ -125,6 +166,13 @@ class _CapturePageState extends State<CapturePage> {
         TextField(
           key: const Key('capture-text'),
           controller: text,
+          onChanged: (_) {
+            autosave?.cancel();
+            autosave = Timer(
+              const Duration(milliseconds: 350),
+              () => saveDraft(),
+            );
+          },
           maxLines: 7,
           maxLength: 10000,
           enabled: !busy,

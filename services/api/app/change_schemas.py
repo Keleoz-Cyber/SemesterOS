@@ -10,6 +10,7 @@ class ChangeInput(Input):
     targets:list[str]=Field(default_factory=list,max_length=100)
     title:str=Field(min_length=1,max_length=160)
     source_text:str=Field(min_length=1,max_length=10000)
+    source_id:str|None=Field(default=None,max_length=36)
     start_at:datetime|None=None
     end_at:datetime|None=None
     location:str=Field(default='',max_length=200)
