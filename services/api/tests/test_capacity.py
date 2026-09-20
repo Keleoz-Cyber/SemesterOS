@@ -137,3 +137,17 @@ def test_interval_capacity_matches_an_independent_minute_bitmap():
         index=CapacityIndex(subtract([(a*60,b*60) for a,b in allowed],merge([(a*60,b*60) for a,b in blocked])))
         a,b=sorted(randomizer.sample(range(241),2))
         assert index.minutes(a*60,b*60)==len(expected & set(range(a,b)))
+
+
+def test_real_plans_deduct_only_other_tasks_and_never_duplicate_window_demand():
+    items=[task('a',180),task('b',60)]
+    plans=[{'id':'pa','item_id':'a','start_at':at('09:00').isoformat(),'end_at':at('11:00').isoformat(),'minutes':120,'status':'active','locked':False},
+           {'id':'pb','item_id':'b','start_at':at('11:00').isoformat(),'end_at':at('12:00').isoformat(),'minutes':60,'status':'active','locked':False}]
+    result=analyze(SEMESTER,AVAILABILITY,[],items,at('08:00'),plans)
+    a=result['items'][0]
+    assert a['other_plan_minutes']==60 and a['task_slack_minutes']==0
+    assert a['planned_minutes']==120 and a['unplanned_minutes']==60
+    assert result['summary']['window_gap_minutes']==0
+    later=analyze(SEMESTER,AVAILABILITY,[],items,at('12:01'),plans)
+    assert later['items'][0]['planned_minutes']==0
+    assert later['items'][0]['remaining_minutes']==180

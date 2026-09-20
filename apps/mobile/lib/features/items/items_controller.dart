@@ -26,6 +26,20 @@ class ItemsController extends ChangeNotifier {
   int _riskRequest = 0;
   bool riskBusy = false;
   String? riskNotice;
+  Map<String, dynamic>? planFeed;
+  String? planNotice;
+  int _planRequest = 0;
+  bool get hasCurrentPlans =>
+      !offline &&
+      planFeed != null &&
+      semesterId != null &&
+      itemsRevision != null &&
+      planFeed?['semester_id'] == semesterId &&
+      planFeed?['revision'] == itemsRevision;
+  bool revisionIsStale(String? sid, int revision) =>
+      sid != semesterId ||
+      (_observedRevision != null && _observedRevision! > revision) ||
+      (itemsRevision != null && itemsRevision! > revision);
 
   bool get hasCurrentRisk =>
       !offline &&
@@ -47,6 +61,8 @@ class ItemsController extends ChangeNotifier {
     analysis = null;
     _riskRequest++;
     riskBusy = false;
+    planFeed = null;
+    _planRequest++;
   }
 
   bool observeRevision(String sid, int revision) {
@@ -155,6 +171,7 @@ class ItemsController extends ChangeNotifier {
       });
       if (!valid(epoch, generation)) return;
       await syncNotifications();
+      if (valid(epoch, generation) && request == _request) await refreshPlans();
       if (valid(epoch, generation) && request == _request) {
         await refreshRisk(reloadOnMismatch: false);
       }
@@ -248,12 +265,20 @@ class ItemsController extends ChangeNotifier {
     });
   }
 
-  Future<void> lifecycle(Map<String, dynamic> item, String state) async {
+  Future<void> lifecycle(
+    Map<String, dynamic> item,
+    String state, {
+    Map<String, dynamic> confirmation = const {},
+  }) async {
     final result = Map<String, dynamic>.from(
       await api.request(
         'POST',
         '/items/${item['id']}/lifecycle',
-        data: {'expected_version': item['version'], 'lifecycle': state},
+        data: {
+          'expected_version': item['version'],
+          'lifecycle': state,
+          ...confirmation,
+        },
       ),
     );
     await acceptItem(result);
@@ -390,6 +415,110 @@ class ItemsController extends ChangeNotifier {
       ),
     );
     await acceptItem(item);
+    await refresh();
+  }
+
+  Future<Map<String, dynamic>> previewLifecycle(
+    Map<String, dynamic> item,
+    String state,
+  ) async => Map<String, dynamic>.from(
+    await api.request(
+      'POST',
+      '/items/${item['id']}/lifecycle/preview',
+      data: {'expected_version': item['version'], 'lifecycle': state},
+    ),
+  );
+  Future<void> refreshPlans() async {
+    if (owner == null || owner != _owner || semesterId == null) return;
+    final epoch = _epoch, generation = api.generation, request = ++_planRequest;
+    try {
+      final result = Map<String, dynamic>.from(
+        await api.request('GET', '/semesters/$semesterId/plans'),
+      );
+      if (!valid(epoch, generation) || request != _planRequest) return;
+      planFeed = result;
+      planNotice = result['revision'] == itemsRevision ? null : '计划已变化，请刷新';
+    } catch (_) {
+      if (valid(epoch, generation) && request == _planRequest) {
+        planFeed = null;
+        planNotice = '个人计划同步未完成，请重试';
+      }
+    }
+    if (valid(epoch, generation) && request == _planRequest) changed();
+  }
+
+  Future<Map<String, dynamic>> generateSchedule(
+    Map<String, dynamic> data,
+  ) async {
+    final sid = semesterId;
+    final result = Map<String, dynamic>.from(
+      await api.request(
+        'POST',
+        '/semesters/$sid/plan-proposals',
+        data: data,
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+    if (sid != semesterId) throw ApiFailure('学期已切换，请重新打开候选');
+    return result;
+  }
+
+  Future<Map<String, dynamic>> acceptSchedule(
+    Map<String, dynamic> p,
+    bool partial,
+  ) async {
+    final result = Map<String, dynamic>.from(
+      await api.request(
+        'POST',
+        '/plan-proposals/${p['id']}/accept',
+        data: {
+          'expected_version': p['version'],
+          'expected_revision': p['base_revision'],
+          'confirm_partial': partial,
+          'unarranged_minutes': p['unarranged_minutes'] ?? 0,
+        },
+      ),
+    );
+    observeRevision(result['semester_id'], result['revision']);
+    invalidateRisk();
+    changed();
+    await refresh();
+    return result;
+  }
+
+  Future<void> undoSchedule(Map<String, dynamic> p, int revision) async {
+    final result = Map<String, dynamic>.from(
+      await api.request(
+        'POST',
+        '/plan-proposals/${p['id']}/undo',
+        data: {'expected_version': p['version'], 'expected_revision': revision},
+      ),
+    );
+    observeRevision(result['semester_id'], result['revision']);
+    invalidateRisk();
+    changed();
+    await refresh();
+  }
+
+  Future<void> changePlanBlock(
+    Map<String, dynamic> b, {
+    bool? locked,
+    bool cancel = false,
+    bool confirmLocked = false,
+  }) async {
+    final result = Map<String, dynamic>.from(
+      await api.request(
+        cancel ? 'POST' : 'PATCH',
+        '/plan-blocks/${b['id']}/${cancel ? 'cancel' : 'lock'}',
+        data: {
+          'expected_version': b['version'],
+          if (cancel) 'confirm_locked': confirmLocked else 'locked': locked,
+        },
+      ),
+    );
+    observeRevision(result['semester_id'], result['revision']);
+    invalidateRisk();
+    changed();
     await refresh();
   }
 

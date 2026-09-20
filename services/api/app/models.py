@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import JSON, ForeignKey, ForeignKeyConstraint, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, ForeignKeyConstraint, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -86,6 +86,7 @@ class StudyItem(Base):
     __table_args__ = (
         ForeignKeyConstraint(['user_id', 'semester_id'], ['semesters.user_id', 'semesters.id']),
         UniqueConstraint('user_id', 'id'),
+        UniqueConstraint('user_id', 'semester_id', 'id', name='uq_item_owner_semester_id'),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(String(36), index=True)
@@ -163,3 +164,48 @@ class ProgressEntry(Base):
     item_id: Mapped[str] = mapped_column(String(36), index=True)
     payload: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[str] = mapped_column(String(40))
+
+
+class PlanProposal(Base):
+    __tablename__='plan_proposals'
+    __table_args__=(ForeignKeyConstraint(['user_id','semester_id'],['semesters.user_id','semesters.id']),
+                   UniqueConstraint('user_id','semester_id','id'))
+    id: Mapped[str]=mapped_column(String(36),primary_key=True,default=new_id)
+    user_id: Mapped[str]=mapped_column(String(36),index=True)
+    semester_id: Mapped[str]=mapped_column(String(36),index=True)
+    base_revision: Mapped[int]=mapped_column(Integer)
+    version: Mapped[int]=mapped_column(Integer,default=1)
+    phase: Mapped[str]=mapped_column(String(20),default='ready')
+    payload: Mapped[dict]=mapped_column(JSON)
+    receipt: Mapped[dict | None]=mapped_column(JSON,nullable=True)
+    created_at: Mapped[str]=mapped_column(String(40))
+    applied_at: Mapped[str | None]=mapped_column(String(40),nullable=True)
+
+
+class PlanBlock(Base):
+    __tablename__='plan_blocks'
+    __table_args__=(ForeignKeyConstraint(['user_id','semester_id','item_id'],['study_items.user_id','study_items.semester_id','study_items.id']),
+        ForeignKeyConstraint(['user_id','semester_id','proposal_id'],['plan_proposals.user_id','plan_proposals.semester_id','plan_proposals.id']))
+    id: Mapped[str]=mapped_column(String(36),primary_key=True,default=new_id)
+    user_id: Mapped[str]=mapped_column(String(36),index=True)
+    semester_id: Mapped[str]=mapped_column(String(36),index=True)
+    item_id: Mapped[str]=mapped_column(String(36),index=True)
+    proposal_id: Mapped[str]=mapped_column(String(36))
+    start_at: Mapped[str]=mapped_column(String(40))
+    end_at: Mapped[str]=mapped_column(String(40))
+    minutes: Mapped[int]=mapped_column(Integer)
+    locked: Mapped[bool]=mapped_column(Boolean,default=False)
+    status: Mapped[str]=mapped_column(String(20),default='active')
+    version: Mapped[int]=mapped_column(Integer,default=1)
+    updated_at: Mapped[str]=mapped_column(String(40))
+
+
+class PlanRevision(Base):
+    __tablename__='plan_revisions'
+    __table_args__=(ForeignKeyConstraint(['user_id','semester_id'],['semesters.user_id','semesters.id']),)
+    id: Mapped[str]=mapped_column(String(36),primary_key=True,default=new_id)
+    user_id: Mapped[str]=mapped_column(String(36),index=True)
+    semester_id: Mapped[str]=mapped_column(String(36))
+    kind: Mapped[str]=mapped_column(String(40))
+    payload: Mapped[dict]=mapped_column(JSON)
+    created_at: Mapped[str]=mapped_column(String(40))

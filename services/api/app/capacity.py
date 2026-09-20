@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from math import floor
 
 from .reminder_rules import SHANGHAI, anchor_at, instant
+from .plan_rules import classify, occupied_seconds, future_minutes
 
 
 def merge(spans):
@@ -101,7 +102,7 @@ def exam_window(exam, semester_start, semester_end):
     return semester_start, semester_end
 
 
-def analyze(semester, availability, courses, items, now):
+def calendar_context(semester, availability, courses, items, now):
     current = now.timestamp()
     semester_start = local_day(semester['first_monday']).timestamp()
     semester_end = semester_start + semester['total_weeks'] * 7 * 86400
@@ -137,6 +138,15 @@ def analyze(semester, availability, courses, items, now):
     blocked += [(instant(r['start_at']).timestamp(), instant(r['end_at']).timestamp()) for r in availability.get('exclusions', [])]
     total = CapacityIndex(available)
     free = CapacityIndex(subtract(available, merge(blocked)))
+    return {'current':current,'begin':begin,'semester_end':semester_end,'total':total,'free':free,
+            'uncertain':uncertain,'conflicts':conflicts}
+
+
+def analyze(semester, availability, courses, items, now, plans=()):
+    context=calendar_context(semester,availability,courses,items,now)
+    current,begin,semester_end=(context[k] for k in ('current','begin','semester_end'))
+    total,free,uncertain,conflicts=(context[k] for k in ('total','free','uncertain','conflicts'))
+    valid_plans,plan_issues=classify(plans,items,free.spans,begin)
     tasks = [i for i in items if i['kind'] != 'exam' and i['lifecycle'] == 'active']
     limit = len(tasks) > 200
     result, ready = [], []
@@ -170,9 +180,16 @@ def analyze(semester, availability, courses, items, now):
         missing = any(r.startswith('needs_') or r in ('outside_semester', 'analysis_limit') for r in reasons)
         can_count = availability.get('configured') and due is not None and due <= semester_end and policy != 'unconfirmed' and remaining is not None and item.get('certainty') == 'formal' and not limit
         before = total.minutes(release, due) if can_count else None
-        capacity = free.minutes(release, due) if can_count else None
+        calendar_capacity=free.minutes(release,due) if can_count else None
+        other_seconds=occupied_seconds(valid_plans,release,due,{item['id']}) if can_count and due>release else 0
+        capacity=max(0,floor((free.before(due)-free.before(release)-other_seconds)/60)) if can_count and due>release else 0 if can_count else None
         slack = capacity - remaining if can_count else None
-        longest = free.longest(release, due) if can_count else None
+        other_spans=merge([(instant(b['start_at']).timestamp(),instant(b['end_at']).timestamp()) for b in valid_plans if b['item_id']!=item['id']])
+        longest = CapacityIndex(subtract(free.spans,other_spans)).longest(release,due) if can_count else None
+        own_coverage=sum(future_minutes(b,current) for b in valid_plans if b['item_id']==item['id'])
+        plan_problem=any(p['item_id']==item['id'] for p in plan_issues)
+        if plan_problem:reasons.append('plan_conflict')
+        if remaining is not None and own_coverage>remaining:reasons.append('plan_overcoverage');plan_problem=True
         hard = due is not None and any(instant(c['start_at']).timestamp() < due and instant(c['end_at']).timestamp() > release for c in conflicts)
         if hard:
             reasons.append('fixed_conflict')
@@ -189,11 +206,12 @@ def analyze(semester, availability, courses, items, now):
                'remaining_minutes':remaining, 'release_at':iso(release) if policy != 'unconfirmed' else None,
                'deadline_at':iso(due) if due is not None else None, 'reason_codes':reasons,
                'capacity_before_fixed_minutes':None if unknown_exam else before,
-               'fixed_occupied_minutes':None if before is None or unknown_exam else before-capacity,
-               'capacity_after_fixed_minutes':None if unknown_exam else capacity, 'other_plan_minutes':0,
+               'fixed_occupied_minutes':None if before is None or unknown_exam else before-calendar_capacity,
+               'capacity_after_fixed_minutes':None if unknown_exam else calendar_capacity, 'other_plan_minutes':None if unknown_exam or calendar_capacity is None else calendar_capacity-capacity,
+               'planned_minutes':own_coverage,'unplanned_minutes':max(0,remaining-own_coverage) if remaining is not None else None,
                'task_slack_minutes':None if unknown_exam else slack, 'max_contiguous_minutes':None if unknown_exam else longest,
                'window_gap_minutes':0, 'critical_window':None, 'data_complete':not missing,
-               'level':'high' if overdue or hard or no_slot or inverted else 'unknown' if missing else
+               'level':'high' if overdue or hard or no_slot or inverted or plan_problem else 'unknown' if missing else
                        'medium' if tentative_exam or slack < max(30, .2*remaining) else 'low'}
         result.append(row)
         if can_count and due > current:
@@ -207,7 +225,8 @@ def analyze(semester, availability, courses, items, now):
                 continue
             subset = [r for r in ready if r[0] >= a and r[1] <= b]
             demand = sum(r[2] for r in subset)
-            capacity = free.minutes(a, b)
+            other_seconds=occupied_seconds(valid_plans,a,b,{r[3]['item_id'] for r in subset})
+            capacity = max(0,floor((free.before(b)-free.before(a)-other_seconds)/60))
             gap = max(0, demand-capacity)
             if not gap:
                 continue
@@ -229,11 +248,12 @@ def analyze(semester, availability, courses, items, now):
                 row['level'] = 'unknown'
                 row['reason_codes'].append('other_tasks_incomplete')
     uncertain_count = sum(a < semester_end and b > begin for a,b,_,_ in uncertain)
-    level = 'high' if conflicts or any(r['level']=='high' for r in result) else 'unknown' if incomplete or not availability.get('configured') else 'medium' if uncertain_count or any(r['level']=='medium' for r in result) else 'low'
+    level = 'high' if conflicts or plan_issues or any(r['level']=='high' for r in result) else 'unknown' if incomplete or not availability.get('configured') else 'medium' if uncertain_count or any(r['level']=='medium' for r in result) else 'low'
     return {'items':result, 'summary':{'level':level, 'active_task_count':len(tasks), 'incomplete_count':incomplete,
         'window_gap_minutes':critical['gap_minutes'] if critical else 0, 'critical_window':critical,
         'fixed_conflict_count':len(conflicts), 'configured':availability.get('configured', False),
         'uncertain_exam_count':uncertain_count,
+        'plan_conflict_count':len(plan_issues),
         'analysis_limited':limit, 'is_schedule':False}, 'fixed_conflicts':conflicts[:30],
-        'scope_end':iso(semester_end), 'computed_at':now.astimezone(timezone.utc).isoformat(),
+        'plan_issues':plan_issues[:30], 'scope_end':iso(semester_end), 'computed_at':now.astimezone(timezone.utc).isoformat(),
         'valid_until':(now+timedelta(minutes=1)).astimezone(timezone.utc).isoformat(), 'rule_version':'risk-v1', 'time_resolution_minutes':1}

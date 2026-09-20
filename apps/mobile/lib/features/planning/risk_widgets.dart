@@ -29,6 +29,8 @@ String reasonLabel(String code) =>
     const {
       'needs_availability': '先确认每周可学习时间',
       'other_tasks_incomplete': '其他任务信息未齐，整体负荷尚不能确定',
+      'plan_conflict': '已有个人计划与当前时间约束冲突，请核对',
+      'plan_overcoverage': '已有计划超过剩余工作量，请通过更新进度核对',
       'needs_estimate': '补充预计剩余耗时',
       'needs_deadline': '确认截止日期及具体时刻或当天结束口径',
       'needs_start': '确认任务最早什么时候可以开始',
@@ -92,6 +94,12 @@ class RiskBadge extends StatelessWidget {
               const Text(
                 '查看计算依据 ›',
                 style: TextStyle(fontSize: 12, color: CampusColors.muted),
+              ),
+            if (r?['planned_minutes'] != null &&
+                r?['unplanned_minutes'] != null)
+              Text(
+                '有效未来覆盖 ${minutesLabel(r!['planned_minutes'])} · 尚待安排 ${minutesLabel(r['unplanned_minutes'])}',
+                style: const TextStyle(fontSize: 12, color: CampusColors.muted),
               ),
           ],
         ),
@@ -163,6 +171,11 @@ class RiskOverview extends StatelessWidget {
                     style: const TextStyle(fontSize: 13),
                   ),
               ],
+              if ((summary?['plan_conflict_count'] ?? 0) > 0)
+                Text(
+                  '${summary['plan_conflict_count']}段已有计划需要核对',
+                  style: const TextStyle(fontSize: 13),
+                ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -191,7 +204,7 @@ class RiskOverview extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        const SoftNotice('总时长足够，也可能没有合适的连续空档。这里是容量检查，尚未生成自动排程。'),
+        const SoftNotice('总时长足够，也可能没有合适的连续空档。容量检查后，可在“生成计划”中核对具体安排。'),
       ],
     );
   }
@@ -328,7 +341,7 @@ Future<void> showRiskDetails(
             ],
             const SizedBox(height: 16),
             const Text(
-              '分析按当前记录和完整分钟保守估算。未生成个人计划时，其他任务计划占用为0；整体工作量仍参与共享窗口检查。',
+              '分析按当前记录和完整分钟保守估算。只扣其他任务的有效计划，自己的覆盖不重复扣；已安排不等于已完成。',
               style: TextStyle(fontSize: 12, color: CampusColors.muted),
             ),
             const SizedBox(height: 14),

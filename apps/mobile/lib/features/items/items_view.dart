@@ -4,6 +4,7 @@ import 'items_controller.dart';
 import 'item_widgets.dart';
 import '../planning/risk_widgets.dart';
 import '../planning/availability_page.dart';
+import '../planning/plan_list.dart';
 
 class ItemsView extends StatefulWidget {
   final ItemsController controller;
@@ -46,6 +47,7 @@ class _ItemsViewState extends State<ItemsView> {
               ),
             ),
           ),
+          PlanningEntry(controller: c),
           SectionHeading('学期事项', action: '添加事项', onAction: widget.onCreate),
           Wrap(
             spacing: 8,
@@ -102,7 +104,7 @@ class _ItemsViewState extends State<ItemsView> {
             label: const Text('开启或检查系统通知'),
           ),
           const SizedBox(height: 12),
-          const SoftNotice('余量按当前记录计算，自动排程尚未开放。可以先核对学习时间和任务进度。'),
+          const SoftNotice('生成候选后需确认应用；已有计划保持原位，安排过不代表工作已经完成。'),
         ],
       );
     },
@@ -129,6 +131,7 @@ class TodayItems extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          PlanningEntry(controller: controller, today: true),
           SectionHeading('待处理事项', action: '全部事项', onAction: onAll),
           if (controller.notice != null) ...[
             SoftNotice(controller.notice!, warning: true),

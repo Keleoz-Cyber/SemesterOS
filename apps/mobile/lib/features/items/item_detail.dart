@@ -7,6 +7,7 @@ import 'item_widgets.dart';
 import 'reminder_editor.dart';
 import '../planning/risk_widgets.dart';
 import '../planning/progress_page.dart';
+import '../planning/plan_change_confirmation.dart';
 
 class ItemDetailPage extends StatefulWidget {
   final ItemsController controller;
@@ -83,32 +84,65 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
 
   Future<void> changeState(String state) async {
     final target = currentItem!;
+    Map<String, dynamic> preview;
+    try {
+      preview = await widget.controller.previewLifecycle(target, state);
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
+      return;
+    }
+    if (!mounted) return;
+    final blocks = List<Map<String, dynamic>>.from(
+      preview['affected_blocks'] ?? [],
+    );
     final label = {
       'completed': '确认已完成',
       'cancelled': '确认取消事项',
       'active': '恢复这条事项',
     }[state]!;
-    final yes = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(label),
-        content: Text(
-          state == 'active' ? '恢复事项后，已停用的提醒需要重新开启。' : '相关未触发提醒将一并停用。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('返回'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('确认'),
-          ),
-        ],
-      ),
-    );
+    final selection = blocks.isEmpty
+        ? null
+        : await confirmPlanChange(
+            context,
+            title: label,
+            message: '相关未触发提醒和以下未来个人计划将取消，任务进度只按本次确认更新。',
+            confirmLabel: '确认',
+            blocks: blocks,
+            cancelAll: true,
+          );
+    if (!mounted) return;
+    final yes = blocks.isNotEmpty
+        ? selection != null
+        : await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(label),
+              content: Text(
+                state == 'active' ? '恢复事项后，已停用的提醒需要重新开启。' : '相关未触发提醒将一并停用。',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('返回'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('确认'),
+                ),
+              ],
+            ),
+          );
     if (yes == true && mounted) {
-      await run(() => widget.controller.lifecycle(target, state));
+      await run(
+        () => widget.controller.lifecycle(
+          target,
+          state,
+          confirmation: {
+            'expected_revision': preview['base_revision'],
+            ...?selection,
+          },
+        ),
+      );
     }
   }
 

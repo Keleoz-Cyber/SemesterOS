@@ -56,6 +56,7 @@ class AvailabilityInput(Input):
 
 class AvailabilityApply(AvailabilityInput):
     expected_revision: int = Field(ge=0)
+    confirm_plan_conflicts: bool = False
 
 
 class ProgressInput(Input):
@@ -68,3 +69,5 @@ class ProgressInput(Input):
 class ProgressApply(ProgressInput):
     expected_revision: int = Field(ge=0)
     confirm_complete: bool = False
+    cancel_plan_ids:list[str]=Field(default_factory=list,max_length=300)
+    confirm_locked_cancellation:bool=False

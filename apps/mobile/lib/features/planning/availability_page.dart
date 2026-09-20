@@ -203,6 +203,19 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                 ...summary(Map<String, dynamic>.from(preview['after'])),
                 const SizedBox(height: 12),
                 const Text('重叠学习时段会合并，保存后重新计算余量。'),
+                if ((preview['affected_plan_count'] ?? 0) > 0) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    '新设置会使${preview['affected_plan_count']}段已有计划不再满足约束。确认后会标出冲突，计划保持原位，需要另行处理。',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  for (final b in preview['affected_blocks'])
+                    Text(
+                      '${displayInstant(b['start_at'])} 至 ${displayInstant(b['end_at'])}',
+                    ),
+                ],
               ],
             ),
           ),
@@ -224,6 +237,8 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
         return;
       }
       final data = {...input, 'expected_revision': preview['base_revision']};
+      data['confirm_plan_conflicts'] =
+          (preview['affected_plan_count'] ?? 0) > 0;
       final encoded = jsonEncode(data);
       if (lastBody != encoded) {
         lastBody = encoded;

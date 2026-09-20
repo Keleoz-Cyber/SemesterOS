@@ -7,10 +7,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from . import academics, auth, items, capture, planning
+from . import academics, auth, items, capture, planning, schedule_api
 from pathlib import Path
 from dotenv import dotenv_values
-from threading import Lock
+from threading import Lock, BoundedSemaphore
 import os
 from .database import make_engine
 
@@ -32,6 +32,9 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
     app.state.engine = engine
     app.state.capture_attempts = defaultdict(deque)
     app.state.capture_lock = Lock()
+    app.state.planner_lock=Lock()
+    app.state.planner_users=set()
+    app.state.planner_slots=BoundedSemaphore(2)
     attempts = defaultdict(deque)
 
     @app.middleware("http")
@@ -73,4 +76,5 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
     app.include_router(items.router, prefix="/api/v1")
     app.include_router(capture.router, prefix="/api/v1")
     app.include_router(planning.router, prefix="/api/v1")
+    app.include_router(schedule_api.router, prefix="/api/v1")
     return app

@@ -121,6 +121,9 @@ class ItemEdit(ItemFields):
 class LifecycleInput(Input):
     expected_version: int = Field(ge=1)
     lifecycle: Literal['active', 'completed', 'cancelled']
+    expected_revision:int|None=Field(default=None,ge=0)
+    cancel_plan_ids:list[str]=Field(default_factory=list,max_length=300)
+    confirm_locked_cancellation:bool=False
 
 
 class ReminderCreate(ReminderInput):

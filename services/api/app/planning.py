@@ -10,6 +10,9 @@ from .items import owned_item, check_version, audit, serialize_item, rules_for
 from .models import AvailabilityRevision, CourseMeeting, ProgressEntry, StudyAvailability, StudyItem, User
 from .planning_schemas import AvailabilityApply, AvailabilityInput, ProgressApply, ProgressInput
 from .reminder_rules import utcnow
+from .capacity import calendar_context
+from .plan_rules import classify
+from .plan_store import plan_rows,block_value,preview_blocks,cancel_for_change
 
 router=APIRouter()
 
@@ -40,8 +43,20 @@ def get_availability(sid:str,user:User=Depends(current_user),db:Session=Depends(
 @router.post('/semesters/{sid}/availability/preview')
 def preview_availability(sid:str,body:AvailabilityInput,user:User=Depends(current_user),db:Session=Depends(get_db)):
     s,row=validate_preferences(db,user,sid,body)
+    conflicts=preference_conflicts(db,user,s,body.normalized())
     return {'before':availability_value(row,s.revision),'after':body.normalized(),'base_revision':s.revision,
-            'settings_version':body.expected_version,'affected_plan_count':0}
+            'settings_version':body.expected_version,'affected_plan_count':len(conflicts),'affected_blocks':conflicts}
+
+
+def preference_conflicts(db,user,s,payload):
+    calendar={'first_monday':s.first_monday,'total_weeks':s.total_weeks,'periods':s.periods}
+    courses=[{**c.payload,'id':c.id} for c in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id==user.id,CourseMeeting.semester_id==s.id))]
+    items=[{**i.payload,'id':i.id,'lifecycle':i.lifecycle} for i in db.scalars(select(StudyItem).where(StudyItem.user_id==user.id,StudyItem.semester_id==s.id))]
+    plans=[block_value(b) for b in plan_rows(db,user,s.id)]
+    context=calendar_context(calendar,{**payload,'configured':True},courses,items,utcnow())
+    _,issues=classify(plans,items,context['free'].spans,context['begin'])
+    bad={i['block_id'] for i in issues}
+    return [b for b in plans if b['id'] in bad]
 
 
 @router.put('/semesters/{sid}/availability')
@@ -55,6 +70,8 @@ def put_availability(sid:str,body:AvailabilityApply,user:User=Depends(current_us
     s,row=validate_preferences(db,user,sid,body)
     if s.revision!=body.expected_revision:
         error(409,'SNAPSHOT_STALE','学期安排已变化，请重新核对学习时间')
+    if preference_conflicts(db,user,s,body.normalized()) and not body.confirm_plan_conflicts:
+        error(422,'CONFIRM_PLAN_CONFLICTS','新设置会使已有计划冲突，请明确确认；计划不会自动移动')
     before=availability_value(row,s.revision)
     now=utcnow().isoformat()
     if row is None:
@@ -80,8 +97,9 @@ def get_risk(sid:str,user:User=Depends(current_user),db:Session=Depends(get_db))
     preferences=availability_value(availability_row(db,user,sid),revision)
     courses=[{**r.payload,'id':r.id} for r in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id==user.id,CourseMeeting.semester_id==sid))]
     items=[{**r.payload,'id':r.id,'version':r.version,'lifecycle':r.lifecycle} for r in db.scalars(select(StudyItem).where(StudyItem.user_id==user.id,StudyItem.semester_id==sid).order_by(StudyItem.created_at,StudyItem.id))]
+    plans=[block_value(b) for b in plan_rows(db,user,sid)]
     db.commit()
-    return {**analyze(calendar,preferences,courses,items,utcnow()),'semester_id':sid,'revision':revision,
+    return {**analyze(calendar,preferences,courses,items,utcnow(),plans),'semester_id':sid,'revision':revision,
             'settings_version':preferences['version']}
 
 
@@ -96,9 +114,10 @@ def progress_target(db,user,item_id,body):
 @router.post('/items/{item_id}/progress/preview')
 def preview_progress(item_id:str,body:ProgressInput,user:User=Depends(current_user),db:Session=Depends(get_db)):
     item,s=progress_target(db,user,item_id,body)
+    blocks=preview_blocks(db,item,utcnow())
     return {'item_id':item.id,'item_version':item.version,'base_revision':s.revision,
             'before_remaining_minutes':item.payload.get('remaining_minutes'),'after_remaining_minutes':body.remaining_minutes,
-            'actual_minutes':body.actual_minutes,'will_complete':body.remaining_minutes==0,'affected_plan_count':0}
+            'actual_minutes':body.actual_minutes,'will_complete':body.remaining_minutes==0,'affected_plan_count':len(blocks),'affected_blocks':blocks}
 
 
 @router.post('/items/{item_id}/progress')
@@ -113,6 +132,8 @@ def apply_progress(item_id:str,body:ProgressApply,user:User=Depends(current_user
         error(409,'SNAPSHOT_STALE','预览后学期安排已变化，请重新核对进度')
     if (body.remaining_minutes==0)!=body.confirm_complete:
         error(422,'CONFIRM_COMPLETION','剩余为0时需明确确认完成并停用提醒')
+    cancel_for_change(db,user,item,utcnow(),body.cancel_plan_ids,body.confirm_locked_cancellation,
+        remaining=body.remaining_minutes,all_required=body.confirm_complete)
     before=item.payload.get('remaining_minutes')
     item.payload={**item.payload,'remaining_minutes':body.remaining_minutes}
     item.version+=1;item.updated_at=utcnow().isoformat()

@@ -8,6 +8,7 @@ from .database import get_db
 from .item_schemas import ItemCreate, ItemEdit, LifecycleInput, ReminderCreate, ReminderEdit, ReminderInput
 from .models import CourseMeeting, ItemRevision, ReminderRule, StudyItem, TextCandidate, User
 from .reminder_rules import anchor_at, evaluate, utcnow
+from .plan_store import preview_blocks,cancel_for_change
 
 router = APIRouter()
 
@@ -191,6 +192,9 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
             and item.payload['time'].get('at') == data['time'].get('at')
             and item.payload['time']['precision'] == data['time']['precision'] == 'exact'):
         data['time']['end_at'] = item.payload['time'].get('end_at')
+    coverage=sum(b['future_minutes'] for b in preview_blocks(db,item,utcnow()))
+    if coverage and (data.get('remaining_minutes') is None or data['remaining_minutes']<coverage):
+        error(409,'PLAN_CONFIRMATION_REQUIRED','已有未来计划超过新剩余工作量，请通过更新进度选择需取消的块')
     # Original source/candidate evidence is immutable; corrections have their own audit reason.
     for key in ('source_text', 'candidate_id', 'parse_evidence'):
         if key in item.payload:
@@ -223,6 +227,11 @@ def set_lifecycle(item_id: str, body: LifecycleInput, user: User = Depends(curre
     check_version(item, body.expected_version)
     if body.lifecycle == 'completed' and item.payload['kind'] == 'exam':
         error(422, 'INVALID_LIFECYCLE', '考试不是可完成的个人任务')
+    current=owned_semester(db,user,item.semester_id)
+    future=preview_blocks(db,item,utcnow())
+    if body.lifecycle!='active' and future:
+        if body.expected_revision!=current.revision:error(409,'PLAN_CONFIRMATION_REQUIRED','请先预览并确认如何取消未来计划')
+        cancel_for_change(db,user,item,utcnow(),body.cancel_plan_ids,body.confirm_locked_cancellation,all_required=True)
     item.lifecycle = body.lifecycle
     if body.lifecycle == 'active' and item.payload.get('remaining_minutes') == 0:
         item.payload = {**item.payload, 'remaining_minutes': None}
@@ -240,6 +249,14 @@ def set_lifecycle(item_id: str, body: LifecycleInput, user: User = Depends(curre
     remember(db, user, operation, idempotency_key, request, result)
     db.commit()
     return result
+
+
+@router.post('/items/{item_id}/lifecycle/preview')
+def preview_lifecycle(item_id:str,body:LifecycleInput,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    item=owned_item(db,user,item_id,lock=True);check_version(item,body.expected_version)
+    s=owned_semester(db,user,item.semester_id)
+    blocks=preview_blocks(db,item,utcnow()) if body.lifecycle!='active' else []
+    return {'base_revision':s.revision,'affected_blocks':blocks,'affected_plan_count':len(blocks)}
 
 
 @router.post('/items/{item_id}/reminders', status_code=201)

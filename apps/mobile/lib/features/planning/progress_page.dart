@@ -4,6 +4,7 @@ import '../../ui/campus_widgets.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'risk_widgets.dart';
+import 'plan_change_confirmation.dart';
 
 class ProgressPage extends StatefulWidget {
   final ItemsController controller;
@@ -63,39 +64,63 @@ class _ProgressPageState extends State<ProgressPage> {
       );
       if (!mounted) return;
       final complete = preview['will_complete'] == true;
-      final yes = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(complete ? '确认任务已经完成' : '确认新的剩余工作量'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${widget.item['title']}'),
-                const SizedBox(height: 12),
-                Text(
-                  '原剩余：${minutesLabel(preview['before_remaining_minutes'])}\n新剩余：${minutesLabel(preview['after_remaining_minutes'])}',
-                ),
-                if (preview['actual_minutes'] != null)
-                  Text('本次实际用时：${minutesLabel(preview['actual_minutes'])}'),
-                const SizedBox(height: 12),
-                Text(complete ? '确认后标记完成，并停用未触发提醒。' : '仅按你确认的新剩余值保存；实际用时单独记录。'),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('返回修改'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(complete ? '确认完成并停止提醒' : '确认更新进度'),
-            ),
-          ],
-        ),
+      final blocks = List<Map<String, dynamic>>.from(
+        preview['affected_blocks'] ?? [],
       );
+      final selection = blocks.isEmpty
+          ? null
+          : await confirmPlanChange(
+              context,
+              title: complete ? '确认任务已经完成' : '确认新的剩余工作量',
+              message:
+                  '原剩余：${minutesLabel(preview['before_remaining_minutes'])}\n新剩余：${minutesLabel(preview['after_remaining_minutes'])}\n实际投入单独记录。',
+              confirmLabel: complete ? '确认完成并停止提醒' : '确认更新进度',
+              blocks: blocks,
+              cancelAll: complete,
+              remaining: input['remaining_minutes'] as int,
+            );
+      if (!mounted) return;
+      final yes = blocks.isNotEmpty
+          ? selection != null
+          : await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(complete ? '确认任务已经完成' : '确认新的剩余工作量'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${widget.item['title']}'),
+                      const SizedBox(height: 12),
+                      Text(
+                        '原剩余：${minutesLabel(preview['before_remaining_minutes'])}\n新剩余：${minutesLabel(preview['after_remaining_minutes'])}',
+                      ),
+                      if (preview['actual_minutes'] != null)
+                        Text(
+                          '本次实际用时：${minutesLabel(preview['actual_minutes'])}',
+                        ),
+                      const SizedBox(height: 12),
+                      Text(
+                        complete
+                            ? '确认后标记完成，并停用未触发提醒。'
+                            : '仅按你确认的新剩余值保存；实际用时单独记录。',
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('返回修改'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(complete ? '确认完成并停止提醒' : '确认更新进度'),
+                  ),
+                ],
+              ),
+            );
       if (yes != true || !mounted) return;
       await widget.controller.saveProgress(
         widget.item['id'],
@@ -103,6 +128,7 @@ class _ProgressPageState extends State<ProgressPage> {
           ...input,
           'expected_revision': preview['base_revision'],
           'confirm_complete': complete,
+          ...?selection,
         },
         idempotencyKey:
             'progress-${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}',
