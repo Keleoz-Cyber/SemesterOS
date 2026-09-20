@@ -1,7 +1,9 @@
 param(
     [ValidateSet('Api', 'Android', 'Test')]
     [string]$Action = 'Api',
-    [string]$Device = 'emulator-5554'
+    [string]$Device = 'auto',
+    [string]$Emulator = 'Medium_Phone_33',
+    [ValidateRange(10, 600)][int]$WaitSeconds = 150
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -12,11 +14,13 @@ function Check-Exit([string]$Step) {
 }
 
 if ($Action -eq 'Android') {
+    . (Join-Path $PSScriptRoot 'android-device.ps1')
+    $resolvedDevice = Resolve-SemesterAndroidDevice -ProjectRoot $projectRoot -Device $Device -Emulator $Emulator -WaitSeconds $WaitSeconds
     Push-Location apps/mobile
     try {
         & flutter --no-version-check pub get
         Check-Exit 'Flutter dependencies'
-        & flutter --no-version-check run --no-pub -d $Device
+        & flutter --no-version-check run --no-pub -d $resolvedDevice
         Check-Exit 'Android app'
     } finally { Pop-Location }
     exit

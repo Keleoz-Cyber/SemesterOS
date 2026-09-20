@@ -26,14 +26,16 @@
 # 终端1：创建本地私有配置、启动PostgreSQL、迁移并运行API
 pwsh -File scripts/dev.ps1 -Action Api
 
-# 终端2：先在Android Studio启动模拟器，再运行App
-pwsh -File scripts/dev.ps1 -Action Android -Device emulator-5554
+# 终端2：自动选择已连接的Android设备；没有设备时启动已有模拟器
+pwsh -File scripts/dev.ps1 -Action Android
 
 # 验证：PostgreSQL独立测试schema + Flutter测试及静态分析
 pwsh -File scripts/dev.ps1 -Action Test
 ```
 
 API使用`http://127.0.0.1:8871`，模拟器通过`http://10.0.2.2:8871`访问；PostgreSQL只绑定本机`55439`端口，避免占用已有项目的`55432`。首次运行脚本生成`.env`，不输出密码。API已在运行时无需重复启动同端口服务。
+
+Android启动脚本优先使用唯一已连接设备；没有设备时默认启动`Medium_Phone_33`，等待Android系统和安装服务就绪后再运行App。多个设备时用`-Device`指定，其他虚拟设备用`-Emulator`指定；原来的`-Device emulator-5554`命令也支持自动启动该端口的模拟器。启动日志保存在`tmp/android-start/`，默认等待150秒，不清空模拟器数据。
 
 用 Android Studio 打开`apps/mobile`目录。当前验证设备为`Medium_Phone_33`（Android 13）。本次导出的调试包只含x86_64，用于该模拟器；物理手机需另构建适合其架构的包。调试包允许本地HTTP，正式发布需要HTTPS入口和独立签名配置；本批不发布正式签名包。
 
