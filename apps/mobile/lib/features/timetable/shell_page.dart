@@ -10,6 +10,7 @@ import 'week_view.dart';
 import 'semester_view.dart';
 import '../items/items_controller.dart';
 import '../items/items_view.dart';
+import '../centers/semester_centers.dart';
 
 class ShellPage extends StatefulWidget {
   final AppController controller;
@@ -47,6 +48,48 @@ class _ShellPageState extends State<ShellPage> {
       context.push(c.semester == null ? '/semester/new' : '/import');
   void manual() =>
       context.push(c.semester == null ? '/semester/new' : '/manual');
+
+  void openCourse(Map<String, dynamic> event) {
+    if (widget.items != null && event['course_id'] != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CourseHubPage(
+            controller: widget.items!,
+            courseId: event['course_id'],
+          ),
+        ),
+      );
+    } else {
+      showCourseDetails(context, event);
+    }
+  }
+
+  Future<void> manageSemester() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('管理学期与课表')),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: SemesterView(
+              semesters: c.semesters,
+              current: c.semester!,
+              onSelect: (s) async {
+                await c.selectSemester(s);
+                if (mounted && context.mounted) Navigator.pop(context);
+              },
+              onCreate: () => context.push('/semester/new'),
+              onImport: openImport,
+              onManual: manual,
+            ),
+          ),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
 
   Future<void> refresh() async {
     if (tab == 1 && c.semester != null) {
@@ -272,7 +315,7 @@ class _ShellPageState extends State<ShellPage> {
           onWeek: c.loadWeek,
           onCurrent: () => c.loadWeek(c.weekNow(c.semester!)),
           onImport: openImport,
-          onCourse: (event) => showCourseDetails(context, event),
+          onCourse: openCourse,
         );
       case 2:
         if (widget.items != null) {
@@ -306,6 +349,13 @@ class _ShellPageState extends State<ShellPage> {
           ],
         );
       case 3:
+        if (widget.items != null) {
+          return SemesterHome(
+            key: ValueKey(c.semester!['id']),
+            controller: widget.items!,
+            onManage: manageSemester,
+          );
+        }
         return SemesterView(
           semesters: c.semesters,
           current: c.semester!,
@@ -331,7 +381,7 @@ class _ShellPageState extends State<ShellPage> {
           onTimetable: () => switchTab(1),
           onImport: openImport,
           onManual: manual,
-          onCourse: (event) => showCourseDetails(context, event),
+          onCourse: openCourse,
         );
     }
   }

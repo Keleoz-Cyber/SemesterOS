@@ -196,7 +196,7 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
     if coverage and (data.get('remaining_minutes') is None or data['remaining_minutes']<coverage):
         error(409,'PLAN_CONFIRMATION_REQUIRED','已有未来计划超过新剩余工作量，请通过更新进度选择需取消的块')
     # Original source/candidate evidence is immutable; corrections have their own audit reason.
-    for key in ('source_text', 'candidate_id', 'parse_evidence'):
+    for key in ('source_text', 'candidate_id', 'parse_evidence', 'review_exam_id'):
         if key in item.payload:
             data[key] = item.payload[key]
     changed_anchor = item.payload['time'] != data['time']

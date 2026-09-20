@@ -236,25 +236,32 @@ class ItemsController extends ChangeNotifier {
 
   Future<Map<String, dynamic>> get(String id) async =>
       Map<String, dynamic>.from(await api.request('GET', '/items/$id'));
-  Future<void> acceptItem(Map<String, dynamic> item) async {
+  Future<void> acceptItem(Map<String, dynamic> item) => acceptItems([item]);
+
+  Future<void> acceptItems(List<Map<String, dynamic>> committed) async {
     _request++;
     invalidateRisk();
     final epoch = _epoch, generation = api.generation;
     if (_owner == null || owner != _owner) return;
-    if (item['semester_id'] == semesterId) {
-      final existing = items.where((r) => r['id'] == item['id']).firstOrNull;
-      if (existing != null &&
-          (existing['version'] as int) > (item['version'] as int)) {
-        return;
+    var accepted = false;
+    for (final item in committed) {
+      if (item['semester_id'] == semesterId) {
+        final existing = items.where((r) => r['id'] == item['id']).firstOrNull;
+        if (existing != null &&
+            (existing['version'] as int) > (item['version'] as int)) {
+          continue;
+        }
+        items = [item, ...items.where((r) => r['id'] != item['id'])];
+        _saved[semesterId!] = {'items': items, 'courses': courses};
       }
-      items = [item, ...items.where((r) => r['id'] != item['id'])];
-      _saved[semesterId!] = {'items': items, 'courses': courses};
+      reminderFeed = [
+        ...reminderFeed.where((r) => r['item_id'] != item['id']),
+        if (item['lifecycle'] == 'active')
+          ...rows(item['reminders']).where((r) => r['enabled'] == true),
+      ];
+      accepted = true;
     }
-    reminderFeed = [
-      ...reminderFeed.where((r) => r['item_id'] != item['id']),
-      if (item['lifecycle'] == 'active')
-        ...rows(item['reminders']).where((r) => r['enabled'] == true),
-    ];
+    if (!accepted) return;
     changed();
     // Correct local alarms from the committed receipt even if the next GET fails.
     await syncNotifications();
@@ -471,6 +478,7 @@ class ItemsController extends ChangeNotifier {
     bool apply = false,
   }) async {
     final sid = semesterId;
+    final generation = api.generation;
     final result = Map<String, dynamic>.from(
       await api.request(
         method,
@@ -481,7 +489,11 @@ class ItemsController extends ChangeNotifier {
     );
     if (sid != semesterId) throw ApiFailure('学期已切换，请重新打开');
     if (apply) {
+      api.checkSession(generation);
       observeRevision(result['semester_id'], result['revision']);
+      final receipts = rows(result['changed_items']);
+      if (receipts.isNotEmpty) await acceptItems(receipts);
+      api.checkSession(generation);
       invalidateRisk();
       changed();
       await onRealityChanged?.call(result);

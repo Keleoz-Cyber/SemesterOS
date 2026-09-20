@@ -16,6 +16,8 @@ import '../features/items/reminder_sync.dart';
 import '../features/items/item_form.dart';
 import '../features/items/item_detail.dart';
 import '../features/items/capture_page.dart';
+import '../features/centers/semester_centers.dart';
+import '../features/centers/exam_pages.dart';
 
 class SemesterApp extends ConsumerStatefulWidget {
   const SemesterApp({super.key});
@@ -60,6 +62,23 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
         return null;
       },
       routes: [
+        GoRoute(
+          path: '/courses/:id',
+          builder: (_, state) => CourseHubPage(
+            controller: items,
+            courseId: state.pathParameters['id']!,
+          ),
+        ),
+        GoRoute(
+          path: '/exams/:id',
+          builder: (_, state) => controller.semester == null
+              ? SemesterPage(controller: controller)
+              : ExamCenterPage(
+                  controller: items,
+                  semester: controller.semester!,
+                  examId: state.pathParameters['id']!,
+                ),
+        ),
         GoRoute(
           path: '/',
           builder: (_, _) => ShellPage(controller: controller, items: items),

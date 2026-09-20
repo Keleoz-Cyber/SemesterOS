@@ -21,6 +21,84 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   test(
+    'exam and review reminder receipts replace old alarms even if the following GET fails',
+    () async {
+      final api = SemesterApi()..session = account('a');
+      final port = FakeNotifications();
+      final oldTime = DateTime.now()
+          .toUtc()
+          .add(const Duration(days: 5))
+          .toIso8601String();
+      final newTime = DateTime.now()
+          .toUtc()
+          .add(const Duration(days: 3))
+          .toIso8601String();
+      Map<String, dynamic> item(String id, int version, String at) => {
+        'id': id,
+        'semester_id': 's',
+        'version': version,
+        'lifecycle': 'active',
+        'reminders': [
+          {
+            'id': 'r$id',
+            'item_id': id,
+            'version': version,
+            'item_version': version,
+            'title': id,
+            'enabled': true,
+            'schedule_state': 'scheduled',
+            'trigger_at': at,
+          },
+        ],
+      };
+      var fail = false;
+      api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.method == 'POST') {
+          fail = true;
+          return body({
+            'semester_id': 's',
+            'revision': 2,
+            'changed_items': [
+              item('exam', 2, newTime),
+              item('review', 2, newTime),
+            ],
+          });
+        }
+        if (fail) return body({'message': 'offline'}, 503);
+        if (r.path.endsWith('/courses')) return body([]);
+        if (r.path.endsWith('/reminders')) {
+          return body({
+            'owner_id': 'a',
+            'reminders': [
+              ...item('exam', 1, oldTime)['reminders'],
+              ...item('review', 1, oldTime)['reminders'],
+            ],
+          });
+        }
+        return body({
+          'revision': 1,
+          'semester_id': 's',
+          'items': [item('exam', 1, oldTime), item('review', 1, oldTime)],
+        });
+      });
+      final c = ItemsController(api, MemoryStore(), ReminderSync(port));
+      await c.bind('s');
+      expect(port.scheduled.length, 2);
+      await c.changeRequest(
+        'POST',
+        '/exams/exam/reschedule',
+        data: {},
+        apply: true,
+      );
+      expect(c.offline, isTrue);
+      expect(port.scheduled.values.map((r) => r['trigger_at']).toSet(), {
+        newTime,
+      });
+      expect(c.items.every((i) => i['version'] == 2), isTrue);
+      c.dispose();
+    },
+  );
+  test(
     'a pre-commit refresh cannot overwrite a committed completion receipt',
     () async {
       final api = SemesterApi()..session = account('a');

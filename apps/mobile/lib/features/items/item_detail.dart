@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/campus_widgets.dart';
 import 'items_controller.dart';
@@ -213,6 +214,24 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                               ),
                             ),
                     ),
+                    if (data['kind'] == 'exam')
+                      TextButton.icon(
+                        onPressed: () => context.push('/exams/${data['id']}'),
+                        icon: const Icon(Icons.school_outlined),
+                        label: const Text('考试复习与改期确认'),
+                      ),
+                    if (data['review_exam_id'] != null)
+                      TextButton(
+                        onPressed: () =>
+                            context.push('/exams/${data['review_exam_id']}'),
+                        child: const Text('查看关联考试'),
+                      ),
+                    if (data['course_id'] != null)
+                      TextButton(
+                        onPressed: () =>
+                            context.push('/courses/${data['course_id']}'),
+                        child: const Text('查看课程事务'),
+                      ),
                     if (error != null) ...[
                       SoftNotice(error!, warning: true),
                       const SizedBox(height: 12),

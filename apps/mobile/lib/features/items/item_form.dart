@@ -7,6 +7,7 @@ import 'items_controller.dart';
 import 'item_widgets.dart';
 import 'reminder_editor.dart';
 import '../planning/date_time_picker.dart';
+import '../centers/exam_pages.dart';
 
 class ItemFormPage extends StatefulWidget {
   final ItemsController controller;
@@ -223,6 +224,38 @@ class _ItemFormPageState extends State<ItemFormPage> {
       error = null;
     });
     try {
+      if (editing && kind == 'exam') {
+        final request = <String, dynamic>{
+          'expected_version': data['expected_version'],
+          'time': t,
+          'certainty': certainty,
+          'location': data['location'],
+          'reserve_time': data['reserve_time'],
+          'reason': data['change_reason'],
+          'title': data['title'],
+          'course_id': data['course_id'],
+          'notes': data['notes'],
+          'align_review_deadlines': false,
+        };
+        final preview = await widget.controller.changeRequest(
+          'POST',
+          '/exams/${widget.initial!['id']}/reschedule/preview',
+          data: request,
+        );
+        if (!mounted) return;
+        final applied = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ExamChangePreviewPage(
+              controller: widget.controller,
+              preview: preview,
+              request: request,
+            ),
+          ),
+        );
+        if (applied == true && mounted) Navigator.pop(context, true);
+        return;
+      }
       await widget.controller.save(
         data,
         id: widget.initial?['id'],
