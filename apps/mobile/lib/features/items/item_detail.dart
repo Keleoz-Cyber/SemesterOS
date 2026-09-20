@@ -215,6 +215,12 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                               ),
                             ),
                     ),
+                    TextButton.icon(
+                      onPressed: () =>
+                          context.push('/operations?item=${data['id']}'),
+                      icon: const Icon(Icons.tune),
+                      label: const Text('用一句话修改这条事项或提醒'),
+                    ),
                     if (data['source_id'] != null)
                       TextButton.icon(
                         onPressed: () => Navigator.push(

@@ -34,6 +34,9 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
     context=calendar_context(calendar,preferences,courses,items,now)
     start=request.get('_window_start',ceil(context['begin']/60)+request['lead_minutes'])
     end=request.get('_window_end',min(start+request['days']*1440,floor(context['semester_end']/60)))
+    if request.get('window_start_at') and '_window_start' not in request:
+        start=max(start,ceil(instant(request['window_start_at']).timestamp()/60))
+        end=min(floor(instant(request['window_end_at']).timestamp()/60),floor(context['semester_end']/60))
     base={'window_start':stamp(start),'window_end':stamp(end),'blocks':[],'tasks':[],
           'status':'INPUT_INVALID','messages':[],'solver_status':None,'optimal':False,
           'unarranged_minutes':0,'can_apply':False,'existing_conflict_count':len(context['conflicts'])}

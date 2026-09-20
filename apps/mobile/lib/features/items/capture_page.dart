@@ -7,6 +7,7 @@ import 'item_form.dart';
 import 'item_widgets.dart';
 import '../changes/changes_page.dart';
 import '../media/drafts.dart';
+import '../operations/operation_page.dart';
 
 class CapturePage extends StatefulWidget {
   final ItemsController controller;
@@ -101,6 +102,23 @@ class _CapturePageState extends State<CapturePage> {
         referenceAt,
       );
       if (!mounted) return;
+      if ([
+        'update_task',
+        'update_reminder',
+        'request_plan',
+      ].contains(candidate['intent'])) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OperationPage(
+              controller: widget.controller,
+              initialText: text.text,
+              referenceAt: referenceAt,
+            ),
+          ),
+        );
+        return;
+      }
       if (candidate['intent'] == 'report_change') {
         await Navigator.push(
           context,
@@ -117,7 +135,7 @@ class _CapturePageState extends State<CapturePage> {
       if (candidate['intent'] != 'create_item' || candidate['item'] == null) {
         setState(
           () => error =
-              '当前文字入口支持新增一条事项。${(candidate['questions'] as List? ?? []).join('；')}\n修改已有事项请从详情进入，多条通知请分开记录。',
+              '${(candidate['questions'] as List? ?? []).join('；')}\n请明确一条事项；若是修改已有内容，可以进入下方修改入口。',
         );
         return;
       }
@@ -215,6 +233,21 @@ class _CapturePageState extends State<CapturePage> {
         TextButton(
           onPressed: busy ? null : () => openForm(),
           child: const Text('直接手工填写，保留原文'),
+        ),
+        TextButton(
+          onPressed: busy
+              ? null
+              : () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => OperationPage(
+                      controller: widget.controller,
+                      initialText: text.text,
+                      referenceAt: referenceAt,
+                    ),
+                  ),
+                ),
+          child: const Text('用这段文字修改已有事项 / 提醒'),
         ),
       ],
     ),

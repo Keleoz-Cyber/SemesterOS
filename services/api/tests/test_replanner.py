@@ -41,6 +41,17 @@ def test_no_change_is_a_zero_movement_solution():
     assert r['status']=='FEASIBLE_COMPLETE' and r['moved_tasks']==0 and not r['can_apply']
 
 
+def test_unselected_tasks_are_fixed_during_scoped_replanning():
+    from app.replanner import generate
+    plans=[block('p1','a','09:00','10:00'),block('p2','b','10:00','11:00')]
+    course={'id':'c','title':'课','weekday':1,'weeks':[1],'sections':[1]}
+    r=generate(SEMESTER,AVAILABILITY,[course],[task('a',60),task('b',60)],plans,{'lead_minutes':0,'task_ids':['a']},at('08:00'))
+    assert r['status']=='FEASIBLE_COMPLETE'
+    assert next(b for b in r['blocks'] if b['id']=='p2')['start_at']==at('10:00').astimezone(__import__('datetime').timezone.utc).isoformat()
+    blocked=generate(SEMESTER,AVAILABILITY,[course],[task('a',60),task('b',60)],plans,{'lead_minutes':0,'task_ids':['b']},at('08:00'))
+    assert blocked['status']=='INPUT_INVALID' and blocked['locked_conflicts'][0]['id']=='p1'
+
+
 def test_overlap_with_movable_block_does_not_falsely_block_locked_plan():
     r=solve([block('p1','a','09:00','10:00',True),block('p2','b','09:30','10:30')])
     assert r['status']=='FEASIBLE_COMPLETE',r

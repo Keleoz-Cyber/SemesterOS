@@ -250,12 +250,26 @@ class ItemsController extends ChangeNotifier {
     final epoch = _epoch, generation = api.generation;
     if (_owner == null || owner != _owner) return;
     var accepted = false;
-    for (final item in committed) {
+    for (final incoming in committed) {
+      var item = incoming;
       if (item['semester_id'] == semesterId) {
         final existing = items.where((r) => r['id'] == item['id']).firstOrNull;
         if (existing != null &&
             (existing['version'] as int) > (item['version'] as int)) {
           continue;
+        }
+        if (existing != null && existing['version'] == item['version']) {
+          final rules = {
+            for (final r in rows(existing['reminders'])) r['id']: r,
+          };
+          for (final r in rows(item['reminders'])) {
+            final old = rules[r['id']];
+            if (old == null ||
+                (r['version'] as int) >= (old['version'] as int)) {
+              rules[r['id']] = r;
+            }
+          }
+          item = {...item, 'reminders': rules.values.toList()};
         }
         items = [item, ...items.where((r) => r['id'] != item['id'])];
         _saved[semesterId!] = {'items': items, 'courses': courses};
@@ -462,14 +476,16 @@ class ItemsController extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> generateSchedule(
-    Map<String, dynamic> data,
-  ) async {
+    Map<String, dynamic> data, {
+    String? idempotencyKey,
+  }) async {
     final sid = semesterId;
     final result = Map<String, dynamic>.from(
       await api.request(
         'POST',
         '/semesters/$sid/${data['mode'] == 'replan' ? 'replan-proposals' : 'plan-proposals'}',
         data: data,
+        idempotencyKey: idempotencyKey,
         receiveTimeout: const Duration(seconds: 30),
       ),
     );

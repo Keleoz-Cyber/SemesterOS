@@ -21,6 +21,56 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   test(
+    'replayed operation receipt cannot roll back a newer reminder with the same item version',
+    () async {
+      final api = SemesterApi()..session = account('a');
+      api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.path.endsWith('/courses')) return body([]);
+        if (r.path.endsWith('/reminders')) {
+          return body({'owner_id': 'a', 'reminders': []});
+        }
+        return body({'items': [], 'revision': 1});
+      });
+      final port = FakeNotifications();
+      final c = ItemsController(api, MemoryStore(), ReminderSync(port));
+      await c.bind('s');
+      final latest = {
+        'id': 'i',
+        'version': 1,
+        'semester_id': 's',
+        'lifecycle': 'active',
+        'reminders': [
+          {
+            'id': 'r',
+            'item_id': 'i',
+            'version': 3,
+            'item_version': 1,
+            'enabled': false,
+            'schedule_state': 'disabled',
+            'trigger_at': DateTime.now()
+                .add(const Duration(days: 1))
+                .toIso8601String(),
+          },
+        ],
+      };
+      await c.acceptItem(latest);
+      await c.acceptItem({
+        ...latest,
+        'reminders': [
+          <String, dynamic>{
+            ...Map<String, dynamic>.from((latest['reminders'] as List).first),
+            'version': 2,
+            'enabled': true,
+            'schedule_state': 'scheduled',
+          },
+        ],
+      });
+      expect(c.items.single['reminders'][0]['version'], 3);
+      expect(port.scheduled, isEmpty);
+      c.dispose();
+    },
+  );
+  test(
     'exam and review reminder receipts replace old alarms even if the following GET fails',
     () async {
       final api = SemesterApi()..session = account('a');

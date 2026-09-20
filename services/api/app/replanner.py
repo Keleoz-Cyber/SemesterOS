@@ -29,7 +29,7 @@ def prepare(calendar,preferences,courses,items,plans,request,now):
     specs=[];locked=[]
     for b in future:
         item=tasks.get(b['item_id']);original=instant(b['start_at']).timestamp()/60
-        fixed=b['locked'] or original<begin
+        fixed=b['locked'] or original<begin or (request.get('task_ids') is not None and b['item_id'] not in request['task_ids'])
         if fixed and any(r!='plan_overlap' for r in bad.get(b['id'],{}).get('reason_codes',[])):locked.append(b)
         invalid=[r for r in bad.get(b['id'],{}).get('reason_codes',[]) if r not in ('outside_free_time','after_deadline','before_release','plan_overlap')]
         if not item or invalid or not original.is_integer():
@@ -41,7 +41,7 @@ def prepare(calendar,preferences,courses,items,plans,request,now):
             (max(release,ceil(a/60)),min(deadline,floor(z/60))-b['minutes']+1) for a,z in context['free'].spans])]
         specs.append({'before':b,'fixed':fixed,'original':int(original),'domains':domains})
     if locked:
-        base.update(locked_conflicts=locked,messages=['锁定、已开始或即将开始的计划与现实安排冲突，请明确处理后再重排']);return base,None
+        base.update(locked_conflicts=locked,messages=['锁定、已开始、即将开始或未选中的计划与现实安排冲突，请明确处理或调整范围后再重排']);return base,None
     for id in {b['item_id'] for b in future}:
         item=tasks[id];coverage=sum(future_minutes(b,now.timestamp()) for b in future if b['item_id']==id)
         if item.get('remaining_minutes') is None or coverage>item['remaining_minutes']:

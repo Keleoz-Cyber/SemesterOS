@@ -177,7 +177,7 @@ class _ProposalPageState extends State<ProposalPage> {
             const SoftNotice('仅重排已有未来块。保持时长与锁定，不自动新增未覆盖工作；确认前原计划保持。'),
             for (final b in p['locked_conflicts'] ?? [])
               SoftNotice(
-                '${b['title'] ?? '个人计划'} · ${displayInstant(b['start_at'])}\n已锁定、开始或即将开始，请到个人计划中明确处理。',
+                '${b['title'] ?? '个人计划'} · ${displayInstant(b['start_at'])}\n已锁定、开始、即将开始或未纳入移动范围，请明确处理。',
                 warning: true,
               ),
           ] else

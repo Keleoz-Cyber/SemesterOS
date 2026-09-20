@@ -82,7 +82,9 @@ def create_replan(sid:str,body:ReplanInput,request:Request,user:User=Depends(cur
     s=owned_semester(db,user,sid,lock=True);data=body.model_dump(mode='json');op='replan/'+sid
     cached=replay(db,user,op,idempotency_key,data)
     if cached is not None:return cached
-    source=snapshot(db,user,s);revision=s.revision;db.commit()
+    source=snapshot(db,user,s);revision=s.revision
+    if body.task_ids and not set(body.task_ids).issubset({i['id'] for i in source[3] if i['lifecycle']=='active' and i['kind']!='exam'}):error(404,'NOT_FOUND','所选任务不属于本学期或已不活跃')
+    db.commit()
     with solver_slot(request.app,user.id):result=replanner.generate(*source,data,utcnow())
     db.expire_all();s=owned_semester(db,user,sid,lock=True)
     cached=replay(db,user,op,idempotency_key,data)

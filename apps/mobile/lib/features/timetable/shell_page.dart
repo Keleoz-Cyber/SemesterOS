@@ -130,6 +130,15 @@ class _ShellPageState extends State<ShellPage> {
               child: Column(
                 children: [
                   if (widget.items != null) ...[
+                    ListTile(
+                      leading: const Icon(Icons.tune),
+                      title: const Text('用一句话修改事项 / 提醒'),
+                      subtitle: const Text('先核对对象与变化，再确认'),
+                      onTap: () {
+                        Navigator.pop(sheet);
+                        context.push('/operations');
+                      },
+                    ),
                     for (final type in {
                       'image': '图片通知录入',
                       'audio': '语音快速记录',

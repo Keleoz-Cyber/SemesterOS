@@ -18,6 +18,14 @@ def test_chunking_preserves_work_and_merges_short_tail():
     assert chunks(180,45,False)==[180]
 
 
+def test_explicit_requested_window_constrains_every_new_block():
+    req={**request('a',targets={'a':60}),'window_start_at':at('11:00').isoformat(),'window_end_at':at('12:00').isoformat()}
+    result=run([task(minutes=180)],req)
+    assert result['status']=='FEASIBLE_COMPLETE',result
+    assert sum(b['minutes'] for b in result['blocks'])==60
+    assert all(at('11:00')<=datetime.fromisoformat(b['start_at'])<datetime.fromisoformat(b['end_at'])<=at('12:00') for b in result['blocks'])
+
+
 def test_complete_plan_has_no_overlap_and_respects_course_release_and_deadline():
     items=[task('a',60,start_policy='at',earliest_start_at=at('10:00').isoformat()),task('b',60)]
     course={'id':'c','title':'课程','weekday':1,'weeks':[1],'sections':[1]}

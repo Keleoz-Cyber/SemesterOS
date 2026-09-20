@@ -10,6 +10,7 @@ Future<Map<String, dynamic>?> confirmPlanChange(
   required List<Map<String, dynamic>> blocks,
   bool cancelAll = false,
   int? remaining,
+  int? maxKeptBlocks,
 }) async {
   final selected = <String>{if (cancelAll) ...blocks.map((b) => '${b['id']}')};
   var unlock = false;
@@ -26,7 +27,12 @@ Future<Map<String, dynamic>?> confirmPlanChange(
               0,
               (sum, b) => sum + ((b['future_minutes'] ?? b['minutes']) as int),
             );
-        final enough = remaining == null || kept <= remaining;
+        final keptCount = blocks
+            .where((b) => !selected.contains(b['id']))
+            .length;
+        final enough =
+            (remaining == null || kept <= remaining) &&
+            (maxKeptBlocks == null || keptCount <= maxKeptBlocks);
         return AlertDialog(
           title: Text(title),
           content: SingleChildScrollView(
@@ -57,7 +63,9 @@ Future<Map<String, dynamic>?> confirmPlanChange(
                     ),
                   if (!enough)
                     Text(
-                      '仍保留 ${minutesLabel(kept)}，超过新的剩余工作量',
+                      maxKeptBlocks != null && keptCount > maxKeptBlocks
+                          ? '不可拆分设置最多保留一段未来计划，请选择需取消的块'
+                          : '仍保留 ${minutesLabel(kept)}，超过新的剩余工作量',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                       ),

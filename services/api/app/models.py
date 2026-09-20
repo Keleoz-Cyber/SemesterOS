@@ -249,3 +249,19 @@ class MediaSource(Base):
     metadata_json: Mapped[dict]=mapped_column(JSON,default=dict)
     error_code: Mapped[str | None]=mapped_column(String(50),nullable=True)
     created_at: Mapped[str]=mapped_column(String(40))
+
+
+class OperationProposal(Base):
+    __tablename__='operation_proposals'
+    __table_args__=(ForeignKeyConstraint(['user_id','semester_id'],['semesters.user_id','semesters.id']),)
+    id: Mapped[str]=mapped_column(String(36),primary_key=True,default=new_id)
+    user_id: Mapped[str]=mapped_column(String(36),index=True)
+    semester_id: Mapped[str]=mapped_column(String(36),index=True)
+    version: Mapped[int]=mapped_column(Integer,default=1)
+    phase: Mapped[str]=mapped_column(String(30),default='needs_clarification')
+    base_revision: Mapped[int]=mapped_column(Integer)
+    source_text: Mapped[str]=mapped_column(String(10000))
+    reference_at: Mapped[str]=mapped_column(String(40))
+    payload: Mapped[dict]=mapped_column(JSON)
+    receipt: Mapped[dict | None]=mapped_column(JSON,nullable=True)
+    created_at: Mapped[str]=mapped_column(String(40))

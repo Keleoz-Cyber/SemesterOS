@@ -11,6 +11,7 @@ import '../changes/changes_page.dart';
 import 'drafts.dart';
 import 'media_input.dart';
 import 'source_view.dart';
+import '../operations/operation_page.dart';
 
 String sourceState(String? state) => switch (state) {
   'queued' => '等待识别',
@@ -479,6 +480,25 @@ class _MediaCapturePageState extends State<MediaCapturePage>
           ),
         );
         if (!mounted || !same || stamp != op) return;
+        if ([
+          'update_task',
+          'update_reminder',
+          'request_plan',
+        ].contains(candidate['intent'])) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OperationPage(
+                controller: widget.controller,
+                initialText: text.text,
+                referenceAt: referenceAt,
+                sourceId: source!['id'],
+                sourceVersion: source!['version'],
+              ),
+            ),
+          );
+          return;
+        }
         if (candidate['intent'] == 'report_change') {
           await Navigator.push(
             context,

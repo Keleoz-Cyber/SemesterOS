@@ -1,6 +1,9 @@
 from typing import Literal
 from pydantic import Field, model_validator
 from .schemas import Input
+from datetime import datetime,timedelta
+from pydantic import field_validator
+from .item_schemas import ItemTime
 
 
 class TaskTarget(Input):
@@ -14,10 +17,17 @@ class ScheduleInput(Input):
     chunk_minutes:int=Field(default=45,ge=15,le=120)
     allow_partial:bool=False
     tasks:list[TaskTarget]=Field(min_length=1,max_length=100)
+    window_start_at:datetime|None=None
+    window_end_at:datetime|None=None
+    @field_validator('window_start_at','window_end_at')
+    @classmethod
+    def aware(cls,v):return ItemTime.aware(v)
 
     @model_validator(mode='after')
     def unique(self):
         if len({t.item_id for t in self.tasks})!=len(self.tasks):raise ValueError('不能重复选择任务')
+        if bool(self.window_start_at)!=bool(self.window_end_at):raise ValueError('请同时明确起止时刻')
+        if self.window_start_at and not timedelta(0)<self.window_end_at-self.window_start_at<=timedelta(days=28):raise ValueError('规划窗口需为正且不超过28天')
         return self
 
 
@@ -41,3 +51,8 @@ class BlockCancel(Input):
 class ReplanInput(Input):
     mode:Literal['replan']='replan'
     lead_minutes:int=Field(default=5,ge=0,le=60)
+    task_ids:list[str]|None=Field(default=None,min_length=1,max_length=100)
+    @model_validator(mode='after')
+    def unique(self):
+        if self.task_ids and len(set(self.task_ids))!=len(self.task_ids):raise ValueError('不能重复选择任务')
+        return self

@@ -19,6 +19,7 @@ import '../features/items/capture_page.dart';
 import '../features/centers/semester_centers.dart';
 import '../features/centers/exam_pages.dart';
 import '../features/media/media_capture_page.dart';
+import '../features/operations/operation_page.dart';
 
 class SemesterApp extends ConsumerStatefulWidget {
   const SemesterApp({super.key});
@@ -63,6 +64,13 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
         return null;
       },
       routes: [
+        GoRoute(
+          path: '/operations',
+          builder: (_, state) => OperationPage(
+            controller: items,
+            contextItemId: state.uri.queryParameters['item'],
+          ),
+        ),
         GoRoute(
           path: '/capture/media',
           builder: (_, state) => controller.semester == null
