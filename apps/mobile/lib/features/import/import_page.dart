@@ -160,7 +160,10 @@ class _ImportPageState extends State<ImportPage> {
       }
     });
     try {
-      final script = await rootBundle.loadString('assets/haut_reader.js');
+      final script = await rootBundle.loadString(
+        'assets/haut_reader.js',
+        cache: false,
+      );
       await web.runJavaScript('$script\nsemesterRead(${jsonEncode(nonce)});');
     } catch (_) {
       timeout?.cancel();

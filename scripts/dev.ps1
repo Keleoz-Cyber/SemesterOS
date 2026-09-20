@@ -62,6 +62,11 @@ try {
 } finally { Pop-Location }
 
 if ($Action -eq 'Test') {
+    if (!(Get-Command node -ErrorAction SilentlyContinue)) {
+        throw '教务JavaScript适配回归需要Node.js 18或以上版本。'
+    }
+    & node --test apps/mobile/test/haut_reader_test.cjs
+    Check-Exit 'School reader JavaScript tests'
     Push-Location apps/mobile
     try {
         & flutter --no-version-check test --no-pub

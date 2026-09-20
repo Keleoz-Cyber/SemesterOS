@@ -20,8 +20,29 @@ async function semesterRead(nonce) {
     if (!response.ok) throw new Error('教务查询未成功，请在原页面重新查询后再试');
     const data = await response.json();
     if (!Array.isArray(data.kbList)) throw new Error('返回内容不是已适配的课表格式，请保留原页面核对');
+    if (data.kbList.length > 300) throw new Error('课表条目超过本次读取上限，请核对所选范围');
     const allow = ['kcmc', 'xm', 'cdmc', 'xqj', 'zcd', 'jc', 'jcs', 'jxb_id', 'kch_id'];
-    const rows = data.kbList.map(row => Object.fromEntries(allow.filter(k => row[k] != null).map(k => [k, row[k]])));
+    const rows = [];
+    // The school replaces Array.prototype.filter with an index-first callback.
+    // Use indexed loops instead of page-owned map/filter/fromEntries helpers.
+    for (let i = 0; i < data.kbList.length; i++) {
+      const source = data.kbList[i];
+      if (source === null || typeof source !== 'object' || Array.isArray(source)) {
+        throw new Error(`第${i + 1}条课程格式无法确认，未跳过该条课程`);
+      }
+      const row = {};
+      for (let j = 0; j < allow.length; j++) {
+        const key = allow[j];
+        if (Object.prototype.hasOwnProperty.call(source, key) && source[key] != null) {
+          const value = source[key];
+          if (typeof value !== 'string' && typeof value !== 'number') {
+            throw new Error(`第${i + 1}条课程字段格式无法确认，未跳过该条课程`);
+          }
+          row[key] = value;
+        }
+      }
+      rows[rows.length] = row;
+    }
     const yearLabel = document.querySelector('#xnm,[name="xnm"]')?.selectedOptions?.[0]?.textContent?.trim() || year;
     const termLabel = document.querySelector('#xqm,[name="xqm"]')?.selectedOptions?.[0]?.textContent?.trim() || term;
     send('courses', {year, term, sourceTerm: `${yearLabel} ${termLabel}`, rows});
