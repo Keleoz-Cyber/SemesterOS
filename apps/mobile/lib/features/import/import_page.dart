@@ -8,6 +8,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../app/controller.dart';
 import 'haut_parser.dart';
 import 'preview.dart';
+import 'school_navigation.dart';
 
 class ImportPage extends StatefulWidget {
   final AppController controller;
@@ -21,12 +22,10 @@ class _ImportPageState extends State<ImportPage> {
   bool loading = true, reading = false, closed = false, closing = false;
   String? notice, nonce;
   Timer? timeout;
+  final redirectBudget = SchoolRedirectBudget();
   static const school =
       'https://jwglxt.haut.edu.cn/jwglxt/xtgl/login_slogin.html';
-  bool allowed(String url) {
-    final uri = Uri.tryParse(url);
-    return uri?.scheme == 'https' && uri?.host == 'jwglxt.haut.edu.cn';
-  }
+  bool allowed(String url) => isTrustedSchoolUrl(url);
 
   @override
   void initState() {
@@ -36,18 +35,60 @@ class _ImportPageState extends State<ImportPage> {
       ..addJavaScriptChannel('SemesterImport', onMessageReceived: receive)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) {
-            if (mounted) setState(() => loading = true);
+          onPageStarted: (url) {
+            nonce = null;
+            timeout?.cancel();
+            if (mounted) {
+              setState(() {
+                loading = true;
+                reading = false;
+                if (allowed(url)) notice = null;
+              });
+            }
           },
           onPageFinished: (_) {
             if (mounted) setState(() => loading = false);
           },
           onNavigationRequest: (r) {
-            if (allowed(r.url) || r.url == 'about:blank') {
+            final decision = schoolNavigation(r.url);
+            if (decision.action == SchoolNavigationAction.allow) {
               return NavigationDecision.navigate;
             }
+            if (decision.action == SchoolNavigationAction.upgradeHttps &&
+                r.isMainFrame) {
+              if (!redirectBudget.allowUpgrade(DateTime.now())) {
+                if (mounted) {
+                  setState(() {
+                    loading = false;
+                    notice = '学校页面短时间内反复跳转，已暂停。请刷新登录页后重试。';
+                  });
+                }
+                return NavigationDecision.prevent;
+              }
+              // Reject the HTTP request first. Continue on the next event turn in
+              // the same WebView so its HTTPS session stays intact.
+              unawaited(
+                Future<void>(() async {
+                  if (!mounted || closing) return;
+                  try {
+                    await web.loadRequest(decision.destination!);
+                  } catch (_) {
+                    if (mounted) {
+                      setState(() {
+                        loading = false;
+                        notice = '学校页面跳转未完成，请刷新登录页后重试';
+                      });
+                    }
+                  }
+                }),
+              );
+              return NavigationDecision.prevent;
+            }
             if (mounted) {
-              setState(() => notice = '此跳转尚未适配，请使用学校原页的教务账号登录；需要核对统一认证跳转');
+              setState(() {
+                loading = false;
+                notice = blockedSchoolNavigationMessage(r.url);
+              });
             }
             return NavigationDecision.prevent;
           },
@@ -65,9 +106,32 @@ class _ImportPageState extends State<ImportPage> {
   }
 
   Future<void> open() async {
+    redirectBudget.reset();
     await WebViewCookieManager().clearCookies();
     await web.clearLocalStorage();
     await web.loadRequest(Uri.parse(school));
+  }
+
+  Future<void> refreshSchool() async {
+    redirectBudget.reset();
+    nonce = null;
+    timeout?.cancel();
+    if (mounted) {
+      setState(() {
+        notice = null;
+        reading = false;
+      });
+    }
+    final current = await web.currentUrl();
+    if (current == null ||
+        !allowed(current) ||
+        (Uri.tryParse(current)?.path.contains('login_') ?? false)) {
+      // A fresh GET avoids re-submitting a login form whose password field was
+      // replaced with ciphertext by the school's own script.
+      await web.loadRequest(Uri.parse(school));
+    } else {
+      await web.reload();
+    }
   }
 
   Future<void> read() async {
@@ -206,7 +270,7 @@ class _ImportPageState extends State<ImportPage> {
         ),
         actions: [
           IconButton(
-            onPressed: () => web.reload(),
+            onPressed: refreshSchool,
             icon: const Icon(Icons.refresh),
             tooltip: '刷新学校页面',
           ),
