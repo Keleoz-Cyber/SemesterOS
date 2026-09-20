@@ -52,6 +52,8 @@ API使用`http://127.0.0.1:8871`，模拟器通过`http://10.0.2.2:8871`访问�
 
 已实测Flutter 3.44.2 / Dart 3.12.2，使用本机已有的Gradle 8.14、AGP 8.11.1、Kotlin 2.2.20；工程保留HTTPS Maven镜像与官方源。Windows跨盘Kotlin增量缓存存在路径错误，因此本项目关闭该增量缓存并使用进程内编译，未修改其他项目。
 
+构建JVM由`apps/mobile/android/gradle/gradle-daemon-jvm.properties`固定为 **Java 21**，需要本机安装JDK 21。它优先于Android Studio自带JBR和`JAVA_HOME`选择Gradle构建进程，因此IDE升级到JBR 25后仍使用兼容的构建JVM；不修改全局Flutter或Java配置。本机已检测到`C:\Program Files\Microsoft\jdk-21.0.4.7-hotspot`，仓库不硬编码这个路径。若出现只写着`25.0.x`的构建异常，先检查此配置是否存在；依赖列表的“有新版本”提示不是同一个问题。[Gradle JVM规则](https://docs.gradle.org/current/userguide/gradle_daemon.html#sec:daemon_jvm_criteria)
+
 固定`material_ui`/`cupertino_ui` 1.0.0以适配当前Flutter SDK；较新版本引用了此SDK没有的注解。Drift 2.28.2与sqlite3_flutter_libs 0.5.39避免当前网络下SQLite 3.x原生资源下载失败。更新依赖需重新验证，不能直接清除锁文件升级。
 
 ## 数据与开发约定
