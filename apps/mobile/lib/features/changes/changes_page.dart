@@ -1,0 +1,524 @@
+import 'package:flutter/material.dart';
+import '../../ui/campus_widgets.dart';
+import '../items/items_controller.dart';
+import '../items/item_widgets.dart';
+import '../planning/date_time_picker.dart';
+import '../planning/proposal_page.dart';
+
+const changeNames = {
+  'move': '调课',
+  'cancel': '停课',
+  'suspend': '放假停课（明确选择课次）',
+  'add': '补课',
+  'block': '固定活动',
+};
+
+class ChangesPage extends StatefulWidget {
+  final ItemsController controller;
+  final String initialText;
+  const ChangesPage({
+    super.key,
+    required this.controller,
+    this.initialText = '',
+  });
+  @override
+  State<ChangesPage> createState() => _ChangesPageState();
+}
+
+class _ChangesPageState extends State<ChangesPage> {
+  late final source = TextEditingController(text: widget.initialText);
+  final title = TextEditingController(), location = TextEditingController();
+  late final sid = widget.controller.semesterId;
+  late final generation = widget.controller.api.generation;
+  String kind = 'move';
+  Map<String, dynamic>? feed, suggestion;
+  final targets = <String>{};
+  DateTime? start, end;
+  bool busy = false;
+  String? error;
+  bool get same =>
+      sid == widget.controller.semesterId &&
+      generation == widget.controller.api.generation;
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  void dispose() {
+    source.dispose();
+    title.dispose();
+    location.dispose();
+    super.dispose();
+  }
+
+  Future<void> act(Future<void> Function() fn) async {
+    if (!same) {
+      setState(() => error = '账号或学期已切换，请返回');
+      return;
+    }
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await fn();
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> load() => act(() async {
+    final result = await widget.controller.changeRequest(
+      'GET',
+      '/semesters/$sid/changes',
+    );
+    if (mounted && same) setState(() => feed = result);
+  });
+  Future<void> parse() => act(() async {
+    if (source.text.trim().isEmpty) throw Exception('先粘贴学校通知或填写变更依据');
+    final r = await widget.controller.changeRequest(
+      'POST',
+      '/changes/parse',
+      data: {
+        'semester_id': sid,
+        'text': source.text.trim(),
+        'reference_at': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+    if (!mounted || !same) return;
+    final s = Map<String, dynamic>.from(r['suggestion']);
+    setState(() {
+      suggestion = s;
+      if (s['kind'] == 'clarify') {
+        error = '通知尚不明确，请核对下面的问题后手工填写';
+        return;
+      }
+      kind = s['kind'];
+      title.text = s['title'] ?? '';
+      location.text = s['location'] ?? '';
+      start = DateTime.tryParse(s['start_at'] ?? '');
+      end = DateTime.tryParse(s['end_at'] ?? '');
+      targets.clear();
+      if ((r['target_candidates'] as List).length == 1) {
+        targets.add(r['target_candidates'][0]);
+      }
+    });
+  });
+  Future<void> preview() => act(() async {
+    if (title.text.trim().isEmpty || source.text.trim().isEmpty) {
+      throw Exception('请填写标题与原始通知/变更依据');
+    }
+    if (['move', 'cancel', 'suspend'].contains(kind) && targets.isEmpty) {
+      throw Exception('请选择实际受影响的课次');
+    }
+    if (['move', 'add', 'block'].contains(kind) &&
+        (start == null || end == null || !end!.isAfter(start!))) {
+      throw Exception('请核对新安排的开始和结束时间');
+    }
+    final p = await widget.controller.changeRequest(
+      'POST',
+      '/semesters/$sid/changes',
+      data: {
+        'kind': kind,
+        'targets': targets.toList(),
+        'title': title.text.trim(),
+        'source_text': source.text.trim(),
+        'location': location.text.trim(),
+        if (['move', 'add', 'block'].contains(kind)) ...{
+          'start_at': start!.toUtc().toIso8601String(),
+          'end_at': end!.toUtc().toIso8601String(),
+        },
+      },
+    );
+    if (!mounted || !same) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            ChangePreviewPage(controller: widget.controller, preview: p),
+      ),
+    );
+    if (mounted && same) {
+      final r = await widget.controller.changeRequest(
+        'GET',
+        '/semesters/$sid/changes',
+      );
+      if (mounted) {
+        setState(() {
+          feed = r;
+          targets.clear();
+        });
+      }
+    }
+  });
+  Future<void> chooseTargets() async {
+    final selected = Set<String>.from(targets);
+    final all = widget.controller.rows(feed?['occurrences']);
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, update) => AlertDialog(
+          title: const Text('明确选择受影响课次'),
+          content: SizedBox(
+            width: 500,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const Text('每行代表一次课。放假只停用所选课次，不默认停掉所有课程。'),
+                for (final e in all)
+                  CheckboxListTile(
+                    title: Text(
+                      '${e['title']}\n${displayInstant(e['start_at'])}',
+                    ),
+                    value: selected.contains(e['id']),
+                    onChanged: (v) => update(() {
+                      if (v == true) {
+                        if (kind != 'suspend') selected.clear();
+                        selected.add(e['id']);
+                      } else {
+                        selected.remove(e['id']);
+                      }
+                    }),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('返回'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, selected),
+              child: const Text('确认选择'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        targets.clear();
+        targets.addAll(result);
+        if (targets.length == 1) {
+          final e = all.firstWhere((e) => e['id'] == targets.first);
+          title.text = e['title'];
+          location.text = e['location'] ?? '';
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('现实变化'),
+      actions: [
+        IconButton(
+          onPressed: busy ? null : load,
+          icon: const Icon(Icons.refresh),
+          tooltip: '刷新变化',
+        ),
+      ],
+    ),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        const CampusHero(
+          eyebrow: 'CHANGE / 现实先行',
+          title: '学校安排变了',
+          subtitle: '先确认现实变化\n再核对个人计划调整',
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: source,
+          minLines: 3,
+          maxLines: 6,
+          decoration: const InputDecoration(
+            labelText: '原始通知 / 手工核对依据',
+            hintText: '粘贴调课、停课、补课、放假或活动通知',
+          ),
+        ),
+        TextButton.icon(
+          onPressed: busy ? null : parse,
+          icon: const Icon(Icons.auto_awesome_outlined),
+          label: const Text('解析通知，稍后核对'),
+        ),
+        if (suggestion != null) ...[
+          const SoftNotice('AI只提供待核对建议。请逐项确认课次、日期和起止时间；解析不会保存现实安排。'),
+          for (final q in suggestion!['questions'] ?? []) Text('需核对：$q'),
+          for (final e in (suggestion!['evidence'] as Map? ?? {}).entries)
+            Text('来源片段：${e.value}'),
+        ],
+        DropdownButtonFormField<String>(
+          initialValue: kind,
+          key: ValueKey(kind),
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: '变化类型'),
+          items: changeNames.entries
+              .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+              .toList(),
+          onChanged: busy
+              ? null
+              : (v) => setState(() {
+                  kind = v!;
+                  targets.clear();
+                }),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: title,
+          decoration: const InputDecoration(labelText: '课程 / 活动标题'),
+        ),
+        if (['move', 'cancel', 'suspend'].contains(kind)) ...[
+          OutlinedButton(
+            onPressed: busy || feed == null ? null : chooseTargets,
+            child: Text('选择受影响课次（已选${targets.length}次）'),
+          ),
+          for (final e
+              in widget.controller
+                  .rows(feed?['occurrences'])
+                  .where((e) => targets.contains(e['id'])))
+            Text('${e['title']} · ${displayInstant(e['start_at'])}'),
+        ],
+        if (['move', 'add', 'block'].contains(kind)) ...[
+          TextButton(
+            onPressed: busy
+                ? null
+                : () async {
+                    final v = await pickSchoolDateTime(context, initial: start);
+                    if (v != null && mounted) setState(() => start = v);
+                  },
+            child: Text(
+              start == null
+                  ? '选择新的开始日期与时间'
+                  : '新开始：${displayInstant(start!.toIso8601String())}',
+            ),
+          ),
+          TextButton(
+            onPressed: busy
+                ? null
+                : () async {
+                    final v = await pickSchoolDateTime(
+                      context,
+                      initial: end ?? start,
+                    );
+                    if (v != null && mounted) setState(() => end = v);
+                  },
+            child: Text(
+              end == null
+                  ? '选择新的结束日期与时间'
+                  : '新结束：${displayInstant(end!.toIso8601String())}',
+            ),
+          ),
+          TextField(
+            controller: location,
+            decoration: const InputDecoration(labelText: '新地点（可留空）'),
+          ),
+        ],
+        const SizedBox(height: 12),
+        if (error != null) SoftNotice(error!, warning: true),
+        if (busy) const LinearProgressIndicator(),
+        FilledButton(
+          onPressed: busy ? null : preview,
+          child: const Text('预览变化与影响'),
+        ),
+        const SectionHeading('最近50条变化预览与记录'),
+        for (final p in widget.controller.rows(feed?['changes']))
+          ListTile(
+            title: Text(
+              '${p['request']['title']} · ${changeNames[p['request']['kind']]}',
+            ),
+            subtitle: Text(
+              p['phase'] == 'applied'
+                  ? '现实变化已确认'
+                  : p['phase'] == 'stale'
+                  ? '旧预览已失效'
+                  : '待确认',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChangePreviewPage(
+                  controller: widget.controller,
+                  preview: p,
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class ChangePreviewPage extends StatefulWidget {
+  final ItemsController controller;
+  final Map<String, dynamic> preview;
+  const ChangePreviewPage({
+    super.key,
+    required this.controller,
+    required this.preview,
+  });
+  @override
+  State<ChangePreviewPage> createState() => _ChangePreviewPageState();
+}
+
+class _ChangePreviewPageState extends State<ChangePreviewPage> {
+  late final p = widget.preview;
+  late final generation = widget.controller.api.generation;
+  bool busy = false, confirmConflict = false;
+  late bool applied = p['phase'] == 'applied';
+  String? error;
+  bool get same =>
+      generation == widget.controller.api.generation &&
+      p['semester_id'] == widget.controller.semesterId;
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(refresh);
+  }
+
+  void refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(refresh);
+    super.dispose();
+  }
+
+  Future<void> act(bool replan) async {
+    if (!same) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      if (replan) {
+        final result = await widget.controller.generateSchedule({
+          'mode': 'replan',
+          'lead_minutes': 5,
+        });
+        if (mounted && same) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ProposalPage(controller: widget.controller, proposal: result),
+            ),
+          );
+        }
+      } else {
+        await widget.controller.changeRequest(
+          'POST',
+          '/changes/${p['id']}/apply',
+          data: {
+            'expected_revision': p['base_revision'],
+            'confirm_fixed_conflicts': confirmConflict,
+          },
+          apply: true,
+        );
+        if (mounted && same) setState(() => applied = true);
+      }
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Widget event(Map e) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: CampusPanel(
+      child: Text(
+        '${e['title']}\n${displayInstant(e['start_at'])} — ${displayInstant(e['end_at'])}\n${e['location'] ?? ''}',
+      ),
+    ),
+  );
+  @override
+  Widget build(BuildContext context) {
+    final impact = p['impact'], patch = p['patch'];
+    final conflict = (impact['after_summary']['fixed_conflict_count'] ?? 0) > 0;
+    final stale = widget.controller.revisionIsStale(
+      p['semester_id'],
+      p['base_revision'],
+    );
+    return Scaffold(
+      appBar: AppBar(title: Text(applied ? '现实变化已确认' : '核对现实变化')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            '${p['request']['title']}',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SectionHeading('原始依据'),
+          Text(p['request']['source_text']),
+          const SectionHeading('变化前'),
+          for (final e in patch['before']) event(e),
+          if ((patch['before'] as List).isEmpty) const Text('新增安排'),
+          const SectionHeading('变化后'),
+          for (final e in patch['after']) event(e),
+          if ((patch['after'] as List).isEmpty) const Text('所选课次停课，其余课次保持'),
+          const SectionHeading('本次预览时的影响'),
+          Text('个人计划需核对 ${(impact['affected_blocks'] as List).length} 段'),
+          for (final b in impact['affected_blocks'])
+            Text(
+              '${b['title']} · ${displayInstant(b['start_at'])}${b['locked'] == true ? ' · 已锁定' : ''}',
+            ),
+          for (final r in impact['risk_changes'])
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                '${r['title']}\n计划余量：${r['before_slack'] ?? '待确认'} → ${r['after_slack'] ?? '待确认'} 分钟',
+              ),
+            ),
+          if (conflict)
+            const SoftNotice('固定安排之间已有冲突，个人重排不会移动学校安排。', warning: true),
+          for (final collision in impact['fixed_conflicts'] ?? [])
+            SoftNotice(
+              '${(collision['titles'] as List).join(' 与 ')}\n冲突时段：${displayInstant(collision['start_at'])} — ${displayInstant(collision['end_at'])}',
+              warning: true,
+            ),
+          if ((impact['after_summary']['fixed_conflict_count'] ?? 0) >
+              (impact['fixed_conflicts'] as List? ?? []).length)
+            const Text('此处列出前30处冲突，其余请在课表核对。'),
+          if (conflict && !applied)
+            CheckboxListTile(
+              title: const Text('我已核对，确认记录存在冲突的现实安排'),
+              value: confirmConflict,
+              onChanged: busy
+                  ? null
+                  : (v) => setState(() => confirmConflict = v!),
+            ),
+          if (!same) const SoftNotice('账号或学期已切换，请返回', warning: true),
+          if (stale && !applied)
+            const SoftNotice('此预览已失效，请返回重新预览', warning: true),
+          if (error != null) SoftNotice(error!, warning: true),
+          if (busy) const LinearProgressIndicator(),
+          if (!applied)
+            FilledButton(
+              onPressed:
+                  busy || !same || stale || (conflict && !confirmConflict)
+                  ? null
+                  : () => act(false),
+              child: const Text('确认现实变化，暂不移动个人计划'),
+            ),
+          if (applied) ...[
+            const SoftNotice('现实变化已经保存。下面只生成个人重排候选，核对后再独立确认。'),
+            FilledButton(
+              onPressed: busy || !same ? null : () => act(true),
+              child: const Text('分析最新安排并生成重排候选'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

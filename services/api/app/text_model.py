@@ -29,7 +29,7 @@ evidence的值必须逐字出现在source中，不要编造证据；无法摘录
 不要输出user_id、密码、凭证、API操作或其他字段。'''
 
 
-def deepseek_text(source, reference, courses):
+def deepseek_text(source, reference, courses, *, system_prompt=SYSTEM, prompt_version=PROMPT_VERSION):
     key = os.environ.get('DEEPSEEK_API_KEY')
     if not key:
         error(503, 'MODEL_UNAVAILABLE', '文字解析暂未配置，原文已保留，可以手工填写')
@@ -38,7 +38,7 @@ def deepseek_text(source, reference, courses):
     started = time.monotonic()
     body = {'model': model, 'thinking': {'type': 'disabled'}, 'response_format': {'type': 'json_object'},
             'temperature': 0, 'max_tokens': 1800, 'messages': [
-                {'role': 'system', 'content': SYSTEM},
+                {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': json.dumps({'source': source,
                     'context': {'reference_at': reference, 'timezone': 'Asia/Shanghai', 'courses': courses}}, ensure_ascii=False)}]}
     try:
@@ -55,7 +55,7 @@ def deepseek_text(source, reference, courses):
                     if isinstance(value, dict) and isinstance(value.get('item'), dict) and isinstance(value['item'].get('time'), dict):
                         # This flag is a human policy decision, never model output.
                         value['item']['time']['day_end_confirmed'] = False
-                    return value, {'provider': 'deepseek', 'model': model, 'prompt_version': PROMPT_VERSION,
+                    return value, {'provider': 'deepseek', 'model': model, 'prompt_version': prompt_version,
                         'schema_version': '2', 'elapsed_ms': round((time.monotonic() - started) * 1000),
                         'usage': result.get('usage', {})}
                 except (ValueError, KeyError, IndexError, TypeError):

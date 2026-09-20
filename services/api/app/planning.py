@@ -50,7 +50,8 @@ def preview_availability(sid:str,body:AvailabilityInput,user:User=Depends(curren
 
 def preference_conflicts(db,user,s,payload):
     calendar={'first_monday':s.first_monday,'total_weeks':s.total_weeks,'periods':s.periods}
-    courses=[{**c.payload,'id':c.id} for c in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id==user.id,CourseMeeting.semester_id==s.id))]
+    from .occurrences import effective_courses
+    courses=effective_courses(db,user,s)
     items=[{**i.payload,'id':i.id,'lifecycle':i.lifecycle} for i in db.scalars(select(StudyItem).where(StudyItem.user_id==user.id,StudyItem.semester_id==s.id))]
     plans=[block_value(b) for b in plan_rows(db,user,s.id)]
     context=calendar_context(calendar,{**payload,'configured':True},courses,items,utcnow())
@@ -95,7 +96,8 @@ def get_risk(sid:str,user:User=Depends(current_user),db:Session=Depends(get_db))
     revision=s.revision
     calendar={'first_monday':s.first_monday,'total_weeks':s.total_weeks,'periods':s.periods}
     preferences=availability_value(availability_row(db,user,sid),revision)
-    courses=[{**r.payload,'id':r.id} for r in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id==user.id,CourseMeeting.semester_id==sid))]
+    from .occurrences import effective_courses
+    courses=effective_courses(db,user,s)
     items=[{**r.payload,'id':r.id,'version':r.version,'lifecycle':r.lifecycle} for r in db.scalars(select(StudyItem).where(StudyItem.user_id==user.id,StudyItem.semester_id==sid).order_by(StudyItem.created_at,StudyItem.id))]
     plans=[block_value(b) for b in plan_rows(db,user,sid)]
     db.commit()

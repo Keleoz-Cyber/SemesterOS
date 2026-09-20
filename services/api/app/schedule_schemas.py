@@ -36,3 +36,8 @@ class BlockLock(Input):
 class BlockCancel(Input):
     expected_version:int=Field(ge=1)
     confirm_locked:bool=False
+
+
+class ReplanInput(Input):
+    mode:Literal['replan']='replan'
+    lead_minutes:int=Field(default=5,ge=0,le=60)

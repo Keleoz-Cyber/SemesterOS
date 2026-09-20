@@ -148,7 +148,7 @@ Future<void> showCourseDetails(
           Align(
             alignment: Alignment.centerLeft,
             child: StatusPill(
-              '固定课程',
+              event['reality_kind'] == 'activity' ? '固定活动' : '固定课程',
               icon: Icons.school_outlined,
               foreground: palette.ink,
               background: palette.background,
@@ -178,12 +178,16 @@ Future<void> showCourseDetails(
                 detail(
                   Icons.date_range_outlined,
                   '周次',
-                  compactWeeks(event['weeks'] as List),
+                  event['changed'] == true
+                      ? '本次已确认的安排'
+                      : compactWeeks(event['weeks'] as List),
                 ),
                 detail(
                   Icons.view_agenda_outlined,
                   '节次',
-                  '第${(event['sections'] as List).join('、')}节',
+                  (event['sections'] as List).isEmpty
+                      ? '以起止时刻为准'
+                      : '第${(event['sections'] as List).join('、')}节',
                 ),
               ],
             ),

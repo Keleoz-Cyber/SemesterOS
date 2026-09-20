@@ -209,3 +209,16 @@ class PlanRevision(Base):
     kind: Mapped[str]=mapped_column(String(40))
     payload: Mapped[dict]=mapped_column(JSON)
     created_at: Mapped[str]=mapped_column(String(40))
+
+
+class RealityChange(Base):
+    __tablename__='reality_changes'
+    __table_args__=(ForeignKeyConstraint(['user_id','semester_id'],['semesters.user_id','semesters.id']),)
+    id: Mapped[str]=mapped_column(String(36),primary_key=True,default=new_id)
+    user_id: Mapped[str]=mapped_column(String(36),index=True)
+    semester_id: Mapped[str]=mapped_column(String(36),index=True)
+    base_revision: Mapped[int]=mapped_column(Integer)
+    applied_revision: Mapped[int | None]=mapped_column(Integer,nullable=True)
+    payload: Mapped[dict]=mapped_column(JSON)
+    receipt: Mapped[dict | None]=mapped_column(JSON,nullable=True)
+    created_at: Mapped[str]=mapped_column(String(40))

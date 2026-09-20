@@ -72,22 +72,8 @@ def iso(stamp):
 
 
 def course_intervals(semester, courses):
-    periods = {p['number']: p for p in semester['periods']}
-    monday = local_day(semester['first_monday'])
-    rows = []
-    for course in courses:
-        groups = []
-        for section in sorted(course['sections']):
-            if not groups or groups[-1][-1] + 1 != section:
-                groups.append([])
-            groups[-1].append(section)
-        for week in course['weeks']:
-            day = monday + timedelta(days=(week - 1) * 7 + course['weekday'] - 1)
-            for group in groups:
-                start = day + timedelta(minutes=minute(periods[group[0]]['start']))
-                end = day + timedelta(minutes=minute(periods[group[-1]]['end']))
-                rows.append((start.timestamp(), end.timestamp(), course.get('id', course['title']), course['title']))
-    return rows
+    from .occurrences import expand
+    return [(instant(e['start_at']).timestamp(),instant(e['end_at']).timestamp(),e['id'],e['title']) for e in expand(semester,courses)]
 
 
 def exam_window(exam, semester_start, semester_end):

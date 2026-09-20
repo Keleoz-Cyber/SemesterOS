@@ -20,6 +20,7 @@ class ItemsController extends ChangeNotifier {
   bool _disposed = false;
   Map<String, dynamic> _saved = {};
   VoidCallback? onUnauthorized;
+  Future<void> Function(Map<String, dynamic>)? onRealityChanged;
   Map<String, dynamic>? analysis;
   int? itemsRevision;
   int? _observedRevision;
@@ -454,12 +455,38 @@ class ItemsController extends ChangeNotifier {
     final result = Map<String, dynamic>.from(
       await api.request(
         'POST',
-        '/semesters/$sid/plan-proposals',
+        '/semesters/$sid/${data['mode'] == 'replan' ? 'replan-proposals' : 'plan-proposals'}',
         data: data,
         receiveTimeout: const Duration(seconds: 30),
       ),
     );
     if (sid != semesterId) throw ApiFailure('学期已切换，请重新打开候选');
+    return result;
+  }
+
+  Future<Map<String, dynamic>> changeRequest(
+    String method,
+    String path, {
+    Map<String, dynamic>? data,
+    bool apply = false,
+  }) async {
+    final sid = semesterId;
+    final result = Map<String, dynamic>.from(
+      await api.request(
+        method,
+        path,
+        data: data,
+        receiveTimeout: const Duration(seconds: 60),
+      ),
+    );
+    if (sid != semesterId) throw ApiFailure('学期已切换，请重新打开');
+    if (apply) {
+      observeRevision(result['semester_id'], result['revision']);
+      invalidateRisk();
+      changed();
+      await onRealityChanged?.call(result);
+      await refresh();
+    }
     return result;
   }
 

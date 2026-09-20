@@ -4,6 +4,7 @@ import '../../ui/campus_widgets.dart';
 import 'items_controller.dart';
 import 'item_form.dart';
 import 'item_widgets.dart';
+import '../changes/changes_page.dart';
 
 class CapturePage extends StatefulWidget {
   final ItemsController controller;
@@ -61,6 +62,18 @@ class _CapturePageState extends State<CapturePage> {
         referenceAt,
       );
       if (!mounted) return;
+      if (candidate['intent'] == 'report_change') {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChangesPage(
+              controller: widget.controller,
+              initialText: text.text,
+            ),
+          ),
+        );
+        return;
+      }
       if (candidate['intent'] != 'create_item' || candidate['item'] == null) {
         setState(
           () => error =

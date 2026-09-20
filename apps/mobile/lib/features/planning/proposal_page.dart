@@ -73,7 +73,7 @@ class _ProposalPageState extends State<ProposalPage> {
     try {
       final result = await widget.controller.generateSchedule({
         ...Map<String, dynamic>.from(p['request']),
-        'allow_partial': partial,
+        if (p['mode'] != 'replan') 'allow_partial': partial,
       });
       if (mounted) {
         setState(() {
@@ -109,6 +109,7 @@ class _ProposalPageState extends State<ProposalPage> {
 
   @override
   Widget build(BuildContext context) {
+    final replan = p['mode'] == 'replan';
     final partial = p['status'] == 'FEASIBLE_PARTIAL',
         missing = p['unarranged_minutes'] ?? 0;
     final blocks = List<Map<String, dynamic>>.from(p['blocks'] ?? []);
@@ -127,7 +128,7 @@ class _ProposalPageState extends State<ProposalPage> {
         !stale &&
         same;
     return Scaffold(
-      appBar: AppBar(title: const Text('核对候选计划')),
+      appBar: AppBar(title: Text(replan ? '核对个人重排' : '核对候选计划')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -135,7 +136,9 @@ class _ProposalPageState extends State<ProposalPage> {
             eyebrow: p['phase'] == 'ready'
                 ? 'PROPOSAL / 尚未应用'
                 : 'PROPOSAL / 候选记录',
-            title: proposalStatus(p['status']),
+            title: replan && p['status'] == 'FEASIBLE_COMPLETE'
+                ? (p['moved_tasks'] == 0 ? '现有安排无需移动' : '已生成个人重排方案')
+                : proposalStatus(p['status']),
             subtitle:
                 '${displayInstant(p['window_start'])}\n至 ${displayInstant(p['window_end'])}',
           ),
@@ -167,7 +170,18 @@ class _ProposalPageState extends State<ProposalPage> {
             ),
           if (p['optimal'] == false && '${p['status']}'.startsWith('FEASIBLE'))
             const Text('已通过约束校验，但未证明当前优化目标最优。', style: TextStyle(fontSize: 13)),
-          const SectionHeading('每项工作量'),
+          if (replan) ...[
+            Text(
+              '移动 ${p['moved_tasks'] ?? 0} 项任务 · ${p['moved_blocks'] ?? 0} 段计划\n开始时刻偏移合计 ${p['shift_minutes'] ?? 0} 分钟',
+            ),
+            const SoftNotice('仅重排已有未来块。保持时长与锁定，不自动新增未覆盖工作；确认前原计划保持。'),
+            for (final b in p['locked_conflicts'] ?? [])
+              SoftNotice(
+                '${b['title'] ?? '个人计划'} · ${displayInstant(b['start_at'])}\n已锁定、开始或即将开始，请到个人计划中明确处理。',
+                warning: true,
+              ),
+          ] else
+            const SectionHeading('每项工作量'),
           for (final task in p['tasks'] ?? [])
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -196,7 +210,7 @@ class _ProposalPageState extends State<ProposalPage> {
                 ),
               ),
             ),
-          SectionHeading('新增时间块（${blocks.length}段）'),
+          SectionHeading('${replan ? '重排对照' : '新增时间块'}（${blocks.length}段）'),
           for (final b in blocks)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -208,6 +222,13 @@ class _ProposalPageState extends State<ProposalPage> {
                       b['title'],
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
+                    if (replan)
+                      Text(
+                        DateTime.parse(b['start_at']) ==
+                                DateTime.parse(b['before_start_at'])
+                            ? '保持原位${b['locked'] == true ? ' · 已锁定' : ''}'
+                            : '原安排：${displayInstant(b['before_start_at'])} — ${displayInstant(b['before_end_at'])}',
+                      ),
                     Text(
                       '${displayInstant(b['start_at'])}\n至 ${displayInstant(b['end_at'])} · ${minutesLabel(b['minutes'])}',
                     ),
@@ -216,7 +237,13 @@ class _ProposalPageState extends State<ProposalPage> {
               ),
             ),
           if (blocks.isEmpty)
-            const CampusPanel(child: Text('没有新增时间块。已有覆盖保持，未安排工作见上方说明。')),
+            CampusPanel(
+              child: Text(
+                replan
+                    ? '未得到可应用的重排，原计划保持，请查看上方原因。'
+                    : '没有新增时间块。已有覆盖保持，未安排工作见上方说明。',
+              ),
+            ),
           if (partial && canApply)
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
@@ -235,10 +262,15 @@ class _ProposalPageState extends State<ProposalPage> {
             FilledButton(
               onPressed: busy || (partial && !partialConfirmed) ? null : accept,
               child: Text(
-                partial ? '应用部分方案（仍有${minutesLabel(missing)}未安排）' : '确认应用本轮计划',
+                partial
+                    ? '应用部分方案（仍有${minutesLabel(missing)}未安排）'
+                    : replan
+                    ? '确认应用个人计划重排'
+                    : '确认应用本轮计划',
               ),
             ),
-          if ([
+          if (!replan &&
+              [
                 'INFEASIBLE',
                 'CHUNKING_LIMITED',
                 'TIMEOUT',

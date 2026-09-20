@@ -43,6 +43,12 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
       ReminderSync(notifications),
     );
     items.onUnauthorized = () => controller.logout(remote: false);
+    items.onRealityChanged = (receipt) async {
+      await controller.acknowledgeImport(receipt);
+      if (controller.semester?['id'] == receipt['semester_id']) {
+        await controller.loadWeek(controller.week);
+      }
+    };
     WidgetsBinding.instance.addObserver(this);
     controller.addListener(appChanged);
     router = GoRouter(

@@ -43,19 +43,7 @@ class Parsed(Input):
 @router.post('/capture/text')
 def capture_text(body: CaptureInput, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     s = owned_semester(db, user, body.semester_id)
-    # Per-user rate guard; no source text or secret material is logged.
-    with request.app.state.capture_lock:
-        attempts = request.app.state.capture_attempts
-        now = time.monotonic()
-        for owner in list(attempts):
-            while attempts[owner] and attempts[owner][0] < now - 60:
-                attempts[owner].popleft()
-            if not attempts[owner]:
-                del attempts[owner]
-        q = attempts[user.id]
-        if len(q) >= 8:
-            error(429, 'RATE_LIMITED', '解析请求较多，请稍后再试')
-        q.append(now)
+    admission(request,user)
     courses = [{'id': c.id, 'title': c.payload['title'], 'teacher': c.payload['teacher']}
         for c in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id == user.id,
             CourseMeeting.semester_id == s.id))]
@@ -96,3 +84,19 @@ def capture_text(body: CaptureInput, request: Request, user: User = Depends(curr
     db.add(candidate)
     db.commit()
     return {**data, 'id': candidate.id}
+
+
+def admission(request,user):
+    # Per-user rate guard; no source text or secret material is logged.
+    with request.app.state.capture_lock:
+        attempts = request.app.state.capture_attempts
+        now = time.monotonic()
+        for owner in list(attempts):
+            while attempts[owner] and attempts[owner][0] < now - 60:
+                attempts[owner].popleft()
+            if not attempts[owner]:
+                del attempts[owner]
+        q = attempts[user.id]
+        if len(q) >= 8:
+            error(429, 'RATE_LIMITED', '解析请求较多，请稍后再试')
+        q.append(now)

@@ -14,7 +14,8 @@ from .plan_store import block_value,plan_rows,record
 from .plan_rules import classify
 from .capacity import calendar_context
 from .scheduler import generate,prepare,validate_result
-from .schedule_schemas import ScheduleInput,ProposalAction,BlockLock,BlockCancel
+from .schedule_schemas import ScheduleInput,ProposalAction,BlockLock,BlockCancel,ReplanInput
+from . import replanner
 from .reminder_rules import utcnow,instant
 
 router=APIRouter()
@@ -35,7 +36,8 @@ def solver_slot(app,user_id):
 def snapshot(db,user,s):
     calendar={'first_monday':s.first_monday,'total_weeks':s.total_weeks,'periods':s.periods}
     preferences=availability_value(availability_row(db,user,s.id),s.revision)
-    courses=[{**r.payload,'id':r.id} for r in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id==user.id,CourseMeeting.semester_id==s.id))]
+    from .occurrences import effective_courses
+    courses=effective_courses(db,user,s)
     items=[{**r.payload,'id':r.id,'version':r.version,'lifecycle':r.lifecycle} for r in db.scalars(select(StudyItem).where(StudyItem.user_id==user.id,StudyItem.semester_id==s.id))]
     titles={i['id']:i['title'] for i in items}
     plans=[block_value(b,titles.get(b.item_id,'')) for b in plan_rows(db,user,s.id)]
@@ -75,6 +77,22 @@ def create_proposal(sid:str,body:ScheduleInput,request:Request,user:User=Depends
     remember(db,user,operation,idempotency_key,data,response);db.commit();return response
 
 
+@router.post('/semesters/{sid}/replan-proposals',status_code=201)
+def create_replan(sid:str,body:ReplanInput,request:Request,user:User=Depends(current_user),db:Session=Depends(get_db),idempotency_key:str|None=Header(default=None)):
+    s=owned_semester(db,user,sid,lock=True);data=body.model_dump(mode='json');op='replan/'+sid
+    cached=replay(db,user,op,idempotency_key,data)
+    if cached is not None:return cached
+    source=snapshot(db,user,s);revision=s.revision;db.commit()
+    with solver_slot(request.app,user.id):result=replanner.generate(*source,data,utcnow())
+    db.expire_all();s=owned_semester(db,user,sid,lock=True)
+    cached=replay(db,user,op,idempotency_key,data)
+    if cached is not None:return cached
+    p=PlanProposal(user_id=user.id,semester_id=sid,base_revision=revision,
+        phase='stale' if s.revision!=revision else 'ready' if result['status']=='FEASIBLE_COMPLETE' else 'failed',
+        payload={'request':data,'result':result,'input_hash':fingerprint(source)},created_at=utcnow().isoformat())
+    db.add(p);db.flush();response=proposal_value(p);remember(db,user,op,idempotency_key,data,response);db.commit();return response
+
+
 @router.get('/plan-proposals/{id}')
 def get_proposal(id:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=owned_proposal(db,user,id);s=owned_semester(db,user,p.semester_id)
@@ -94,6 +112,7 @@ def accept_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),d
     if result['status']=='FEASIBLE_PARTIAL' and (not body.confirm_partial or body.unarranged_minutes!=result['unarranged_minutes']):
         error(422,'CONFIRM_PARTIAL','这是部分方案，请明确确认仍有多少分钟未安排')
     if not result['can_apply']:error(422,'NOTHING_TO_APPLY','本轮没有需要新增的时间块')
+    if result.get('mode')=='replan':return apply_replan(db,user,s,p,result)
     request={**p.payload['request'],'_window_start':floor(instant(result['window_start']).timestamp()/60),
              '_window_end':floor(instant(result['window_end']).timestamp()/60)}
     now=utcnow();_,context=prepare(*snapshot(db,user,s),request,now)
@@ -115,9 +134,10 @@ def undo_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),db:
     p=owned_proposal(db,user,id);s=owned_semester(db,user,p.semester_id,lock=True);db.refresh(p)
     if p.phase=='undone':return p.receipt
     latest=db.scalar(select(PlanProposal).where(PlanProposal.user_id==user.id,PlanProposal.semester_id==s.id,
-        PlanProposal.phase=='applied').order_by(PlanProposal.applied_at.desc(),PlanProposal.id.desc()))
+        PlanProposal.phase=='applied').order_by(PlanProposal.base_revision.desc(),PlanProposal.applied_at.desc(),PlanProposal.id.desc()))
     if latest is None or latest.id!=p.id or p.phase!='applied' or p.version!=body.expected_version or s.revision!=body.expected_revision:
         error(409,'UNDO_STALE','仅能撤销最近一次应用且未被后续操作改变的方案')
+    if p.payload['result'].get('mode')=='replan':return undo_replan(db,user,s,p)
     blocks=list(db.scalars(select(PlanBlock).where(PlanBlock.user_id==user.id,PlanBlock.proposal_id==p.id)))
     now=utcnow()
     if any(b.version!=1 or b.status!='active' or b.locked or instant(b.start_at)<now for b in blocks):
@@ -128,13 +148,48 @@ def undo_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),db:
     record(db,user,s.id,'undo_proposal',p.receipt,now);db.commit();return p.receipt
 
 
+def apply_replan(db,user,s,p,result):
+    now=utcnow();_,context=replanner.prepare(*snapshot(db,user,s),p.payload['request'],now)
+    if context is None or not replanner.validate(context,result['blocks']):
+        error(409,'PLAN_EXPIRED','重排候选不再满足最新约束，请重新生成')
+    rows={r.id:r for r in plan_rows(db,user,s.id)};before=[];applied_versions={}
+    for block in result['blocks']:
+        row=rows[block['id']]
+        if instant(row.start_at)==instant(block['start_at']):continue
+        if row.locked or instant(row.start_at)<=now:error(409,'BLOCK_STALE','时间块已锁定或开始')
+        before.append(block_value(row));row.start_at=block['start_at'];row.end_at=block['end_at'];row.version+=1;row.updated_at=now.isoformat()
+        applied_versions[row.id]=row.version
+    p.payload={**p.payload,'before_blocks':before,'applied_versions':applied_versions}
+    s.revision+=1;p.phase='applied';p.version+=1;p.applied_at=now.isoformat()
+    p.receipt={'proposal_id':p.id,'proposal_version':p.version,'semester_id':s.id,'revision':s.revision,
+        'block_ids':list(applied_versions),'moved_tasks':result['moved_tasks'],'shift_minutes':result['shift_minutes'],'unarranged_minutes':0}
+    record(db,user,s.id,'apply_replan',p.receipt,now);db.commit();return p.receipt
+
+
+def undo_replan(db,user,s,p):
+    now=utcnow();source=snapshot(db,user,s);rows={r.id:r for r in plan_rows(db,user,s.id)}
+    old={b['id']:b for b in p.payload['before_blocks']}
+    for id,b in old.items():
+        row=rows.get(id)
+        if not row or row.version!=p.payload['applied_versions'][id] or row.locked or instant(row.start_at)<=now or instant(b['start_at'])<=now:
+            error(409,'UNDO_BLOCK_CHANGED','有关计划已修改、锁定或开始，不能撤销')
+    restored=[old.get(b['id'],b) for b in source[4]]
+    c=calendar_context(*source[:4],now);_,issues=classify(restored,source[3],c['free'].spans,c['begin'])
+    if issues:error(409,'UNDO_REALITY_CONFLICT','旧计划已不符合最新现实安排，不能恢复；请重新规划')
+    for id,b in old.items():
+        rows[id].start_at=b['start_at'];rows[id].end_at=b['end_at'];rows[id].version+=1;rows[id].updated_at=now.isoformat()
+    s.revision+=1;p.phase='undone';p.version+=1
+    p.receipt={'proposal_id':p.id,'proposal_version':p.version,'semester_id':s.id,'revision':s.revision,'undone':True}
+    record(db,user,s.id,'undo_replan',p.receipt,now);db.commit();return p.receipt
+
+
 @router.get('/semesters/{sid}/plans')
 def list_plans(sid:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
     s=owned_semester(db,user,sid,lock=True);source=snapshot(db,user,s);now=utcnow()
     context=calendar_context(*source[:4],now)
     _,issues=classify(source[4],source[3],context['free'].spans,context['begin'])
     latest=db.scalar(select(PlanProposal).where(PlanProposal.user_id==user.id,PlanProposal.semester_id==sid).order_by(PlanProposal.created_at.desc(),PlanProposal.id.desc()))
-    applied=db.scalar(select(PlanProposal).where(PlanProposal.user_id==user.id,PlanProposal.semester_id==sid,PlanProposal.phase=='applied').order_by(PlanProposal.applied_at.desc(),PlanProposal.id.desc()))
+    applied=db.scalar(select(PlanProposal).where(PlanProposal.user_id==user.id,PlanProposal.semester_id==sid,PlanProposal.phase=='applied').order_by(PlanProposal.base_revision.desc(),PlanProposal.applied_at.desc(),PlanProposal.id.desc()))
     latest_data=proposal_value(latest) if latest else None
     if latest_data and latest.phase=='ready' and latest.base_revision!=s.revision:latest_data.update(phase='stale',can_apply=False)
     return {'revision':s.revision,'semester_id':sid,'blocks':[b for b in source[4] if instant(b['end_at'])>now-timedelta(days=7)],

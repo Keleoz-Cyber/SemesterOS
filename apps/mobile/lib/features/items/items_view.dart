@@ -5,6 +5,7 @@ import 'item_widgets.dart';
 import '../planning/risk_widgets.dart';
 import '../planning/availability_page.dart';
 import '../planning/plan_list.dart';
+import '../changes/changes_page.dart';
 
 class ItemsView extends StatefulWidget {
   final ItemsController controller;
@@ -48,6 +49,14 @@ class _ItemsViewState extends State<ItemsView> {
             ),
           ),
           PlanningEntry(controller: c),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ChangesPage(controller: c)),
+            ),
+            icon: const Icon(Icons.published_with_changes),
+            label: const Text('调课 / 停课 / 现实变化'),
+          ),
           SectionHeading('学期事项', action: '添加事项', onAction: widget.onCreate),
           Wrap(
             spacing: 8,
@@ -104,7 +113,7 @@ class _ItemsViewState extends State<ItemsView> {
             label: const Text('开启或检查系统通知'),
           ),
           const SizedBox(height: 12),
-          const SoftNotice('生成候选后需确认应用；已有计划保持原位，安排过不代表工作已经完成。'),
+          const SoftNotice('新增和重排都先核对候选，再确认应用。安排过不代表工作已经完成。'),
         ],
       );
     },

@@ -172,23 +172,12 @@ def timetable(sid: str, week: int = Query(ge=1, le=30), user: User = Depends(cur
     s = owned_semester(db, user, sid, lock=True)
     if week > s.total_weeks:
         error(422, "OUTSIDE_SEMESTER", "该周不在当前学期内")
-    periods = {p["number"]: p for p in s.periods}
-    events = []
-    for row in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id == user.id, CourseMeeting.semester_id == sid)):
-        c = row.payload
-        if week not in c["weeks"]:
-            continue
-        groups = []
-        for section in c["sections"]:
-            if not groups or groups[-1][-1] + 1 != section:
-                groups.append([])
-            groups[-1].append(section)
-        day = date.fromisoformat(s.first_monday) + timedelta(days=(week - 1) * 7 + c["weekday"] - 1)
-        for group in groups:
-            start = datetime.combine(day, time.fromisoformat(periods[group[0]]["start"]), ZoneInfo("Asia/Shanghai"))
-            end = datetime.combine(day, time.fromisoformat(periods[group[-1]]["end"]), ZoneInfo("Asia/Shanghai"))
-            events.append({**c, "id": f"{row.id}:{day}:{group[0]}", "start_at": start.isoformat(),
-                           "end_at": end.isoformat(), "sections": group, "source_batch_id": row.source_batch_id})
+    from .occurrences import effective_courses,expand
+    from .reminder_rules import instant,SHANGHAI
+    begin=datetime.combine(date.fromisoformat(s.first_monday)+timedelta(weeks=week-1),time(),SHANGHAI)
+    finish=begin+timedelta(days=7)
+    events=[e for e in expand({'first_monday':s.first_monday,'periods':s.periods},effective_courses(db,user,s))
+        if instant(e['start_at'])<finish and instant(e['end_at'])>begin]
     events.sort(key=lambda e: (e["start_at"], e["title"], e["id"]))
     for e in events:
         e["conflict"] = any(o["id"] != e["id"] and o["start_at"] < e["end_at"] and e["start_at"] < o["end_at"] for o in events)

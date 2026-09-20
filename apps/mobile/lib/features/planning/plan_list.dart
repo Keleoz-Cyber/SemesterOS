@@ -142,7 +142,9 @@ class _PlanListPageState extends State<PlanListPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('撤销最近一轮计划？'),
-        content: const Text('仅撤销该轮新增且尚未开始、未被修改的个人时间块。课程、考试和任务进度保持。'),
+        content: const Text(
+          '新增方案撤销其新增块；重排方案尝试恢复移动前位置。仅处理未开始、未被修改的块，且必须符合最新现实安排。课程、考试和任务进度保持。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -205,6 +207,26 @@ class _PlanListPageState extends State<PlanListPage> {
               label: const Text('生成新的候选计划'),
             ),
             if (!current) SoftNotice(c.planNotice ?? '计划正在同步，旧时间块暂不展示'),
+            OutlinedButton.icon(
+              onPressed: busy
+                  ? null
+                  : () => act(() async {
+                      final p = await c.generateSchedule({
+                        'mode': 'replan',
+                        'lead_minutes': 5,
+                      });
+                      if (!context.mounted) return;
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ProposalPage(controller: c, proposal: p),
+                        ),
+                      );
+                    }),
+              icon: const Icon(Icons.swap_vert),
+              label: const Text('尽量少改动，重排已有计划'),
+            ),
             if (feed?['latest_proposal'] != null)
               TextButton(
                 onPressed: () => Navigator.push(
