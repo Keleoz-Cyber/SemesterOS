@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>学期OS · V2 交互提案</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="studio">
+    <aside class="intro">
+      <div class="overline"><span class="mark">S</span> SEMESTER OS <span class="version">V2</span></div>
+      <h1>安排很多，<br>操作可以很少。</h1>
+      <p class="lead">把临时通知放进日程，<br>让下一步更清楚。</p>
+      <div class="review-label">交互设计提案 · 非正式 App</div>
+      <div class="screen-links" aria-label="原型页面"></div>
+      <div class="guide"><span>01</span><div><b>试试一句话</b><p>点底部智能输入条，使用组会通知示例。</p></div></div>
+      <div class="guide"><span>02</span><div><b>看清变化再决定</b><p>添加组会，再确认调整一段个人计划。</p></div></div>
+      <div class="guide"><span>03</span><div><b>结果回到日程里</b><p>切换日程和计划，查看变化或撤销。</p></div></div>
+      <p class="fine">合成数据 · 固定为 2026年9月23日<br>仅在本页改变状态，不连接账号或服务器。<br>名称与图标为占位，语音和图片为交互示意。</p>
+      <button class="reset" data-action="reset">重置体验</button>
+    </aside>
+    <section class="phone" id="phone" aria-label="手机交互原型">
+      <div class="statusbar" aria-hidden="true"><b>11:40</b><span>▮▮▮ &nbsp; ◉ &nbsp; ▰</span></div>
+      <header id="app-header"></header>
+      <main id="app-main" tabindex="-1"></main>
+      <div id="ai-dock"></div>
+      <nav id="bottom-nav" aria-label="主导航"></nav>
+      <div id="toast" role="status" aria-live="polite"></div>
+      <div id="overlay" hidden></div>
+    </section>
+    <aside class="notes">
+      <div class="note-kicker">这次重新设计了什么</div>
+      <h2 id="note-title">打开，就知道接下来。</h2>
+      <p id="note-copy">课程收进紧凑时间线，把首屏留给今天真正要做的事。无需越过大幅插图。</p>
+      <div class="note-rule"></div>
+      <h3>一个入口，多种意图</h3>
+      <p>记录、查询、改提醒、调整计划，直接表达需求。让系统判断流程。</p>
+      <div class="micro-journey"><span>通知</span><i>→</i><span>日程</span><i>→</i><span>建议</span></div>
+      <h3>动作和结果连起来</h3>
+      <p>说明改了什么、为什么改，确认后能在日程中找到结果。</p>
+      <button class="state-toggle" data-action="offline">体验离线状态</button>
+      <p class="fine">本原型用固定脚本演示流程；<br>框架、模型、迁移和真机流畅度需另行验证。</p>
+    </aside>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
