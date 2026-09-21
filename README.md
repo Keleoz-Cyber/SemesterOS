@@ -29,7 +29,7 @@
 - [App用户文案优化](docs/14-App用户文案优化.md)
 - [云端手机测试部署](docs/15-云端手机测试部署.md)
 
-手机试用：安装[云端测试APK](https://keleoz.com/semesteros/phone.apk)，重新注册账号（密码至少8位）。云端地址为`https://keleoz.com/semesteros`，不依赖开发电脑；电脑上的现有数据未迁移。此包包含手机所需ARM引擎，与下文模拟器本机测试包分开。
+手机试用：本地安装包为`output/apk/SemesterOS-0.1.0-subdomain-phone-debug.apk`，通过USB或局域网传到手机，无需从网站下载。云端地址为`https://semesteros.keleoz.com`，不依赖开发电脑；密码至少8位。原云端账号与数据继续使用，电脑本地数据未迁移。此包包含手机所需ARM引擎，与下文模拟器本机测试包分开。2026-09-21起原`keleoz.com/semesteros`入口已停用，旧包需覆盖安装新版。
 
 ## 用一句话修改
 
