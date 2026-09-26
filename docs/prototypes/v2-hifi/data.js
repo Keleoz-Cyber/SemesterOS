@@ -41,7 +41,7 @@ function seedData(){
 const RANGE={week:['2026-09-21','2026-09-27'],month:['2026-09-01','2026-09-30'],semester:['2026-08-31','2027-01-17']};
 function summarize(rows,{range='week',metric='scheduled',category=null,tags=[],day=null,empty=false}={}){
  const [from,to]=RANGE[range];
- const inRange=empty?[]:rows.filter(r=>r.date>=from&&r.date<=to);
+ const inRange=empty?[]:rows.filter(r=>r.date>=from&&r.date<=to&&(metric!=='scheduled'||r.kind!=='progress'));
  // A label filter is a union of matching records. Each record is counted once.
  const filtered=inRange.filter(r=>(!category||r.category===category)&&(!tags.length||tags.some(t=>r.tags.includes(t))));
  const value=r=>metric==='actual'?r.actual:duration(r);

@@ -9,10 +9,10 @@
   <div class="workspace">
     <aside class="review-panel">
       <div class="project-id"><span class="project-mark">S</span><span>SEMESTER OS <small>DESIGN / 02</small></span></div>
-      <h1>高保真交互设计</h1><p class="review-intro">第一批：今日、AI助手、统计分析</p>
-      <div class="review-tabs" aria-label="设计页面"><button data-action="today" class="selected">今日安排<span>01</span></button><button data-action="assistant">AI助手<span>02</span></button><button data-action="analytics">统计分析<span>03</span></button></div>
+      <h1>高保真交互设计</h1><p class="review-intro">今日、日程、计划、学期、AI与统计</p>
+      <div class="review-tabs" aria-label="设计页面"><button data-action="today" class="selected">今日安排<span>01</span></button><button data-action="schedule">日程<span>02</span></button><button data-action="plans">计划<span>03</span></button><button data-action="semester">学期<span>04</span></button><button data-action="assistant">AI助手<span>05</span></button><button data-action="analytics">统计分析<span>06</span></button></div>
       <div class="review-box"><h2>建议体验顺序</h2><ol><li>录入组会通知，确认分类和提醒。</li><li>查看调整方案，应用后再撤销。</li><li>切换统计范围、类别和标签。</li><li>点某一天，查看组成统计的日程。</li></ol></div>
-      <div class="review-tools"><button data-action="reset">重置示例</button><button data-action="reduce-motion" aria-pressed="false">减少动画</button><button data-action="offline" aria-pressed="false">离线状态</button><button data-action="empty-stats">空数据状态</button></div>
+      <div class="review-tools"><button data-action="reset">重置示例</button><button data-action="reduce-motion" aria-pressed="false">减少动画</button><button data-action="offline" aria-pressed="false">离线状态</button><button data-action="empty-stats">空数据状态</button><button data-action="load-failure">加载失败</button></div>
       <p class="review-note">可点击的设计版本，不是正式App。<br>使用合成数据，固定时间为9月23日11:40。<br>不连接云端，不调用AI或麦克风。</p>
     </aside>
     <section class="device" aria-label="手机原型" id="device">
@@ -23,8 +23,8 @@
       <div id="toast" role="status" aria-live="polite"></div>
       <div id="overlay" hidden></div>
     </section>
-    <aside class="inspector"><span class="inspector-label">交互说明</span><h2 id="review-title">今日安排</h2><p id="review-description"></p><div class="review-divider"></div><h3>这版可以操作</h3><div id="review-features"></div><div class="swatches"><i></i><i></i><i></i><i></i></div><p class="review-note">类别颜色保持一致。<br>紧急程度用独立状态表达。</p><p class="review-note">日程、计划、学期提供衔接视图；<br>完整高保真设计属于第二批。</p></aside>
+    <aside class="inspector"><span class="inspector-label">交互说明</span><h2 id="review-title">今日安排</h2><p id="review-description"></p><div class="review-divider"></div><h3>这版可以操作</h3><div id="review-features"></div><div class="swatches"><i></i><i></i><i></i><i></i></div><p class="review-note">类别颜色保持一致。<br>紧急程度用独立状态表达。</p><p class="review-note">所有页面共用本地示例数据；<br>设计原型尚未接入真实服务。</p></aside>
   </div>
-  <script src="data.js"></script><script src="app.js"></script>
+  <script src="data.js"></script><script src="pages.js"></script><script src="app.js"></script>
 </body>
 </html>

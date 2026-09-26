@@ -1,8 +1,8 @@
-# 第一批高保真交互原型
+# 完整高保真交互原型
 
-直接用浏览器打开`index.html`，保留同目录`style.css`、`data.js`、`app.js`。不需要HTTP服务。单文件导出在`output/v2-hifi/V2-high-fidelity.html`。
+直接用浏览器打开`index.html`，保留同目录`style.css`、`data.js`、`pages.js`、`app.js`。不需要HTTP服务。完整单文件导出在`output/v2-hifi/V2-complete-preview.html`，也同步更新原`V2-high-fidelity.html`。
 
-本批精做今日、AI助手、统计分析。日程／计划／学期提供用于核对结果的衔接视图，完整高保真设计属于第二批。既有流程原型仍保留在`docs/prototypes/v2/`。
+2026-09-26已补齐日程周网格与列表、计划任务与进度、学期周带与时间轴、学校导入流程；与已有今日、AI和统计共用示例状态。既有流程原型仍保留在`docs/prototypes/v2/`。完整交互说明见21文档。
 
 ## 可以体验
 
