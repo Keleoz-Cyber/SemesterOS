@@ -60,6 +60,12 @@ def taxonomy(user: User = Depends(current_user), db: Session = Depends(get_db)):
 @router.post('/events', status_code=201)
 def create_event(body: EventFields, user: User = Depends(current_user), db: Session = Depends(get_db),
                  idempotency_key: str | None = Header(default=None)):
+    result = create_event_command(db, user, body, idempotency_key)
+    db.commit()
+    return result
+
+
+def create_event_command(db, user, body, idempotency_key=None):
     s = owned_semester(db, user, body.semester_id, lock=True); data = body.model_dump(mode='json')
     cached = replay(db, user, 'event-create', idempotency_key, data)
     if cached is not None: return cached
@@ -87,7 +93,7 @@ def create_event(body: EventFields, user: User = Depends(current_user), db: Sess
                        'source_id': candidate.payload.get('media_source', {}).get('id')}
         candidate.payload = {**candidate.payload, 'applied_event_id': row.id}
     response = receipt(db, user, s, row, '创建日程')
-    remember(db, user, 'event-create', idempotency_key, data, response); db.commit()
+    remember(db, user, 'event-create', idempotency_key, data, response)
     return response
 
 
@@ -108,6 +114,12 @@ def history(eid: str, user: User = Depends(current_user), db: Session = Depends(
 @router.patch('/events/{eid}')
 def edit_event(eid: str, body: EventEdit, user: User = Depends(current_user), db: Session = Depends(get_db),
                idempotency_key: str | None = Header(default=None)):
+    result = edit_event_command(db, user, eid, body, idempotency_key)
+    db.commit()
+    return result
+
+
+def edit_event_command(db, user, eid, body, idempotency_key=None):
     row = owned_event(db, user, eid); s = owned_semester(db, user, row.semester_id, lock=True); db.refresh(row)
     data = body.model_dump(mode='json'); operation = 'event-edit/' + eid
     cached = replay(db, user, operation, idempotency_key, data)
@@ -122,13 +134,19 @@ def edit_event(eid: str, body: EventEdit, user: User = Depends(current_user), db
         updated.update({k: row.payload.get(k) for k in ('candidate_id', 'source_id', 'source_text')})
     row.payload = updated; row.version += 1; row.updated_at = utcnow().isoformat(); s.revision += 1
     db.flush(); response = receipt(db, user, s, row, body.change_reason)
-    remember(db, user, operation, idempotency_key, data, response); db.commit()
+    remember(db, user, operation, idempotency_key, data, response)
     return response
 
 
 @router.post('/events/{eid}/cancel')
 def cancel_event(eid: str, body: EventCancel, user: User = Depends(current_user), db: Session = Depends(get_db),
                  idempotency_key: str | None = Header(default=None)):
+    result = cancel_event_command(db, user, eid, body, idempotency_key)
+    db.commit()
+    return result
+
+
+def cancel_event_command(db, user, eid, body, idempotency_key=None):
     row = owned_event(db, user, eid); s = owned_semester(db, user, row.semester_id, lock=True); db.refresh(row)
     data = body.model_dump(mode='json'); operation = 'event-cancel/' + eid
     cached = replay(db, user, operation, idempotency_key, data)
@@ -137,7 +155,7 @@ def cancel_event(eid: str, body: EventCancel, user: User = Depends(current_user)
     if row.lifecycle != 'active': error(409, 'EVENT_CANCELLED', '日程已经取消')
     row.lifecycle = 'cancelled'; row.version += 1; row.updated_at = utcnow().isoformat(); s.revision += 1
     db.flush(); response = receipt(db, user, s, row, '取消日程')
-    remember(db, user, operation, idempotency_key, data, response); db.commit()
+    remember(db, user, operation, idempotency_key, data, response)
     return response
 
 

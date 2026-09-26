@@ -1,4 +1,5 @@
 import '../features/calendar/event_form.dart';
+import '../features/agent/agent_page.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -65,6 +66,12 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
         return null;
       },
       routes: [
+        GoRoute(
+          path: '/assistant',
+          builder: (_, state) => controller.semester == null
+              ? SemesterPage(controller: controller)
+              : AgentPage(controller: items, semester: controller.semester!),
+        ),
         GoRoute(
           path: '/events/new',
           builder: (_, state) => controller.semester == null

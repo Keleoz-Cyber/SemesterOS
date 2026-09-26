@@ -134,21 +134,24 @@ class _ShellPageState extends State<ShellPage> {
                 children: [
                   if (widget.items != null) ...[
                     ListTile(
+                      leading: const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: CampusColors.primary,
+                      ),
+                      title: const Text('日程助手'),
+                      subtitle: const Text('查询安排、记录通知、修改日程和提醒'),
+                      onTap: () {
+                        Navigator.pop(sheet);
+                        context.push('/assistant');
+                      },
+                    ),
+                    ListTile(
                       leading: const Icon(Icons.event_available_outlined),
                       title: const Text('添加日程'),
                       subtitle: const Text('组会、活动和其他固定安排'),
                       onTap: () {
                         Navigator.pop(sheet);
                         context.push('/events/new');
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.tune),
-                      title: const Text('用一句话修改事项 / 提醒'),
-                      subtitle: const Text('先核对对象与变化，再确认'),
-                      onTap: () {
-                        Navigator.pop(sheet);
-                        context.push('/operations');
                       },
                     ),
                     for (final type in {
@@ -168,18 +171,6 @@ class _ShellPageState extends State<ShellPage> {
                           context.push('/capture/media?kind=${type.key}');
                         },
                       ),
-                    ListTile(
-                      leading: const Icon(
-                        Icons.auto_awesome_outlined,
-                        color: CampusColors.primary,
-                      ),
-                      title: const Text('文字快速记录'),
-                      subtitle: const Text('一句话解析，核对后保存'),
-                      onTap: () {
-                        Navigator.pop(sheet);
-                        context.push('/capture');
-                      },
-                    ),
                     for (final entry in {
                       'assignment': '记录作业',
                       'exam': '记录考试',

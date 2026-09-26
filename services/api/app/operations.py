@@ -201,6 +201,15 @@ def reject(id:str,body:OperationAction,user:User=Depends(current_user),db:Sessio
 
 @router.post('/operations/{id}/apply')
 def apply(id:str,body:OperationAction,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    p,_=own(db,user,id)
+    if p.payload.get('agent_run_id'):
+        error(409,'AGENT_CONFIRMATION_REQUIRED','请在日程助手中核对并确认这次修改')
+    result=apply_command(db,user,id,body)
+    db.commit()
+    return result
+
+
+def apply_command(db,user,id,body):
     p,s=own(db,user,id)
     if p.phase=='applied':return p.receipt
     if p.phase!='ready' or p.version!=body.expected_version or output(db,user,p,s)['phase']!='ready':error(409,'OPERATION_STALE','事项、提醒或安排已有变化，请重新核对')
@@ -230,4 +239,4 @@ def apply(id:str,body:OperationAction,user:User=Depends(current_user),db:Session
         audit(db,item,('自然语言修改：'+p.source_text)[:500]);changed=[serialize_item(db,item)]
     p.phase='applied';p.version+=1
     p.receipt={'operation_id':p.id,'operation_version':p.version,'semester_id':s.id,'revision':s.revision,'changed_items':changed,'planning_request':planning}
-    db.commit();return p.receipt
+    return p.receipt

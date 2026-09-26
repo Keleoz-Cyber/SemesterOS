@@ -138,6 +138,12 @@ def history(item_id: str, user: User = Depends(current_user), db: Session = Depe
 @router.post('/items', status_code=201)
 def create_item(body: ItemCreate, user: User = Depends(current_user), db: Session = Depends(get_db),
                 idempotency_key: str | None = Header(default=None)):
+    result = create_item_command(db, user, body, idempotency_key)
+    db.commit()
+    return result
+
+
+def create_item_command(db, user, body, idempotency_key=None):
     data, s = checked_payload(db, user, body)
     request = body.model_dump(mode='json')
     cached = replay(db, user, 'create-item', idempotency_key, request)
@@ -172,7 +178,6 @@ def create_item(body: ItemCreate, user: User = Depends(current_user), db: Sessio
     audit(db, item, '用户确认录入')
     result = serialize_item(db, item)
     remember(db, user, 'create-item', idempotency_key, request, result)
-    db.commit()
     return result
 
 

@@ -302,3 +302,32 @@ class OperationProposal(Base):
     payload: Mapped[dict]=mapped_column(JSON)
     receipt: Mapped[dict | None]=mapped_column(JSON,nullable=True)
     created_at: Mapped[str]=mapped_column(String(40))
+
+
+class AgentThread(Base):
+    __tablename__ = 'agent_threads'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'semester_id'], ['semesters.user_id', 'semesters.id']),
+                      UniqueConstraint('user_id', 'id'))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    semester_id: Mapped[str] = mapped_column(String(36), index=True)
+    title: Mapped[str] = mapped_column(String(80), default='新对话')
+    created_at: Mapped[str] = mapped_column(String(40))
+    updated_at: Mapped[str] = mapped_column(String(40))
+
+
+class AgentRun(Base):
+    __tablename__ = 'agent_runs'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'thread_id'], ['agent_threads.user_id', 'agent_threads.id']),
+                      UniqueConstraint('thread_id', 'request_id'))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    thread_id: Mapped[str] = mapped_column(String(36), index=True)
+    request_id: Mapped[str] = mapped_column(String(100))
+    text: Mapped[str] = mapped_column(String(10000))
+    status: Mapped[str] = mapped_column(String(30), default='queued', index=True)
+    state: Mapped[dict] = mapped_column(JSON, default=dict)
+    lease_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    lease_until: Mapped[int] = mapped_column(Integer, default=0)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[str] = mapped_column(String(40))

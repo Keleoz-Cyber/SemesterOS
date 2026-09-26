@@ -27,9 +27,16 @@ def main():
     engine=make_engine()
     try:
         while parent_alive():
+            # Agent state lives in the same durable DB queue; no API request waits
+            # on model I/O. Alternate with media jobs so neither queue is starved.
+            from .agent_runtime import work_once
+            try: agent_work = work_once(engine)
+            except Exception: agent_work = False
             try:job=claim(engine)
             except Exception:time.sleep(2);continue
-            if job is None:time.sleep(.5);continue
+            if job is None:
+                if not agent_work:time.sleep(.5)
+                continue
             try:publish(engine,job,recognize(path_for(root(),job['storage_key']),job['kind']))
             except FileNotFoundError:publish(engine,job,error='MODEL_OR_FILE_MISSING')
             except Exception:publish(engine,job,error='RECOGNITION_FAILED')
