@@ -6,7 +6,7 @@ from .academics import owned_semester, replay, remember
 from .auth import current_user, error
 from .database import get_db
 from .event_schemas import EventFields, EventEdit, EventCancel
-from .event_store import CATEGORIES, tag_ids, event_rows, event_value
+from .event_store import CATEGORIES, tag_ids, event_rows, event_value, classification_value, classification_request
 from .models import CalendarEvent, CalendarEventRevision, CalendarTag, StudyItem, TextCandidate, User
 from .reminder_rules import utcnow, instant
 
@@ -121,7 +121,7 @@ def edit_event(eid: str, body: EventEdit, user: User = Depends(current_user), db
 
 def edit_event_command(db, user, eid, body, idempotency_key=None):
     row = owned_event(db, user, eid); s = owned_semester(db, user, row.semester_id, lock=True); db.refresh(row)
-    data = body.model_dump(mode='json'); operation = 'event-edit/' + eid
+    data = classification_request(body); operation = 'event-edit/' + eid
     cached = replay(db, user, operation, idempotency_key, data)
     if cached is not None: return cached
     guard(s, body.expected_revision, row, body.expected_version)
@@ -129,6 +129,9 @@ def edit_event_command(db, user, eid, body, idempotency_key=None):
     if body.candidate_id not in (None, row.payload.get('candidate_id')):
         error(422, 'SOURCE_IMMUTABLE', '不能更换日程的原始来源')
     updated = payload(db, user, s, body)
+    for field, stored in (('category_id', 'category_id'), ('tags', 'tag_ids')):
+        if field not in body.model_fields_set and stored in row.payload:
+            updated[stored] = row.payload[stored]
     updated['source_text'] = row.payload.get('source_text', '')
     if row.payload.get('candidate_id'):
         updated.update({k: row.payload.get(k) for k in ('candidate_id', 'source_id', 'source_text')})
@@ -179,7 +182,7 @@ def calendar(sid: str, from_date: date = Query(), to_date: date = Query(),
             instant(e['start_at']).timestamp(), instant(e['end_at']).timestamp())
     term_start = local_day(s.first_monday).timestamp(); term_end = term_start + s.total_weeks * 7 * 86400
     facts = [('event', event_value(db, r)) for r in event_rows(db, user, sid)]
-    facts += [('exam' if r.payload['kind'] == 'exam' else 'deadline', {**r.payload, 'id': r.id, 'version': r.version})
+    facts += [('exam' if r.payload['kind'] == 'exam' else 'deadline', {**r.payload, **classification_value(db, r), 'id': r.id, 'version': r.version})
               for r in db.scalars(select(StudyItem).where(StudyItem.user_id == user.id, StudyItem.semester_id == sid, StudyItem.lifecycle == 'active'))]
     for kind, e in facts:
         t = e['time']; exact = t['precision'] == 'exact'; fixed = kind in ('event', 'exam')
@@ -187,17 +190,19 @@ def calendar(sid: str, from_date: date = Query(), to_date: date = Query(),
                  'start_at': t.get('at') if exact and fixed else None, 'end_at': t.get('end_at') if exact and fixed else None,
                  'due_at': t.get('at') if exact and not fixed else None, 'date': t.get('date'), 'week': t.get('week'),
                  'end_date': t.get('end_date'), 'time_precision': t['precision'], 'certainty': e['certainty'],
-                 'location': e.get('location', ''), 'category_id': e.get('category_id') or ('study' if kind == 'exam' else None),
+                 'location': e.get('location', ''), 'category_id': e.get('category_id'),
                  'tags': e.get('tags', []), 'fixed': fixed, 'version': e['version']}
         if t['precision'] == 'unknown': undated.append(entry); continue
         a, b = exam_window(e, term_start, term_end)
         if exact and (not fixed or not t.get('end_at')): b = a + .000001
         add(entry, a, b)
+    item_labels = {r.id: classification_value(db, r) for r in db.scalars(select(StudyItem).where(
+        StudyItem.user_id == user.id, StudyItem.semester_id == sid))}
     for p in source[4]:
         if p['status'] != 'active': continue
         add({'id': 'plan:' + p['id'], 'resource_id': p['item_id'], 'plan_id': p['id'], 'resource_type': 'plan',
              'title': p.get('title', '个人计划'), 'start_at': p['start_at'], 'end_at': p['end_at'], 'location': '',
-             'fixed': False, 'category_id': None, 'tags': [], 'time_precision': 'exact'},
+             'fixed': False, **item_labels.get(p['item_id'], {'category_id': None, 'tags': []}), 'time_precision': 'exact'},
             instant(p['start_at']).timestamp(), instant(p['end_at']).timestamp())
     context = calendar_context(*source[:4], utcnow())
     def ordering(entry):

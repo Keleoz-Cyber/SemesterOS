@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
-import '../timetable/week_view.dart';
+import 'schedule_grid.dart';
 import 'calendar_repository.dart';
 
 class CalendarPanel extends StatefulWidget {
@@ -26,6 +26,7 @@ class CalendarPanelState extends State<CalendarPanel>
   late int week;
   bool grid = true;
   String kind = 'all';
+  DateTime? selectedDay;
   String? sid;
   int? seenRevision;
   Map<String, dynamic> get semester => widget.app.semester!;
@@ -231,7 +232,6 @@ class CalendarPanelState extends State<CalendarPanel>
     final entries = repository.entries
         .where((e) => kind == 'all' || e['resource_type'] == kind)
         .toList();
-    final segments = calendarGridEntries(entries, first);
     final now = schoolNow();
     final data = widget.todayOnly
         ? entries.where((e) => onDay(e, now)).toList()
@@ -368,19 +368,38 @@ class CalendarPanelState extends State<CalendarPanel>
           const SizedBox(height: 14),
         ],
         if (repository.data != null) ...[
-          if (!widget.todayOnly && grid && !largeText && segments.isNotEmpty)
+          if (!widget.todayOnly &&
+              grid &&
+              !largeText &&
+              entries.any((e) => e['start_at'] != null && e['end_at'] != null))
             SizedBox(
-              height: 430,
-              child: SingleChildScrollView(
-                child: TimetableGrid(
-                  semester: semester,
-                  week: week,
-                  events: segments,
-                  now: DateTime.now(),
-                  onCourse: open,
+              height: 480,
+              child: ScheduleGrid(
+                firstDay: first,
+                entries: entries,
+                onOpen: open,
+                onDay: (day) => setState(() => selectedDay = day),
+              ),
+            ),
+          if (!widget.todayOnly &&
+              grid &&
+              !largeText &&
+              selectedDay != null &&
+              !selectedDay!.isBefore(first) &&
+              selectedDay!.isBefore(first.add(const Duration(days: 7)))) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                '${selectedDay!.month}月${selectedDay!.day}日安排',
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
+            for (final row in entries.where((e) => onDay(e, selectedDay!)))
+              tile(row),
+          ],
           if (data.isEmpty && !repository.busy)
             Padding(
               padding: const EdgeInsets.all(24),

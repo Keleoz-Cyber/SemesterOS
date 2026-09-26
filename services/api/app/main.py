@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from . import calendar_events
 from . import agent_api
+from . import insights
 from . import academics, auth, items, capture, planning, schedule_api, changes, change_parser, centers, exam_planning, media, operations
 from pathlib import Path
 from dotenv import dotenv_values
@@ -88,6 +89,7 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
 
     app.include_router(calendar_events.router, prefix="/api/v1")
     app.include_router(agent_api.router, prefix="/api/v1")
+    app.include_router(insights.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(academics.router, prefix="/api/v1")
     app.include_router(items.router, prefix="/api/v1")

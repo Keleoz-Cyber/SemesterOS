@@ -230,13 +230,19 @@ class SemesterHome extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           CampusHero(
-            eyebrow: '看见整个学期',
+            eyebrow: '本学期',
             title: semester['name'],
-            subtitle: '重要节点按周排列\n不确定的时间继续保留待确认',
+            subtitle:
+                '${semester['total_weeks']}周 · ${semester['first_monday']}开始',
           ),
           Wrap(
             spacing: 8,
             children: [
+              FilledButton.tonalIcon(
+                onPressed: () => context.push('/insights'),
+                icon: const Icon(Icons.bar_chart_rounded),
+                label: const Text('统计分析'),
+              ),
               FilledButton.tonalIcon(
                 onPressed: () async {
                   await Navigator.push(

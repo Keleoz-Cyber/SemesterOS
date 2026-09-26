@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'ui_polish_test.dart' show mount;
 import 'package:semester_os/features/media/drafts.dart';
 import 'package:semester_os/features/media/media_input.dart';
 import 'package:semester_os/features/media/media_capture_page.dart';
@@ -85,6 +86,122 @@ Widget page(ScheduleFixture f) => MediaCapturePage(
   input: FakeMedia(),
 );
 void main() {
+  testWidgets(
+    'reviewed media returns to assistant without invoking old parser',
+    (tester) async {
+      final f = await setup(tester);
+      final old = f.api.dio.httpClientAdapter as ControlledTransport;
+      Map<String, dynamic>? returned;
+      var legacyParses = 0;
+      f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.path.endsWith('/sources/a') && r.method == 'PATCH') {
+          return body({...source('a'), 'version': 2, 'text': r.data['text']});
+        }
+        if (r.path.endsWith('/capture/text')) {
+          legacyParses++;
+          return body({'message': '不应调用'}, 400);
+        }
+        return old.respond(r);
+      });
+      await mount(
+        tester,
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                returned = await Navigator.push<Map<String, dynamic>>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MediaCapturePage(
+                      controller: f.c,
+                      semester: const {'id': 's', 'total_weeks': 20},
+                      input: FakeMedia(),
+                      returnSource: true,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('选择通知'),
+            ),
+          ),
+        ),
+      );
+      await ioTap(tester, find.text('选择通知'));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 80)),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('用这些文字整理事项'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await settleIo(tester);
+      await tester.ensureVisible(find.text('用这些文字整理事项'));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await tester.tap(find.text('用这些文字整理事项'));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await tester.pump(const Duration(milliseconds: 400));
+      await settleIo(tester);
+      expect(returned?['id'], 'a');
+      expect(returned?['version'], 2);
+      expect(legacyParses, 0);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+    },
+  );
+  testWidgets(
+    'assistant media manual fallback can return without a Map bool type error',
+    (tester) async {
+      final f = await setup(tester);
+      bool returned = false;
+      await mount(
+        tester,
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                await Navigator.push<Map<String, dynamic>>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MediaCapturePage(
+                      controller: f.c,
+                      semester: const {'id': 's', 'total_weeks': 20},
+                      input: FakeMedia(),
+                      returnSource: true,
+                    ),
+                  ),
+                );
+                returned = true;
+              },
+              child: const Text('打开'),
+            ),
+          ),
+        ),
+      );
+      await ioTap(tester, find.text('打开'));
+      await settleIo(tester);
+      await tester.scrollUntilVisible(
+        find.text('保存文字并手动填写事项'),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.runAsync(() async {
+        await tester.tap(find.text('保存文字并手动填写事项'));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await settleIo(tester);
+      expect(find.byType(ItemFormPage), findsOneWidget);
+      Navigator.pop(tester.element(find.byType(ItemFormPage)), true);
+      await settleIo(tester);
+      expect(returned, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+    },
+  );
   setUpAll(loadPreviewFonts);
   testWidgets(
     'manual fallback works without a microphone recording or uploaded source',

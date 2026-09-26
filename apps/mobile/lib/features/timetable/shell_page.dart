@@ -23,6 +23,8 @@ class ShellPage extends StatefulWidget {
 
 class _ShellPageState extends State<ShellPage> {
   final calendarKey = GlobalKey<CalendarPanelState>();
+  final todayKey = GlobalKey<CalendarPanelState>();
+  final visitedTabs = <int>{0};
   int tab = 0;
   bool grid = true;
   Timer? clock;
@@ -42,8 +44,13 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   void switchTab(int value) {
-    setState(() => tab = value);
-    if (value == 0 && c.semester != null) c.loadWeek(c.weekNow(c.semester!));
+    setState(() {
+      tab = value;
+      visitedTabs.add(value);
+    });
+    if (value == 0 && c.semester != null && widget.items == null) {
+      c.loadWeek(c.weekNow(c.semester!));
+    }
   }
 
   void openImport() =>
@@ -100,7 +107,8 @@ class _ShellPageState extends State<ShellPage> {
       await c.openSession();
     }
     await widget.items?.refresh();
-    await calendarKey.currentState?.reload();
+    if (tab == 0) await todayKey.currentState?.reload();
+    if (tab == 1) await calendarKey.currentState?.reload();
   }
 
   Future<void> add() async {
@@ -168,7 +176,7 @@ class _ShellPageState extends State<ShellPage> {
                         subtitle: const Text('保留来源，识别后核对'),
                         onTap: () {
                           Navigator.pop(sheet);
-                          context.push('/capture/media?kind=${type.key}');
+                          context.push('/assistant?input=${type.key}');
                         },
                       ),
                     for (final entry in {
@@ -308,15 +316,15 @@ class _ShellPageState extends State<ShellPage> {
     ),
   );
 
-  Widget page() {
+  Widget page(int index) {
     if (c.semester == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const CampusHero(
-            eyebrow: '新的开始',
-            title: '我的新学期',
-            subtitle: '从一张课表开始\n让安排清晰起来',
+            eyebrow: '',
+            title: '建立学期',
+            subtitle: '设置开学日期，然后导入课表',
           ),
           const SizedBox(height: 22),
           EmptyPanel(
@@ -331,7 +339,7 @@ class _ShellPageState extends State<ShellPage> {
     final hasData =
         c.savedWeeks['${c.semester!['id']}/${c.week}']?['revision'] ==
         c.semester!['revision'];
-    switch (tab) {
+    switch (index) {
       case 1:
         if (widget.items != null) {
           return CalendarPanel(key: calendarKey, app: c, items: widget.items!);
@@ -361,9 +369,9 @@ class _ShellPageState extends State<ShellPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const CampusHero(
-              eyebrow: '给重要的事留时间',
+              eyebrow: '',
               title: '个人计划',
-              subtitle: '课程先安顿好\n再安排自己的时间',
+              subtitle: '',
             ),
             const SizedBox(height: 22),
             const Align(
@@ -399,7 +407,7 @@ class _ShellPageState extends State<ShellPage> {
       default:
         if (widget.items != null) {
           return CalendarPanel(
-            key: calendarKey,
+            key: todayKey,
             app: c,
             items: widget.items!,
             todayOnly: true,
@@ -465,17 +473,6 @@ class _ShellPageState extends State<ShellPage> {
           ),
           actions: [
             IconButton(
-              onPressed: c.busy ? null : refresh,
-              tooltip: '同步课表',
-              icon: c.busy
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.sync_rounded, color: CampusColors.muted),
-            ),
-            IconButton(
               onPressed: account,
               tooltip: '账户',
               icon: const CircleAvatar(
@@ -491,23 +488,37 @@ class _ShellPageState extends State<ShellPage> {
             const SizedBox(width: 8),
           ],
         ),
-        body: RefreshIndicator(
-          onRefresh: refresh,
-          child: ListView(
-            key: PageStorageKey(
-              'semester-tab-${c.user['id']}-${c.semester?['id']}-$tab',
-            ),
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 106),
-            physics: const AlwaysScrollableScrollPhysics(),
-            children: [
-              if (c.notice != null &&
-                  (!c.notice!.startsWith('正在同步') || c.offline)) ...[
-                SoftNotice(c.notice!, warning: c.offline),
-                const SizedBox(height: 14),
-              ],
-              page(),
-            ],
-          ),
+        body: IndexedStack(
+          index: tab,
+          children: [
+            for (var index = 0; index < 4; index++)
+              if (!visitedTabs.contains(index))
+                const SizedBox()
+              else
+                KeyedSubtree(
+                  key: ValueKey(
+                    'tab-${c.user['id']}-${c.semester?['id']}-$index',
+                  ),
+                  child: RefreshIndicator(
+                    onRefresh: refresh,
+                    child: ListView(
+                      key: PageStorageKey(
+                        'semester-tab-${c.user['id']}-${c.semester?['id']}-$index',
+                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 106),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        if (c.notice != null &&
+                            (!c.notice!.startsWith('正在同步') || c.offline)) ...[
+                          SoftNotice(c.notice!, warning: c.offline),
+                          const SizedBox(height: 14),
+                        ],
+                        page(index),
+                      ],
+                    ),
+                  ),
+                ),
+          ],
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: add,

@@ -27,6 +27,15 @@ class AgentController extends ChangeNotifier {
       items.semesterId == semesterId;
   bool get processing =>
       runs.any((r) => r['status'] == 'queued' || r['status'] == 'running');
+  Map<String, dynamic>? get activeSource {
+    if (runs.isEmpty ||
+        {'applied', 'cancelled'}.contains(runs.last['status'])) {
+      return null;
+    }
+    final value = runs.last['source'];
+    return value is Map ? Map<String, dynamic>.from(value) : null;
+  }
+
   void emit() {
     if (active) notifyListeners();
   }
@@ -118,7 +127,12 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  Future<bool> send(String text) async {
+  Future<bool> send(
+    String text, {
+    Map<String, dynamic>? source,
+    List<String> selectedRecordIds = const [],
+    bool detachSource = false,
+  }) async {
     if (busy || processing || !active || text.trim().isEmpty) return false;
     final stamp = _epoch;
     busy = true;
@@ -134,8 +148,10 @@ class AgentController extends ChangeNotifier {
         check(stamp);
         threadId = t['id'];
       }
-      if (_pendingText != text || _pendingId == null) {
-        _pendingText = text;
+      final signature =
+          '$text\u0000${source?['id'] ?? ''}:${source?['version'] ?? ''}:${selectedRecordIds.join(',')}:$detachSource';
+      if (_pendingText != signature || _pendingId == null) {
+        _pendingText = signature;
         _pendingId = List.generate(
           16,
           (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -145,7 +161,15 @@ class AgentController extends ChangeNotifier {
         await request(
           'POST',
           '/agent/threads/$threadId/turns',
-          data: {'text': text, 'request_id': _pendingId},
+          data: {
+            'text': text,
+            'request_id': _pendingId,
+            if (source != null) 'source_id': source['id'],
+            if (source != null) 'source_version': source['version'],
+            if (selectedRecordIds.isNotEmpty)
+              'selected_record_ids': selectedRecordIds,
+            if (detachSource) 'detach_source': true,
+          },
         ),
       );
       check(stamp);

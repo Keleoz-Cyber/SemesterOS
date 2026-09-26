@@ -106,6 +106,15 @@ def get_proposal(id:str,user:User=Depends(current_user),db:Session=Depends(get_d
 
 @router.post('/plan-proposals/{id}/accept')
 def accept_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    p=owned_proposal(db,user,id)
+    if p.payload.get('agent_run_id'):
+        error(409,'AGENT_CONFIRMATION_REQUIRED','请在日程助手中核对并确认这次计划')
+    receipt=accept_proposal_command(db,user,id,body)
+    db.commit();return receipt
+
+
+def accept_proposal_command(db,user,id,body:ProposalAction):
+    """Apply under the caller's transaction, including the AgentRun receipt."""
     p=owned_proposal(db,user,id);s=owned_semester(db,user,p.semester_id,lock=True);db.refresh(p)
     if p.phase=='applied':return p.receipt
     if p.phase!='ready' or p.version!=body.expected_version or s.revision!=p.base_revision or s.revision!=body.expected_revision:
@@ -115,6 +124,8 @@ def accept_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),d
     if result['status']=='FEASIBLE_PARTIAL' and (not body.confirm_partial or body.unarranged_minutes!=result['unarranged_minutes']):
         error(422,'CONFIRM_PARTIAL','这是部分方案，请明确确认仍有多少分钟未安排')
     if not result['can_apply']:error(422,'NOTHING_TO_APPLY','这次没有可以保存的新安排')
+    if p.payload.get('agent_run_id') and fingerprint(snapshot(db,user,s))!=p.payload['input_hash']:
+        error(409,'SNAPSHOT_STALE','任务或安排已有变化，请重新生成方案')
     if result.get('mode')=='replan':return apply_replan(db,user,s,p,result)
     request={**p.payload['request'],'_window_start':floor(instant(result['window_start']).timestamp()/60),
              '_window_end':floor(instant(result['window_end']).timestamp()/60)}
@@ -129,7 +140,7 @@ def accept_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),d
     s.revision+=1;p.phase='applied';p.version+=1;p.applied_at=now.isoformat()
     p.receipt={'proposal_id':p.id,'proposal_version':p.version,'semester_id':s.id,'revision':s.revision,
                'block_ids':ids,'unarranged_minutes':result['unarranged_minutes']}
-    record(db,user,s.id,'apply_proposal',p.receipt,now);db.commit();return p.receipt
+    record(db,user,s.id,'apply_proposal',p.receipt,now);return p.receipt
 
 
 @router.post('/plan-proposals/{id}/undo')
@@ -166,7 +177,7 @@ def apply_replan(db,user,s,p,result):
     s.revision+=1;p.phase='applied';p.version+=1;p.applied_at=now.isoformat()
     p.receipt={'proposal_id':p.id,'proposal_version':p.version,'semester_id':s.id,'revision':s.revision,
         'block_ids':list(applied_versions),'moved_tasks':result['moved_tasks'],'shift_minutes':result['shift_minutes'],'unarranged_minutes':0}
-    record(db,user,s.id,'apply_replan',p.receipt,now);db.commit();return p.receipt
+    record(db,user,s.id,'apply_replan',p.receipt,now);return p.receipt
 
 
 def undo_replan(db,user,s,p):

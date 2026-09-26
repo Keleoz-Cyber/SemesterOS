@@ -1,11 +1,11 @@
 """Authenticated conversation API. Model tools never receive confirmation authority."""
 from datetime import timedelta
-from typing import Literal
+from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Request
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .academics import owned_semester
+from .academics import owned_semester, fingerprint
 from .auth import current_user, error
 from .database import get_db
 from .models import AgentThread, AgentRun, User, OperationProposal
@@ -22,6 +22,16 @@ class ThreadInput(Input):
 class TurnInput(Input):
     text: str = Field(min_length=1, max_length=10000)
     request_id: str = Field(min_length=1, max_length=100)
+    source_id: str | None = Field(default=None, max_length=36)
+    source_version: int | None = Field(default=None, ge=1)
+    selected_record_ids: list[Annotated[str, Field(min_length=1, max_length=36)]] = Field(default_factory=list, max_length=30)
+    detach_source: bool = False
+
+    @model_validator(mode='after')
+    def paired_source(self):
+        if bool(self.source_id) != (self.source_version is not None): raise ValueError('来源与版本需要一起提供')
+        if self.source_id and self.detach_source: raise ValueError('不能同时附加和移除来源')
+        return self
 
     @field_validator('text')
     @classmethod
@@ -55,11 +65,18 @@ def public_run(row):
             'created_at': row.created_at, 'answer': state.get('answer', ''),
             'stage': state.get('stage', '等待处理'), 'cards': state.get('cards', []),
             'preview': state.get('preview'), 'receipt': state.get('receipt'),
+            'source': state.get('source'),
+            'ambiguous_ids': state.get('ambiguous_ids', []),
             'error': state.get('error'), 'sequence': state.get('sequence', 0)}
 
 
 def invalidate_preview(db, row):
     preview = row.state.get('preview') or {}
+    if preview.get('kind') == 'plan':
+        from .agent_planning import invalidate_agent_plan
+        user = db.get(User, row.user_id)
+        owned_semester(db, user, preview['semester_id'], lock=True)
+        invalidate_agent_plan(db, user, preview)
     if preview.get('kind') == 'operation':
         # Legacy operation endpoints serialize on the semester before touching
         # the proposal. Use the same order when rejecting via the agent.
@@ -100,8 +117,10 @@ def get_thread(tid: str, user: User = Depends(current_user), db: Session = Depen
 def submit(tid: str, body: TurnInput, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     row = owned_thread(db, user, tid, True)
     existing = db.scalar(select(AgentRun).where(AgentRun.thread_id == tid, AgentRun.request_id == body.request_id))
+    signature = fingerprint(body.model_dump(mode='json'))
     if existing:
-        if existing.text != body.text: error(409, 'IDEMPOTENCY_CONFLICT', '这次发送的内容已变化，请重新发送')
+        if existing.text != body.text or (existing.state.get('input_signature', signature) != signature) or ((body.source_id or body.selected_record_ids) and not existing.state.get('input_signature')):
+            error(409, 'IDEMPOTENCY_CONFLICT', '这次发送的内容已变化，请重新发送')
         return public_run(existing)
     from .capture import admission
     admission(request, user)
@@ -117,6 +136,31 @@ def submit(tid: str, body: TurnInput, request: Request, user: User = Depends(cur
     now = utcnow().isoformat()
     from .agent_runtime import initial_state
     state = initial_state(db, user, row, body.text, now)
+    if body.detach_source: state.update(source=None, draft_source=body.text)
+    state['input_signature'] = signature
+    selected = set(body.selected_record_ids)
+    if not selected.issubset(state.get('ambiguous_ids', [])):
+        error(409, 'SELECTION_STALE', '候选记录已变化，请重新查询并选择')
+    state['ambiguous_ids'] = [id for id in state.get('ambiguous_ids', []) if id not in selected]
+    state['selected_record_ids'] = sorted(selected)
+    if body.source_id:
+        from .media import owned_source, version
+        import json
+        source = owned_source(db, user, body.source_id)
+        if source.semester_id != row.semester_id: error(404, 'NOT_FOUND', '来源不属于当前学期')
+        version(source, body.source_version)
+        if source.status in ('queued', 'running') or not source.text.strip():
+            error(409, 'SOURCE_NOT_READY', '请先完成识别并核对文字')
+        ref = {'id': source.id, 'version': source.version, 'kind': source.kind, 'text': source.text,
+               'reference_at': source.reference_at, 'original_text': source.original_text}
+        state.update(source=ref, draft_source=source.text)
+        message = {'role': 'user', 'content': json.dumps({'request': body.text, 'notice_data': ref}, ensure_ascii=False)}
+        state['messages'][-1] = message; state['turn_messages'][-1] = message
+    if selected:
+        import json
+        message = {'role':'user', 'content':json.dumps({'request':state['messages'][-1]['content'],
+            'selected_record_ids':sorted(selected)},ensure_ascii=False)}
+        state['messages'][-1] = message; state['turn_messages'][-1] = message
     run = AgentRun(user_id=user.id, thread_id=tid, request_id=body.request_id,
                    text=body.text, state=state, created_at=now)
     row.updated_at = now

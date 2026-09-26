@@ -381,8 +381,9 @@ void main() {
       );
       await tester.tap(find.text('更多设置'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byKey(const Key('task-start-policy')));
-      await tester.tap(find.byKey(const Key('task-start-policy')));
+        await tester.ensureVisible(find.byKey(const Key('task-start-policy')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('task-start-policy')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('从现在起可开始').last);
       await tester.pumpAndSettle();

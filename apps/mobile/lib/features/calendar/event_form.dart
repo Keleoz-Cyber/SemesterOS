@@ -6,6 +6,7 @@ import '../../core/api.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'calendar_repository.dart';
+import '../media/source_view.dart';
 
 const eventCategories = {
   'study': '学业',
@@ -554,6 +555,20 @@ class _EventDetailPageState extends State<EventDetailPage> {
               const Text('通知原文', style: TextStyle(fontWeight: FontWeight.bold)),
               SelectableText(row['source_text']),
             ],
+            if (row['source_id'] != null)
+              TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SourceViewPage(
+                      controller: widget.controller,
+                      id: row['source_id'],
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.description_outlined),
+                label: const Text('查看原始通知'),
+              ),
             const SizedBox(height: 24),
             if (row['lifecycle'] == 'cancelled')
               const Text('这条日程已取消')

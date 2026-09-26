@@ -5,14 +5,19 @@ import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'agent_controller.dart';
+import '../media/media_capture_page.dart';
+import '../media/source_view.dart';
+import '../insights/insights_controller.dart' show insightHours;
 
 class AgentPage extends StatefulWidget {
   final ItemsController controller;
   final Map<String, dynamic> semester;
+  final String? initialMediaKind;
   const AgentPage({
     super.key,
     required this.controller,
     required this.semester,
+    this.initialMediaKind,
   });
   @override
   State<AgentPage> createState() => _AgentPageState();
@@ -21,12 +26,22 @@ class AgentPage extends StatefulWidget {
 class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   late final AgentController c;
   final input = TextEditingController();
+  Map<String, dynamic>? attachment;
+  bool detachedSource = false;
+  Map<String, dynamic>? get currentSource =>
+      attachment ?? (detachedSource ? null : c.activeSource);
+  final Set<String> partialAcknowledged = {};
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     c = AgentController(widget.controller, widget.semester['id']);
     c.open();
+    if (widget.initialMediaKind != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) attach(widget.initialMediaKind!);
+      });
+    }
   }
 
   @override
@@ -42,12 +57,56 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  Future<void> send() async {
-    final text = input.text.trim();
-    if (await c.send(text) && mounted && input.text.trim() == text) {
-      input.clear();
+  Future<void> send() => submit(input.text.trim());
+
+  Future<void> submit(
+    String text, {
+    List<String> selectedRecordIds = const [],
+  }) async {
+    final source = currentSource;
+    if (await c.send(
+          text,
+          source: source,
+          detachSource: detachedSource,
+          selectedRecordIds: selectedRecordIds,
+        ) &&
+        mounted) {
+      if (input.text.trim() == text) input.clear();
+      setState(() {
+        attachment = null;
+        detachedSource = false;
+      });
     }
   }
+
+  Future<void> attach(String kind) async {
+    final source = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MediaCapturePage(
+          controller: widget.controller,
+          semester: widget.semester,
+          kind: kind,
+          returnSource: true,
+        ),
+      ),
+    );
+    if (mounted && c.active && source != null) {
+      setState(() {
+        attachment = source;
+        detachedSource = false;
+        if (input.text.trim().isEmpty) input.text = '请根据这份通知整理安排，先给我预览';
+      });
+    }
+  }
+
+  void sourceView(Map source) => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) =>
+          SourceViewPage(controller: widget.controller, id: source['id']),
+    ),
+  );
 
   Future<void> history() async {
     await c.open(id: c.threadId);
@@ -173,6 +232,33 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                   ],
                 ),
               ),
+            if (currentSource != null)
+              ListTile(
+                dense: true,
+                leading: Icon(
+                  currentSource!['kind'] == 'image'
+                      ? Icons.image_outlined
+                      : Icons.mic_none,
+                ),
+                title: Text(
+                  '${currentSource!['text']}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: const Text('已核对的来源'),
+                onTap: () => sourceView(currentSource!),
+                trailing: IconButton(
+                  tooltip: '移除本次附件',
+                  onPressed: c.busy
+                      ? null
+                      : () => setState(() {
+                          attachment = null;
+                          detachedSource = true;
+                          if (input.text == '请根据这份通知整理安排，先给我预览') input.clear();
+                        }),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
             Container(
               padding: const EdgeInsets.fromLTRB(16, 10, 12, 12),
               decoration: const BoxDecoration(
@@ -182,6 +268,16 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  PopupMenuButton<String>(
+                    tooltip: '图片或语音',
+                    enabled: !c.busy && !c.processing,
+                    onSelected: attach,
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'image', child: Text('图片通知')),
+                      PopupMenuItem(value: 'audio', child: Text('语音输入')),
+                    ],
+                  ),
                   Expanded(
                     child: TextField(
                       controller: input,
@@ -257,6 +353,15 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 ),
               ],
             ),
+          if (run['source'] is Map)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => sourceView(run['source']),
+                icon: const Icon(Icons.description_outlined, size: 17),
+                label: const Text('查看原始来源'),
+              ),
+            ),
           if ((run['answer'] ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -266,7 +371,10 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               ),
             ),
           for (final card in rows(run['cards'])) factCard(card),
-          if (p is Map) previewCard(run, Map<String, dynamic>.from(p)),
+          if (p is Map)
+            p['kind'] == 'plan'
+                ? planPreview(run, Map<String, dynamic>.from(p))
+                : previewCard(run, Map<String, dynamic>.from(p)),
           if (run['error'] != null)
             Text(
               run['error'],
@@ -287,20 +395,93 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget panel(Widget child, {Color color = Colors.white}) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
+  Widget panel(Widget child, {Color color = Colors.white}) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Material(
       color: color,
-      border: Border.all(color: CampusColors.line),
-      borderRadius: BorderRadius.circular(22),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: CampusColors.line),
+      ),
+      child: Padding(padding: const EdgeInsets.all(18), child: child),
     ),
-    child: child,
   );
 
   Widget factCard(Map<String, dynamic> card) {
     final d = Map<String, dynamic>.from(card['data'] ?? {});
     final kind = card['kind'];
+    if (kind == 'insights') {
+      final summary = Map<String, dynamic>.from(d['summary'] ?? {}),
+          filters = Map<String, dynamic>.from(d['filters'] ?? {});
+      final link = Uri(
+        path: '/insights',
+        queryParameters: {
+          'from': '${d['from_date']}',
+          'to': '${d['to_date']}',
+          if (filters['category_id'] != null)
+            'category': '${filters['category_id']}',
+          if ((filters['tag_ids'] as List? ?? []).isNotEmpty)
+            'tags': (filters['tag_ids'] as List).join(','),
+        },
+      ).toString();
+      return panel(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '统计依据',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+            ),
+            Text(
+              '${d['from_date']} — ${d['to_date']}',
+              style: const TextStyle(color: CampusColors.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 15),
+            Wrap(
+              spacing: 22,
+              runSpacing: 12,
+              children: [
+                metric(
+                  '固定安排',
+                  insightHours(summary['fixed_scheduled_minutes']),
+                ),
+                metric(
+                  '个人计划',
+                  insightHours(summary['personal_planned_minutes']),
+                ),
+                metric('实际记录', insightHours(summary['actual_minutes'])),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () => context.push(link),
+              icon: const Icon(Icons.bar_chart),
+              label: const Text('查看这组统计'),
+            ),
+          ],
+        ),
+        color: const Color(0xFFF0ECFF),
+      );
+    }
+    if (kind == 'planning_result') {
+      return panel(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '暂时无法生成可保存的计划',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ),
+            for (final message in (d['messages'] as List? ?? []))
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text('$message'),
+              ),
+          ],
+        ),
+      );
+    }
     if (kind == 'calendar' || kind == 'records') {
       final entries = rows(d[kind == 'calendar' ? 'entries' : 'records']);
       return panel(
@@ -332,7 +513,21 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                           ? ' · ${e['location']}'
                           : ''),
                 ),
-                trailing: const Icon(Icons.chevron_right, size: 20),
+                trailing:
+                    c.runs.isNotEmpty &&
+                        (c.runs.last['ambiguous_ids'] as List? ?? []).contains(
+                          e['id'],
+                        )
+                    ? TextButton(
+                        onPressed: c.busy || c.processing
+                            ? null
+                            : () => submit(
+                                '选择「${e['title']}」（${entryTime(e)}），继续刚才的操作。',
+                                selectedRecordIds: [e['id']],
+                              ),
+                        child: const Text('选这条'),
+                      )
+                    : const Icon(Icons.chevron_right, size: 20),
                 onTap: () => openRecord(e),
               ),
             if (rows(d['undated']).isNotEmpty)
@@ -686,5 +881,135 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       return value.map((v) => v is Map ? v['name'] : v).join('、');
     }
     return '$value';
+  }
+
+  Widget planPreview(Map<String, dynamic> run, Map<String, dynamic> preview) {
+    final result = Map<String, dynamic>.from(preview['after']);
+    final blocks = rows(result['blocks']);
+    final tasks = {
+      for (final t in rows(preview['before']?['tasks'])) t['id']: t['title'],
+    };
+    final previous = {
+      for (final b in rows(preview['before']?['blocks'])) b['id']: b,
+    };
+    final replan = preview['action'] == 'replan';
+    final changed = replan
+        ? blocks
+              .where((b) => previous[b['id']]?['start_at'] != b['start_at'])
+              .toList()
+        : blocks;
+    final missing = result['unarranged_minutes'] as num? ?? 0;
+    final pending = run['status'] == 'needs_confirmation';
+    final partial = missing > 0;
+    return panel(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                run['status'] == 'applied'
+                    ? Icons.check_circle
+                    : Icons.event_note_rounded,
+                color: CampusColors.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  run['status'] == 'applied'
+                      ? '已保存个人计划'
+                      : replan
+                      ? '调整个人计划'
+                      : '个人计划预览',
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            replan ? '${changed.length}段计划将调整时间' : '新增${blocks.length}段个人计划',
+          ),
+          for (final b in changed)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${b['title'] ?? tasks[b['item_id']] ?? '个人任务'}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  if (replan && previous[b['id']] != null)
+                    Text(
+                      entryTime(previous[b['id']]!),
+                      style: const TextStyle(
+                        color: CampusColors.muted,
+                        decoration: TextDecoration.lineThrough,
+                        fontSize: 12,
+                      ),
+                    ),
+                  Text(entryTime(b), style: const TextStyle(fontSize: 13)),
+                ],
+              ),
+            ),
+          if (partial)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF0D6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text('还有$missing分钟没有排入日程。已有安排不会因此被自动延长。'),
+            ),
+          if (pending && partial)
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('先保存能安排的部分', style: TextStyle(fontSize: 14)),
+              value: partialAcknowledged.contains(run['id']),
+              onChanged: c.busy
+                  ? null
+                  : (v) => setState(() {
+                      v == true
+                          ? partialAcknowledged.add(run['id'])
+                          : partialAcknowledged.remove(run['id']);
+                    }),
+            ),
+          if (pending)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: c.busy ? null : () => c.decide(run, false),
+                    child: const Text('暂不安排'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    key: const Key('agent-plan-confirm'),
+                    onPressed:
+                        c.busy ||
+                            (partial &&
+                                !partialAcknowledged.contains(run['id']))
+                        ? null
+                        : () => c.decide(run, true),
+                    child: Text(
+                      partial
+                          ? '确认部分安排'
+                          : replan
+                          ? '确认调整'
+                          : '确认安排',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
   }
 }

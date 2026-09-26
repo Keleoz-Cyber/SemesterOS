@@ -11,6 +11,168 @@ import 'ui_polish_test.dart' show mount, capture, loadPreviewFonts;
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
+  testWidgets('record selection respects removal of the current media source', (
+    tester,
+  ) async {
+    final f = ScheduleFixture();
+    final old = f.api.dio.httpClientAdapter as ControlledTransport;
+    Map<String, dynamic>? sent;
+    f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+      if (r.path.contains('/agent/threads?')) {
+        return body([
+          {'id': 't', 'title': '选择组会'},
+        ]);
+      }
+      if (r.path.endsWith('/agent/threads/t')) {
+        return body({
+          'runs': [
+            {
+              'id': 'r',
+              'status': 'completed',
+              'text': '改组会',
+              'answer': '请选出要修改的记录',
+              'source': {
+                'id': 'media',
+                'version': 1,
+                'kind': 'image',
+                'text': '原通知',
+              },
+              'ambiguous_ids': ['e'],
+              'cards': [
+                {
+                  'kind': 'records',
+                  'data': {
+                    'records': [
+                      {
+                        'id': 'e',
+                        'resource_type': 'event',
+                        'title': '组会',
+                        'date': '2026-10-01',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        });
+      }
+      if (r.path.endsWith('/turns')) {
+        sent = Map<String, dynamic>.from(r.data);
+        return body({
+          'id': 'new',
+          'status': 'completed',
+          'text': '已选择',
+          'cards': [],
+        });
+      }
+      return old.respond(r);
+    });
+    await tester.runAsync(() => f.c.bind('s'));
+    await mount(
+      tester,
+      AgentPage(controller: f.c, semester: {'id': 's', 'name': '学期'}),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 80)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('移除本次附件'));
+    await tester.pump();
+    await ioTap(tester, find.text('选这条'));
+    expect(sent?['detach_source'], isTrue);
+    expect(sent?.containsKey('source_id'), isFalse);
+    expect(sent?['selected_record_ids'], ['e']);
+    await tester.pumpWidget(const SizedBox());
+    f.c.dispose();
+  });
+  testWidgets(
+    'partial plan requires acknowledging unfinished work before confirm',
+    (tester) async {
+      final f = ScheduleFixture();
+      final old = f.api.dio.httpClientAdapter as ControlledTransport;
+      var confirmations = 0;
+      final run = <String, dynamic>{
+        'id': 'r',
+        'status': 'needs_confirmation',
+        'text': '先安排能完成的部分',
+        'cards': [],
+        'preview': {
+          'kind': 'plan',
+          'action': 'schedule',
+          'token': 'bound',
+          'before': {
+            'tasks': [
+              {'id': 't', 'title': 'Java报告'},
+            ],
+            'blocks': [],
+          },
+          'after': {
+            'unarranged_minutes': 30,
+            'blocks': [
+              {
+                'item_id': 't',
+                'start_at': '2026-10-01T09:00:00+08:00',
+                'end_at': '2026-10-01T10:00:00+08:00',
+                'minutes': 60,
+              },
+            ],
+          },
+        },
+      };
+      f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.path.contains('/agent/threads?')) {
+          return body([
+            {'id': 't', 'title': '安排'},
+          ]);
+        }
+        if (r.path.endsWith('/agent/threads/t')) {
+          return body({
+            'runs': [run],
+          });
+        }
+        if (r.path.endsWith('/decision')) {
+          confirmations++;
+          return body({
+            ...run,
+            'status': 'applied',
+            'receipt': {'semester_id': 's', 'revision': 1},
+          });
+        }
+        return old.respond(r);
+      });
+      await tester.runAsync(() => f.c.bind('s'));
+      await mount(
+        tester,
+        AgentPage(controller: f.c, semester: {'id': 's', 'name': '学期'}),
+      );
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 80)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('30分钟没有排入日程'), findsOneWidget);
+      await capture(tester, 'agent-plan-preview');
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('agent-plan-confirm')))
+            .onPressed,
+        isNull,
+      );
+      await tester.ensureVisible(find.text('先保存能安排的部分'));
+      await tester.tap(find.text('先保存能安排的部分'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('agent-plan-confirm')))
+            .onPressed,
+        isNotNull,
+      );
+      await ioTap(tester, find.byKey(const Key('agent-plan-confirm')));
+      expect(confirmations, 1);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+    },
+  );
   test(
     'restoring saved receipt refreshes reminders after lost confirmation response',
     () async {

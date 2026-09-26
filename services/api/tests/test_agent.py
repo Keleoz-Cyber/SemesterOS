@@ -259,3 +259,91 @@ def test_same_name_search_cannot_silently_pick_one_event(client):
     run(client,model)
     value=client.get('/api/v1/agent/runs/'+req['id'],headers=h).json()
     assert value['status']=='completed' and value['preview'] is None
+    req=turn(client,h,tid,'就改它吧','vague-followup')
+    def followup(m,t):
+        if m[-1]['role']=='user':return call('prepare_event',{'action':'update','event_id':first['id'],'fields':{'location':'6302'}})
+        assert json.loads(m[-1]['content'])['error']['code']=='AMBIGUOUS_TARGET'
+        return {'role':'assistant','content':'请先选出要修改的组会。'}
+    run(client,followup)
+    value=client.get('/api/v1/agent/runs/'+req['id'],headers=h).json()
+    assert value['status']=='completed' and value['preview'] is None
+    selected=client.post(f'/api/v1/agent/threads/{tid}/turns',headers=h,json={
+        'text':'选择这一条，继续修改地点','request_id':'picked','selected_record_ids':[first['id']]}).json()
+    run(client,lambda m,t:call('prepare_event',{'action':'update','event_id':first['id'],'fields':{'location':'6302'}}))
+    value=client.get('/api/v1/agent/runs/'+selected['id'],headers=h).json()
+    assert value['status']=='needs_confirmation' and value['preview']['target_id']==first['id']
+
+
+def test_agent_media_keeps_source_and_rejects_changed_source_before_apply(client):
+    from app.models import MediaSource
+    from sqlalchemy.orm import Session
+    account,h=register(client);s=semester(client,h);tid=thread(client,h,s['id'])
+    with Session(client.app.state.engine,expire_on_commit=False) as db:
+        source=MediaSource(user_id=account['user']['id'],semester_id=s['id'],upload_key='synthetic',input_hash='0'*64,
+            kind='image',mime='image/png',size=1,storage_key='synthetic.png',status='recognized',text='10月2日17点到18点组会',
+            original_text='10月2日17点到18点组会',reference_at='2026-09-27T00:00:00+00:00',created_at='2026-09-27T00:00:00+00:00')
+        db.add(source);db.commit();source_id=source.id
+    body={'text':'请根据这份通知记录日程，先给我预览','request_id':'media-turn','source_id':source_id,'source_version':1}
+    response=client.post(f'/api/v1/agent/threads/{tid}/turns',headers=h,json=body)
+    assert response.status_code==202,response.text
+    req=response.json()
+    def model(m,t):
+        assert source.text in json.dumps(m,ensure_ascii=False)
+        return call('prepare_event',{'action':'create','fields':{'title':'组会','time':{'precision':'exact','at':'2026-10-02T17:00:00+08:00','end_at':'2026-10-02T18:00:00+08:00'}}})
+    run(client,model)
+    url='/api/v1/agent/runs/'+req['id'];p=client.get(url,headers=h).json()['preview']
+    assert p['source']['id']==source_id
+    with Session(client.app.state.engine) as db:
+        r=db.get(MediaSource,source_id);r.version=2;db.commit()
+    assert client.post(url+'/decision',headers=h,json={'decision':'confirm','token':p['token']}).status_code==409
+    assert revision(client,h,s['id'])==0
+    assert client.post(f'/api/v1/agent/threads/{tid}/turns',headers=h,json={**body,'source_version':2}).status_code==409
+
+
+def test_media_source_survives_clarification_and_stops_after_application(client):
+    from app.models import MediaSource
+    from sqlalchemy.orm import Session
+    account,h=register(client);s=semester(client,h);tid=thread(client,h,s['id'])
+    with Session(client.app.state.engine,expire_on_commit=False) as db:
+        source=MediaSource(user_id=account['user']['id'],semester_id=s['id'],upload_key='clarify',input_hash='0'*64,
+            kind='audio',mime='audio/wav',size=1,storage_key='synthetic.wav',status='recognized',text='明天下午组会',
+            original_text='明天下午组会',reference_at='2026-09-27T00:00:00Z',created_at='2026-09-27T00:00:00Z')
+        db.add(source);db.commit();source_id=source.id
+    response=client.post(f'/api/v1/agent/threads/{tid}/turns',headers=h,json={
+        'text':'整理这份通知','request_id':'media','source_id':source_id,'source_version':1})
+    assert response.status_code==202
+    run(client,lambda m,t:{'role':'assistant','content':'组会几点开始、几点结束？'})
+    req=turn(client,h,tid,'下午4点到5点','clarify')
+    run(client,lambda m,t:call('prepare_event',{'action':'create','fields':{'title':'组会','time':{
+        'precision':'exact','at':'2026-09-28T16:00:00+08:00','end_at':'2026-09-28T17:00:00+08:00'}}}))
+    url='/api/v1/agent/runs/'+req['id'];p=client.get(url,headers=h).json()['preview']
+    assert p['source']['id']==source_id
+    result=client.post(url+'/decision',headers=h,json={'decision':'confirm','token':p['token']})
+    assert result.status_code==200,result.text
+    assert result.json()['receipt']['event']['source_id']==source_id
+    assert result.json()['receipt']['event']['source_text']=='明天下午组会'
+    next_run=turn(client,h,tid,'另记一件事','next')
+    assert next_run['source'] is None
+
+
+def test_agent_assignment_omitted_category_keeps_study_default(client):
+    _,h=register(client);s=semester(client,h);tid=thread(client,h,s['id']);req=turn(client,h,tid,'记录数学作业')
+    run(client,lambda m,t:call('prepare_item',{'fields':{'kind':'assignment','title':'数学作业'}}))
+    url='/api/v1/agent/runs/'+req['id'];p=client.get(url,headers=h).json()['preview']
+    result=client.post(url+'/decision',headers=h,json={'decision':'confirm','token':p['token']})
+    assert result.status_code==200,result.text
+    assert result.json()['receipt']['item']['category_id']=='study'
+
+
+def test_agent_semester_analysis_reuses_canonical_statistics(client):
+    _,h=register(client);s=semester(client,h);create_event(client,h,s['id']);tid=thread(client,h,s['id'])
+    req=turn(client,h,tid,'本学期科研安排和实际记录各有多少时间？')
+    def model(m,t):
+        if m[-1]['role']=='user':return call('query_insights',{'scope':'semester','category_id':'research'})
+        value=json.loads(m[-1]['content'])
+        assert value['from_date']=='2026-08-31' and value['to_date']=='2027-01-17'
+        assert value['summary']['fixed_scheduled_minutes']==60 and value['summary']['actual_minutes'] is None
+        return {'role':'assistant','content':'科研固定安排有1小时；还没有实际投入记录。'}
+    run(client,model)
+    result=client.get('/api/v1/agent/runs/'+req['id'],headers=h).json()
+    assert result['status']=='completed' and result['cards'][0]['kind']=='insights'

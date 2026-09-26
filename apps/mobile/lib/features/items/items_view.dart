@@ -35,9 +35,9 @@ class _ItemsViewState extends State<ItemsView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const CampusHero(
-            eyebrow: '从记录开始',
+            eyebrow: '计划',
             title: '我的事项',
-            subtitle: '作业、考试和个人任务\n记下来，也记得提醒',
+            subtitle: '作业、考试与个人任务',
           ),
           RiskOverview(
             controller: c,

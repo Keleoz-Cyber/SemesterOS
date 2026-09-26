@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/features/calendar/calendar_panel.dart';
 import 'package:semester_os/features/calendar/event_form.dart';
+import 'package:semester_os/features/timetable/shell_page.dart';
 import 'package:semester_os/features/items/capture_page.dart';
 import 'schedule_flow_test.dart' show ScheduleFixture;
 import 'api_session_test.dart' show ControlledTransport, body;
@@ -33,6 +34,52 @@ class ClockedCalendarApp extends AppController {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
+  testWidgets(
+    'tab return preserves calendar filter without refetching the same week',
+    (tester) async {
+      final f = ScheduleFixture();
+      final old = f.api.dio.httpClientAdapter as ControlledTransport;
+      var reads = 0;
+      f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.path.contains('/calendar?')) {
+          reads++;
+          return body({
+            'semester_id': 's',
+            'revision': 1,
+            'entries': [],
+            'undated': [],
+          });
+        }
+        return old.respond(r);
+      });
+      final app =
+          AppController(f.api, MemoryStore(), clearSchoolSession: () async {})
+            ..semester = semester()
+            ..week = 4
+            ..ready = true;
+      await tester.runAsync(() => f.c.bind('s'));
+      await mount(tester, ShellPage(controller: app, items: f.c));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 80)),
+      );
+      await tester.pumpAndSettle();
+      await ioTap(tester, find.text('日程').last);
+      await ioTap(tester, find.widgetWithText(ChoiceChip, '活动'));
+      final before = reads;
+      await ioTap(tester, find.text('今日').last);
+      await ioTap(tester, find.text('日程').last);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '活动'))
+            .selected,
+        isTrue,
+      );
+      expect(reads, before);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+      app.dispose();
+    },
+  );
   testWidgets(
     'AI fixed activity opens the event confirmation instead of a task deadline form',
     (tester) async {

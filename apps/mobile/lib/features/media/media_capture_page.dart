@@ -33,12 +33,14 @@ class MediaCapturePage extends StatefulWidget {
   final Map<String, dynamic> semester;
   final String kind;
   final MediaInput? input;
+  final bool returnSource;
   const MediaCapturePage({
     super.key,
     required this.controller,
     required this.semester,
     this.kind = 'image',
     this.input,
+    this.returnSource = false,
   });
   @override
   State<MediaCapturePage> createState() => _MediaCapturePageState();
@@ -465,6 +467,15 @@ class _MediaCapturePageState extends State<MediaCapturePage>
     try {
       if (source != null || !manual) await saveText();
       if (!mounted || !same || stamp != op) return;
+      if (widget.returnSource && !manual) {
+        if (dirty || source == null) throw Exception('文字还没保存，请重试');
+        final result = Map<String, dynamic>.from(source!);
+        await drafts.save(draftKey, null);
+        if (!mounted || !same || stamp != op) return;
+        finished = true;
+        Navigator.pop(context, result);
+        return;
+      }
       Map<String, dynamic>? candidate;
       if (!manual) {
         candidate = Map<String, dynamic>.from(
@@ -552,7 +563,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
         finished = true;
         autosave?.cancel();
         await drafts.save(draftKey, null);
-        if (mounted) Navigator.pop(context, true);
+        if (mounted) Navigator.pop(context, widget.returnSource ? null : true);
       }
     } catch (e) {
       if (mounted && same && stamp == op) setState(() => error = userError(e));
@@ -595,10 +606,12 @@ class _MediaCapturePageState extends State<MediaCapturePage>
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                const CampusHero(
-                  eyebrow: '保留来源',
-                  title: '从通知到事项',
-                  subtitle: '先识别内容，再对照核对\n只有你确认后才保存事项',
+                CampusHero(
+                  eyebrow: '识别通知',
+                  title: kind == 'image' ? '核对图片通知' : '核对录音文字',
+                  subtitle: widget.returnSource
+                      ? '核对文字和原消息时间，再交给助手'
+                      : '核对识别的文字，再保存事项',
                 ),
                 const SizedBox(height: 16),
                 const SoftNotice(

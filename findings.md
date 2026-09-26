@@ -33,3 +33,13 @@
 - 现有博客域名经过EdgeOne，Nginx已有客户端IP解析；学期OS转发必须重写X-Forwarded-For并对响应设置private/no-store，防止跨用户缓存。
 - API、worker及数据库实际空闲内存约155MB、605MB、44MB；原博客保持运行。已实测云端OCR/ASR和AI，不仅是健康检查。
 - 云端数据库没有迁移私人数据；只包含验证时创建的隔离合成账号，新账号学期为空。
+# 2026-09-27 成熟组件接入
+
+- 最终以calendar_view周视图和fl_chart柱／环图接入真实App，kalender未采用；没有同时使用两套同类实现。
+- 组件需要适配业务：时区、跨日切片、固定记录不可自动移动、公历周号和教学周区分、大字号表头高度、点击返回原始对象均由App核查。
+- 实测工具模型能复用原CP-SAT做规划／重排，统计统一从insights获取；调用成功与持久化成功分开，由服务端确认回执表达。
+- 回归发现的边界见progress.md与24；没有进行APK构建、真机测量或云端更新。
+
+- 官方pub.dev核查：calendar_view 2.0.0提供周／日／月、布局与事件控制，MIT且要求精确锁版本；kalender 0.32.0仍为1.0前候选，有时区、缩放和拖拽，先不同时引入两套。
+- fl_chart 1.2.0提供柱／折线／饼图和触摸、内置动画，MIT；优先用于统计展示，不重写图表绘制。库具备功能不等于本App已通过大字号和触控验证。
+- 来源：https://pub.dev/packages/calendar_view 、https://pub.dev/packages/kalender 、https://pub.dev/packages/fl_chart 。后续以真实Flutter控件测试选择，不使用官网下载量作为可靠性证明。

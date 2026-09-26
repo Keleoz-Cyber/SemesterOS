@@ -8,6 +8,14 @@ CATEGORIES = [{'id': key, 'name': name} for key, name in (
     ('study', '学业'), ('research', '科研'), ('affairs', '校园事务'), ('life', '生活'))]
 
 
+def classification_request(body):
+    # Omission means default/preserve, while explicit null/[] means clear.
+    # Keep only these fields presence-sensitive; retain normalized defaults for
+    # every other field so existing equivalent retries still share a fingerprint.
+    omitted = {'category_id', 'tags'} - body.model_fields_set
+    return body.model_dump(mode='json', exclude=omitted)
+
+
 def event_rows(db, user, sid=None, active=True):
     q = select(CalendarEvent).where(CalendarEvent.user_id == user.id)
     if sid is not None: q = q.where(CalendarEvent.semester_id == sid)
@@ -47,11 +55,17 @@ def reminder_values(row):
     return result
 
 
-def event_value(db, row):
+def classification_value(db, row):
     ids = row.payload.get('tag_ids', [])
     by_id = {t.id: {'id': t.id, 'name': t.name} for t in db.scalars(select(CalendarTag).where(
         CalendarTag.user_id == row.user_id, CalendarTag.id.in_(ids)))} if ids else {}
+    default = 'study' if row.payload.get('kind') in ('assignment', 'exam') else None
+    return {'category_id': row.payload.get('category_id', default),
+            'tags': [by_id[i] for i in ids if i in by_id]}
+
+
+def event_value(db, row):
     return {**{k: v for k, v in row.payload.items() if k != 'tag_ids'}, 'id': row.id,
             'semester_id': row.semester_id, 'version': row.version, 'lifecycle': row.lifecycle,
-            'control': 'fixed', 'tags': [by_id[i] for i in ids if i in by_id],
+            'control': 'fixed', **classification_value(db, row),
             'reminders': reminder_values(row), 'created_at': row.created_at, 'updated_at': row.updated_at}

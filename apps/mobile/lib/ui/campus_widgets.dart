@@ -128,15 +128,17 @@ class SoftNotice extends StatelessWidget {
 
 class CampusHero extends StatelessWidget {
   final String eyebrow, title, subtitle;
+  final bool illustrated;
   const CampusHero({
     super.key,
     required this.eyebrow,
     required this.title,
     required this.subtitle,
+    this.illustrated = false,
   });
   @override
   Widget build(BuildContext context) {
-    final art = MediaQuery.textScalerOf(context).scale(1) <= 1.3;
+    final art = illustrated && MediaQuery.textScalerOf(context).scale(1) <= 1.3;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -164,15 +166,16 @@ class CampusHero extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  eyebrow,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF626A93),
-                    fontWeight: FontWeight.w600,
+                if (eyebrow.isNotEmpty)
+                  Text(
+                    eyebrow,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF626A93),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
+                if (eyebrow.isNotEmpty) const SizedBox(height: 10),
                 Text(
                   title,
                   style: const TextStyle(
@@ -182,15 +185,16 @@ class CampusHero extends StatelessWidget {
                     height: 1.2,
                   ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 1.5,
-                    color: Color(0xFF606D8C),
+                if (subtitle.isNotEmpty) const SizedBox(height: 10),
+                if (subtitle.isNotEmpty)
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: Color(0xFF606D8C),
+                    ),
                   ),
-                ),
               ],
             ),
           ),

@@ -1,5 +1,6 @@
 import '../features/calendar/event_form.dart';
 import '../features/agent/agent_page.dart';
+import '../features/insights/insights_page.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -11,6 +12,7 @@ import '../features/accounts/auth_page.dart';
 import '../features/semester/semester_page.dart';
 import '../features/timetable/shell_page.dart';
 import '../features/import/import_page.dart';
+import '../features/import/school_picker.dart';
 import '../features/import/manual_page.dart';
 import '../features/items/items_controller.dart';
 import '../features/items/android_notifications.dart';
@@ -67,10 +69,24 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
       },
       routes: [
         GoRoute(
+          path: '/insights',
+          builder: (_, state) => controller.semester == null
+              ? SemesterPage(controller: controller)
+              : InsightsPage(
+                  controller: items,
+                  semester: controller.semester!,
+                  initialQuery: state.uri.queryParameters,
+                ),
+        ),
+        GoRoute(
           path: '/assistant',
           builder: (_, state) => controller.semester == null
               ? SemesterPage(controller: controller)
-              : AgentPage(controller: items, semester: controller.semester!),
+              : AgentPage(
+                  controller: items,
+                  semester: controller.semester!,
+                  initialMediaKind: state.uri.queryParameters['input'],
+                ),
         ),
         GoRoute(
           path: '/events/new',
@@ -139,6 +155,13 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
         ),
         GoRoute(
           path: '/import',
+          builder: (context, _) => SchoolPickerPage(
+            onSelect: () => context.push('/import/haut'),
+            onManual: () => context.push('/manual'),
+          ),
+        ),
+        GoRoute(
+          path: '/import/haut',
           builder: (_, _) => ImportPage(controller: controller),
         ),
         GoRoute(

@@ -92,7 +92,7 @@ class TodayView extends StatelessWidget {
           eyebrow:
               '${local.month}月${local.day}日 · 周${'一二三四五六日'[local.weekday - 1]}',
           title: '今天的安排',
-          subtitle: '第$week周\n把时间留给重要的事',
+          subtitle: '第$week周',
         ),
         const SizedBox(height: 14),
         Row(

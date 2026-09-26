@@ -35,9 +35,12 @@ class _ItemFormPageState extends State<ItemFormPage> {
       notes = TextEditingController(),
       source = TextEditingController(),
       reason = TextEditingController(),
+      tags = TextEditingController(),
       week = TextEditingController();
   late String kind, precision, certainty, priority;
   String? course;
+  String? categoryId;
+  bool categoryChosen = false;
   DateTime? date, endDate;
   TimeOfDay? time;
   DateTime? examEndAt, earliestAt;
@@ -55,6 +58,12 @@ class _ItemFormPageState extends State<ItemFormPage> {
         widget.initial ?? widget.candidate?['item'] ?? <String, dynamic>{};
     final t = data['time'] ?? {};
     kind = data['kind'] ?? widget.kind;
+    categoryId = data.containsKey('category_id')
+        ? data['category_id']
+        : (kind == 'task' ? null : 'study');
+    tags.text = (data['tags'] is List ? data['tags'] as List : [])
+        .map((t) => t is Map ? t['name'] : t)
+        .join('，');
     precision = t['precision'] ?? 'unknown';
     certainty = data['certainty'] ?? 'unknown';
     priority = data['priority'] ?? 'normal';
@@ -84,7 +93,16 @@ class _ItemFormPageState extends State<ItemFormPage> {
 
   @override
   void dispose() {
-    for (final c in [title, minutes, location, notes, source, reason, week]) {
+    for (final c in [
+      title,
+      minutes,
+      location,
+      notes,
+      source,
+      reason,
+      week,
+      tags,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -196,6 +214,14 @@ class _ItemFormPageState extends State<ItemFormPage> {
           : effort,
       'splittable': split,
       'priority': priority,
+      if (kind != 'exam') 'category_id': categoryId,
+      if (kind != 'exam')
+        'tags': tags.text
+            .split(RegExp('[,，\n]'))
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toSet()
+            .toList(),
       'location': location.text.trim(),
       'notes': notes.text.trim(),
       'source_text': source.text.trim(),
@@ -398,7 +424,12 @@ class _ItemFormPageState extends State<ItemFormPage> {
             ],
             onChanged: editing
                 ? null
-                : (value) => setState(() => kind = value!),
+                : (value) => setState(() {
+                    kind = value!;
+                    if (!categoryChosen) {
+                      categoryId = kind == 'task' ? null : 'study';
+                    }
+                  }),
           ),
           const SizedBox(height: 14),
           TextFormField(
@@ -625,6 +656,46 @@ class _ItemFormPageState extends State<ItemFormPage> {
             childrenPadding: const EdgeInsets.only(bottom: 16),
             children: [
               if (kind != 'exam') ...[
+                DropdownButtonFormField<String>(
+                  key: const Key('item-category'),
+                  initialValue: categoryId ?? 'unclassified',
+                  decoration: const InputDecoration(labelText: '分类'),
+                  items: [
+                    for (final e in {
+                      'study': '学业',
+                      'research': '科研',
+                      'affairs': '校园事务',
+                      'life': '生活',
+                      'unclassified': '未分类',
+                    }.entries)
+                      DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  ],
+                  onChanged: (value) => setState(() {
+                    categoryChosen = true;
+                    categoryId = value == 'unclassified' ? null : value;
+                  }),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: tags,
+                  key: const Key('item-tags'),
+                  decoration: const InputDecoration(
+                    labelText: '标签',
+                    hintText: '例如：实验报告，社团；用逗号分隔',
+                  ),
+                  validator: (text) {
+                    final values = (text ?? '')
+                        .split(RegExp('[,，\n]'))
+                        .map((s) => s.trim())
+                        .where((s) => s.isNotEmpty)
+                        .toSet();
+                    if (values.length > 12 || values.any((s) => s.length > 24)) {
+                      return '最多12个标签，每个不超过24字';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
                   key: const Key('task-start-policy'),
                   initialValue: startPolicy,

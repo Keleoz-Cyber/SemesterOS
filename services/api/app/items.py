@@ -9,6 +9,7 @@ from .item_schemas import ItemCreate, ItemEdit, LifecycleInput, ReminderCreate, 
 from .models import CourseMeeting, ItemRevision, ReminderRule, StudyItem, TextCandidate, User
 from .reminder_rules import anchor_at, evaluate, utcnow
 from .plan_store import preview_blocks,cancel_for_change
+from .event_store import tag_ids, classification_value, classification_request
 
 router = APIRouter()
 
@@ -49,7 +50,8 @@ def serialize_rule(rule, item, peers=()):
 def serialize_item(db, item):
     anchor = anchor_at(item.payload)
     rules = rules_for(db, item)
-    return {**item.payload, 'id': item.id, 'semester_id': item.semester_id, 'version': item.version,
+    return {**{k: v for k, v in item.payload.items() if k != 'tag_ids'},
+            **classification_value(db, item), 'id': item.id, 'semester_id': item.semester_id, 'version': item.version,
             'lifecycle': item.lifecycle, 'review_state': 'confirmed',
             'control': 'authoritative' if item.payload['kind'] == 'exam' else 'plannable',
             'anchor_at': anchor.isoformat() if anchor else None, 'created_at': item.created_at,
@@ -65,7 +67,10 @@ def checked_payload(db, user, body):
     s = owned_semester(db, user, body.semester_id, lock=True)
     if body.time.week and body.time.week > s.total_weeks:
         error(422, 'INVALID_WEEK', '周次超出当前学期，请核对')
-    data = body.model_dump(mode='json', exclude={'reminders', 'expected_version', 'change_reason'})
+    data = body.model_dump(mode='json', exclude={'reminders', 'expected_version', 'change_reason', 'tags'})
+    data['tag_ids'] = tag_ids(db, user, body.tags)
+    if 'category_id' not in body.model_fields_set:
+        data['category_id'] = 'study' if body.kind in ('assignment', 'exam') else None
     data['course_title'] = ''
     if body.source_id:
         from .media import owned_source
@@ -145,7 +150,7 @@ def create_item(body: ItemCreate, user: User = Depends(current_user), db: Sessio
 
 def create_item_command(db, user, body, idempotency_key=None):
     data, s = checked_payload(db, user, body)
-    request = body.model_dump(mode='json')
+    request = classification_request(body)
     cached = replay(db, user, 'create-item', idempotency_key, request)
     if cached is not None:
         return cached
@@ -187,7 +192,7 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
     item = owned_item(db, user, item_id, lock=True)
     if item.semester_id != body.semester_id or item.payload['kind'] != body.kind:
         error(422, 'IMMUTABLE_KIND', '不能通过编辑改变事项所属学期或类型')
-    request = body.model_dump(mode='json')
+    request = classification_request(body)
     operation = 'edit-item/' + item_id
     cached = replay(db, user, operation, idempotency_key, request)
     if cached is not None:
@@ -196,6 +201,9 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
     data, s = checked_payload(db, user, body)
     # Older clients do not know the new optional planning fields. Preserve those
     # unless this request explicitly changed them, rather than erasing user choices.
+    for field, stored in (('category_id', 'category_id'), ('tags', 'tag_ids')):
+        if field not in body.model_fields_set and stored in item.payload:
+            data[stored] = item.payload[stored]
     if not {'start_policy', 'earliest_start_at'} & body.model_fields_set:
         for key in ('start_policy', 'earliest_start_at'):
             if key in item.payload:

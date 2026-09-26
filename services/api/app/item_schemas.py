@@ -87,6 +87,15 @@ class ItemFields(Input):
     source_text: str = Field(default='', max_length=10000)
     candidate_id: str | None = Field(default=None, max_length=36)
     source_id:str|None=Field(default=None,max_length=36)
+    category_id: Literal['study', 'research', 'affairs', 'life'] | None = None
+    tags: list[str] = Field(default_factory=list, max_length=12)
+
+    @field_validator('tags')
+    @classmethod
+    def normalize_tags(cls, tags):
+        # Import lazily: event time schemas already depend on ItemTime.
+        from .event_schemas import EventFields
+        return EventFields.normalize_tags(tags)
 
     @field_validator('earliest_start_at')
     @classmethod
