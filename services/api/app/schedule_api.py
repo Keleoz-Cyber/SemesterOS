@@ -1,3 +1,4 @@
+from .event_store import calendar_snapshot
 from datetime import timedelta
 from math import floor
 from fastapi import APIRouter,Depends,Header,Request
@@ -34,7 +35,7 @@ def solver_slot(app,user_id):
 
 
 def snapshot(db,user,s):
-    calendar={'first_monday':s.first_monday,'total_weeks':s.total_weeks,'periods':s.periods}
+    calendar=calendar_snapshot(db,user,s)
     preferences=availability_value(availability_row(db,user,s.id),s.revision)
     from .occurrences import effective_courses
     courses=effective_courses(db,user,s)

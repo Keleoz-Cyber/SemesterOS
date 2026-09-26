@@ -35,6 +35,8 @@ String reasonLabel(String code) =>
       'needs_deadline': '请补充截止时间，或确认在当天结束前完成',
       'needs_start': '确认任务最早什么时候可以开始',
       'needs_deadline_confirmation': '截止时间尚未确定，请先核实',
+      'uncertain_fixed': '附近有尚未确定的固定日程',
+      'needs_fixed_time': '固定日程缺少完整时间，请先核对',
       'needs_exam_time': '相关考试缺少明确开始或结束时间',
       'outside_semester': '截止超过当前学期分析范围',
       'analysis_limit': '事项超过本次分析上限，暂未完成分析',

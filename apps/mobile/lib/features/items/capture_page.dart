@@ -1,3 +1,4 @@
+import '../calendar/event_form.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -69,15 +70,21 @@ class _CapturePageState extends State<CapturePage> {
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => ItemFormPage(
-          controller: widget.controller,
-          semester: widget.semester,
-          candidate:
-              candidate ??
-              {
-                'item': {'source_text': text.text},
-              },
-        ),
+        builder: (_) => candidate?['intent'] == 'create_event'
+            ? EventFormPage(
+                controller: widget.controller,
+                semester: widget.semester,
+                candidate: candidate,
+              )
+            : ItemFormPage(
+                controller: widget.controller,
+                semester: widget.semester,
+                candidate:
+                    candidate ??
+                    {
+                      'item': {'source_text': text.text},
+                    },
+              ),
       ),
     );
     if (mounted && result == true) {
@@ -133,7 +140,10 @@ class _CapturePageState extends State<CapturePage> {
         );
         return;
       }
-      if (candidate['intent'] != 'create_item' || candidate['item'] == null) {
+      if (!((candidate['intent'] == 'create_item' &&
+              candidate['item'] != null) ||
+          (candidate['intent'] == 'create_event' &&
+              candidate['event'] != null))) {
         setState(
           () => error =
               '${(candidate['questions'] as List? ?? []).join('；')}\n请明确一条事项；若是修改已有内容，可以进入下方修改入口。',

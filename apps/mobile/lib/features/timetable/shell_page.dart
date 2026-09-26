@@ -1,3 +1,4 @@
+import '../calendar/calendar_panel.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +22,7 @@ class ShellPage extends StatefulWidget {
 }
 
 class _ShellPageState extends State<ShellPage> {
+  final calendarKey = GlobalKey<CalendarPanelState>();
   int tab = 0;
   bool grid = true;
   Timer? clock;
@@ -98,6 +100,7 @@ class _ShellPageState extends State<ShellPage> {
       await c.openSession();
     }
     await widget.items?.refresh();
+    await calendarKey.currentState?.reload();
   }
 
   Future<void> add() async {
@@ -116,7 +119,7 @@ class _ShellPageState extends State<ShellPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              '把事情放进学期',
+              '添加记录',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
@@ -130,6 +133,15 @@ class _ShellPageState extends State<ShellPage> {
               child: Column(
                 children: [
                   if (widget.items != null) ...[
+                    ListTile(
+                      leading: const Icon(Icons.event_available_outlined),
+                      title: const Text('添加日程'),
+                      subtitle: const Text('组会、活动和其他固定安排'),
+                      onTap: () {
+                        Navigator.pop(sheet);
+                        context.push('/events/new');
+                      },
+                    ),
                     ListTile(
                       leading: const Icon(Icons.tune),
                       title: const Text('用一句话修改事项 / 提醒'),
@@ -330,6 +342,9 @@ class _ShellPageState extends State<ShellPage> {
         c.semester!['revision'];
     switch (tab) {
       case 1:
+        if (widget.items != null) {
+          return CalendarPanel(key: calendarKey, app: c, items: widget.items!);
+        }
         return WeekView(
           semester: c.semester!,
           events: c.events,
@@ -391,6 +406,14 @@ class _ShellPageState extends State<ShellPage> {
           onManual: manual,
         );
       default:
+        if (widget.items != null) {
+          return CalendarPanel(
+            key: calendarKey,
+            app: c,
+            items: widget.items!,
+            todayOnly: true,
+          );
+        }
         return TodayView(
           itemsBlock: widget.items == null
               ? null
@@ -519,7 +542,7 @@ class _ShellPageState extends State<ShellPage> {
               NavigationDestination(
                 icon: Icon(Icons.calendar_month_outlined),
                 selectedIcon: Icon(Icons.calendar_month_rounded),
-                label: '课表',
+                label: '日程',
               ),
               NavigationDestination(
                 icon: Icon(Icons.check_box_outlined),

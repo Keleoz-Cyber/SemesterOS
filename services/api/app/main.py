@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from . import calendar_events
 from . import academics, auth, items, capture, planning, schedule_api, changes, change_parser, centers, exam_planning, media, operations
 from pathlib import Path
 from dotenv import dotenv_values
@@ -39,7 +40,7 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
                 except subprocess.TimeoutExpired:worker.kill();worker.wait()
             engine.dispose()
 
-    app = FastAPI(title="SemesterOS", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="SemesterOS", version="0.2.0", lifespan=lifespan)
     app.state.engine = engine
     from .media_files import root
     app.state.media_root=root()
@@ -82,8 +83,9 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
     def health():
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"status": "ok", "version": "0.1.0", "database": engine.dialect.name}
+        return {"status": "ok", "version": "0.2.0", "database": engine.dialect.name}
 
+    app.include_router(calendar_events.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(academics.router, prefix="/api/v1")
     app.include_router(items.router, prefix="/api/v1")

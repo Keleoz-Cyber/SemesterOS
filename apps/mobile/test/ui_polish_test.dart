@@ -206,12 +206,22 @@ void main() {
       expect(find.text('今天的安排'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await capture(tester, 'today');
-      await tester.tap(find.text('课表'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('日程'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('周日'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await capture(tester, 'timetable');
-      await tester.tap(find.text('日程'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SegmentedButton<bool>),
+          matching: find.text('日程'),
+        ),
+      );
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text('高等数学').first,
@@ -248,7 +258,12 @@ void main() {
         textScale: 2,
       );
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('课表'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('日程'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('已按较大字号显示日程列表，完整保留课程信息。'), findsOneWidget);
       expect(tester.takeException(), isNull);

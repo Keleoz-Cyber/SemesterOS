@@ -201,11 +201,22 @@ class TimetableGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final periods = List<Map<String, dynamic>>.from(semester['periods']);
-    final begin = int.parse(periods.first['start'].split(':')[0]);
-    final end = (int.parse(periods.last['end'].split(':')[0]) + 1).clamp(
-      begin + 1,
-      24,
+    final begin = events.fold<int>(
+      int.parse(periods.first['start'].split(':')[0]),
+      (value, e) => math.min(value, schoolTime(e['start_at']).hour),
     );
+    final end = events
+        .fold<int>(int.parse(periods.last['end'].split(':')[0]) + 1, (
+          value,
+          e,
+        ) {
+          final a = schoolTime(e['start_at']), b = schoolTime(e['end_at']);
+          return math.max(
+            value,
+            a.day != b.day ? 24 : b.hour + (b.minute > 0 ? 1 : 0),
+          );
+        })
+        .clamp(begin + 1, 24);
     const scale = .85;
     final height = (end - begin) * 60.0 * scale;
     final start = DateTime.parse(

@@ -90,7 +90,10 @@ def test_disabling_reminder_keeps_task_time_and_revision(client):
 
 def test_work_reduction_requires_explicit_future_block_and_locked_cancellation(client,monkeypatch):
     from test_schedule_api import setup as planning_setup,proposal,accept
+    from app import operations, schedule_api
     h,s,item=planning_setup(client,monkeypatch,minutes=120)
+    # The planning fixture freezes September 21; operations must share its clock.
+    monkeypatch.setattr(operations, 'utcnow', schedule_api.utcnow)
     original=proposal(client,h,s,item);assert accept(client,h,original).status_code==200
     plans=client.get(f"/api/v1/semesters/{s['id']}/plans",headers=h).json()['blocks']
     client.patch(f"/api/v1/plan-blocks/{plans[0]['id']}/lock",headers=h,json={'expected_version':1,'locked':True})

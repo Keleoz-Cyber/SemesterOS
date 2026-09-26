@@ -12,6 +12,43 @@ class Base(DeclarativeBase):
     pass
 
 
+class CalendarTag(Base):
+    __tablename__ = 'calendar_tags'
+    __table_args__ = (UniqueConstraint('user_id', 'normalized'), UniqueConstraint('user_id', 'id'))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    name: Mapped[str] = mapped_column(String(24))
+    normalized: Mapped[str] = mapped_column(String(100))
+
+
+class CalendarEvent(Base):
+    __tablename__ = 'calendar_events'
+    __table_args__ = (
+        ForeignKeyConstraint(['user_id', 'semester_id'], ['semesters.user_id', 'semesters.id']),
+        UniqueConstraint('user_id', 'id'),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    semester_id: Mapped[str] = mapped_column(String(36), index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    lifecycle: Mapped[str] = mapped_column(String(20), default='active')
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[str] = mapped_column(String(40))
+    updated_at: Mapped[str] = mapped_column(String(40))
+
+
+class CalendarEventRevision(Base):
+    __tablename__ = 'calendar_event_revisions'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'event_id'], ['calendar_events.user_id', 'calendar_events.id']),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    event_id: Mapped[str] = mapped_column(String(36), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    reason: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

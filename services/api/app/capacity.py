@@ -111,6 +111,14 @@ def calendar_context(semester, availability, courses, items, now):
             school.append((a, b, exam['id'], exam['title'] + ('（暂定预留）' if exam.get('certainty') != 'formal' else '')))
         if not complete or exam.get('certainty') != 'formal':
             uncertain.append((a, b, reserved and not complete, exam['id']))
+    for event in semester.get('fixed_events', []):
+        a, b = exam_window(event, semester_start, semester_end)
+        complete = event['time']['precision'] == 'exact' and event['time'].get('end_at') is not None
+        eid = 'event:' + event['id']
+        if complete:
+            school.append((a, b, eid, event['title']))
+        if not complete or event.get('certainty') != 'formal':
+            uncertain.append((a, b, not complete, eid))
     school = sorted(r for r in school if r[1] > begin and r[0] < semester_end)
     conflicts, active = [], []
     for row in school:
@@ -160,9 +168,9 @@ def analyze(semester, availability, courses, items, now, plans=()):
         unknown_exam = due is not None and any(a < due and b > release and missing for a, b, missing, _ in uncertain)
         tentative_exam = due is not None and any(a < due and b > release for a, b, _, _ in uncertain)
         if unknown_exam:
-            reasons.append('needs_exam_time')
+            reasons.append('needs_fixed_time' if any(a < due and b > release and missing and id.startswith('event:') for a,b,missing,id in uncertain) else 'needs_exam_time')
         if tentative_exam:
-            reasons.append('uncertain_exam')
+            reasons.append('uncertain_fixed' if any(a < due and b > release and id.startswith('event:') for a,b,_,id in uncertain) else 'uncertain_exam')
         missing = any(r.startswith('needs_') or r in ('outside_semester', 'analysis_limit') for r in reasons)
         can_count = availability.get('configured') and due is not None and due <= semester_end and policy != 'unconfirmed' and remaining is not None and item.get('certainty') == 'formal' and not limit
         before = total.minutes(release, due) if can_count else None
@@ -238,7 +246,8 @@ def analyze(semester, availability, courses, items, now, plans=()):
     return {'items':result, 'summary':{'level':level, 'active_task_count':len(tasks), 'incomplete_count':incomplete,
         'window_gap_minutes':critical['gap_minutes'] if critical else 0, 'critical_window':critical,
         'fixed_conflict_count':len(conflicts), 'configured':availability.get('configured', False),
-        'uncertain_exam_count':uncertain_count,
+        'uncertain_exam_count':sum(a < semester_end and b > begin and not id.startswith('event:') for a,b,_,id in uncertain),
+        'uncertain_event_count':sum(a < semester_end and b > begin and id.startswith('event:') for a,b,_,id in uncertain),
         'plan_conflict_count':len(plan_issues),
         'analysis_limited':limit, 'is_schedule':False}, 'fixed_conflicts':conflicts[:30],
         'plan_issues':plan_issues[:30], 'scope_end':iso(semester_end), 'computed_at':now.astimezone(timezone.utc).isoformat(),

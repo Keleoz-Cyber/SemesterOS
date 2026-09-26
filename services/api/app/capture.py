@@ -35,8 +35,9 @@ class CaptureInput(Input):
 
 
 class Parsed(Input):
-    intent: Literal['create_item', 'update_task', 'update_reminder', 'report_change', 'request_plan', 'clarify', 'unsupported']
+    intent: Literal['create_item', 'create_event', 'update_task', 'update_reminder', 'report_change', 'request_plan', 'clarify', 'unsupported']
     item: dict | None = None
+    event: dict | None = None
     evidence: dict[str, str] = Field(default_factory=dict, max_length=30)
     inferred_fields: list[str] = Field(default_factory=list, max_length=30)
     questions: list[str] = Field(default_factory=list, max_length=12)
@@ -64,6 +65,19 @@ def capture_text(body: CaptureInput, request: Request, user: User = Depends(curr
         if any(quote not in body.text for quote in parsed.evidence.values()):
             raise ValueError('证据未出现在原文')
         item = None
+        event = None
+        if parsed.event is not None and parsed.intent != 'create_event':
+            raise ValueError('非固定日程不能附带活动字段')
+        if parsed.intent == 'create_event':
+            from .event_schemas import EventFields
+            if parsed.item is not None or parsed.event is None:
+                raise ValueError('固定日程需要独立的活动字段')
+            event = EventFields.model_validate({**parsed.event, 'semester_id': s.id,
+                                               'expected_revision': s.revision}).model_dump(mode='json', exclude={'expected_revision'})
+            if event['time']['week'] and event['time']['week'] > s.total_weeks:
+                raise ValueError('周次越界')
+            event['source_text'] = body.text
+            event['candidate_id'] = None
         if parsed.intent == 'create_item':
             if parsed.item is None:
                 raise ValueError('新增缺少事项')
@@ -87,7 +101,7 @@ def capture_text(body: CaptureInput, request: Request, user: User = Depends(curr
             raise ValueError('非新增不能附带写入事项')
     except (ValidationError, ValueError, TypeError):
         error(502, 'INVALID_MODEL_OUTPUT', 'AI整理的内容还不完整，原文已保留。请重试或手动填写')
-    data = {'intent': parsed.intent, 'item': item, 'evidence': parsed.evidence,
+    data = {'intent': parsed.intent, 'item': item, 'event': event, 'evidence': parsed.evidence,
             'inferred_fields': parsed.inferred_fields, 'questions': parsed.questions,
             'reference_at': body.reference_at.isoformat(), 'metadata': metadata, 'review_state': 'pending'}
     if source is not None:

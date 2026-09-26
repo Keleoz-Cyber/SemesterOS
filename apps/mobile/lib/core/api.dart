@@ -7,10 +7,12 @@ class ApiFailure implements Exception {
   final String message;
   final bool unauthorized;
   final bool staleSession;
+  final int? statusCode;
   ApiFailure(
     this.message, {
     this.unauthorized = false,
     this.staleSession = false,
+    this.statusCode,
   });
   @override
   String toString() => message;
@@ -184,6 +186,7 @@ class SemesterApi {
               ? '服务暂时不可用，请稍后重试。已保存的内容不受影响。'
               : '暂时连接不上，请检查网络后重试。已保存的课表仍可查看。',
           unauthorized: e.response?.statusCode == 401 && authenticated,
+          statusCode: e.response?.statusCode,
         );
       }
     }

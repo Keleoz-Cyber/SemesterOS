@@ -1,3 +1,4 @@
+from .event_store import calendar_snapshot
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -49,7 +50,7 @@ def preview_availability(sid:str,body:AvailabilityInput,user:User=Depends(curren
 
 
 def preference_conflicts(db,user,s,payload):
-    calendar={'first_monday':s.first_monday,'total_weeks':s.total_weeks,'periods':s.periods}
+    calendar=calendar_snapshot(db,user,s)
     from .occurrences import effective_courses
     courses=effective_courses(db,user,s)
     items=[{**i.payload,'id':i.id,'lifecycle':i.lifecycle} for i in db.scalars(select(StudyItem).where(StudyItem.user_id==user.id,StudyItem.semester_id==s.id))]
@@ -94,7 +95,7 @@ def get_risk(sid:str,user:User=Depends(current_user),db:Session=Depends(get_db))
     # database lock, then run calculations without holding a transaction open.
     s=owned_semester(db,user,sid,lock=True)
     revision=s.revision
-    calendar={'first_monday':s.first_monday,'total_weeks':s.total_weeks,'periods':s.periods}
+    calendar=calendar_snapshot(db,user,s)
     preferences=availability_value(availability_row(db,user,sid),revision)
     from .occurrences import effective_courses
     courses=effective_courses(db,user,s)

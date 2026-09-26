@@ -1,3 +1,4 @@
+import '../features/calendar/event_form.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -64,6 +65,25 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
         return null;
       },
       routes: [
+        GoRoute(
+          path: '/events/new',
+          builder: (_, state) => controller.semester == null
+              ? SemesterPage(controller: controller)
+              : EventFormPage(
+                  controller: items,
+                  semester: controller.semester!,
+                ),
+        ),
+        GoRoute(
+          path: '/events/:id',
+          builder: (_, state) => controller.semester == null
+              ? SemesterPage(controller: controller)
+              : EventDetailPage(
+                  controller: items,
+                  semester: controller.semester!,
+                  eventId: state.pathParameters['id']!,
+                ),
+        ),
         GoRoute(
           path: '/operations',
           builder: (_, state) => OperationPage(
@@ -192,7 +212,13 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
     pendingNotification = null;
     if (pending.owner != items.owner) return;
     try {
-      final item = await items.get(pending.item);
+      final isEvent = pending.item.startsWith('event:');
+      final id = isEvent ? pending.item.substring(6) : pending.item;
+      final item = isEvent
+          ? Map<String, dynamic>.from(
+              await controller.api.request('GET', '/events/$id'),
+            )
+          : await items.get(id);
       if (!mounted || pending.owner != items.owner) return;
       final s = controller.semesters
           .where((s) => s['id'] == item['semester_id'])
@@ -202,7 +228,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
         await controller.selectSemester(s);
       }
       if (mounted && pending.owner == items.owner) {
-        router.push('/items/${pending.item}');
+        router.push(isEvent ? '/events/$id' : '/items/$id');
       }
     } catch (_) {
       /* An expired/foreign notification cannot expose an item. */

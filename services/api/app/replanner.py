@@ -22,7 +22,7 @@ def prepare(calendar,preferences,courses,items,plans,request,now):
     if len(future)>300 or len({b['item_id'] for b in future})>100:
         base.update(status='INPUT_LIMIT',messages=['一次最多调整100项任务、300段计划，请减少任务数量']);return base,None
     if any(missing and a<end*60 and b>now.timestamp() for a,b,missing,_ in context['uncertain']):
-        base['messages']=['需预留的考试缺少完整时间，请先核对'];return base,None
+        base['messages']=['需预留的固定安排缺少完整时间，请先核对'];return base,None
     tasks={i['id']:i for i in items}
     _,issues=classify(future,items,context['free'].spans,context['begin'])
     bad={i['block_id']:i for i in issues}

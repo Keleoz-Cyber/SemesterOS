@@ -43,7 +43,7 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
     if not preferences.get('configured'):base['messages']=['请先设置每周的学习时间'];return base,None
     if end<=start:base['messages']=['请选择本学期内尚未过去的时间'];return base,None
     if any(a<end*60 and b>start*60 and missing for a,b,missing,_ in context['uncertain']):
-        base['messages']=['这段时间内有考试尚未填写开始或结束时间，请先补充'];return base,None
+        base['messages']=['这段时间内有固定安排缺少开始或结束时间，请先补充'];return base,None
     future=[b for b in plans if b['status']=='active' and instant(b['end_at']).timestamp()>now.timestamp()]
     if len(request['tasks'])>100 or len(future)>300:
         base.update(status='INPUT_LIMIT',messages=['一次最多安排100项任务、300段计划，请分批安排']);return base,None

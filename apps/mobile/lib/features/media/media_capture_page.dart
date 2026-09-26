@@ -1,3 +1,4 @@
+import '../calendar/event_form.dart';
 import '../../core/api.dart' show userError;
 import 'dart:async';
 import 'dart:io';
@@ -514,7 +515,10 @@ class _MediaCapturePageState extends State<MediaCapturePage>
           );
           return;
         }
-        if (candidate['intent'] != 'create_item' || candidate['item'] == null) {
+        if (!((candidate['intent'] == 'create_item' &&
+                candidate['item'] != null) ||
+            (candidate['intent'] == 'create_event' &&
+                candidate['event'] != null))) {
           throw Exception(
             '请拆成一条通知或补充信息：${(candidate['questions'] as List? ?? []).join('；')}',
           );
@@ -524,18 +528,24 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       final saved = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
-          builder: (_) => ItemFormPage(
-            controller: widget.controller,
-            semester: widget.semester,
-            candidate:
-                candidate ??
-                {
-                  'item': {
-                    'source_text': text.text,
-                    if (source != null) 'source_id': source!['id'],
-                  },
-                },
-          ),
+          builder: (_) => candidate?['intent'] == 'create_event'
+              ? EventFormPage(
+                  controller: widget.controller,
+                  semester: widget.semester,
+                  candidate: candidate,
+                )
+              : ItemFormPage(
+                  controller: widget.controller,
+                  semester: widget.semester,
+                  candidate:
+                      candidate ??
+                      {
+                        'item': {
+                          'source_text': text.text,
+                          if (source != null) 'source_id': source!['id'],
+                        },
+                      },
+                ),
         ),
       );
       if (saved == true) {

@@ -318,10 +318,12 @@ def edit_reminder(rule_id: str, body: ReminderEdit, user: User = Depends(current
 
 @router.get('/reminders')
 def list_reminders(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    from .event_store import event_rows, reminder_values
+    event_reminders = [reminder for event in event_rows(db, user) for reminder in reminder_values(event)]
     rows = list(db.execute(select(ReminderRule, StudyItem).join(StudyItem, ReminderRule.item_id == StudyItem.id).where(
         ReminderRule.user_id == user.id, StudyItem.user_id == user.id, StudyItem.lifecycle == 'active')))
     peers = {}
     for rule, item in rows:
         peers.setdefault(item.id, []).append(rule)
     return {'owner_id': user.id, 'synced_at': utcnow().isoformat(),
-            'reminders': [serialize_rule(r, item, peers[item.id]) for r, item in rows if r.payload['enabled']]}
+            'reminders': [serialize_rule(r, item, peers[item.id]) for r, item in rows if r.payload['enabled']] + event_reminders}

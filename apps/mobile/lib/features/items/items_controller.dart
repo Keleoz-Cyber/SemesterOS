@@ -498,6 +498,7 @@ class ItemsController extends ChangeNotifier {
     String path, {
     Map<String, dynamic>? data,
     bool apply = false,
+    String? idempotencyKey,
   }) async {
     final sid = semesterId;
     final generation = api.generation;
@@ -506,6 +507,7 @@ class ItemsController extends ChangeNotifier {
         method,
         path,
         data: data,
+        idempotencyKey: idempotencyKey,
         receiveTimeout: const Duration(seconds: 60),
       ),
     );
