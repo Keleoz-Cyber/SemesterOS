@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light"><title>学期OS · 高保真交互设计</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="workspace">
+    <aside class="review-panel">
+      <div class="project-id"><span class="project-mark">S</span><span>SEMESTER OS <small>DESIGN / 02</small></span></div>
+      <h1>高保真交互设计</h1><p class="review-intro">第一批：今日、AI助手、统计分析</p>
+      <div class="review-tabs" aria-label="设计页面"><button data-action="today" class="selected">今日安排<span>01</span></button><button data-action="assistant">AI助手<span>02</span></button><button data-action="analytics">统计分析<span>03</span></button></div>
+      <div class="review-box"><h2>建议体验顺序</h2><ol><li>录入组会通知，确认分类和提醒。</li><li>查看调整方案，应用后再撤销。</li><li>切换统计范围、类别和标签。</li><li>点某一天，查看组成统计的日程。</li></ol></div>
+      <div class="review-tools"><button data-action="reset">重置示例</button><button data-action="reduce-motion" aria-pressed="false">减少动画</button><button data-action="offline" aria-pressed="false">离线状态</button><button data-action="empty-stats">空数据状态</button></div>
+      <p class="review-note">可点击的设计版本，不是正式App。<br>使用合成数据，固定时间为9月23日11:40。<br>不连接云端，不调用AI或麦克风。</p>
+    </aside>
+    <section class="device" aria-label="手机原型" id="device">
+      <div class="statusbar" aria-hidden="true"><b>11:40</b><span class="island"></span><span class="device-signals">▮▮▮ ◉ ▰</span></div>
+      <header id="header"></header><main id="main" tabindex="-1"></main>
+      <div id="dock"></div><nav id="nav" aria-label="主导航"></nav>
+      <div class="home-indicator" aria-hidden="true"></div>
+      <div id="toast" role="status" aria-live="polite"></div>
+      <div id="overlay" hidden></div>
+    </section>
+    <aside class="inspector"><span class="inspector-label">交互说明</span><h2 id="review-title">今日安排</h2><p id="review-description"></p><div class="review-divider"></div><h3>这版可以操作</h3><div id="review-features"></div><div class="swatches"><i></i><i></i><i></i><i></i></div><p class="review-note">类别颜色保持一致。<br>紧急程度用独立状态表达。</p><p class="review-note">日程、计划、学期提供衔接视图；<br>完整高保真设计属于第二批。</p></aside>
+  </div>
+  <script src="data.js"></script><script src="app.js"></script>
+</body>
+</html>
