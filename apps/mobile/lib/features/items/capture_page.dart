@@ -1,3 +1,5 @@
+import '../../ui/app_controls.dart';
+import '../../ui/detail_widgets.dart';
 import '../calendar/event_form.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
@@ -182,46 +184,55 @@ class _CapturePageState extends State<CapturePage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('文字快速记录')),
+    appBar: AppBar(title: const Text('文字记录')),
+    bottomNavigationBar: ActionFooter(
+      label: '让AI整理',
+      onPressed: busy ? null : parse,
+      icon: Icons.auto_awesome_outlined,
+    ),
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const CampusHero(
-          eyebrow: '一句话记录',
-          title: '把通知变成事项',
-          subtitle: 'AI帮你整理\n你确认后再保存',
+        EditorSection(
+          title: '通知原文',
+          icon: Icons.edit_note_rounded,
+          children: [
+            AppField(
+              key: const Key('capture-text'),
+              controller: text,
+              onChanged: (_) {
+                autosave?.cancel();
+                autosave = Timer(
+                  const Duration(milliseconds: 350),
+                  () => saveDraft(),
+                );
+              },
+              maxLines: 6,
+              maxLength: 10000,
+              enabled: !busy,
+              decoration: const InputDecoration(
+                labelText: '通知内容',
+                counterText: '',
+                hintText: '例如：9月25日23:59前交Java报告，预计3小时',
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 18),
-        TextField(
-          key: const Key('capture-text'),
-          controller: text,
-          onChanged: (_) {
-            autosave?.cancel();
-            autosave = Timer(
-              const Duration(milliseconds: 350),
-              () => saveDraft(),
-            );
-          },
-          maxLines: 7,
-          maxLength: 10000,
-          enabled: !busy,
-          decoration: const InputDecoration(
-            labelText: '想记录什么？',
-            hintText: '例如：9月25日23:59前交Java报告，预计3小时',
-          ),
+        AppDisclosure(
+          title: const Text('原通知时间'),
+          subtitle: Text(displayInstant(referenceAt)),
+          children: [
+            AppTextButton.icon(
+              onPressed: busy ? null : chooseReference,
+              icon: const Icon(Icons.history),
+              label: Text(displayInstant(referenceAt)),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text('转发旧通知时设置，用于判断“明天”等相对日期。'),
+            ),
+          ],
         ),
-        TextButton.icon(
-          onPressed: busy ? null : chooseReference,
-          icon: const Icon(Icons.history),
-          label: Text('原消息时间：${displayInstant(referenceAt)}'),
-        ),
-        const Text(
-          '转贴旧通知时，请修改原消息时间，便于解释“明天”“下周五”。',
-          style: TextStyle(fontSize: 13),
-        ),
-        const SizedBox(height: 16),
-        const SoftNotice('这段文字和本学期的课程名称会发送给AI，用于整理事项。请只粘贴本次需要记录的内容。'),
-        const SizedBox(height: 16),
         if (busy)
           const Padding(
             padding: EdgeInsets.only(bottom: 16),
@@ -237,16 +248,18 @@ class _CapturePageState extends State<CapturePage> {
           SoftNotice(error!, warning: true),
           const SizedBox(height: 16),
         ],
-        FilledButton(
-          onPressed: busy ? null : parse,
-          child: const Text('让AI整理'),
+
+        const SizedBox(height: 16),
+        AppTile(
+          onTap: busy ? null : () => openForm(),
+          leading: const Icon(Icons.edit_outlined),
+          title: const Text('手动填写'),
+          trailing: const Icon(Icons.chevron_right_rounded),
         ),
-        TextButton(
-          onPressed: busy ? null : () => openForm(),
-          child: const Text('直接手工填写，保留原文'),
-        ),
-        TextButton(
-          onPressed: busy
+        AppTile(
+          leading: const Icon(Icons.edit_note_rounded),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: busy
               ? null
               : () => Navigator.push(
                   context,
@@ -258,7 +271,7 @@ class _CapturePageState extends State<CapturePage> {
                     ),
                   ),
                 ),
-          child: const Text('用这段文字修改已有事项 / 提醒'),
+          title: const Text('修改已有事项'),
         ),
       ],
     ),

@@ -1,23 +1,42 @@
+import '../../ui/app_controls.dart';
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'agent_controller.dart';
-import '../media/media_capture_page.dart';
+import 'agent_answer.dart';
+import 'change_confirmation.dart';
+import '../media/inline_capture_controller.dart';
+import '../media/media_input.dart';
+import '../planning/date_time_picker.dart';
+import '../media/hold_voice_button.dart';
 import '../media/source_view.dart';
 import '../insights/insights_controller.dart' show insightHours;
+import '../media/drafts.dart';
 
 class AgentPage extends StatefulWidget {
   final ItemsController controller;
   final Map<String, dynamic> semester;
   final String? initialMediaKind;
+  final String? initialText;
+  final bool embedded, autoSubmit, autofocus;
+  final MediaInput? voiceInput, imageInput;
   const AgentPage({
     super.key,
     required this.controller,
     required this.semester,
     this.initialMediaKind,
+    this.initialText,
+    this.embedded = false,
+    this.autoSubmit = false,
+    this.autofocus = false,
+    this.voiceInput,
+    this.imageInput,
   });
   @override
   State<AgentPage> createState() => _AgentPageState();
@@ -25,7 +44,37 @@ class AgentPage extends StatefulWidget {
 
 class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   late final AgentController c;
+  late final InlineCaptureController media;
+  MediaInput? gallery;
+  bool restoringMedia = false, sendingMedia = false, pickingImage = false;
+  bool pendingMediaDraft = false;
+  bool expandedImagePreview = false;
+  String? transcriptAck;
+  int captureEpoch = 0;
+  String? captureError;
+  bool get mediaWorking =>
+      media.busy ||
+      ['uploading', 'queued', 'running', 'recognizing'].contains(media.phase);
+  bool get conversationLocked =>
+      !readyForDraft ||
+      c.loading ||
+      c.busy ||
+      sendingMedia ||
+      mediaWorking ||
+      pickingImage ||
+      voiceRecording ||
+      pendingMediaDraft ||
+      media.hasPending;
   final input = TextEditingController();
+  final composerFocus = FocusNode();
+  final conversationScroll = ScrollController();
+  Timer? draftTimer;
+  late final CaptureDrafts drafts;
+  late String draftKey;
+  late final String baseDraftKey, contextPointerKey;
+  bool readyForDraft = false;
+  late bool voiceMode = widget.initialMediaKind == 'audio';
+  bool voiceRecording = false;
   Map<String, dynamic>? attachment;
   bool detachedSource = false;
   Map<String, dynamic>? get currentSource =>
@@ -36,34 +85,236 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     c = AgentController(widget.controller, widget.semester['id']);
-    c.open();
-    if (widget.initialMediaKind != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) attach(widget.initialMediaKind!);
-      });
+    media = InlineCaptureController(
+      controller: widget.controller,
+      semesterId: widget.semester['id'],
+      onTranscript: (value) {
+        if (!mounted || !c.active || value.trim().isEmpty) return;
+        final source = media.source;
+        final token = '${source?['id']}:${source?['version']}';
+        // The acknowledgement and composer text are saved together. Reopening
+        // an edited draft must not append the original transcript again.
+        if (transcriptAck != token) {
+          final existing = input.text.trim();
+          if (!restoringMedia || !existing.endsWith(value.trim())) {
+            input.text = [
+              if (existing.isNotEmpty) existing,
+              value.trim(),
+            ].join('\n');
+          }
+          input.selection = TextSelection.collapsed(offset: input.text.length);
+          transcriptAck = token;
+        }
+        setState(() => voiceMode = false);
+        scheduleDraft();
+      },
+    )..addListener(mediaChanged);
+    final generation = widget.controller.api.generation,
+        sid = widget.semester['id'];
+    drafts = CaptureDrafts(
+      widget.controller.cache,
+      widget.controller.owner!,
+      () =>
+          generation == widget.controller.api.generation &&
+          sid == widget.controller.semesterId,
+    );
+    baseDraftKey = 'assistant:$sid';
+    contextPointerKey = 'assistant-context-latest:$sid';
+    draftKey = widget.initialText == null
+        ? baseDraftKey
+        : 'assistant-context:$sid:${base64Url.encode(utf8.encode(widget.initialText!))}';
+    input.text = widget.initialText ?? '';
+    input.addListener(scheduleDraft);
+    initialize();
+  }
+
+  Future<void> initialize() async {
+    Map<String, dynamic>? saved;
+    try {
+      if (widget.initialText == null) {
+        final pointer = await drafts.read(contextPointerKey);
+        if (pointer?['key'] is String) {
+          final candidate = await drafts.read(pointer!['key']);
+          if (candidate != null &&
+              ('${candidate['text'] ?? ''}'.isNotEmpty ||
+                  candidate['source'] != null ||
+                  candidate['pending_media'] == true ||
+                  candidate['picking_image'] == true)) {
+            draftKey = pointer['key'];
+            saved = candidate;
+          }
+        }
+      }
+      saved ??= await drafts.read(draftKey);
+      if (widget.initialText != null &&
+          saved != null &&
+          '${saved['text'] ?? ''}'.isEmpty &&
+          saved['source'] == null &&
+          saved['pending_media'] != true &&
+          saved['picking_image'] != true) {
+        saved = null;
+      }
+    } catch (_) {
+      /* Local storage failure does not disable online input. */
+    }
+    if (!mounted || !c.active) return;
+    await c.open(
+      id: saved?['thread_id'],
+      fresh: widget.initialText != null && saved?['thread_id'] == null,
+    );
+    if (!mounted || !c.active) return;
+    if (saved != null) {
+      input.text = saved['text'] ?? '';
+      attachment = saved['source'] is Map
+          ? Map<String, dynamic>.from(saved['source'])
+          : null;
+      detachedSource = saved['detached'] == true;
+      mediaReferenceOverride = saved['media_reference_override'];
+      transcriptAck = saved['media_transcript_ack'];
+      pendingMediaDraft = saved['pending_media'] == true;
+    }
+    readyForDraft = true;
+    restoringMedia = true;
+    try {
+      await media.restore(scope: draftKey);
+    } finally {
+      restoringMedia = false;
+    }
+    if (!mounted || !c.active) return;
+    pendingMediaDraft = media.hasPending;
+    setState(() {});
+    if (saved?['picking_image'] == true) {
+      // Recover only inside the resolved conversation draft scope. Do not
+      // launch a fresh picker, which would consume Android's lost result.
+      if (!media.hasPending) await attach('image', recoverImage: true);
+      if (!mounted || !c.active) return;
+      await saveDraft();
+    } else if (widget.initialMediaKind == 'image' && !media.hasPending) {
+      await attach('image');
+    } else if (widget.autoSubmit &&
+        saved == null &&
+        input.text.trim().isNotEmpty) {
+      await send();
+    } else if (widget.autofocus && !voiceMode) {
+      composerFocus.requestFocus();
+    }
+  }
+
+  void mediaChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void scheduleDraft() {
+    if (!readyForDraft) return;
+    draftTimer?.cancel();
+    draftTimer = Timer(const Duration(milliseconds: 350), () => saveDraft());
+  }
+
+  Future<void> saveDraft() async {
+    final value = {
+      'text': input.text,
+      'source': attachment,
+      'detached': detachedSource,
+      'thread_id': c.threadId,
+      'media_reference_override': mediaReferenceOverride,
+      'media_transcript_ack': transcriptAck,
+      'pending_media': pendingMediaDraft || media.hasPending,
+      'picking_image': pickingImage,
+    };
+    final key = draftKey;
+    try {
+      await drafts.save(
+        key,
+        value,
+        pointerKey: key == baseDraftKey ? null : contextPointerKey,
+        activatePointer:
+            (value['text'] as String).isNotEmpty ||
+            value['source'] != null ||
+            value['pending_media'] == true ||
+            value['picking_image'] == true,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('草稿未能保存，请保留输入内容')));
+      }
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) c.poll();
+    if (state == AppLifecycleState.resumed) {
+      c.poll();
+      media.checkJob(force: true);
+    }
   }
 
   @override
   void dispose() {
+    draftTimer?.cancel();
+    if (readyForDraft) saveDraft();
+    input.removeListener(scheduleDraft);
+    composerFocus.dispose();
+    conversationScroll.dispose();
     WidgetsBinding.instance.removeObserver(this);
+    media.removeListener(mediaChanged);
+    media.dispose();
+    gallery?.dispose();
     c.dispose();
     input.dispose();
     super.dispose();
   }
 
-  Future<void> send() => submit(input.text.trim());
+  Future<void> send() async {
+    if (!readyForDraft ||
+        !c.active ||
+        c.loading ||
+        c.busy ||
+        c.processing ||
+        mediaWorking ||
+        pickingImage ||
+        sendingMedia ||
+        voiceRecording) {
+      return;
+    }
+    final value = input.text.trim();
+    if (value.isEmpty) return;
+    final intendedThread = c.threadId;
+    setState(() => sendingMedia = true);
+    try {
+      if (media.hasPending) {
+        final confirmed = await media.confirmText(
+          value,
+          referenceAt: mediaReferenceOverride,
+        );
+        if (!mounted || !c.active || confirmed == null) return;
+        attachment = confirmed;
+        detachedSource = false;
+      }
+      if (c.threadId != intendedThread || c.loading) return;
+      await submit(value, reviewedCapture: true);
+    } finally {
+      if (mounted) setState(() => sendingMedia = false);
+    }
+  }
 
   Future<void> submit(
     String text, {
     List<String> selectedRecordIds = const [],
+    bool reviewedCapture = false,
   }) async {
+    if (!c.active ||
+        c.loading ||
+        mediaWorking ||
+        pickingImage ||
+        voiceRecording ||
+        (!reviewedCapture &&
+            (sendingMedia || media.hasPending || pendingMediaDraft))) {
+      return;
+    }
     final source = currentSource;
+    final submittedMediaId = reviewedCapture ? (media.source?['id']) : null;
     if (await c.send(
           text,
           source: source,
@@ -72,32 +323,257 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
         ) &&
         mounted) {
       if (input.text.trim() == text) input.clear();
+      if (submittedMediaId != null && media.source?['id'] == submittedMediaId) {
+        await media.detach();
+      }
+      if (!mounted || !c.active) return;
       setState(() {
         attachment = null;
         detachedSource = false;
+        mediaReferenceOverride = null;
+        pendingMediaDraft = media.hasPending;
+        if (!pendingMediaDraft) transcriptAck = null;
+      });
+      if (readyForDraft) await saveDraft();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && conversationScroll.hasClients) {
+          conversationScroll.jumpTo(0);
+        }
       });
     }
   }
 
-  Future<void> attach(String kind) async {
-    final source = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MediaCapturePage(
-          controller: widget.controller,
-          semester: widget.semester,
-          kind: kind,
-          returnSource: true,
+  Future<void> attach(
+    String kind, {
+    String? audioPath,
+    bool recoverImage = false,
+  }) async {
+    if (!readyForDraft ||
+        !c.active ||
+        c.loading ||
+        c.busy ||
+        c.processing ||
+        mediaWorking ||
+        sendingMedia ||
+        pickingImage) {
+      return;
+    }
+    final epoch = ++captureEpoch;
+    composerFocus.unfocus();
+    mediaReferenceOverride = null;
+    setState(() => captureError = null);
+    String? path = audioPath;
+    if (kind == 'image') {
+      setState(() => pickingImage = true);
+      try {
+        await saveDraft();
+        if (!mounted || !c.active || epoch != captureEpoch) return;
+        gallery ??= widget.imageInput ?? DeviceMediaInput();
+        path = await gallery!.image(recover: recoverImage);
+      } catch (_) {
+        if (mounted) setState(() => captureError = '图片未能打开，请重试');
+      } finally {
+        if (mounted && epoch == captureEpoch) {
+          setState(() => pickingImage = false);
+        }
+      }
+    }
+    if (!mounted || !c.active || epoch != captureEpoch) return;
+    if (path == null) {
+      await saveDraft();
+      return;
+    }
+    attachment = null;
+    detachedSource = true;
+    transcriptAck = null;
+    expandedImagePreview = false;
+    pendingMediaDraft = true;
+    // Keep the picker recovery flag until capture has durably copied the file.
+    pickingImage = kind == 'image';
+    await saveDraft();
+    if (!mounted || !c.active || epoch != captureEpoch) return;
+    await media.capture(path, kind);
+    if (!mounted || !c.active || epoch != captureEpoch) return;
+    pickingImage = false;
+    pendingMediaDraft = media.hasPending;
+    setState(() {});
+    await saveDraft();
+  }
+
+  Future<void> removeCapture() async {
+    captureEpoch++;
+    if (mediaWorking) await media.cancel();
+    await media.detach();
+    if (!mounted) return;
+    setState(() {
+      attachment = null;
+      detachedSource = true;
+      captureError = null;
+      voiceMode = false;
+      pickingImage = false;
+      pendingMediaDraft = false;
+      transcriptAck = null;
+    });
+    scheduleDraft();
+  }
+
+  Future<void> captureReference() async {
+    final initial = DateTime.tryParse(media.referenceAt);
+    final selected = await pickSchoolDateTime(context, initial: initial);
+    if (!mounted || selected == null) return;
+    // Preserve source versioning; changing the reference is confirmed on send.
+    mediaReferenceOverride = selected.toUtc().toIso8601String();
+    setState(() {});
+    scheduleDraft();
+  }
+
+  String? mediaReferenceOverride;
+
+  Widget captureStatus() {
+    final failed = media.error ?? captureError;
+    final emptyVoice =
+        media.kind == 'audio' &&
+        const [
+          'NO_USABLE_TEXT',
+          'EMPTY_TRANSCRIPT',
+        ].contains(media.source?['error_code']);
+    final status = pickingImage
+        ? '正在选择图片…'
+        : mediaWorking
+        ? (media.phase == 'uploading' ? '正在上传…' : '正在识别…')
+        : failed ?? (media.kind == 'audio' ? '语音已转成文字' : '图片文字已提取');
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Material(
+        color: failed == null ? CampusColors.blueSoft : CampusColors.errorSoft,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 8, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (media.kind == 'image' && media.local != null)
+                InkWell(
+                  onTap: () => setState(
+                    () => expandedImagePreview = !expandedImagePreview,
+                  ),
+                  child: AnimatedSize(
+                    duration: MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                    child: Image.file(
+                      File(media.local!),
+                      height: expandedImagePreview ? 220 : 96,
+                      width: double.infinity,
+                      fit: BoxFit.contain,
+                      semanticLabel: '原始图片，点击展开或收起',
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+              Row(
+                children: [
+                  Icon(
+                    media.kind == 'image'
+                        ? Icons.image_outlined
+                        : Icons.mic_none_rounded,
+                    size: 20,
+                    color: CampusColors.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(status, style: const TextStyle(fontSize: 14)),
+                  ),
+                  AppIconButton(
+                    tooltip: '移除本次附件',
+                    onPressed: sendingMedia ? null : removeCapture,
+                    icon: const Icon(Icons.close, size: 20),
+                  ),
+                ],
+              ),
+              if (mediaWorking) const LinearProgressIndicator(minHeight: 2),
+              if (!mediaWorking && failed != null)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    if (media.hasPending)
+                      AppTextButton(
+                        onPressed: sendingMedia
+                            ? null
+                            : emptyVoice
+                            ? () async {
+                                await removeCapture();
+                                if (mounted) setState(() => voiceMode = true);
+                              }
+                            : media.retry,
+                        child: Text(emptyVoice ? '重新录音' : '重试识别'),
+                      ),
+                    AppTextButton(
+                      onPressed: () async {
+                        await removeCapture();
+                        if (mounted) composerFocus.requestFocus();
+                      },
+                      child: const Text('直接输入'),
+                    ),
+                  ],
+                ),
+              if (!mediaWorking &&
+                  media.source != null &&
+                  failed == null &&
+                  media.kind == 'image')
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppTextButton(
+                    onPressed: sendingMedia ? null : captureReference,
+                    child: Text(
+                      '消息时间 ${displayInstant(mediaReferenceOverride ?? media.referenceAt)}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
-    if (mounted && c.active && source != null) {
-      setState(() {
-        attachment = source;
-        detachedSource = false;
-        if (input.text.trim().isEmpty) input.text = '请根据这份通知整理安排，先给我预览';
-      });
+  }
+
+  Future<void> moreInput() async {
+    composerFocus.unfocus();
+    final value = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final choice in const [
+              ('image', '从图片导入', Icons.image_outlined),
+              ('event', '添加日程', Icons.event_outlined),
+              ('item', '添加待办', Icons.checklist_rounded),
+              ('exam', '添加考试', Icons.school_outlined),
+            ])
+              AppTile(
+                leading: Icon(choice.$3),
+                title: Text(choice.$2),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.pop(context, choice.$1),
+              ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || value == null) return;
+    if (value == 'image') {
+      await attach('image');
+      return;
     }
+    await context.push(
+      value == 'event'
+          ? '/events/new'
+          : '/items/new?kind=${value == 'exam' ? 'exam' : 'task'}',
+    );
   }
 
   void sourceView(Map source) => Navigator.push(
@@ -109,6 +585,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   );
 
   Future<void> history() async {
+    if (conversationLocked) return;
     await c.open(id: c.threadId);
     if (!mounted) return;
     final selected = await showModalBottomSheet<String>(
@@ -123,7 +600,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
           ),
           for (final t in c.threads)
-            ListTile(
+            AppTile(
               title: Text(t['title']),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.pop(context, t['id'] as String),
@@ -133,7 +610,14 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
         ],
       ),
     );
-    if (selected != null) c.open(id: selected);
+    if (selected != null && !conversationLocked) {
+      await c.open(id: selected);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && conversationScroll.hasClients) {
+          conversationScroll.jumpTo(0);
+        }
+      });
+    }
   }
 
   @override
@@ -141,16 +625,23 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     animation: c,
     builder: (context, _) => Scaffold(
       appBar: AppBar(
-        title: const Text('日程助手'),
+        leading: widget.embedded
+            ? AppIconButton(
+                tooltip: '收起输入',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              )
+            : null,
+        title: Text(widget.embedded ? '智能输入' : '日程助手'),
         actions: [
-          IconButton(
+          AppIconButton(
             tooltip: '最近对话',
-            onPressed: c.busy ? null : history,
+            onPressed: conversationLocked ? null : history,
             icon: const Icon(Icons.history_rounded),
           ),
-          IconButton(
+          AppIconButton(
             tooltip: '新对话',
-            onPressed: c.busy ? null : () => c.open(fresh: true),
+            onPressed: conversationLocked ? null : () => c.open(fresh: true),
             icon: const Icon(Icons.add_comment_outlined),
           ),
         ],
@@ -158,43 +649,42 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Text(
-                widget.semester['name'] ?? '当前学期',
-                style: const TextStyle(color: CampusColors.muted, fontSize: 13),
+            if (MediaQuery.viewInsetsOf(context).bottom == 0 &&
+                MediaQuery.sizeOf(context).height -
+                        MediaQuery.viewInsetsOf(context).bottom >
+                    360)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Text(
+                  widget.semester['name'] ?? '当前学期',
+                  style: const TextStyle(
+                    color: CampusColors.muted,
+                    fontSize: 13,
+                  ),
+                ),
               ),
-            ),
             Expanded(
               child: c.loading
                   ? const Center(child: CircularProgressIndicator())
                   : ListView(
+                      controller: conversationScroll,
                       padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
                       children: [
-                        if (c.runs.isEmpty) ...[
-                          const SizedBox(height: 30),
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: CircleAvatar(
-                              radius: 27,
-                              backgroundColor: Color(0xFFE9E5FF),
-                              child: Icon(
-                                Icons.auto_awesome_rounded,
-                                color: CampusColors.primary,
-                                size: 27,
-                              ),
+                        if (c.runs.isEmpty &&
+                            !media.hasPending &&
+                            captureError == null &&
+                            !pickingImage) ...[
+                          const SizedBox(height: 20),
+                          const Text(
+                            '记录与查询',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: CampusColors.ink,
                             ),
                           ),
                           const SizedBox(height: 20),
-                          const Text(
-                            '想查什么，或记点什么？',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
                           for (final example in [
                             '我今天有哪些安排？',
                             '这周哪天有一小时空闲？',
@@ -202,38 +692,57 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                           ])
                             Padding(
                               padding: const EdgeInsets.only(bottom: 10),
-                              child: OutlinedButton(
-                                onPressed: () => input.text = example,
-                                style: OutlinedButton.styleFrom(
-                                  alignment: Alignment.centerLeft,
-                                  padding: const EdgeInsets.all(17),
+                              child: AppTile(
+                                onTap: () => input.text = example,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 6,
                                 ),
-                                child: Text(example),
+                                leading: const Icon(
+                                  Icons.arrow_outward_rounded,
+                                  size: 20,
+                                  color: CampusColors.primary,
+                                ),
+                                title: Text(example),
                               ),
                             ),
                         ],
-                        for (final run in c.runs) turnView(run),
+                        if (c.runs.length > 1)
+                          AppDisclosure(
+                            key: ValueKey('earlier-${c.runs.last['id']}'),
+                            title: Text('历史消息 · ${c.runs.length - 1}'),
+                            children: [
+                              for (final run in c.runs.take(c.runs.length - 1))
+                                turnView(run),
+                            ],
+                          ),
+                        if (c.runs.isNotEmpty) turnView(c.runs.last),
+                        if (media.hasPending ||
+                            media.error != null ||
+                            captureError != null ||
+                            pickingImage)
+                          captureStatus(),
                       ],
                     ),
             ),
             if (c.error != null)
               Container(
-                color: const Color(0xFFFFF1DE),
+                color: CampusColors.warningSoft,
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
                     Expanded(child: Text(c.error!)),
-                    TextButton(
+                    AppTextButton(
                       onPressed: () =>
                           c.processing ? c.poll() : c.open(id: c.threadId),
-                      child: const Text('刷新'),
+                      child: const Text('重新读取'),
                     ),
                   ],
                 ),
               ),
-            if (currentSource != null)
-              ListTile(
+            if (currentSource != null && !media.hasPending)
+              AppTile(
                 dense: true,
                 leading: Icon(
                   currentSource!['kind'] == 'image'
@@ -245,9 +754,9 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: const Text('已核对的来源'),
+
                 onTap: () => sourceView(currentSource!),
-                trailing: IconButton(
+                trailing: AppIconButton(
                   tooltip: '移除本次附件',
                   onPressed: c.busy
                       ? null
@@ -259,60 +768,132 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                   icon: const Icon(Icons.close),
                 ),
               ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 10, 12, 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: CampusColors.line)),
+            if (voiceRecording)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '上滑取消',
+                  style: TextStyle(fontSize: 13, color: CampusColors.muted),
+                ),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  PopupMenuButton<String>(
-                    tooltip: '图片或语音',
-                    enabled: !c.busy && !c.processing,
-                    onSelected: attach,
-                    icon: const Icon(Icons.add_circle_outline_rounded),
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'image', child: Text('图片通知')),
-                      PopupMenuItem(value: 'audio', child: Text('语音输入')),
-                    ],
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: input,
-                      minLines: 1,
-                      maxLines: 5,
-                      enabled: !c.loading,
-                      maxLength: 10000,
-                      decoration: const InputDecoration(
-                        hintText: '输入通知、问题或修改要求',
-                        counterText: '',
-                        filled: true,
-                        fillColor: CampusColors.background,
-                        border: OutlineInputBorder(
-                          borderSide: BorderSide.none,
-                          borderRadius: BorderRadius.all(Radius.circular(20)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    tooltip: '发送',
-                    onPressed: c.loading || c.busy || c.processing
-                        ? null
-                        : send,
-                    icon: const Icon(Icons.arrow_upward_rounded),
-                  ),
-                ],
-              ),
-            ),
+            composer(),
           ],
         ),
       ),
     ),
   );
+
+  Widget composer() {
+    final landscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final blocked =
+        c.busy ||
+        c.processing ||
+        voiceRecording ||
+        mediaWorking ||
+        pickingImage ||
+        sendingMedia;
+    final field = FTextField(
+      control: FTextFieldControl.managed(controller: input),
+      focusNode: composerFocus,
+      minLines: 1,
+      maxLines: landscape || MediaQuery.sizeOf(context).height < 300
+          ? 1
+          : MediaQuery.viewInsetsOf(context).bottom > 0 ||
+                MediaQuery.sizeOf(context).height < 500
+          ? 2
+          : 4,
+      enabled: !c.loading && !media.busy && !sendingMedia,
+      maxLength: 10000,
+      hint: '输入通知或日程问题',
+      counterBuilder: (_, _, _, _) => null,
+    );
+    final toggle = AppIconButton(
+      tooltip: voiceMode ? '切换键盘输入' : '切换语音输入',
+      onPressed: blocked
+          ? null
+          : () {
+              setState(() => voiceMode = !voiceMode);
+              if (voiceMode) {
+                composerFocus.unfocus();
+              } else {
+                composerFocus.requestFocus();
+              }
+            },
+      icon: Icon(voiceMode ? Icons.keyboard_outlined : Icons.mic_none_rounded),
+    );
+    final more = AppIconButton(
+      tooltip: '添加图片或手动记录',
+      onPressed: blocked ? null : moreInput,
+      icon: const Icon(Icons.add_circle_outline_rounded),
+    );
+    final submit = ValueListenableBuilder<TextEditingValue>(
+      valueListenable: input,
+      builder: (_, value, _) => AppIconButton.filled(
+        tooltip: '发送',
+        onPressed: c.loading || blocked || value.text.trim().isEmpty
+            ? null
+            : send,
+        icon: const Icon(Icons.arrow_upward_rounded),
+      ),
+    );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      decoration: const BoxDecoration(
+        color: CampusColors.surface,
+        border: Border(top: BorderSide(color: CampusColors.line)),
+      ),
+      child: voiceMode
+          ? Row(
+              children: [
+                toggle,
+                Expanded(
+                  child: HoldVoiceButton(
+                    enabled:
+                        c.active &&
+                        readyForDraft &&
+                        !c.loading &&
+                        !c.busy &&
+                        !c.processing &&
+                        !mediaWorking &&
+                        !pickingImage &&
+                        !sendingMedia,
+                    input: widget.voiceInput,
+                    onRecorded: (path) => attach('audio', audioPath: path),
+                    onRecordingChanged: (value) {
+                      if (mounted) setState(() => voiceRecording = value);
+                    },
+                    onError: (message) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(message)));
+                      }
+                    },
+                  ),
+                ),
+                more,
+              ],
+            )
+          : landscape
+          ? Row(
+              children: [
+                toggle,
+                Expanded(child: field),
+                more,
+                submit,
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                field,
+                Row(children: [toggle, const Spacer(), more, submit]),
+              ],
+            ),
+    );
+  }
 
   Widget turnView(Map<String, dynamic> run) {
     final working = run['status'] == 'queued' || run['status'] == 'running';
@@ -328,12 +909,23 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               margin: const EdgeInsets.only(left: 35, bottom: 18),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: CampusColors.primary,
-                borderRadius: BorderRadius.circular(22),
+                color: CampusColors.blueSoft,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(18),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(5),
+                ),
               ),
               child: Text(
-                run['text'],
-                style: const TextStyle(color: Colors.white, height: 1.5),
+                run['source'] is Map && run['text'] == '请根据这份通知整理安排，先给我预览'
+                    ? (run['source']['kind'] == 'image' ? '图片通知' : '语音记录')
+                    : run['text'],
+                style: const TextStyle(
+                  color: CampusColors.ink,
+                  fontSize: 15,
+                  height: 1.5,
+                ),
               ),
             ),
           ),
@@ -347,7 +939,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(width: 10),
                 Expanded(child: Text(run['stage'] ?? '正在处理')),
-                TextButton(
+                AppTextButton(
                   onPressed: () => c.stop(run),
                   child: const Text('停止'),
                 ),
@@ -356,7 +948,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           if (run['source'] is Map)
             Align(
               alignment: Alignment.centerLeft,
-              child: TextButton.icon(
+              child: AppTextButton.icon(
                 onPressed: () => sourceView(run['source']),
                 icon: const Icon(Icons.description_outlined, size: 17),
                 label: const Text('查看原始来源'),
@@ -365,16 +957,43 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           if ((run['answer'] ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: SelectableText(
-                run['answer'],
-                style: const TextStyle(height: 1.6),
-              ),
+              child: AgentAnswer(run['answer']),
             ),
-          for (final card in rows(run['cards'])) factCard(card),
           if (p is Map)
             p['kind'] == 'plan'
                 ? planPreview(run, Map<String, dynamic>.from(p))
+                : {
+                    'course_change',
+                    'exam_change',
+                    'batch',
+                    'undo',
+                  }.contains(p['kind'])
+                ? ChangeConfirmation(
+                    key: ValueKey(p['token']),
+                    run: run,
+                    controller: c,
+                    details: (child) => changeDetails(run, child),
+                  )
                 : previewCard(run, Map<String, dynamic>.from(p)),
+          if (run['status'] == 'applied' && run['undo_available'] == true)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppTextButton.icon(
+                onPressed: conversationLocked || c.processing
+                    ? null
+                    : () => c.requestUndo(run),
+                icon: const Icon(Icons.undo_rounded),
+                label: const Text('撤销这次操作'),
+              ),
+            ),
+          if (run['undone_by'] != null) const Text('这次操作已撤销'),
+          if (p is Map && rows(run['cards']).isNotEmpty)
+            AppDisclosure(
+              title: const Text('查看参考安排'),
+              children: [for (final card in rows(run['cards'])) factCard(card)],
+            )
+          else
+            for (final card in rows(run['cards'])) factCard(card),
           if (run['error'] != null)
             Text(
               run['error'],
@@ -400,10 +1019,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     child: Material(
       color: color,
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: const BorderSide(color: CampusColors.line),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(padding: const EdgeInsets.all(18), child: child),
     ),
   );
@@ -454,14 +1070,14 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               ],
             ),
             const SizedBox(height: 12),
-            TextButton.icon(
+            AppTextButton.icon(
               onPressed: () => context.push(link),
               icon: const Icon(Icons.bar_chart),
               label: const Text('查看这组统计'),
             ),
           ],
         ),
-        color: const Color(0xFFF0ECFF),
+        color: CampusColors.blueSoft,
       );
     }
     if (kind == 'planning_result') {
@@ -482,8 +1098,16 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
         ),
       );
     }
-    if (kind == 'calendar' || kind == 'records') {
-      final entries = rows(d[kind == 'calendar' ? 'entries' : 'records']);
+    if (kind == 'calendar' ||
+        kind == 'records' ||
+        kind == 'course_occurrences') {
+      final entries = rows(
+        d[kind == 'calendar'
+            ? 'entries'
+            : kind == 'course_occurrences'
+            ? 'occurrences'
+            : 'records'],
+      );
       return panel(
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -502,8 +1126,27 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 padding: EdgeInsets.only(top: 10),
                 child: Text('没有查到匹配的安排'),
               ),
+            if (kind == 'course_occurrences' &&
+                entries.length > 1 &&
+                c.runs.isNotEmpty &&
+                entries.every(
+                  (e) => (c.runs.last['ambiguous_ids'] as List? ?? []).contains(
+                    e['id'],
+                  ),
+                ))
+              AppTextButton(
+                onPressed: conversationLocked || c.processing
+                    ? null
+                    : () => submit(
+                        '我已核对以上 ${entries.length} 个课次，按这组课次继续刚才的操作。',
+                        selectedRecordIds: entries
+                            .map((e) => e['id'] as String)
+                            .toList(),
+                      ),
+                child: Text('选择以上 ${entries.length} 个课次'),
+              ),
             for (final e in entries)
-              ListTile(
+              AppTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 title: Text(e['title'] ?? '日程'),
@@ -518,8 +1161,8 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                         (c.runs.last['ambiguous_ids'] as List? ?? []).contains(
                           e['id'],
                         )
-                    ? TextButton(
-                        onPressed: c.busy || c.processing
+                    ? AppTextButton(
+                        onPressed: conversationLocked || c.processing
                             ? null
                             : () => submit(
                                 '选择「${e['title']}」（${entryTime(e)}），继续刚才的操作。',
@@ -571,7 +1214,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             ),
           ],
         ),
-        color: const Color(0xFFF0ECFF),
+        color: CampusColors.blueSoft,
       );
     }
     if (kind == 'windows') {
@@ -616,11 +1259,14 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     ],
   );
   void openRecord(Map<String, dynamic> e) {
-    final id = e['resource_id'] ?? e['id'];
+    final id = e['resource_type'] == 'course_occurrence'
+        ? e['course_id']
+        : e['resource_id'] ?? e['id'];
+    if (id == null) return;
     final type = e['resource_type'];
     final route = type == 'event'
         ? '/events/$id'
-        : type == 'course'
+        : type == 'course' || type == 'course_occurrence'
         ? '/courses/$id'
         : type == 'exam'
         ? '/exams/$id'
@@ -643,6 +1289,23 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     }
     if ((t['week'] ?? e['week']) != null) return '第${t['week'] ?? e['week']}周';
     return '时间待确认';
+  }
+
+  Widget changeDetails(Map<String, dynamic> run, Map<String, dynamic> p) {
+    final detailRun = <String, dynamic>{
+      ...run,
+      'status': 'detail',
+      'preview': p,
+    };
+    if (p['kind'] == 'course_change' ||
+        p['kind'] == 'exam_change' && run['preview']['kind'] == 'batch') {
+      return ChangeConfirmation(
+        run: detailRun,
+        controller: c,
+        details: (child) => previewCard(detailRun, child),
+      );
+    }
+    return previewCard(detailRun, p);
   }
 
   Widget previewCard(Map<String, dynamic> run, Map<String, dynamic> p) {
@@ -731,7 +1394,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           ))
             difference(labels[key]!, key, before, after, create),
           if (create)
-            ExpansionTile(
+            AppDisclosure(
               tilePadding: EdgeInsets.zero,
               title: const Text('更多设置与来源'),
               children: [
@@ -759,14 +1422,20 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: AppOutlineButton(
                     onPressed: c.busy ? null : () => c.decide(run, false),
-                    child: const Text('不修改'),
+                    child: Text(
+                      create
+                          ? '暂不添加'
+                          : action == 'cancel'
+                          ? '保留安排'
+                          : '暂不修改',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: FilledButton(
+                  child: AppButton(
                     onPressed: c.busy ? null : () => c.decide(run, true),
                     child: Text(
                       action == 'cancel'
@@ -797,27 +1466,51 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     Map<String, dynamic> after,
     bool create,
   ) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: CampusColors.muted, fontSize: 12),
-        ),
-        if (!create && before.containsKey(key))
-          Text(
-            fieldValue(key, before[key]),
-            style: const TextStyle(
-              color: CampusColors.muted,
-              decoration: TextDecoration.lineThrough,
+    padding: const EdgeInsets.only(bottom: 12),
+    child: LayoutBuilder(
+      builder: (context, size) {
+        final value = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!create && before.containsKey(key))
+              Text(
+                fieldValue(key, before[key]),
+                style: const TextStyle(
+                  color: CampusColors.muted,
+                  decoration: TextDecoration.lineThrough,
+                  fontSize: 14,
+                ),
+              ),
+            Text(
+              fieldValue(key, after[key]),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                height: 1.4,
+              ),
             ),
-          ),
-        Text(
-          fieldValue(key, after[key]),
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ],
+          ],
+        );
+        final name = Text(
+          label,
+          style: const TextStyle(color: CampusColors.muted, fontSize: 13),
+        );
+        if (size.maxWidth < 260 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.4) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [name, const SizedBox(height: 4), value],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: 76, child: name),
+            const SizedBox(width: 8),
+            Expanded(child: value),
+          ],
+        );
+      },
     ),
   );
 
@@ -966,7 +1659,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               child: Text('还有$missing分钟没有排入日程。已有安排不会因此被自动延长。'),
             ),
           if (pending && partial)
-            CheckboxListTile(
+            AppCheckRow(
               contentPadding: EdgeInsets.zero,
               title: const Text('先保存能安排的部分', style: TextStyle(fontSize: 14)),
               value: partialAcknowledged.contains(run['id']),
@@ -982,14 +1675,14 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: AppOutlineButton(
                     onPressed: c.busy ? null : () => c.decide(run, false),
                     child: const Text('暂不安排'),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: FilledButton(
+                  child: AppButton(
                     key: const Key('agent-plan-confirm'),
                     onPressed:
                         c.busy ||

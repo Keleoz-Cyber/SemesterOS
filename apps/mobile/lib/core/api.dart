@@ -5,11 +5,13 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiFailure implements Exception {
   final String message;
+  final String? code;
   final bool unauthorized;
   final bool staleSession;
   final int? statusCode;
   ApiFailure(
     this.message, {
+    this.code,
     this.unauthorized = false,
     this.staleSession = false,
     this.statusCode,
@@ -187,6 +189,9 @@ class SemesterApi {
               : '暂时连接不上，请检查网络后重试。已保存的课表仍可查看。',
           unauthorized: e.response?.statusCode == 401 && authenticated,
           statusCode: e.response?.statusCode,
+          code: response is Map && response['code'] is String
+              ? response['code'] as String
+              : null,
         );
       }
     }

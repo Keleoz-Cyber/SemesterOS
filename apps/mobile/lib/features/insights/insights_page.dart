@@ -1,8 +1,10 @@
+import '../../ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/app_selection.dart';
 import '../items/items_controller.dart';
 import '../calendar/calendar_repository.dart';
 import 'insights_controller.dart';
@@ -27,11 +29,11 @@ class _InsightsPageState extends State<InsightsPage> {
   String? selectedDate;
   int visible = 30;
   static const colors = {
-    'study': Color(0xFF6550DD),
-    'research': Color(0xFF1E9A83),
-    'affairs': Color(0xFFDC9637),
-    'life': Color(0xFFCF709A),
-    'unclassified': Color(0xFF8E99AB),
+    'study': CampusColors.primary,
+    'research': CampusColors.teal,
+    'affairs': CampusColors.warning,
+    'life': CampusColors.chartPurple,
+    'unclassified': CampusColors.muted,
   };
   static const names = {
     'study': '学业',
@@ -97,7 +99,7 @@ class _InsightsPageState extends State<InsightsPage> {
         initialDateRange: DateTimeRange(start: c.from, end: c.to),
         helpText: '选择统计日期',
       );
-      if (picked == null) return;
+      if (picked == null || !mounted) return;
       if (picked.end.difference(picked.start).inDays > 365) {
         if (mounted) {
           ScaffoldMessenger.of(
@@ -126,6 +128,146 @@ class _InsightsPageState extends State<InsightsPage> {
     await c.range(a, b);
   }
 
+  String tagName(String id) {
+    for (final tag in insightRows(c.data?['tags'])) {
+      if (tag['id'] == id) return '${tag['name']}';
+    }
+    return '已选标签';
+  }
+
+  Future<void> chooseFilters() async {
+    var category = c.category;
+    final tags = {...c.tags};
+    final availableTags = {
+      for (final tag in insightRows(c.data?['tags']))
+        '${tag['id']}': '${tag['name']}',
+      for (final id in c.tags) id: tagName(id),
+    };
+    final apply = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          top: false,
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * .78,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: Text(
+                    '筛选统计',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    children: [
+                      const Text(
+                        '分类',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      for (final entry in <String?, String>{
+                        null: '全部分类',
+                        ...names,
+                      }.entries)
+                        AppTile(
+                          key: ValueKey('category-${entry.key ?? 'all'}'),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          selected: category == entry.key,
+                          selectedTileColor: CampusColors.blueSoft,
+                          title: Text(entry.value),
+                          trailing: Icon(
+                            category == entry.key
+                                ? Icons.radio_button_checked_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            size: 22,
+                          ),
+                          onTap: () =>
+                              setSheetState(() => category = entry.key),
+                        ),
+                      if (availableTags.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        const Text(
+                          '标签',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '可多选，包含任一标签即可',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: CampusColors.muted,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final tag in availableTags.entries)
+                              AppFilterChip(
+                                label: Text(tag.value),
+                                selected: tags.contains(tag.key),
+                                onSelected: (selected) => setSheetState(() {
+                                  selected
+                                      ? tags.add(tag.key)
+                                      : tags.remove(tag.key);
+                                }),
+                              ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                  child: Row(
+                    children: [
+                      AppTextButton(
+                        onPressed: () => setSheetState(() {
+                          category = null;
+                          tags.clear();
+                        }),
+                        child: const Text('重置'),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: AppButton(
+                          onPressed: () => Navigator.pop(sheetContext, true),
+                          child: const Text('应用筛选'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (apply != true || !mounted) return;
+    setState(() {
+      selectedDate = null;
+      visible = 30;
+    });
+    c.category = category;
+    c.tags = tags;
+    await c.load();
+  }
+
   Duration get animation => MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
       : const Duration(milliseconds: 350);
@@ -133,101 +275,112 @@ class _InsightsPageState extends State<InsightsPage> {
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: c,
     builder: (context, _) => Scaffold(
-      appBar: AppBar(title: const Text('统计分析')),
+      appBar: AppBar(
+        title: const Text('时间统计'),
+        actions: [
+          AppTextButton.icon(
+            key: const ValueKey('insights-filters'),
+            onPressed: chooseFilters,
+            icon: const Icon(Icons.tune_rounded, size: 20),
+            label: Text(
+              c.category == null && c.tags.isEmpty
+                  ? '筛选'
+                  : '筛选 · ${c.tags.length + (c.category == null ? 0 : 1)}',
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: c.load,
-        child: SingleChildScrollView(
+        child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 36),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                widget.semester['name'],
-                style: const TextStyle(color: CampusColors.muted),
-              ),
-              const SizedBox(height: 12),
+          children: [
+            Text(
+              widget.semester['name'],
+              style: const TextStyle(color: CampusColors.muted),
+            ),
+            const SizedBox(height: 12),
+            AppSegmentedControl<String>(
+              value: range,
+              options: const {
+                'week': '本周',
+                'month': '近4周',
+                'term': '本学期',
+                'custom': '自定义',
+              },
+              onChanged: chooseRange,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${calendarDate(c.from)} — ${calendarDate(c.to)}',
+              style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+            ),
+            const SizedBox(height: 16),
+            if (c.category != null || c.tags.isNotEmpty)
               Wrap(
-                spacing: 7,
-                runSpacing: 7,
+                spacing: 8,
                 children: [
-                  for (final r in {
-                    'week': '本周',
-                    'month': '近4周',
-                    'term': '本学期',
-                    'custom': '自选日期',
-                  }.entries)
-                    ChoiceChip(
-                      label: Text(r.value),
-                      selected: range == r.key,
-                      onSelected: (_) => chooseRange(r.key),
+                  if (c.category != null)
+                    AppInputChip(
+                      label: Text(names[c.category] ?? '分类'),
+                      onDeleted: () {
+                        selectedDate = null;
+                        visible = 30;
+                        c.filterCategory(null);
+                      },
+                    ),
+                  for (final tagId in c.tags)
+                    AppInputChip(
+                      label: Text(tagName(tagId)),
+                      onDeleted: () {
+                        selectedDate = null;
+                        visible = 30;
+                        c.toggleTag(tagId);
+                      },
                     ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                '${calendarDate(c.from)} — ${calendarDate(c.to)}',
-                style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+            if (c.busy) const LinearProgressIndicator(minHeight: 2),
+            if (c.offline)
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: CampusColors.warningSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  c.data == null
+                      ? (c.error ?? '暂时无法读取统计，请下拉重试。')
+                      : '当前显示缓存统计，下拉可重新同步。',
+                ),
               ),
-              const SizedBox(height: 16),
-              if (c.category != null || c.tags.isNotEmpty)
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    if (c.category != null)
-                      InputChip(
-                        label: Text(names[c.category] ?? '分类'),
-                        onDeleted: () => c.filterCategory(null),
-                      ),
-                    for (final tag in insightRows(
-                      c.data?['tags'],
-                    ).where((t) => c.tags.contains(t['id'])))
-                      InputChip(
-                        label: Text(tag['name']),
-                        onDeleted: () => c.toggleTag(tag['id']),
-                      ),
-                  ],
-                ),
-              if (c.busy) const LinearProgressIndicator(minHeight: 2),
-              if (c.offline)
-                Container(
-                  margin: const EdgeInsets.symmetric(vertical: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF1DD),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    c.data == null
-                        ? (c.error ?? '暂时无法读取统计，请下拉重试。')
-                        : '当前显示缓存统计，下拉可重新同步。',
-                  ),
-                ),
-              if (c.data != null)
-                ExcludeSemantics(
-                  excluding: c.busy,
-                  child: IgnorePointer(
-                    ignoring: c.busy,
-                    child: AnimatedOpacity(
-                      opacity: c.busy && !c.matchesCurrentQuery
-                          ? 0
-                          : c.busy
-                          ? 0.5
-                          : 1,
-                      duration: c.busy && !c.matchesCurrentQuery
-                          ? Duration.zero
-                          : animation,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: content(c.data!),
-                      ),
+            if (c.data != null)
+              ExcludeSemantics(
+                excluding: c.busy,
+                child: IgnorePointer(
+                  ignoring: c.busy,
+                  child: AnimatedOpacity(
+                    opacity: c.busy && !c.matchesCurrentQuery
+                        ? 0
+                        : c.busy
+                        ? 0.5
+                        : 1,
+                    duration: c.busy && !c.matchesCurrentQuery
+                        ? Duration.zero
+                        : animation,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: content(c.data!),
                     ),
                   ),
                 ),
-              if (c.data == null && !c.busy)
-                TextButton(onPressed: c.load, child: const Text('重新加载')),
-            ],
-          ),
+              ),
+            if (c.data == null && !c.busy)
+              AppTextButton(onPressed: c.load, child: const Text('重新加载')),
+          ],
         ),
       ),
     ),
@@ -244,45 +397,7 @@ class _InsightsPageState extends State<InsightsPage> {
         .toList();
     return [
       const SizedBox(height: 10),
-      LayoutBuilder(
-        builder: (context, size) {
-          final w = (size.maxWidth - 12) / 2;
-          return Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              metric(
-                '日历占用',
-                insightHours(summary['occupied_union_minutes']),
-                const Color(0xFFEDE9FF),
-                w,
-                Icons.schedule_rounded,
-              ),
-              metric(
-                '实际记录',
-                insightHours(summary['actual_minutes']),
-                const Color(0xFFE0F5EB),
-                w,
-                Icons.done_all_rounded,
-              ),
-              metric(
-                '固定安排',
-                insightHours(summary['fixed_scheduled_minutes']),
-                Colors.white,
-                w,
-                Icons.event_available_outlined,
-              ),
-              metric(
-                '个人计划',
-                insightHours(summary['personal_planned_minutes']),
-                Colors.white,
-                w,
-                Icons.checklist_rounded,
-              ),
-            ],
-          );
-        },
-      ),
+      overview(summary),
       const SizedBox(height: 12),
       Text(
         '日历占用已扣除重叠时段 · ${summary['entry_count'] ?? 0}条记录',
@@ -294,19 +409,17 @@ class _InsightsPageState extends State<InsightsPage> {
           padding: const EdgeInsets.only(top: 8),
           child: Text(
             '${summary['unknown_duration_count'] ?? 0}条安排缺少起止时间 · ${summary['undated_count'] ?? 0}条日期待确认',
-            style: const TextStyle(color: Color(0xFF996019), fontSize: 12),
+            style: const TextStyle(color: CampusColors.warning, fontSize: 12),
           ),
         ),
       const SizedBox(height: 24),
-      SegmentedButton<String>(
-        segments: const [
-          ButtonSegment(value: 'scheduled', label: Text('已安排')),
-          ButtonSegment(value: 'actual', label: Text('实际记录')),
-        ],
-        selected: {mode},
-        onSelectionChanged: (s) => setState(() {
-          mode = s.first;
+      AppSegmentedControl<String>(
+        value: mode,
+        options: const {'scheduled': '已安排', 'actual': '实际记录'},
+        onChanged: (value) => setState(() {
+          mode = value;
           selectedDate = null;
+          visible = 30;
         }),
       ),
       const SizedBox(height: 14),
@@ -329,7 +442,7 @@ class _InsightsPageState extends State<InsightsPage> {
             if (selectedDate != null)
               Align(
                 alignment: Alignment.centerLeft,
-                child: InputChip(
+                child: AppInputChip(
                   label: Text('$selectedDate 的记录'),
                   onDeleted: () => setState(() => selectedDate = null),
                 ),
@@ -348,51 +461,35 @@ class _InsightsPageState extends State<InsightsPage> {
             ),
             const SizedBox(height: 14),
             distribution(categories),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final cat in categories)
-                  FilterChip(
-                    key: ValueKey('category-${cat['id']}'),
-                    label: Text(cat['name']),
-                    avatar: CircleAvatar(
-                      radius: 5,
-                      backgroundColor: colors[cat['id']],
+            if (MediaQuery.textScalerOf(context).scale(1) <= 1.4)
+              Wrap(
+                spacing: 18,
+                runSpacing: 10,
+                children: [
+                  for (final category in categories)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: colors[category['id']],
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${category['name']}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
                     ),
-                    selected: c.category == cat['id'],
-                    onSelected: (_) {
-                      selectedDate = null;
-                      c.filterCategory(
-                        c.category == cat['id'] ? null : cat['id'],
-                      );
-                    },
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      if (insightRows(data['tags']).isNotEmpty) ...[
-        const SizedBox(height: 18),
-        heading('标签筛选', sub: '命中任一标签，同一记录只统计一次'),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 7,
-          runSpacing: 7,
-          children: [
-            for (final t in insightRows(data['tags']))
-              FilterChip(
-                label: Text(t['name']),
-                selected: c.tags.contains(t['id']),
-                onSelected: (_) {
-                  selectedDate = null;
-                  c.toggleTag(t['id']);
-                },
+                ],
               ),
           ],
         ),
-      ],
+      ),
       const SizedBox(height: 24),
       heading(
         selectedDate == null ? '统计来源' : '$selectedDate 的来源',
@@ -403,12 +500,12 @@ class _InsightsPageState extends State<InsightsPage> {
         const Padding(padding: EdgeInsets.all(20), child: Text('这个范围内没有对应记录。')),
       for (final r in shown.take(visible)) sourceTile(r),
       if (shown.length > visible)
-        TextButton(
+        AppTextButton(
           onPressed: () => setState(() => visible += 30),
           child: Text('继续查看（剩余${shown.length - visible}条）'),
         ),
       if (insightRows(data['undated']).isNotEmpty)
-        ExpansionTile(
+        AppDisclosure(
           tilePadding: EdgeInsets.zero,
           title: Text('日期待确认（${insightRows(data['undated']).length}条）'),
           subtitle: const Text('不分配到任意日期，也不计入本次时长'),
@@ -418,7 +515,7 @@ class _InsightsPageState extends State<InsightsPage> {
           ],
         ),
       const SizedBox(height: 16),
-      ExpansionTile(
+      AppDisclosure(
         tilePadding: EdgeInsets.zero,
         title: const Text('统计口径'),
         children: [
@@ -455,53 +552,122 @@ class _InsightsPageState extends State<InsightsPage> {
     ],
   );
   Widget panel(Widget child) => Container(
-    padding: const EdgeInsets.all(17),
+    padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: CampusColors.line),
+      borderRadius: BorderRadius.circular(16),
     ),
     child: child,
   );
-  Widget metric(
-    String label,
-    String value,
-    Color color,
-    double width,
-    IconData icon,
-  ) => Container(
-    width: width,
-    padding: const EdgeInsets.all(17),
+  Widget overview(Map<String, dynamic> summary) => Container(
+    padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(23),
+      color: CampusColors.surface,
+      borderRadius: BorderRadius.circular(20),
     ),
     child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
+        const Row(
           children: [
-            Icon(icon, size: 18, color: CampusColors.primary),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+            Icon(Icons.schedule_rounded, size: 20, color: CampusColors.primary),
+            SizedBox(width: 8),
+            Text(
+              '日历占用',
+              style: TextStyle(
+                fontSize: 14,
+                color: CampusColors.muted,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         AnimatedSwitcher(
           duration: animation,
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.centerLeft,
+            children: [...previous, ?current],
+          ),
           child: Text(
-            value,
-            key: ValueKey(value),
-            style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w800),
+            insightHours(summary['occupied_union_minutes']),
+            key: ValueKey(summary['occupied_union_minutes']),
+            style: const TextStyle(
+              fontSize: 42,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+              color: CampusColors.primary,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Divider(height: 1),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 32,
+          runSpacing: 16,
+          children: [
+            subtotal(
+              '固定安排',
+              summary['fixed_scheduled_minutes'],
+              CampusColors.ink,
+            ),
+            subtotal(
+              '个人计划',
+              summary['personal_planned_minutes'],
+              CampusColors.teal,
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: CampusColors.tealSoft,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 16,
+            runSpacing: 6,
+            children: [
+              const Text(
+                '实际记录',
+                style: TextStyle(fontSize: 14, color: CampusColors.teal),
+              ),
+              Text(
+                insightHours(summary['actual_minutes']),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: CampusColors.teal,
+                ),
+              ),
+            ],
           ),
         ),
       ],
     ),
+  );
+  Widget subtotal(String label, dynamic minutes, Color color) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        insightHours(minutes),
+        style: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w600,
+          color: color,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    ],
   );
   Widget trend(List<Map<String, dynamic>> daily) {
     if (daily.isEmpty) return const Text('暂无可绘制的数据');
@@ -515,7 +681,7 @@ class _InsightsPageState extends State<InsightsPage> {
     return Column(
       children: [
         SizedBox(
-          height: 210,
+          height: 210 + (MediaQuery.textScalerOf(context).scale(12) - 12) * 2,
           child: LayoutBuilder(
             builder: (context, size) => SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -535,7 +701,7 @@ class _InsightsPageState extends State<InsightsPage> {
                               width: daily.length > 14 ? 12 : 18,
                               borderRadius: BorderRadius.circular(5),
                               color: selectedDate == daily[i]['date']
-                                  ? const Color(0xFF252B45)
+                                  ? CampusColors.ink
                                   : CampusColors.primary,
                               rodStackItems: mode == 'actual'
                                   ? null
@@ -546,7 +712,7 @@ class _InsightsPageState extends State<InsightsPage> {
                                                     as num? ??
                                                 0) /
                                             60,
-                                        const Color(0xFF7664E5),
+                                        CampusColors.primary,
                                       ),
                                       BarChartRodStackItem(
                                         (daily[i]['fixed_scheduled_minutes']
@@ -554,7 +720,7 @@ class _InsightsPageState extends State<InsightsPage> {
                                                 0) /
                                             60,
                                         amount(daily[i]),
-                                        const Color(0xFF48B8A0),
+                                        CampusColors.teal,
                                       ),
                                     ],
                             ),
@@ -579,11 +745,13 @@ class _InsightsPageState extends State<InsightsPage> {
                       leftTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
-                          reservedSize: 32,
+                          reservedSize: MediaQuery.textScalerOf(
+                            context,
+                          ).scale(36),
                           getTitlesWidget: (value, meta) => Text(
                             '${value.toInt()}h',
                             style: const TextStyle(
-                              fontSize: 10,
+                              fontSize: 12,
                               color: CampusColors.muted,
                             ),
                           ),
@@ -592,7 +760,8 @@ class _InsightsPageState extends State<InsightsPage> {
                       bottomTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
-                          reservedSize: 30,
+                          reservedSize:
+                              MediaQuery.textScalerOf(context).scale(22) + 12,
                           interval: 1,
                           getTitlesWidget: (value, meta) {
                             final i = value.toInt();
@@ -604,7 +773,7 @@ class _InsightsPageState extends State<InsightsPage> {
                               child: Text(
                                 '${DateTime.parse(daily[i]['date']).day}',
                                 style: const TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   color: CampusColors.muted,
                                 ),
                               ),
@@ -634,7 +803,7 @@ class _InsightsPageState extends State<InsightsPage> {
         const SizedBox(height: 10),
         if (mode == 'scheduled')
           const Text(
-            '紫色：固定安排　绿色：个人计划',
+            '蓝色：固定安排　青色：个人计划',
             style: TextStyle(color: CampusColors.muted, fontSize: 11),
           ),
         // Text controls are also keyboard/screen-reader accessible and cover zero-height bars.
@@ -643,7 +812,7 @@ class _InsightsPageState extends State<InsightsPage> {
           child: Row(
             children: [
               for (final d in daily)
-                TextButton(
+                AppTextButton(
                   onPressed: () => setState(
                     () => selectedDate = selectedDate == d['date']
                         ? null
@@ -670,6 +839,23 @@ class _InsightsPageState extends State<InsightsPage> {
         child: Text('暂无可统计的时长'),
       );
     }
+    if (MediaQuery.textScalerOf(context).scale(1) > 1.4) {
+      return Column(
+        children: [
+          for (final part in parts)
+            AppTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(part['name']),
+              subtitle: Text(insightHours(part[key])),
+              trailing: Text('${((part[key] as num) / sum * 100).round()}%'),
+              onTap: () {
+                selectedDate = null;
+                c.filterCategory(c.category == part['id'] ? null : part['id']);
+              },
+            ),
+        ],
+      );
+    }
     return SizedBox(
       height: 190,
       child: Stack(
@@ -692,7 +878,7 @@ class _InsightsPageState extends State<InsightsPage> {
                       radius: c.category == p['id'] ? 34 : 27,
                       title: '${((p[key] as num) / sum * 100).round()}%',
                       titleStyle: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -786,8 +972,8 @@ class _InsightsPageState extends State<InsightsPage> {
     padding: const EdgeInsets.only(bottom: 8),
     child: Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(17),
-      child: ListTile(
+      borderRadius: BorderRadius.circular(12),
+      child: AppTile(
         leading: Container(
           width: 5,
           height: 38,

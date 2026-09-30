@@ -1,3 +1,4 @@
+import 'package:semester_os/ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/changes/changes_page.dart';
@@ -77,8 +78,8 @@ void main() {
       );
       expect(
         tester
-            .widget<FilledButton>(
-              find.widgetWithText(FilledButton, '确认现实变化，暂不移动个人计划'),
+            .widget<AppButton>(
+              find.widgetWithText(AppButton, '确认现实变化，暂不移动个人计划'),
             )
             .onPressed,
         isNull,
@@ -146,11 +147,22 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.pumpAndSettle();
+      expect(find.text('确认现实变化，暂不移动个人计划').hitTestable(), findsOneWidget);
       await ioTap(tester, find.text('确认现实变化，暂不移动个人计划'));
       expect(changesApplied, 1);
       expect(calendarRefresh, 1);
       expect(replans, 0);
       expect(f.applied, 0);
+      // Applying expands the confirmation area; reveal its next action before
+      // tapping so this still exercises the two independent requests.
+      await tester.scrollUntilVisible(
+        find.text('查看个人计划调整方案'),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('查看个人计划调整方案').hitTestable(), findsOneWidget);
       await ioTap(tester, find.text('查看个人计划调整方案'));
       expect(replans, 1);
       expect(f.applied, 0);
@@ -161,6 +173,8 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.pumpAndSettle();
+      expect(find.text('确认调整计划').hitTestable(), findsOneWidget);
       await ioTap(tester, find.text('确认调整计划'));
       expect(f.applied, 1);
       await tester.pumpWidget(const SizedBox());
@@ -187,9 +201,7 @@ void main() {
     );
     expect(
       tester
-          .widget<FilledButton>(
-            find.widgetWithText(FilledButton, '确认现实变化，暂不移动个人计划'),
-          )
+          .widget<AppButton>(find.widgetWithText(AppButton, '确认现实变化，暂不移动个人计划'))
           .onPressed,
       isNull,
     );

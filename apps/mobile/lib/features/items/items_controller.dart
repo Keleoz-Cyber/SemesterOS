@@ -20,6 +20,7 @@ class ItemsController extends ChangeNotifier {
   int _epoch = 0, _request = 0, _boundGeneration = -1;
   bool _disposed = false;
   Map<String, dynamic> _saved = {};
+  final Set<String> _deletedSemesterIds = {};
   VoidCallback? onUnauthorized;
   Future<void> Function(Map<String, dynamic>)? onRealityChanged;
   Map<String, dynamic>? analysis;
@@ -101,6 +102,7 @@ class ItemsController extends ChangeNotifier {
       return;
     }
     final previous = _owner;
+    if (previous != owner) _deletedSemesterIds.clear();
     _epoch++;
     invalidateRisk();
     itemsRevision = null;
@@ -122,7 +124,11 @@ class ItemsController extends ChangeNotifier {
     changed();
     if (previous != _owner || _owner == null) {
       try {
-        await reminders.clear();
+        if (previous == null && _owner != null) {
+          await reminders.initializeOwner(_owner!);
+        } else {
+          await reminders.clear();
+        }
       } catch (_) {
         notificationStatus = '旧系统提醒清理失败，请重新打开App重试';
       }
@@ -135,10 +141,29 @@ class ItemsController extends ChangeNotifier {
         }
       }
     }
-    if (!valid(epoch, generation) || _owner == null || selected == null) return;
+    if (!valid(epoch, generation) || _owner == null) return;
+    if (selected == null) {
+      _saved = {};
+      final account = _owner!;
+      final old = await cache.read('items:$account') ?? {};
+      if (!valid(epoch, generation)) return;
+      await cache.write('items:$account', {...old, 'semesters': {}});
+      try {
+        await refreshOwnerReminders();
+      } catch (_) {
+        if (valid(epoch, generation)) {
+          notificationStatus = '提醒同步未完成，请联网后重试';
+          changed();
+        }
+      }
+      return;
+    }
     final saved = await cache.read('items:$_owner');
     if (!valid(epoch, generation)) return;
     _saved = Map<String, dynamic>.from(saved?['semesters'] ?? {});
+    for (final deleted in _deletedSemesterIds) {
+      _saved.remove(deleted);
+    }
     final selectedCache = _saved[selected];
     items = rows(selectedCache?['items']);
     courses = rows(selectedCache?['courses']);
@@ -169,6 +194,9 @@ class ItemsController extends ChangeNotifier {
       reminderFeed = rows(result[2]['reminders']);
       syncedAt = result[2]['synced_at'];
       _saved[sid] = {'items': items, 'courses': courses};
+      for (final deleted in _deletedSemesterIds) {
+        _saved.remove(deleted);
+      }
       offline = false;
       notice = null;
       await cache.write('items:$_owner', {
@@ -217,6 +245,40 @@ class ItemsController extends ChangeNotifier {
       }
     }
     if (valid(epoch, generation)) changed();
+  }
+
+  Future<void> forgetDeletedSemester(String sid) async {
+    final account = owner;
+    if (account == null) return;
+    _deletedSemesterIds.add(sid);
+    _saved.remove(sid);
+    final saved = await cache.read('items:$account') ?? {};
+    final terms = Map<String, dynamic>.from(saved['semesters'] ?? {})
+      ..remove(sid);
+    await cache.write('items:$account', {...saved, 'semesters': terms});
+    if (_owner != account || owner != account) return;
+    _saved = terms;
+    await refreshOwnerReminders();
+  }
+
+  Future<void> refreshOwnerReminders() async {
+    final account = owner;
+    if (account == null || _owner != account) return;
+    final epoch = _epoch, generation = api.generation;
+    final response = await api.request('GET', '/reminders');
+    if (!valid(epoch, generation)) return;
+    if (response['owner_id'] != account) {
+      throw ApiFailure('提醒清单账号不一致');
+    }
+    reminderFeed = rows(response['reminders']);
+    final saved = await cache.read('items:$account') ?? {};
+    if (!valid(epoch, generation)) return;
+    await cache.write('items:$account', {
+      ...saved,
+      'reminders': reminderFeed,
+      'synced_at': response['synced_at'],
+    });
+    await syncNotifications();
   }
 
   Future<Map<String, dynamic>> save(

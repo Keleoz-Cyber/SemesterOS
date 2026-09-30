@@ -190,10 +190,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(PieChart), findsOneWidget);
       await capture(tester, 'insights-distribution');
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('category-research')),
-      );
+      await tester.tap(find.byKey(const ValueKey('insights-filters')));
+      await tester.pumpAndSettle();
       await ioTap(tester, find.byKey(const ValueKey('category-research')));
+      await ioTap(tester, find.text('应用筛选'));
       expect(queries.last.queryParameters['category_id'], 'research');
       await tester.ensureVisible(find.text('课题组组会'));
       await tester.pumpAndSettle();

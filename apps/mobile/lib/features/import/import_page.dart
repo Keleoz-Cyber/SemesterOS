@@ -1,3 +1,5 @@
+import '../../ui/app_controls.dart';
+import '../../ui/detail_widgets.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -259,7 +261,7 @@ class _ImportPageState extends State<ImportPage> {
     },
     child: Scaffold(
       appBar: AppBar(
-        leading: IconButton(
+        leading: AppIconButton(
           onPressed: leave,
           icon: const Icon(Icons.arrow_back),
           tooltip: '返回并退出教务登录',
@@ -272,7 +274,7 @@ class _ImportPageState extends State<ImportPage> {
           ],
         ),
         actions: [
-          IconButton(
+          AppIconButton(
             onPressed: refreshSchool,
             icon: const Icon(Icons.refresh),
             tooltip: '刷新学校页面',
@@ -281,6 +283,10 @@ class _ImportPageState extends State<ImportPage> {
       ),
       body: Column(
         children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: WorkflowHeader(steps: ['选择学校', '登录教务', '核对课表'], current: 1),
+          ),
           const Padding(
             padding: EdgeInsets.all(10),
             child: Text(
@@ -301,7 +307,7 @@ class _ImportPageState extends State<ImportPage> {
               padding: const EdgeInsets.all(12),
               child: SizedBox(
                 width: double.infinity,
-                child: FilledButton(
+                child: AppButton(
                   onPressed: reading || closing ? null : read,
                   child: Text(reading ? '正在读取课表…' : '读取当前学期课表'),
                 ),

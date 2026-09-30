@@ -1,3 +1,5 @@
+import '../../ui/app_controls.dart';
+import '../../ui/detail_widgets.dart';
 import 'package:flutter/material.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/campus_widgets.dart';
@@ -7,6 +9,7 @@ class SemesterView extends StatelessWidget {
   final Map<String, dynamic> current;
   final void Function(Map<String, dynamic>) onSelect;
   final VoidCallback onCreate, onImport, onManual;
+  final VoidCallback? onEdit, onDelete;
   const SemesterView({
     super.key,
     required this.semesters,
@@ -15,97 +18,111 @@ class SemesterView extends StatelessWidget {
     required this.onCreate,
     required this.onImport,
     required this.onManual,
+    this.onEdit,
+    this.onDelete,
   });
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const CampusHero(
-        eyebrow: '我的时间',
+      const RecordHeading(
         title: '我的学期',
-        subtitle: '从第一周开始\n把每一段安排放好',
+        label: '学期与课表',
+        icon: Icons.auto_stories_outlined,
+        subtitle: '切换学期后，课表、事项和计划会一起切换。',
       ),
       SectionHeading('学期列表', action: '新建学期', onAction: onCreate),
       for (final s in semesters) ...[
         Material(
           color: s['id'] == current['id']
-              ? const Color(0xFFEFEDFF)
-              : Colors.white,
-          borderRadius: BorderRadius.circular(21),
-          child: InkWell(
+              ? CampusColors.blueSoft
+              : CampusColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          child: AppTile(
+            contentPadding: const EdgeInsets.all(16),
             onTap: () => onSelect(s),
-            borderRadius: BorderRadius.circular(21),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
+            selected: s['id'] == current['id'],
+            leading: const Icon(
+              Icons.auto_stories_outlined,
+              color: CampusColors.primary,
+            ),
+            title: Text(
+              '${s['name']}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .8),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.auto_stories_outlined,
-                          color: CampusColors.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          '${s['name']}',
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      if (s['id'] == current['id'])
-                        const Icon(
-                          Icons.check_circle_rounded,
-                          color: CampusColors.primary,
-                          size: 23,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 17),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      StatusPill(
-                        '共${s['total_weeks']}周',
-                        background: Colors.white.withValues(alpha: .7),
-                        foreground: CampusColors.muted,
-                      ),
-                      if (s['id'] == current['id']) const StatusPill('当前学期'),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
                   Text(
-                    '第一周周一  ${s['first_monday']}',
+                    '共${s['total_weeks']}周 · 第一周周一 ${s['first_monday']}',
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       color: CampusColors.muted,
                     ),
                   ),
+                  if (s['id'] == current['id'])
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        '当前学期',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: CampusColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
+            trailing: Icon(
+              s['id'] == current['id']
+                  ? Icons.check_circle_rounded
+                  : Icons.chevron_right_rounded,
+              color: s['id'] == current['id']
+                  ? CampusColors.primary
+                  : CampusColors.muted,
+            ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+      ],
+      if (onEdit != null || onDelete != null) ...[
+        const SectionHeading('学期设置'),
+        if (onEdit != null)
+          AppTile(
+            leading: const Icon(
+              Icons.edit_calendar_outlined,
+              color: CampusColors.primary,
+            ),
+            title: const Text('修改校历与节次'),
+            subtitle: const Text('修正开学日期、周数或上课时间'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: onEdit,
+          ),
+        if (onDelete != null)
+          AppTile(
+            leading: const Icon(
+              Icons.delete_outline_rounded,
+              color: CampusColors.error,
+            ),
+            title: const Text(
+              '删除当前学期',
+              style: TextStyle(color: CampusColors.error),
+            ),
+            subtitle: const Text('先查看会一并删除的内容'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: onDelete,
+          ),
       ],
       const SectionHeading('管理课表'),
       CampusPanel(
         padding: EdgeInsets.zero,
         child: Column(
           children: [
-            ListTile(
+            AppTile(
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 18,
                 vertical: 8,
@@ -126,14 +143,14 @@ class SemesterView extends StatelessWidget {
               onTap: onImport,
             ),
             const Divider(height: 1, indent: 58, endIndent: 18),
-            ListTile(
+            AppTile(
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 18,
                 vertical: 8,
               ),
               leading: const Icon(
                 Icons.edit_calendar_outlined,
-                color: Color(0xFF328774),
+                color: CampusColors.teal,
               ),
               title: const Text(
                 '手工补充课程',

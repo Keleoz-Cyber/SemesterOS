@@ -1,3 +1,8 @@
+import 'package:forui/forui.dart';
+import '../ui/forui_theme.dart';
+import '../ui/assistant_scope.dart';
+import '../ui/brand.dart';
+import '../features/agent/assistant_sheet.dart';
 import '../features/calendar/event_form.dart';
 import '../features/agent/agent_page.dart';
 import '../features/insights/insights_page.dart';
@@ -19,10 +24,8 @@ import '../features/items/android_notifications.dart';
 import '../features/items/reminder_sync.dart';
 import '../features/items/item_form.dart';
 import '../features/items/item_detail.dart';
-import '../features/items/capture_page.dart';
 import '../features/centers/semester_centers.dart';
 import '../features/centers/exam_pages.dart';
-import '../features/media/media_capture_page.dart';
 import '../features/operations/operation_page.dart';
 
 class SemesterApp extends ConsumerStatefulWidget {
@@ -118,10 +121,11 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
           path: '/capture/media',
           builder: (_, state) => controller.semester == null
               ? SemesterPage(controller: controller)
-              : MediaCapturePage(
+              : AgentPage(
                   controller: items,
                   semester: controller.semester!,
-                  kind: state.uri.queryParameters['kind'] ?? 'image',
+                  initialMediaKind:
+                      state.uri.queryParameters['kind'] ?? 'image',
                 ),
         ),
         GoRoute(
@@ -172,7 +176,11 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
           path: '/capture',
           builder: (_, _) => controller.semester == null
               ? SemesterPage(controller: controller)
-              : CapturePage(controller: items, semester: controller.semester!),
+              : AgentPage(
+                  controller: items,
+                  semester: controller.semester!,
+                  autofocus: true,
+                ),
         ),
         GoRoute(
           path: '/items/new',
@@ -287,12 +295,36 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
 
   @override
   Widget build(BuildContext context) => MaterialApp.router(
-    title: '学期OS',
+    title: appName,
     locale: const Locale('zh', 'CN'),
     supportedLocales: const [Locale('zh', 'CN')],
-    localizationsDelegates: GlobalMaterialLocalizations.delegates,
+    localizationsDelegates: const [
+      FLocalizations.delegate,
+      ...GlobalMaterialLocalizations.delegates,
+    ],
     debugShowCheckedModeBanner: false,
     routerConfig: router,
     theme: campusTheme(),
+    builder: (context, child) => ShiriForuiTheme(
+      child: AssistantScope(
+        onOpen:
+            (pageContext, {initialText, mediaKind, autoSubmit = false}) async {
+              final semester = controller.semester;
+              if (semester == null) {
+                router.push('/semester/new');
+                return;
+              }
+              await openAssistantSheet(
+                pageContext,
+                controller: items,
+                semester: semester,
+                initialText: initialText,
+                mediaKind: mediaKind,
+                autoSubmit: autoSubmit,
+              );
+            },
+        child: child ?? const SizedBox(),
+      ),
+    ),
   );
 }

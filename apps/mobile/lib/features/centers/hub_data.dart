@@ -1,3 +1,4 @@
+import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -21,10 +22,10 @@ class HubData extends StatefulWidget {
     required this.builder,
   });
   @override
-  State<HubData> createState() => _HubDataState();
+  HubDataState createState() => HubDataState();
 }
 
-class _HubDataState extends State<HubData> {
+class HubDataState extends State<HubData> with WidgetsBindingObserver {
   Map<String, dynamic>? data;
   String? error;
   bool busy = false;
@@ -32,16 +33,56 @@ class _HubDataState extends State<HubData> {
   late final generation = widget.controller.api.generation;
   late final sid = widget.controller.semesterId;
   Timer? timer;
+  Future<void>? _pending;
+  DateTime? _loadedAt;
+  bool _visible = false;
+  bool _foreground = true;
+  bool get active => _visible && _foreground;
+  bool get stale =>
+      data == null ||
+      error != null ||
+      _expired ||
+      widget.controller.revisionIsStale(sid, data!['revision']) ||
+      _loadedAt == null ||
+      DateTime.now().difference(_loadedAt!) >= const Duration(seconds: 45);
+  bool get _expired {
+    final until = data?['valid_until'] ?? data?['risk']?['valid_until'];
+    return until != null &&
+        DateTime.tryParse('$until')?.isAfter(DateTime.now()) != true;
+  }
+
   bool get same =>
       generation == widget.controller.api.generation &&
       sid == widget.controller.semesterId;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _foreground =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     widget.controller.addListener(changed);
-    load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _visible = TickerMode.valuesOf(context).enabled;
+    _updateActivity();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _updateActivity();
+  }
+
+  void _updateActivity() {
+    timer?.cancel();
+    if (!active || !same) return;
+    if (stale && !busy) load();
     timer = Timer.periodic(const Duration(seconds: 45), (_) {
-      if (!busy && same) load();
+      if (active && !busy && same) load();
     });
   }
 
@@ -52,12 +93,20 @@ class _HubDataState extends State<HubData> {
   @override
   void dispose() {
     timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     request++;
     widget.controller.removeListener(changed);
     super.dispose();
   }
 
-  Future<void> load() async {
+  Future<void> load() {
+    if (_pending != null) return _pending!;
+    final pending = _load();
+    _pending = pending;
+    return pending.whenComplete(() => _pending = null);
+  }
+
+  Future<void> _load() async {
     if (!same) return;
     final stamp = ++request;
     setState(() {
@@ -71,12 +120,14 @@ class _HubDataState extends State<HubData> {
         throw Exception('查询期间安排已更新，请刷新');
       }
       widget.controller.observeRevision(sid!, value['revision']);
-      setState(() => data = value);
+      setState(() {
+        data = value;
+        _loadedAt = DateTime.now();
+      });
     } catch (e) {
-      if (mounted && stamp == request) {
+      if (mounted && stamp == request && same) {
         setState(() {
           error = userError(e);
-          data = null;
         });
       }
     } finally {
@@ -91,6 +142,7 @@ class _HubDataState extends State<HubData> {
     final until = value?['valid_until'] ?? value?['risk']?['valid_until'];
     final fresh =
         value != null &&
+        error == null &&
         !widget.controller.offline &&
         !widget.controller.revisionIsStale(sid, value['revision']) &&
         until != null &&
@@ -98,19 +150,32 @@ class _HubDataState extends State<HubData> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: busy ? null : load,
-            icon: const Icon(Icons.refresh),
-            label: const Text('刷新本页'),
-          ),
-        ),
         if (busy) const LinearProgressIndicator(),
-        if (error != null) SoftNotice(error!, warning: true),
+        if (error != null) ...[
+          SoftNotice(
+            value == null ? error! : '更新失败，保留上次记录。$error',
+            warning: true,
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppTextButton.icon(
+              onPressed: busy ? null : load,
+              icon: const Icon(Icons.refresh),
+              label: const Text('重试'),
+            ),
+          ),
+        ],
         if (value != null) ...[
-          if (!fresh)
-            const SoftNotice('安排已更新或分析过期，请刷新后查看最新余量与负荷。', warning: true),
+          if (!fresh && error == null) ...[
+            const SoftNotice('安排已更新或分析过期，时间余量待更新。', warning: true),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppTextButton(
+                onPressed: busy ? null : load,
+                child: const Text('更新数据'),
+              ),
+            ),
+          ],
           widget.builder(context, value, fresh, load),
         ],
       ],

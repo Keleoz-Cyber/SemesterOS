@@ -98,6 +98,27 @@ void main() {
     },
   );
   test(
+    'calendar mismatch keeps its code for an actionable settings link',
+    () async {
+      final api = SemesterApi()..session = account('preview');
+      api.dio.httpClientAdapter = ControlledTransport(
+        (_) async => body({
+          'code': 'CALENDAR_MISMATCH',
+          'message': '课表使用第11节，请补上该节时间',
+        }, 422),
+      );
+      await expectLater(
+        api.request('POST', '/imports', data: {}),
+        throwsA(
+          isA<ApiFailure>()
+              .having((e) => e.code, 'code', 'CALENDAR_MISMATCH')
+              .having((e) => e.message, 'message', contains('第11节')),
+        ),
+      );
+      api.dio.close();
+    },
+  );
+  test(
     'a delayed response from account A cannot be used by account B',
     () async {
       final api = SemesterApi();

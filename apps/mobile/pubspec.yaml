@@ -1,7 +1,7 @@
 name: semester_os
 description: "学期OS：课程导入与学期事务管理"
 publish_to: 'none'
-version: 0.2.0+2
+version: 0.1.0+6
 
 environment:
   sdk: ^3.12.2
@@ -9,12 +9,14 @@ environment:
 dependencies:
   audio_session: 0.2.2
   calendar_view: 2.0.0
+  cupertino_icons: 1.0.9
   cupertino_ui: 1.0.0
   dio: ^5.11.1
   drift: 2.28.2
   fl_chart: 1.2.0
   flutter:
     sdk: flutter
+  flutter_markdown_plus: 1.0.12
   flutter_local_notifications: 22.3.1
   flutter_localizations:
     sdk: flutter
@@ -31,8 +33,12 @@ dependencies:
   sqlite3_flutter_libs: 0.5.39
   timezone: ^0.11.1
   webview_flutter: ^4.14.1
+  forui: 0.25.0
+  smooth_sheets: 1.2.0
+  flutter_animate: 4.5.2
 
 dev_dependencies:
+  path_provider_platform_interface: ^2.1.2
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0

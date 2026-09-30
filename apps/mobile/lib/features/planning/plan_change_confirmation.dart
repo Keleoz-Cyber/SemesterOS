@@ -1,4 +1,7 @@
+import '../../ui/app_controls.dart';
 import 'package:flutter/material.dart';
+import '../../ui/detail_widgets.dart';
+import '../../ui/campus_theme.dart';
 import '../items/item_widgets.dart';
 import 'risk_widgets.dart';
 
@@ -33,7 +36,7 @@ Future<Map<String, dynamic>?> confirmPlanChange(
         final enough =
             (remaining == null || kept <= remaining) &&
             (maxKeptBlocks == null || keptCount <= maxKeptBlocks);
-        return AlertDialog(
+        return AppDialog(
           title: Text(title),
           content: SingleChildScrollView(
             child: Column(
@@ -43,15 +46,35 @@ Future<Map<String, dynamic>?> confirmPlanChange(
                 Text(message),
                 if (blocks.isNotEmpty) ...[
                   const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: CampusColors.blueSoft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: RecordFact(
+                      label: '修改后保留的安排',
+                      value: '$keptCount段 · ${minutesLabel(kept)}',
+                      icon: Icons.event_available_outlined,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     cancelAll ? '以下未来计划将一并取消' : '选择要取消的未来计划；保留的总时长不能超过剩余所需时间',
                   ),
                   for (final block in blocks)
-                    CheckboxListTile(
+                    AppCheckRow(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        '${displayInstant(block['start_at'])} · ${minutesLabel(block['minutes'])}${block['locked'] == true ? ' · 已锁定' : ''}',
+                        displayInstant(block['start_at']),
+                        style: const TextStyle(color: CampusColors.ink),
                       ),
+                      subtitle: Text(
+                        '${minutesLabel(block['minutes'])}${block['locked'] == true ? ' · 已锁定，需要单独确认解锁' : ''}',
+                        style: const TextStyle(color: CampusColors.muted),
+                      ),
+                      activeColor: CampusColors.teal,
                       value: selected.contains(block['id']),
                       onChanged: cancelAll
                           ? null
@@ -73,7 +96,7 @@ Future<Map<String, dynamic>?> confirmPlanChange(
                       ),
                     ),
                   if (locked)
-                    CheckboxListTile(
+                    AppCheckRow(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('我确认解锁并取消所选锁定计划'),
                       value: unlock,
@@ -84,18 +107,24 @@ Future<Map<String, dynamic>?> confirmPlanChange(
             ),
           ),
           actions: [
-            TextButton(
+            AppTextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('返回修改'),
             ),
-            FilledButton(
+            AppButton(
+              style: AppButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
+              ),
               onPressed: !enough || (locked && !unlock)
                   ? null
                   : () => Navigator.pop(context, {
                       'cancel_plan_ids': selected.toList(),
                       'confirm_locked_cancellation': locked && unlock,
                     }),
-              child: Text(confirmLabel),
+              child: Text(confirmLabel, textAlign: TextAlign.center),
             ),
           ],
         );

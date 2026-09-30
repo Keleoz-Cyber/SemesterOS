@@ -1,8 +1,11 @@
+import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../media/source_view.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/detail_widgets.dart';
+import '../../ui/record_actions.dart';
 import '../../ui/campus_widgets.dart';
 import 'items_controller.dart';
 import 'item_form.dart';
@@ -28,10 +31,12 @@ class ItemDetailPage extends StatefulWidget {
 
 class _ItemDetailPageState extends State<ItemDetailPage> {
   Map<String, dynamic>? item;
-  List<Map<String, dynamic>>? history;
   String? error;
   bool busy = false;
+  late final generation = widget.controller.api.generation;
+  bool get sameSession => generation == widget.controller.api.generation;
   Map<String, dynamic>? get currentItem {
+    if (!sameSession) return null;
     final cached = widget.controller.items
         .where((r) => r['id'] == widget.id)
         .firstOrNull;
@@ -53,7 +58,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
   Future<void> load() async {
     try {
       final value = await widget.controller.get(widget.id);
-      if (mounted) {
+      if (mounted && sameSession) {
         setState(() {
           item = value;
           error = null;
@@ -86,7 +91,8 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
   }
 
   Future<void> changeState(String state) async {
-    final target = currentItem!;
+    final target = currentItem;
+    if (target == null || busy) return;
     Map<String, dynamic> preview;
     try {
       preview = await widget.controller.previewLifecycle(target, state);
@@ -94,7 +100,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
       if (mounted) setState(() => error = userError(e));
       return;
     }
-    if (!mounted) return;
+    if (!mounted || !sameSession) return;
     final blocks = List<Map<String, dynamic>>.from(
       preview['affected_blocks'] ?? [],
     );
@@ -118,24 +124,24 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
         ? selection != null
         : await showDialog<bool>(
             context: context,
-            builder: (context) => AlertDialog(
+            builder: (context) => AppDialog(
               title: Text(label),
               content: Text(
                 state == 'active' ? '恢复事项后，已停用的提醒需要重新开启。' : '相关未触发提醒将一并停用。',
               ),
               actions: [
-                TextButton(
+                AppTextButton(
                   onPressed: () => Navigator.pop(context, false),
                   child: const Text('返回'),
                 ),
-                FilledButton(
+                AppButton(
                   onPressed: () => Navigator.pop(context, true),
                   child: const Text('确认'),
                 ),
               ],
             ),
           );
-    if (yes == true && mounted) {
+    if (yes == true && mounted && sameSession) {
       await run(
         () => widget.controller.lifecycle(
           target,
@@ -150,13 +156,14 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
   }
 
   Future<void> reminder([Map<String, dynamic>? initial]) async {
-    final target = currentItem!;
+    final target = currentItem;
+    if (target == null) return;
     final result = await editReminder(
       context,
       kind: target['kind'],
       initial: initial,
     );
-    if (result != null && mounted) {
+    if (result != null && mounted && sameSession) {
       await run(
         () =>
             widget.controller.saveReminder(target, result, id: initial?['id']),
@@ -164,304 +171,419 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.controller,
-      builder: (context, _) {
-        final cached = widget.controller.items
-            .where((r) => r['id'] == widget.id)
-            .firstOrNull;
-        final data =
-            cached != null &&
-                (cached['version'] as int) >= (item?['version'] as int? ?? 0)
-            ? cached
-            : item;
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('事项详情'),
-            actions: [
-              IconButton(
-                tooltip: '刷新事项',
-                onPressed: busy ? null : load,
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          ),
-          body: data == null
-              ? Center(
-                  child: error == null
-                      ? const CircularProgressIndicator()
-                      : Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Text(error!),
-                        ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    ItemCard(
-                      item: data,
-                      onTap: () {},
-                      riskFooter:
-                          data['kind'] == 'exam' ||
-                              data['lifecycle'] != 'active'
-                          ? null
-                          : RiskBadge(
-                              risk: widget.controller.riskFor(data),
-                              onTap: () => showRiskDetails(
-                                context,
-                                widget.controller,
-                                data,
-                              ),
-                            ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () =>
-                          context.push('/operations?item=${data['id']}'),
-                      icon: const Icon(Icons.tune),
-                      label: const Text('用一句话修改这条事项或提醒'),
-                    ),
-                    if (data['source_id'] != null)
-                      TextButton.icon(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => SourceViewPage(
-                              controller: widget.controller,
-                              id: data['source_id'],
-                            ),
-                          ),
-                        ),
-                        icon: const Icon(Icons.attachment),
-                        label: const Text('查看原图 / 原录音与识别文稿'),
-                      ),
-                    if (data['kind'] == 'exam')
-                      TextButton.icon(
-                        onPressed: () => context.push('/exams/${data['id']}'),
-                        icon: const Icon(Icons.school_outlined),
-                        label: const Text('考试复习与改期确认'),
-                      ),
-                    if (data['review_exam_id'] != null)
-                      TextButton(
-                        onPressed: () =>
-                            context.push('/exams/${data['review_exam_id']}'),
-                        child: const Text('查看关联考试'),
-                      ),
-                    if (data['course_id'] != null)
-                      TextButton(
-                        onPressed: () =>
-                            context.push('/courses/${data['course_id']}'),
-                        child: const Text('查看课程事务'),
-                      ),
-                    if (error != null) ...[
-                      SoftNotice(error!, warning: true),
-                      const SizedBox(height: 12),
-                    ],
-                    if (busy) const LinearProgressIndicator(),
-                    if (data['lifecycle'] == 'active')
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          FilledButton.icon(
-                            onPressed: busy
-                                ? null
-                                : () async {
-                                    final saved = await Navigator.push<bool>(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => ItemFormPage(
-                                          controller: widget.controller,
-                                          semester: widget.semester,
-                                          initial: data,
-                                        ),
-                                      ),
-                                    );
-                                    if (saved == true && mounted) await load();
-                                  },
-                            icon: const Icon(Icons.edit_outlined),
-                            label: const Text('编辑事项'),
-                          ),
-                          if (data['kind'] != 'exam')
-                            OutlinedButton.icon(
-                              onPressed: busy
-                                  ? null
-                                  : () => changeState('completed'),
-                              icon: const Icon(Icons.check),
-                              label: const Text('标记完成'),
-                            ),
-                          if (data['kind'] != 'exam')
-                            OutlinedButton.icon(
-                              onPressed: busy
-                                  ? null
-                                  : () async {
-                                      final saved = await Navigator.push<bool>(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ProgressPage(
-                                            controller: widget.controller,
-                                            item: data,
-                                          ),
-                                        ),
-                                      );
-                                      if (saved == true && mounted) {
-                                        await load();
-                                      }
-                                    },
-                              icon: const Icon(Icons.timelapse_outlined),
-                              label: const Text('更新进度'),
-                            ),
-                          TextButton(
-                            onPressed: busy
-                                ? null
-                                : () => changeState('cancelled'),
-                            child: const Text('取消事项'),
-                          ),
-                        ],
-                      )
-                    else
-                      OutlinedButton(
-                        onPressed: busy ? null : () => changeState('active'),
-                        child: const Text('恢复事项'),
-                      ),
-                    if ('${data['location'] ?? ''}'.isNotEmpty) ...[
-                      const SectionHeading('地点'),
-                      CampusPanel(child: Text(data['location'])),
-                    ],
-                    SectionHeading(
-                      '提醒',
-                      action: data['lifecycle'] == 'active' ? '添加提醒' : null,
-                      onAction: busy ? null : () => reminder(),
-                    ),
-                    if ((data['reminders'] as List).isEmpty)
-                      const CampusPanel(child: Text('尚未设置提醒，可选择提前提醒或指定时刻。')),
-                    for (final r in List<Map<String, dynamic>>.from(
-                      data['reminders'],
-                    ))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: CampusPanel(
-                          padding: EdgeInsets.zero,
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            leading: const Icon(
-                              Icons.notifications_outlined,
-                              color: CampusColors.primary,
-                            ),
-                            title: Text(
-                              '${reminderLabel(r)} · ${{'item': '事项提醒', 'start_review': '开始复习', 'check_notice': '核实通知'}[r['purpose']]}',
-                            ),
-                            subtitle: Text(
-                              '${displayInstant(r['trigger_at'])}\n${reminderState(r['schedule_state'])}',
-                            ),
-                            trailing: data['lifecycle'] == 'active'
-                                ? const Icon(Icons.edit_outlined)
-                                : null,
-                            onTap: busy || data['lifecycle'] != 'active'
-                                ? null
-                                : () => reminder(r),
-                          ),
-                        ),
-                      ),
-                    ListenableBuilder(
-                      listenable: widget.controller,
-                      builder: (context, _) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SoftNotice(
-                            widget.controller.notificationStatus ?? '尚未同步系统提醒',
-                          ),
-                          if (widget.controller.syncedAt != null)
-                            Text(
-                              '提醒最近更新：${displayInstant(widget.controller.syncedAt)}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          TextButton.icon(
-                            onPressed: () => widget.controller
-                                .syncNotifications(requestPermission: true),
-                            icon: const Icon(
-                              Icons.notifications_active_outlined,
-                            ),
-                            label: const Text('开启或检查系统通知'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if ('${data['notes'] ?? ''}'.isNotEmpty) ...[
-                      const SectionHeading('补充说明'),
-                      CampusPanel(child: Text(data['notes'])),
-                    ],
-                    const SectionHeading('来源与修改记录'),
-                    CampusPanel(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data['candidate_id'] == null
-                                ? '手工录入并确认'
-                                : '文字解析后由本人核对确认',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${data['source_text'] ?? ''}'.isEmpty
-                                ? '没有附加原文'
-                                : data['source_text'],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '创建于 ${displayInstant(data['created_at'])}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: CampusColors.muted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ExpansionTile(
-                      title: const Text('查看修改历史'),
-                      onExpansionChanged: (open) async {
-                        if (!open) return;
-                        try {
-                          final rows = await widget.controller.api.request(
-                            'GET',
-                            '/items/${widget.id}/history',
-                          );
-                          if (mounted) {
-                            setState(
-                              () => history = List<Map<String, dynamic>>.from(
-                                rows,
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          if (mounted) setState(() => error = userError(e));
-                        }
-                      },
+  Future<void> edit(Map<String, dynamic> data) async {
+    if (!sameSession) return;
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ItemFormPage(
+          controller: widget.controller,
+          semester: widget.semester,
+          initial: data,
+        ),
+      ),
+    );
+    if (saved == true && mounted) await load();
+  }
+
+  Future<void> progress(Map<String, dynamic> data) async {
+    if (!sameSession) return;
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProgressPage(controller: widget.controller, item: data),
+      ),
+    );
+    if (saved == true && mounted) await load();
+  }
+
+  Future<void> showHistory() async {
+    final generation = widget.controller.api.generation;
+    final future = widget.controller.api.request(
+      'GET',
+      '/items/${widget.id}/history',
+    );
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: .72,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('修改历史', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Expanded(
+                child: FutureBuilder<dynamic>(
+                  future: future,
+                  builder: (context, snapshot) {
+                    if (generation != widget.controller.api.generation) {
+                      return const Center(child: Text('账号已切换，请重新打开'));
+                    }
+                    if (snapshot.hasError) {
+                      return Center(child: Text(userError(snapshot.error!)));
+                    }
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final rows = List<Map<String, dynamic>>.from(
+                      snapshot.data as List,
+                    );
+                    if (rows.isEmpty) {
+                      return const Center(child: Text('还没有修改记录'));
+                    }
+                    return ListView(
                       children: [
-                        if (history == null)
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('正在读取修改记录…'),
-                          ),
-                        for (final h in history ?? <Map<String, dynamic>>[])
-                          ListTile(
+                        for (final h in rows)
+                          AppTile(
+                            contentPadding: EdgeInsets.zero,
                             title: Text(h['reason']),
                             subtitle: Text(
                               '${displayInstant(h['created_at'])}\n${itemTimeLabel(Map<String, dynamic>.from(h['snapshot']))}',
                             ),
                           ),
                       ],
-                    ),
-                  ],
+                    );
+                  },
                 ),
-        );
-      },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
+
+  Future<void> showReminders(Map<String, dynamic> data) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => ListenableBuilder(
+        listenable: widget.controller,
+        builder: (context, _) {
+          final target = currentItem ?? data;
+          final reminders = List<Map<String, dynamic>>.from(
+            target['reminders'] ?? [],
+          );
+          return FractionallySizedBox(
+            heightFactor: .72,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('提醒', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (final r in reminders)
+                          RecordActionTile(
+                            title:
+                                '${reminderLabel(r)} · ${{'item': '事项提醒', 'start_review': '开始复习', 'check_notice': '核实通知'}[r['purpose']] ?? '提醒'}',
+                            subtitle: [
+                              if (r['trigger_at'] != null)
+                                displayInstant(r['trigger_at']),
+                              reminderState(r['schedule_state']),
+                            ].join(' · '),
+                            icon: Icons.notifications_outlined,
+                            onTap: target['lifecycle'] != 'active'
+                                ? null
+                                : () {
+                                    Navigator.pop(context);
+                                    reminder(r);
+                                  },
+                          ),
+                        if (widget.controller.notificationStatus != null)
+                          SoftNotice(widget.controller.notificationStatus!),
+                        if (widget.controller.syncedAt != null)
+                          Text(
+                            '最近更新 ${displayInstant(widget.controller.syncedAt)}',
+                            style: const TextStyle(
+                              color: CampusColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        RecordActionTile(
+                          title: '系统通知设置',
+                          icon: Icons.notifications_active_outlined,
+                          onTap: () => widget.controller.syncNotifications(
+                            requestPermission: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (target['lifecycle'] == 'active')
+                    AppButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        reminder();
+                      },
+                      icon: const Icon(Icons.add_alarm_rounded),
+                      label: const Text('添加提醒'),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> more(String action, Map<String, dynamic> data) async {
+    switch (action) {
+      case 'cancel':
+        await changeState('cancelled');
+        break;
+      case 'history':
+        await showHistory();
+        break;
+      case 'refresh':
+        await load();
+        break;
+      case 'source':
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SourceViewPage(
+              controller: widget.controller,
+              id: data['source_id'],
+            ),
+          ),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.controller,
+    builder: (context, _) {
+      final data = currentItem;
+      final active = data?['lifecycle'] == 'active';
+      final exam = data?['kind'] == 'exam';
+      final reminders = List<Map<String, dynamic>>.from(
+        data?['reminders'] ?? [],
+      );
+      final time = Map<String, dynamic>.from(data?['time'] ?? {});
+      final overdue =
+          active &&
+          data?['anchor_at'] != null &&
+          DateTime.parse(data!['anchor_at']).isBefore(DateTime.now());
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(exam ? '考试详情' : '事项详情'),
+          actions: [
+            if (data != null && active)
+              AppIconButton(
+                tooltip: '编辑事项',
+                onPressed: busy ? null : () => edit(data),
+                icon: const Icon(Icons.edit_outlined),
+              ),
+            if (data != null)
+              RecordMenuButton<String>(
+                enabled: !busy,
+                onSelected: (value) => more(value, data),
+                actions: [
+                  const RecordMenuAction(
+                    'history',
+                    '修改历史',
+                    Icons.history_rounded,
+                  ),
+                  if (data['source_id'] != null)
+                    const RecordMenuAction(
+                      'source',
+                      '原始通知',
+                      Icons.description_outlined,
+                    ),
+                  const RecordMenuAction(
+                    'refresh',
+                    '刷新',
+                    Icons.refresh_rounded,
+                  ),
+                  if (active)
+                    const RecordMenuAction(
+                      'cancel',
+                      '取消事项',
+                      Icons.delete_outline_rounded,
+                      destructive: true,
+                    ),
+                ],
+              ),
+          ],
+        ),
+        bottomNavigationBar: data == null
+            ? null
+            : active
+            ? exam
+                  ? ActionFooter(
+                      label: '查看复习安排',
+                      icon: Icons.school_outlined,
+                      onPressed: busy
+                          ? null
+                          : () => context.push('/exams/${data['id']}'),
+                    )
+                  : ActionFooter(
+                      label: '标记完成',
+                      icon: Icons.check_rounded,
+                      onPressed: busy ? null : () => changeState('completed'),
+                    )
+            : ActionFooter(
+                label: '恢复事项',
+                icon: Icons.undo_rounded,
+                onPressed: busy ? null : () => changeState('active'),
+              ),
+        body: data == null
+            ? Center(
+                child: !sameSession
+                    ? const Text('账号已切换，请重新打开')
+                    : error == null
+                    ? const CircularProgressIndicator()
+                    : Text(error!),
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                children: [
+                  RecordHeading(
+                    title: '${data['title']}',
+                    label:
+                        '${kindLabel(data['kind'])} · ${data['lifecycle'] == 'completed'
+                            ? '已完成'
+                            : data['lifecycle'] == 'cancelled'
+                            ? '已取消'
+                            : data['certainty'] != 'formal'
+                            ? '暂定'
+                            : '待完成'}',
+                    icon: exam ? Icons.school_outlined : Icons.task_alt_rounded,
+                    subtitle: data['course_title'],
+                  ),
+                  if (time['precision'] != null &&
+                      time['precision'] != 'unknown')
+                    RecordFact(
+                      label: exam ? '考试时间' : '截止时间',
+                      value: itemTimeLabel(
+                        data,
+                        includeMissing: false,
+                      ).replaceFirst(RegExp(r' (截止|开始)(?= ·|$)'), ''),
+                      icon: Icons.schedule_rounded,
+                      color: overdue
+                          ? CampusColors.error
+                          : CampusColors.primary,
+                    ),
+                  if (overdue)
+                    Text(
+                      exam ? '开始时间已过' : '已过截止时间',
+                      style: const TextStyle(color: CampusColors.error),
+                    ),
+                  if ('${data['location'] ?? ''}'.trim().isNotEmpty)
+                    RecordFact(
+                      label: '地点',
+                      value: data['location'],
+                      icon: Icons.place_outlined,
+                    ),
+                  if (active && !exam) ...[
+                    if (data['remaining_minutes'] != null ||
+                        data['review_exam_id'] != null)
+                      RecordActionTile(
+                        title: data['remaining_minutes'] == null
+                            ? '更新任务进度'
+                            : '还需 ${minutesLabel(data['remaining_minutes'])}',
+                        subtitle: data['remaining_minutes'] == null
+                            ? null
+                            : '更新进度',
+                        icon: Icons.timelapse_rounded,
+                        onTap: busy ? null : () => progress(data),
+                      ),
+                    if (data['remaining_minutes'] != null ||
+                        data['review_exam_id'] != null ||
+                        const [
+                          'high',
+                          'medium',
+                        ].contains(widget.controller.riskFor(data)?['level']))
+                      RiskBadge(
+                        risk: widget.controller.riskFor(data),
+                        onTap: () =>
+                            showRiskDetails(context, widget.controller, data),
+                      ),
+                  ],
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: SoftNotice(error!, warning: true),
+                    ),
+                  if (busy) const LinearProgressIndicator(),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  if (active || reminders.isNotEmpty)
+                    RecordActionTile(
+                      title: reminders.isEmpty
+                          ? '添加提醒'
+                          : '提醒 · ${reminders.length}条',
+                      subtitle: reminders.length == 1
+                          ? '${reminderLabel(reminders.first)} · ${reminderState(reminders.first['schedule_state'])}'
+                          : null,
+                      icon: Icons.notifications_outlined,
+                      onTap: busy
+                          ? null
+                          : () => reminders.isEmpty
+                                ? reminder()
+                                : showReminders(data),
+                    ),
+                  if (active)
+                    RecordActionTile(
+                      title: '智能修改',
+                      icon: Icons.auto_awesome_outlined,
+                      onTap: busy
+                          ? null
+                          : () =>
+                                context.push('/operations?item=${data['id']}'),
+                    ),
+                  if (data['review_exam_id'] != null)
+                    RecordActionTile(
+                      title: '关联考试',
+                      icon: Icons.school_outlined,
+                      onTap: () =>
+                          context.push('/exams/${data['review_exam_id']}'),
+                    ),
+                  if (data['course_id'] != null)
+                    RecordActionTile(
+                      title: '课程事务',
+                      icon: Icons.menu_book_outlined,
+                      onTap: () =>
+                          context.push('/courses/${data['course_id']}'),
+                    ),
+                  if ('${data['notes'] ?? ''}'.trim().isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    DocumentPanel(title: '备注', text: data['notes']),
+                  ],
+                  if ('${data['source_text'] ?? ''}'.trim().isNotEmpty)
+                    AppDisclosure(
+                      tilePadding: EdgeInsets.zero,
+                      title: const Text('通知原文'),
+                      children: [
+                        DocumentPanel(
+                          title: data['candidate_id'] == null
+                              ? '手工录入'
+                              : '已核对的识别内容',
+                          text: data['source_text'],
+                          footer: Text(
+                            '创建于 ${displayInstant(data['created_at'])}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: CampusColors.muted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+      );
+    },
+  );
 }

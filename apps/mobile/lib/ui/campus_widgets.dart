@@ -1,3 +1,4 @@
+import 'app_controls.dart';
 import 'package:flutter/material.dart';
 import 'campus_theme.dart';
 
@@ -15,7 +16,7 @@ class CampusPanel extends StatelessWidget {
   Widget build(BuildContext context) => Material(
     color: color ?? Colors.white,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(20),
       side: const BorderSide(color: CampusColors.line),
     ),
     clipBehavior: Clip.antiAlias,
@@ -31,7 +32,7 @@ class StatusPill extends StatelessWidget {
     this.text, {
     super.key,
     this.foreground = CampusColors.primary,
-    this.background = const Color(0xFFEEEBFF),
+    this.background = CampusColors.blueSoft,
     this.icon,
   });
   @override
@@ -72,16 +73,16 @@ class SectionHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 24, bottom: 12),
-    child: Row(
+    child: OverflowBar(
+      alignment: MainAxisAlignment.spaceBetween,
+      overflowAlignment: OverflowBarAlignment.end,
       children: [
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
-          ),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
         ),
         if (action != null)
-          TextButton(
+          AppTextButton(
             onPressed: onAction,
             child: Text(action!, style: const TextStyle(fontSize: 13)),
           ),
@@ -98,26 +99,24 @@ class SoftNotice extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(13),
     decoration: BoxDecoration(
-      color: warning ? const Color(0xFFFFF2D9) : const Color(0xFFEDF3FF),
+      color: warning ? CampusColors.warningSoft : CampusColors.blueSoft,
       borderRadius: BorderRadius.circular(15),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(
-          warning ? Icons.info_outline_rounded : Icons.cloud_done_outlined,
+          warning ? Icons.error_outline_rounded : Icons.info_outline_rounded,
           size: 19,
-          color: warning ? const Color(0xFF825C1D) : const Color(0xFF48659A),
+          color: warning ? CampusColors.warning : CampusColors.primary,
         ),
         const SizedBox(width: 9),
         Expanded(
           child: Text(
             text,
             style: TextStyle(
-              fontSize: 13,
-              color: warning
-                  ? const Color(0xFF825C1D)
-                  : const Color(0xFF48659A),
+              fontSize: 14,
+              color: warning ? CampusColors.warning : CampusColors.primary,
             ),
           ),
         ),
@@ -137,71 +136,41 @@ class CampusHero extends StatelessWidget {
     this.illustrated = false,
   });
   @override
-  Widget build(BuildContext context) {
-    final art = illustrated && MediaQuery.textScalerOf(context).scale(1) <= 1.3;
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFECEBFF), Color(0xFFEDF6FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (eyebrow.isNotEmpty) ...[
+          Text(
+            eyebrow,
+            style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+          ),
+          const SizedBox(height: 6),
+        ],
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w700,
+            height: 1.25,
+            color: CampusColors.ink,
+          ),
         ),
-        borderRadius: BorderRadius.circular(25),
-      ),
-      child: Stack(
-        children: [
-          if (art)
-            const Positioned(
-              right: -4,
-              bottom: 0,
-              child: SizedBox(
-                width: 135,
-                height: 142,
-                child: CustomPaint(painter: CampusScenePainter()),
-              ),
-            ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(20, 20, art ? 124 : 20, 22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (eyebrow.isNotEmpty)
-                  Text(
-                    eyebrow,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF626A93),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                if (eyebrow.isNotEmpty) const SizedBox(height: 10),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 27,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -.5,
-                    height: 1.2,
-                  ),
-                ),
-                if (subtitle.isNotEmpty) const SizedBox(height: 10),
-                if (subtitle.isNotEmpty)
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.5,
-                      color: Color(0xFF606D8C),
-                    ),
-                  ),
-              ],
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: CampusColors.muted,
             ),
           ),
         ],
-      ),
-    );
-  }
+      ],
+    ),
+  );
 }
 
 class CampusScenePainter extends CustomPainter {
@@ -305,7 +274,7 @@ class EmptyPanel extends StatelessWidget {
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            color: const Color(0xFFEEEBFF),
+            color: CampusColors.blueSoft,
             borderRadius: BorderRadius.circular(15),
           ),
           child: Icon(icon, color: CampusColors.primary, size: 27),
@@ -322,7 +291,7 @@ class EmptyPanel extends StatelessWidget {
         ),
         if (action != null) ...[
           const SizedBox(height: 18),
-          OutlinedButton(onPressed: onAction, child: Text(action!)),
+          AppOutlineButton(onPressed: onAction, child: Text(action!)),
         ],
       ],
     ),

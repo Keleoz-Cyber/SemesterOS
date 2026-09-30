@@ -1,3 +1,5 @@
+import '../../ui/app_controls.dart';
+import 'hold_voice_button.dart';
 import '../calendar/event_form.dart';
 import '../../core/api.dart' show userError;
 import 'dart:async';
@@ -5,7 +7,6 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
-import '../../ui/campus_widgets.dart';
 import '../items/items_controller.dart';
 import '../items/item_form.dart';
 import '../items/item_widgets.dart';
@@ -34,6 +35,7 @@ class MediaCapturePage extends StatefulWidget {
   final String kind;
   final MediaInput? input;
   final bool returnSource;
+  final String? initialAudioPath;
   const MediaCapturePage({
     super.key,
     required this.controller,
@@ -41,6 +43,7 @@ class MediaCapturePage extends StatefulWidget {
     this.kind = 'image',
     this.input,
     this.returnSource = false,
+    this.initialAudioPath,
   });
   @override
   State<MediaCapturePage> createState() => _MediaCapturePageState();
@@ -48,7 +51,10 @@ class MediaCapturePage extends StatefulWidget {
 
 class _MediaCapturePageState extends State<MediaCapturePage>
     with WidgetsBindingObserver {
-  late final input = widget.input ?? DeviceMediaInput();
+  MediaInput? imageInput;
+  MediaInput get input => imageInput ??= widget.kind == 'audio'
+      ? DeviceMediaInput()
+      : widget.input ?? DeviceMediaInput();
   late final generation = widget.controller.api.generation;
   late final owner = widget.controller.owner!;
   late final drafts = CaptureDrafts(widget.controller.cache, owner, () => same);
@@ -63,18 +69,25 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       recording = false,
       dirty = false,
       loading = false,
-      finished = false;
-  int op = 0, seconds = 0;
-  DateTime? recordStart;
-  Timer? poll, tick, autosave;
+      finished = false,
+      restored = false;
+  late bool foreground;
+  int op = 0, audioEpoch = 0;
+  Timer? poll, autosave;
   bool get same =>
       generation == widget.controller.api.generation &&
       owner == widget.controller.owner &&
       widget.semester['id'] == widget.controller.semesterId;
-  String get draftKey => 'media:${widget.semester['id']}';
+  String get legacyDraftKey => 'media:${widget.semester['id']}';
+  String get draftKey => '$legacyDraftKey:$kind';
   @override
   void initState() {
     super.initState();
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    foreground =
+        lifecycle == null ||
+        lifecycle == AppLifecycleState.resumed ||
+        lifecycle == AppLifecycleState.inactive;
     WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(accountChanged);
     restore();
@@ -84,7 +97,8 @@ class _MediaCapturePageState extends State<MediaCapturePage>
   void accountChanged() {
     if (!same) {
       op++;
-      input.dispose();
+      autosave?.cancel();
+      imageInput?.dispose();
       if (mounted) {
         setState(() {
           source = null;
@@ -98,19 +112,21 @@ class _MediaCapturePageState extends State<MediaCapturePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (recording && state != AppLifecycleState.resumed) stopRecording();
+    foreground =
+        state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive;
+    if (!foreground) audioEpoch++;
   }
 
   @override
   void dispose() {
-    if (same && !finished) saveDraft().catchError((_) {});
+    if (same && restored && !finished) saveDraft().catchError((_) {});
     op++;
     poll?.cancel();
-    tick?.cancel();
     autosave?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(accountChanged);
-    input.dispose();
+    imageInput?.dispose();
     text.dispose();
     super.dispose();
   }
@@ -137,27 +153,61 @@ class _MediaCapturePageState extends State<MediaCapturePage>
   }
 
   Future<void> restore() async {
+    final stamp = op;
+    final allowAutomaticCapture = foreground;
+    final entryEpoch = audioEpoch;
     try {
-      final draft = await drafts.read(draftKey);
-      if (!mounted || !same) return;
-      if (draft != null) {
-        setState(() {
-          kind = draft['kind'] ?? kind;
-          local = draft['local'];
-          key = draft['key'] ?? key;
-          source = draft['source'] == null
-              ? null
-              : Map<String, dynamic>.from(draft['source']);
-          text.text = draft['text'] ?? '';
-          referenceAt = draft['reference_at'] ?? referenceAt;
-          dirty = draft['dirty'] == true;
-        });
-        if (draft['picking'] == true) {
-          final file = await input.image(recover: true);
-          if (file != null && mounted && same) await adopt(file, 'image');
+      var draft = await drafts.read(draftKey);
+      if (!mounted || !same || stamp != op) return;
+      if (draft == null) {
+        final legacy = await drafts.read(legacyDraftKey);
+        if (!mounted || !same || stamp != op) return;
+        if (legacy?['kind'] == kind) {
+          await drafts.save(draftKey, legacy);
+          await drafts.save(legacyDraftKey, null);
+          draft = legacy;
         }
       }
-      await loadRecent();
+      if (!mounted || !same || stamp != op) return;
+      setState(() => restored = true);
+      final savedDraft = draft;
+      if (widget.initialAudioPath != null) {
+        setState(() => busy = true);
+        try {
+          await adopt(widget.initialAudioPath!, 'audio', stamp);
+        } finally {
+          if (mounted && same && stamp == op) setState(() => busy = false);
+        }
+        if (mounted && same && stamp == op) await uploadAndRecognize();
+      } else if (savedDraft != null) {
+        setState(() {
+          local = savedDraft['local'];
+          key = savedDraft['key'] ?? key;
+          source = savedDraft['source'] == null
+              ? null
+              : Map<String, dynamic>.from(savedDraft['source']);
+          text.text = savedDraft['text'] ?? '';
+          referenceAt = savedDraft['reference_at'] ?? referenceAt;
+          dirty = savedDraft['dirty'] == true;
+        });
+        if (savedDraft['picking'] == true) {
+          final file = await input.image(recover: true);
+          if (file != null && mounted && same && stamp == op) {
+            await adopt(file, 'image', stamp);
+            if (widget.returnSource && mounted && same && stamp == op) {
+              await uploadAndRecognize();
+            }
+          }
+        }
+      } else if (widget.returnSource &&
+          allowAutomaticCapture &&
+          foreground &&
+          entryEpoch == audioEpoch) {
+        if (kind == 'image') {
+          await pickImage();
+        }
+      }
+      if (!widget.returnSource) await loadRecent();
       await checkJob(force: true);
     } catch (e) {
       if (mounted) setState(() => error = userError(e));
@@ -176,8 +226,8 @@ class _MediaCapturePageState extends State<MediaCapturePage>
     }
   }
 
-  Future<void> adopt(String path, String type) async {
-    if (!same) return;
+  Future<void> adopt(String path, String type, int stamp) async {
+    if (!mounted || !same || stamp != op) return;
     final file = File(path);
     final limit = (type == 'image' ? 10 : 20) * 1024 * 1024;
     if (await file.length() > limit) {
@@ -188,7 +238,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
     final saved = await file.copy(
       '${folder.path}/${mediaKey()}.${type == 'audio' ? 'wav' : 'image'}',
     );
-    if (!mounted || !same) {
+    if (!mounted || !same || stamp != op) {
       await saved.delete();
       return;
     }
@@ -205,66 +255,43 @@ class _MediaCapturePageState extends State<MediaCapturePage>
   }
 
   Future<void> pickImage() async {
-    if (!same) return;
+    if (!same || busy || recording) return;
+    final stamp = ++op;
+    var selected = false;
     setState(() => busy = true);
     try {
       await saveDraft(picking: true);
+      if (!mounted || !same || stamp != op) return;
       final file = await input.image();
-      if (file != null && mounted && same) await adopt(file, 'image');
+      if (!mounted || !same || stamp != op) return;
+      if (file != null) {
+        await adopt(file, 'image', stamp);
+        selected = true;
+      }
       await saveDraft();
     } catch (e) {
-      if (mounted) setState(() => error = userError(e));
+      if (mounted && same && stamp == op) setState(() => error = userError(e));
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted && stamp == op) setState(() => busy = false);
+    }
+    if (selected && mounted && same && stamp == op) {
+      await uploadAndRecognize();
     }
   }
 
-  Future<void> startRecording() async {
-    if (!same) return;
+  Future<void> recorded(String path) async {
+    if (!mounted || !same || busy) return;
+    final stamp = ++op;
     setState(() => busy = true);
     try {
-      if (!await input.start()) {
-        if (mounted) setState(() => error = '麦克风权限未开启，仍可选图或手工填写');
-        return;
-      }
-      if (!mounted || !same) {
-        await input.dispose();
-        return;
-      }
-      setState(() {
-        recording = true;
-        seconds = 0;
-        error = null;
-      });
-      recordStart = DateTime.now();
-      tick = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) {
-          setState(
-            () => seconds = DateTime.now().difference(recordStart!).inSeconds,
-          );
-        }
-        if (seconds >= 119) stopRecording();
-      });
+      await adopt(path, 'audio', stamp);
     } catch (e) {
-      if (mounted) setState(() => error = '暂时无法开始录音，请检查麦克风权限后重试。');
+      if (mounted && same && stamp == op) setState(() => error = userError(e));
+      return;
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted && stamp == op) setState(() => busy = false);
     }
-  }
-
-  Future<void> stopRecording() async {
-    if (!recording) return;
-    tick?.cancel();
-    setState(() => recording = false);
-    try {
-      final file = await input.stop();
-      if (file != null && mounted && same) {
-        await adopt(file, 'audio');
-        await input.release(file);
-      }
-    } catch (e) {
-      if (mounted) setState(() => error = '录音暂时没能保存，请重试。');
-    }
+    if (mounted && same && stamp == op) await uploadAndRecognize();
   }
 
   Future<void> checkJob({bool force = false}) async {
@@ -318,6 +345,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
     try {
       if (source == null) {
         final data = await File(local!).readAsBytes();
+        if (!mounted || !same || stamp != op) return;
         final r = Map<String, dynamic>.from(
           await widget.controller.api.request(
             'POST',
@@ -332,6 +360,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
         setState(() => source = r);
         await saveDraft();
       }
+      if (!mounted || !same || stamp != op) return;
       final r = Map<String, dynamic>.from(
         await widget.controller.api.request(
           'POST',
@@ -343,9 +372,11 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       setState(() {
         source = r;
         dirty = false;
+        text.text = r['text'] ?? '';
+        referenceAt = r['reference_at'] ?? referenceAt;
       });
       await saveDraft();
-      await loadRecent();
+      if (!widget.returnSource) await loadRecent();
     } catch (e) {
       reconcile = true;
       if (mounted && same && stamp == op) setState(() => error = userError(e));
@@ -424,15 +455,15 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       if (dirty && mounted) {
         final discard = await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
+          builder: (ctx) => AppDialog(
             title: const Text('打开已保存的内容？'),
             content: const Text('当前文字还没保存。继续打开会替换它；你也可以返回，先复制或保存当前文字。'),
             actions: [
-              TextButton(
+              AppTextButton(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('继续编辑当前文字'),
               ),
-              FilledButton(
+              AppButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('放弃当前修改并打开'),
               ),
@@ -470,6 +501,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
       if (widget.returnSource && !manual) {
         if (dirty || source == null) throw Exception('文字还没保存，请重试');
         final result = Map<String, dynamic>.from(source!);
+        autosave?.cancel();
         await drafts.save(draftKey, null);
         if (!mounted || !same || stamp != op) return;
         finished = true;
@@ -546,6 +578,7 @@ class _MediaCapturePageState extends State<MediaCapturePage>
                   candidate: candidate,
                 )
               : ItemFormPage(
+                  kind: 'task',
                   controller: widget.controller,
                   semester: widget.semester,
                   candidate:
@@ -596,154 +629,276 @@ class _MediaCapturePageState extends State<MediaCapturePage>
     }
   }
 
+  Future<void> showRecent() async {
+    await loadRecent();
+    if (!mounted || !same) return;
+    final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .55,
+          child: recent.isEmpty
+              ? const Center(child: Text('还没有上传记录'))
+              : ListView(
+                  children: [
+                    for (final row in recent)
+                      AppTile(
+                        key: ValueKey('source-${row['id']}'),
+                        leading: Icon(
+                          row['kind'] == 'image'
+                              ? Icons.image_outlined
+                              : Icons.mic_none_rounded,
+                        ),
+                        title: Text(
+                          (row['text'] as String? ?? '').isEmpty
+                              ? sourceState(row['status'])
+                              : row['text'],
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(displayInstant(row['created_at'])),
+                        onTap: () => Navigator.pop(context, row),
+                      ),
+                  ],
+                ),
+        ),
+      ),
+    );
+    if (selected != null && mounted && same) await selectSource(selected);
+  }
+
+  Future<void> moreAction(String action) async {
+    switch (action) {
+      case 'reference':
+        await chooseReference();
+      case 'retry':
+        await uploadAndRecognize();
+      case 'manual':
+        await parse(manual: true);
+      case 'save':
+        await saveOnly();
+      case 'recent':
+        await showRecent();
+      case 'source':
+        if (source == null) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SourceViewPage(
+              controller: widget.controller,
+              id: source!['id'],
+            ),
+          ),
+        );
+        await checkJob(force: true);
+      case 'play':
+        if (local == null) return;
+        await showModalBottomSheet<void>(
+          context: context,
+          showDragHandle: true,
+          builder: (_) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: LocalAudioPreview(path: local!),
+            ),
+          ),
+        );
+      case 'draft':
+        await restore();
+    }
+  }
+
+  Future<void> showMore() async {
+    final actions = <(String, String, IconData)>[
+      if (!restored) ('draft', '重新读取草稿', Icons.restore_rounded),
+      (
+        'reference',
+        '原消息时间：${displayInstant(referenceAt)}',
+        Icons.schedule_rounded,
+      ),
+      if (source?['file_deleted'] != true && (local != null || source != null))
+        ('retry', '重试识别', Icons.refresh_rounded),
+      ('manual', '手动填写事项', Icons.edit_outlined),
+      if (local != null && kind == 'audio')
+        ('play', '回放录音', Icons.play_circle_outline_rounded),
+      if (source != null) ...[
+        ('save', '保存文字，稍后整理', Icons.save_outlined),
+        ('source', '查看原始内容', Icons.description_outlined),
+      ],
+      ('recent', '最近上传', Icons.history_rounded),
+    ];
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .72,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            children: [
+              for (final action in actions)
+                AppTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  leading: Icon(action.$3),
+                  title: Text(action.$2),
+                  onTap: () => Navigator.pop(context, action.$1),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (action != null && mounted && same) await moreAction(action);
+  }
+
   @override
   Widget build(BuildContext context) {
     final working = ['queued', 'running'].contains(source?['status']);
+    final locked = busy || working || recording || !restored || !same;
+    final hasText = text.text.trim().isNotEmpty;
     return Scaffold(
-      appBar: AppBar(title: Text(kind == 'image' ? '图片通知录入' : '语音快速记录')),
+      appBar: AppBar(
+        title: Text(kind == 'image' ? '图片通知' : '语音输入'),
+        actions: [
+          AppIconButton(
+            tooltip: '更多操作',
+            onPressed: !locked || (!restored && error != null)
+                ? showMore
+                : null,
+            icon: const Icon(Icons.more_horiz_rounded),
+          ),
+        ],
+      ),
       body: !same
           ? const Center(child: Text('账号或学期已切换，请返回'))
-          : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                CampusHero(
-                  eyebrow: '识别通知',
-                  title: kind == 'image' ? '核对图片通知' : '核对录音文字',
-                  subtitle: widget.returnSource
-                      ? '核对文字和原消息时间，再交给助手'
-                      : '核对识别的文字，再保存事项',
-                ),
-                const SizedBox(height: 16),
-                const SoftNotice(
-                  '图片最多10MB，录音最长2分钟。文件上传后会转成文字；你确认的文字和课程名称会发送给AI，用于整理事项。',
-                ),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: busy || working || recording
-                          ? null
-                          : pickImage,
-                      icon: const Icon(Icons.image_outlined),
-                      label: const Text('选择通知图片'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: busy || working
-                          ? null
-                          : recording
-                          ? stopRecording
-                          : startRecording,
-                      icon: Icon(recording ? Icons.stop : Icons.mic_none),
-                      label: Text(recording ? '停止并保存录音（${seconds}s）' : '录一段通知'),
-                    ),
-                  ],
-                ),
-                if (recording) const Text('录音中，切到后台将停止录音'),
-                if (local != null && kind == 'image')
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Image.file(
-                      File(local!),
-                      cacheWidth: 1400,
-                      height: 220,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) =>
-                          const Text('本机找不到原图，请重新选择，或打开已上传的原图'),
-                    ),
-                  ),
-                if (local != null && kind == 'audio')
-                  LocalAudioPreview(key: ValueKey(local), path: local!),
-                if (source != null) ...[
-                  Text(sourceState(source!['status'])),
-                  TextButton(
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => SourceViewPage(
-                            controller: widget.controller,
-                            id: source!['id'],
+          : SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                      children: [
+                        if (kind == 'image' && local != null)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.file(
+                              File(local!),
+                              cacheWidth: 1400,
+                              height: 180,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, _, _) =>
+                                  const Text('原图暂不可用，可重新选择'),
+                            ),
+                          ),
+                        if (kind == 'image')
+                          AppOutlineButton.icon(
+                            onPressed: locked ? null : pickImage,
+                            icon: const Icon(Icons.image_outlined),
+                            label: Text(local == null ? '选择通知图片' : '重新选图'),
+                          ),
+                        if (busy || working) ...[
+                          const SizedBox(height: 12),
+                          const LinearProgressIndicator(),
+                          const SizedBox(height: 12),
+                          Text(working ? '正在转成文字…' : '正在处理…'),
+                          AppTextButton(
+                            onPressed: cancel,
+                            child: const Text('取消当前处理，保留草稿'),
+                          ),
+                        ],
+                        if (error != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              error!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        if (source?['file_deleted'] == true)
+                          const Text('原文件已删除，保留的文字仍可使用。'),
+                        const SizedBox(height: 12),
+                        AppField(
+                          key: const Key('media-transcript'),
+                          controller: text,
+                          minLines: 4,
+                          maxLines: 10,
+                          maxLength: 10000,
+                          enabled: !locked,
+                          onChanged: textChanged,
+                          decoration: InputDecoration(
+                            labelText: '通知文字',
+                            hintText: kind == 'audio'
+                                ? (widget.initialAudioPath == null
+                                      ? '按住下方说话，松开后文字会出现在这里'
+                                      : '识别出的文字会出现在这里')
+                                : '图片里的文字会出现在这里，可修改错字',
+                            counterText: '',
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
                           ),
                         ),
-                      );
-                      await checkJob(force: true);
-                    },
-                    child: const Text('查看原图 / 回放原录音'),
-                  ),
-                ],
-                FilledButton(
-                  onPressed:
-                      busy ||
-                          working ||
-                          recording ||
-                          source?['file_deleted'] == true ||
-                          local == null && source == null
-                      ? null
-                      : uploadAndRecognize,
-                  child: Text(source == null ? '上传并识别' : '重新识别原文件'),
-                ),
-                if (source?['file_deleted'] == true)
-                  const SoftNotice('原文件已删除，仍可核对保留文字或手工填写。'),
-                if (working || busy) ...[
-                  const LinearProgressIndicator(),
-                  TextButton(
-                    onPressed: cancel,
-                    child: const Text('取消当前处理，保留草稿'),
-                  ),
-                ],
-                if (source != null &&
-                    (source!['original_text'] as String? ?? '').isNotEmpty)
-                  ExpansionTile(
-                    title: const Text('查看AI识别的原文'),
-                    children: [SelectableText(source!['original_text'])],
-                  ),
-                const SectionHeading('核对识别文字'),
-                TextField(
-                  controller: text,
-                  minLines: 4,
-                  maxLines: 10,
-                  maxLength: 10000,
-                  enabled: !busy && !working,
-                  onChanged: textChanged,
-                  decoration: const InputDecoration(labelText: '可修正错字、日期与数字'),
-                ),
-                TextButton(
-                  onPressed: busy || working ? null : chooseReference,
-                  child: Text('原消息时间：${displayInstant(referenceAt)}'),
-                ),
-                const Text('本机草稿自动保存；转贴旧通知时请核对原消息时间。'),
-                if (error != null) SoftNotice(error!, warning: true),
-                FilledButton(
-                  onPressed:
-                      busy ||
-                          working ||
-                          source == null ||
-                          text.text.trim().isEmpty
-                      ? null
-                      : () => parse(),
-                  child: const Text('用这些文字整理事项'),
-                ),
-                TextButton(
-                  onPressed: busy || working ? null : () => parse(manual: true),
-                  child: Text(source == null ? '不上传文件，直接手动填写' : '保存文字并手动填写事项'),
-                ),
-                TextButton(
-                  onPressed: busy || working || source == null
-                      ? null
-                      : saveOnly,
-                  child: const Text('先保存文字，稍后整理'),
-                ),
-                const SectionHeading('最近上传的图片和录音（最多50份）'),
-                for (final row in recent)
-                  ListTile(
-                    key: ValueKey('source-${row['id']}'),
-                    title: Text(
-                      '${row['kind'] == 'image' ? '图片通知' : '录音'} · ${sourceState(row['status'])}',
+                        if (hasText)
+                          Text(
+                            '可以修改错字和时间。',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                      ],
                     ),
-                    subtitle: Text(displayInstant(row['created_at'])),
-                    onTap: busy || recording ? null : () => selectSource(row),
                   ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (kind == 'audio' &&
+                            widget.initialAudioPath == null) ...[
+                          Text(
+                            recording ? '上滑取消' : '松开完成 · 上滑取消',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 8),
+                          HoldVoiceButton(
+                            input: widget.kind == 'audio' ? widget.input : null,
+                            enabled: !busy && !working && restored && same,
+                            onRecorded: recorded,
+                            onError: (message) {
+                              if (mounted) setState(() => error = message);
+                            },
+                            onRecordingChanged: (value) {
+                              if (mounted) setState(() => recording = value);
+                            },
+                          ),
+                        ],
+                        if (hasText || kind == 'image') ...[
+                          const SizedBox(height: 10),
+                          AppButton(
+                            onPressed: locked || source == null || !hasText
+                                ? null
+                                : () => parse(),
+                            child: Text(widget.returnSource ? '发送' : '整理日程'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
     );
   }

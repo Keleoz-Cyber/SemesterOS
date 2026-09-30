@@ -1,3 +1,5 @@
+import 'package:forui/forui.dart';
+import 'package:semester_os/ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/core/api.dart';
@@ -206,16 +208,15 @@ void main() {
         tester,
         ProposalPage(controller: f.c, proposal: f.proposal(partial: true)),
       );
+      final button = find.widgetWithText(FButton, '保存已安排部分（仍有45分钟未安排）');
+      expect(tester.widget<FButton>(button).onPress, isNull);
+      expect(f.applied, 0);
       await tester.scrollUntilVisible(
-        find.text('保存已安排部分（仍有45分钟未安排）'),
-        350,
+        find.byType(AppCheckRow), 350,
         scrollable: find.byType(Scrollable).first,
       );
-      final button = find.widgetWithText(FilledButton, '保存已安排部分（仍有45分钟未安排）');
-      expect(tester.widget<FilledButton>(button).onPressed, isNull);
-      expect(f.applied, 0);
-      await tester.ensureVisible(find.byType(CheckboxListTile));
-      await tester.tap(find.byType(CheckboxListTile));
+      await tester.ensureVisible(find.byType(AppCheckRow));
+      await tester.tap(find.byType(AppCheckRow));
       await tester.pumpAndSettle();
       await ioTap(tester, button);
       expect(f.accepted!['confirm_partial'], true);
@@ -258,8 +259,8 @@ void main() {
       );
       await tester.tap(find.text('预览'));
       await tester.pumpAndSettle();
-      final button = find.widgetWithText(FilledButton, '确认完成');
-      expect(tester.widget<FilledButton>(button).onPressed, isNull);
+      final button = find.widgetWithText(AppButton, '确认完成');
+      expect(tester.widget<AppButton>(button).onPressed, isNull);
       await tester.tap(find.text('我确认解锁并取消所选锁定计划'));
       await tester.pumpAndSettle();
       await tester.tap(button);

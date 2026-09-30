@@ -62,6 +62,40 @@ class AndroidNotifications implements NotificationPort {
   }
 
   @override
+  Future<Map<int, Map<String, dynamic>>> pending() async {
+    await initialize();
+    if (!Platform.isAndroid) return {};
+    final result = <int, Map<String, dynamic>>{};
+    for (final request in await plugin.pendingNotificationRequests()) {
+      Map<String, dynamic> payload = {};
+      try {
+        final decoded = jsonDecode(request.payload ?? '{}');
+        if (decoded is Map<String, dynamic>) payload = decoded;
+      } on FormatException {
+        // Invalid/legacy payloads are unverifiable and will be reconciled away.
+      }
+      result[request.id] = payload;
+    }
+    return result;
+  }
+
+  @override
+  Future<Set<int>> activeIds() async {
+    await initialize();
+    if (!Platform.isAndroid) return {};
+    return {
+      for (final notification in await plugin.getActiveNotifications())
+        if (notification.id != null) notification.id!,
+    };
+  }
+
+  @override
+  Future<void> cancel(int id) async {
+    await initialize();
+    if (Platform.isAndroid) await plugin.cancel(id: id);
+  }
+
+  @override
   Future<void> cancelAll() async {
     await initialize();
     if (Platform.isAndroid) await plugin.cancelAll();
@@ -96,6 +130,7 @@ class AndroidNotifications implements NotificationPort {
       payload: jsonEncode({
         'owner_id': data['owner_id'],
         'item_id': data['item_id'],
+        'fingerprint': data['fingerprint'],
       }),
     );
   }

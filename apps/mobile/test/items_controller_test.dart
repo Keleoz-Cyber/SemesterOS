@@ -6,10 +6,16 @@ import 'package:semester_os/features/items/items_controller.dart';
 import 'package:semester_os/features/items/reminder_sync.dart';
 import 'api_session_test.dart' show ControlledTransport, account, body;
 import 'controller_test.dart' show MemoryStore;
-import 'reminder_sync_test.dart' show FakeNotifications;
+import 'reminder_sync_test.dart' show FakeNotifications, rule;
 
 class BlockingNotifications extends FakeNotifications {
   Completer<void>? cancelGate;
+  @override
+  Future<Map<int, Map<String, dynamic>>> pending() async {
+    await cancelGate?.future;
+    return super.pending();
+  }
+
   @override
   Future<void> cancelAll() async {
     await cancelGate?.future;
@@ -20,6 +26,100 @@ class BlockingNotifications extends FakeNotifications {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  test(
+    'semester deletion removes its cache and pending device reminders',
+    () async {
+      final api = SemesterApi()..session = account('a');
+      final cache = MemoryStore();
+      final port = FakeNotifications();
+      final reminder = rule(
+        'old',
+        at: DateTime.now().toUtc().add(const Duration(hours: 2)),
+      );
+      var deleted = false;
+      api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.path.endsWith('/reminders')) {
+          return body({
+            'owner_id': 'a',
+            'reminders': deleted ? [] : [reminder],
+          });
+        }
+        if (request.path.endsWith('/courses')) return body([]);
+        if (request.path.endsWith('/plans')) {
+          return body({'semester_id': 's', 'revision': 1, 'blocks': []});
+        }
+        if (request.path.endsWith('/risk')) {
+          return body({'semester_id': 's', 'revision': 1, 'items': []});
+        }
+        return body({'items': [], 'revision': 1});
+      });
+      final c = ItemsController(api, cache, ReminderSync(port));
+      await c.bind('s');
+      expect(port.scheduled, isNotEmpty);
+      expect(
+        (cache.data['items:a']!['semesters'] as Map).containsKey('s'),
+        true,
+      );
+      deleted = true;
+      await c.bind(null);
+      // The same account may delete its last semester on another device.
+      expect(port.scheduled, isEmpty);
+      expect((cache.data['items:a']!['semesters'] as Map), isEmpty);
+      await c.forgetDeletedSemester('s');
+      expect(port.scheduled, isEmpty);
+      expect(
+        (cache.data['items:a']!['semesters'] as Map).containsKey('s'),
+        false,
+      );
+      c.dispose();
+    },
+  );
+  test(
+    'cold start preserves pending owner alarms while clearing foreign and delivered IDs before network returns',
+    () async {
+      final start = DateTime.utc(2026, 9, 27);
+      final port = FakeNotifications();
+      final due = rule('due', at: start.add(const Duration(seconds: 1)));
+      await ReminderSync(port, now: () => start).replace('a', [due]);
+      final retainedId = port.scheduled.keys.single;
+      port.scheduled[11] = {'owner_id': 'b', 'item_id': 'foreign'};
+      port.active.addAll([12, retainedId]);
+      final api = SemesterApi()..session = account('a');
+      final gate = Completer<void>();
+      api.dio.httpClientAdapter = ControlledTransport((r) async {
+        await gate.future;
+        if (r.path.endsWith('/courses')) return body([]);
+        if (r.path.endsWith('/reminders')) {
+          return body({
+            'owner_id': 'a',
+            'reminders': [
+              {...due, 'schedule_state': 'expired'},
+            ],
+          });
+        }
+        return body({'items': [], 'revision': 1});
+      });
+      final c = ItemsController(
+        api,
+        MemoryStore(),
+        ReminderSync(port, now: () => start.add(const Duration(seconds: 2))),
+      );
+      final binding = c.bind('s');
+      await Future<void>.delayed(Duration.zero);
+      expect(port.scheduled.keys, [retainedId]);
+      expect(port.active, {retainedId});
+      expect(port.cancelled, containsAll([11, 12]));
+      gate.complete();
+      await binding;
+      expect(port.scheduled.keys, [retainedId]);
+      expect(port.scheduleCalls, 1);
+      await api.forget();
+      await c.bind(null);
+      expect(port.scheduled, isEmpty);
+      expect(port.active, isEmpty);
+      c.dispose();
+    },
+  );
   test(
     'replayed operation receipt cannot roll back a newer reminder with the same item version',
     () async {

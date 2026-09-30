@@ -1,7 +1,9 @@
+import '../../ui/app_controls.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/app_selection.dart';
 import '../../ui/campus_widgets.dart';
 import 'course_widgets.dart';
 import 'timetable_layout.dart';
@@ -44,7 +46,7 @@ class WeekView extends StatelessWidget {
       children: [
         CampusHero(
           eyebrow: '${semester['name']}',
-          title: '本周课表',
+          title: '课程表',
           subtitle: '${start.month}月${start.day}日—${end.month}月${end.day}日',
         ),
         const SizedBox(height: 17),
@@ -52,7 +54,7 @@ class WeekView extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
           child: Row(
             children: [
-              IconButton(
+              AppIconButton(
                 onPressed: week > 1 ? () => onWeek(week - 1) : null,
                 icon: const Icon(Icons.chevron_left_rounded),
                 tooltip: '上一周',
@@ -75,7 +77,7 @@ class WeekView extends StatelessWidget {
                   ),
                 ),
               ),
-              IconButton(
+              AppIconButton(
                 onPressed: week < semester['total_weeks']
                     ? () => onWeek(week + 1)
                     : null,
@@ -86,42 +88,22 @@ class WeekView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 13),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                hasData
-                    ? '${events.length}次课程 · ${events.map((e) => e['weekday']).toSet().length}天有课'
-                    : '等待同步课表',
-                style: const TextStyle(fontSize: 13, color: CampusColors.muted),
-              ),
-            ),
-            SegmentedButton<bool>(
-              showSelectedIcon: false,
-              segments: [
-                ButtonSegment(
-                  value: true,
-                  label: const Text('周视图'),
-                  enabled: !largeText,
-                ),
-                const ButtonSegment(value: false, label: Text('日程')),
-              ],
-              selected: {showGrid},
-              onSelectionChanged: (v) => onMode(v.first),
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(
-                  Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontSize: 12),
-                ),
-              ),
-            ),
-          ],
+        Text(
+          hasData
+              ? '${events.length}次课程 · ${events.map((e) => e['weekday']).toSet().length}天有课'
+              : '等待同步课表',
+          style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+        ),
+        const SizedBox(height: 12),
+        AppSegmentedControl<bool>(
+          value: showGrid,
+          options: const {true: '周视图', false: '日程'},
+          disabledValues: largeText ? const {true} : const {},
+          onChanged: onMode,
         ),
         const SizedBox(height: 14),
         if (largeText) ...[
-          const SoftNotice('已按较大字号显示日程列表，完整保留课程信息。'),
+          const SoftNotice('大字号下以日程列表展示'),
           const SizedBox(height: 14),
         ],
         if (!hasData)
@@ -239,8 +221,7 @@ class TimetableGrid extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: CampusColors.line),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,7 +282,7 @@ class TimetableGrid extends StatelessWidget {
                               height: 60,
                               width: width,
                               color: selected
-                                  ? const Color(0xFFF0EEFF)
+                                  ? CampusColors.blueSoft
                                   : day >= 5
                                   ? const Color(0xFFF8FAFD)
                                   : Colors.white,

@@ -114,6 +114,16 @@ class AgentController extends ChangeNotifier {
   }
 
   void replace(Map<String, dynamic> value) {
+    if (value['status'] == 'applied' && value['preview']?['kind'] == 'undo') {
+      final sourceId = value['preview']['source_run_id'];
+      runs = [
+        for (final row in runs)
+          if (row['id'] == sourceId)
+            {...row, 'undo_available': false, 'undone_by': value['id']}
+          else
+            row,
+      ];
+    }
     final index = runs.indexWhere((r) => r['id'] == value['id']);
     if (index < 0) {
       runs = [...runs, value];
@@ -195,7 +205,12 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  Future<void> decide(Map<String, dynamic> run, bool confirm) async {
+  Future<void> decide(
+    Map<String, dynamic> run,
+    bool confirm, {
+    List<String>? selectedGroupIds,
+    bool confirmFixedConflicts = false,
+  }) async {
     if (busy || !active) return;
     final stamp = _epoch;
     busy = true;
@@ -209,6 +224,8 @@ class AgentController extends ChangeNotifier {
           data: {
             'decision': confirm ? 'confirm' : 'reject',
             'token': run['preview']['token'],
+            'selected_group_ids': ?selectedGroupIds,
+            if (confirmFixedConflicts) 'confirm_fixed_conflicts': true,
           },
         ),
       );
@@ -239,6 +256,65 @@ class AgentController extends ChangeNotifier {
     } catch (e) {
       if (active && stamp == _epoch) {
         error = userError(e);
+        emit();
+      }
+    }
+  }
+
+  final Map<String, String> _undoRequests = {};
+  Future<Map<String, dynamic>> selectionPreview(
+    Map<String, dynamic> run,
+    List<String> ids,
+  ) async {
+    if (!active) throw ApiFailure('账号或学期已切换，请重新打开');
+    final stamp = _epoch;
+    final value = Map<String, dynamic>.from(
+      await request(
+        'POST',
+        '/agent/runs/${run['id']}/selection-preview',
+        data: {'token': run['preview']['token'], 'selected_group_ids': ids},
+      ),
+    );
+    check(stamp);
+    return Map<String, dynamic>.from(value['impact']);
+  }
+
+  Future<void> requestUndo(Map<String, dynamic> run) async {
+    if (busy || processing || !active) return;
+    final stamp = _epoch;
+    busy = true;
+    error = null;
+    emit();
+    final key = _undoRequests.putIfAbsent(
+      run['id'],
+      () => List.generate(
+        16,
+        (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+      ).join(),
+    );
+    try {
+      final value = Map<String, dynamic>.from(
+        await request(
+          'POST',
+          '/agent/runs/${run['id']}/request-undo',
+          data: {'request_id': key},
+        ),
+      );
+      check(stamp);
+      runs = [
+        for (final r in runs)
+          if (r['status'] == 'needs_confirmation')
+            {...r, 'status': 'superseded'}
+          else
+            r,
+      ];
+      replace(value);
+      _undoRequests.remove(run['id']);
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+    } finally {
+      if (active && stamp == _epoch) {
+        busy = false;
         emit();
       }
     }

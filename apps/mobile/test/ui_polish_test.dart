@@ -1,3 +1,8 @@
+import 'package:forui/forui.dart';
+import 'package:semester_os/ui/forui_theme.dart';
+import 'package:semester_os/ui/app_selection.dart';
+import 'package:semester_os/ui/app_navigation.dart';
+import 'package:semester_os/ui/assistant_scope.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -107,6 +112,22 @@ Future<void> mount(
     theme = theme.copyWith(
       textTheme: theme.textTheme.apply(fontFamily: 'PreviewSans'),
       primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'PreviewSans'),
+      chipTheme: theme.chipTheme.copyWith(
+        labelStyle: theme.chipTheme.labelStyle?.copyWith(
+          fontFamily: 'PreviewSans',
+        ),
+        secondaryLabelStyle: theme.chipTheme.secondaryLabelStyle?.copyWith(
+          fontFamily: 'PreviewSans',
+        ),
+      ),
+      listTileTheme: theme.listTileTheme.copyWith(
+        titleTextStyle: theme.listTileTheme.titleTextStyle?.copyWith(
+          fontFamily: 'PreviewSans',
+        ),
+        subtitleTextStyle: theme.listTileTheme.subtitleTextStyle?.copyWith(
+          fontFamily: 'PreviewSans',
+        ),
+      ),
       appBarTheme: theme.appBarTheme.copyWith(
         titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(
           fontFamily: 'PreviewSans',
@@ -131,12 +152,15 @@ Future<void> mount(
         theme: theme,
         locale: const Locale('zh', 'CN'),
         supportedLocales: const [Locale('zh', 'CN')],
-        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        localizationsDelegates: const [
+          FLocalizations.delegate,
+          ...GlobalMaterialLocalizations.delegates,
+        ],
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
           ).copyWith(textScaler: TextScaler.linear(textScale)),
-          child: child!,
+          child: ShiriForuiTheme(child: child!),
         ),
         home: child,
       ),
@@ -208,7 +232,7 @@ void main() {
       await capture(tester, 'today');
       await tester.tap(
         find.descendant(
-          of: find.byType(NavigationBar),
+          of: find.byType(AppNavigation),
           matching: find.text('日程'),
         ),
       );
@@ -218,7 +242,7 @@ void main() {
       await capture(tester, 'timetable');
       await tester.tap(
         find.descendant(
-          of: find.byType(SegmentedButton<bool>),
+          of: find.byType(AppSegmentedControl<bool>),
           matching: find.text('日程'),
         ),
       );
@@ -250,9 +274,16 @@ void main() {
     'small screen with large text keeps navigation and courses usable',
     (tester) async {
       final controller = sampleController();
+      var opened = false;
       await mount(
         tester,
-        ShellPage(controller: controller),
+        AssistantScope(
+          onOpen:
+              (context, {initialText, mediaKind, autoSubmit = false}) async {
+                opened = true;
+              },
+          child: ShellPage(controller: controller),
+        ),
         width: 360,
         height: 800,
         textScale: 2,
@@ -260,21 +291,19 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(
         find.descendant(
-          of: find.byType(NavigationBar),
+          of: find.byType(AppNavigation),
           matching: find.text('日程'),
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('已按较大字号显示日程列表，完整保留课程信息。'), findsOneWidget);
+      expect(find.text('大字号下以日程列表展示'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await capture(tester, 'large-text');
-      await tester.tap(find.text('记录'));
+      await tester.tap(find.text('输入通知或日程问题'));
       await tester.pumpAndSettle();
+      expect(opened, isTrue);
+      expect(find.byType(FloatingActionButton), findsNothing);
       expect(tester.takeException(), isNull);
-      await tester.ensureVisible(find.text('手工添加课程'));
-      expect(find.text('手工添加课程').hitTestable(), findsOneWidget);
-      Navigator.of(tester.element(find.text('手工添加课程'))).pop();
-      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('账户'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

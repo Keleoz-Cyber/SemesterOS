@@ -1,6 +1,11 @@
+import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
+import '../../ui/detail_widgets.dart';
+import '../../ui/campus_theme.dart';
+import '../../ui/app_selection.dart';
+import '../../ui/app_picker_field.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'risk_widgets.dart';
@@ -102,54 +107,63 @@ class _SchedulePageState extends State<SchedulePage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('生成个人计划')),
+    appBar: AppBar(title: const Text('安排任务')),
+    bottomNavigationBar: ActionFooter(
+      label: busy ? '正在生成…' : '生成计划方案',
+      icon: Icons.auto_awesome_outlined,
+      onPressed: busy || selected.isEmpty ? null : generate,
+    ),
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const CampusHero(
-          eyebrow: '先预览再确认',
-          title: '把任务放进时间',
-          subtitle: '保留已有安排\n为还没排好的任务找时间',
-        ),
-        const SectionHeading('安排哪几天'),
-        Wrap(
-          spacing: 8,
+        EditorSection(
+          title: '安排范围',
+          icon: Icons.date_range_outlined,
           children: [
-            for (final d in [7, 14, 28])
-              ChoiceChip(
-                label: Text('未来$d天'),
-                selected: days == d,
-                onSelected: busy ? null : (_) => setState(() => days = d),
-              ),
+            AppSegmentedControl<int>(
+              value: days,
+              enabled: !busy,
+              options: const {7: '未来7天', 14: '未来14天', 28: '未来28天'},
+              onChanged: (value) => setState(() => days = value),
+            ),
+            const SizedBox(height: 14),
+            AppDisclosure(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('开始时间与分段设置'),
+              subtitle: Text('$lead分钟后开始 · 每段$chunk分钟'),
+              children: [
+                AppPickerField<int>(
+                  initialValue: lead,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '最早从什么时候开始'),
+                  items: [
+                    for (final n in [0, 5, 10, 15])
+                      DropdownMenuItem(value: n, child: Text('$n分钟后开始')),
+                  ],
+                  onChanged: busy ? null : (v) => setState(() => lead = v!),
+                ),
+                const SizedBox(height: 14),
+                AppPickerField<int>(
+                  initialValue: chunk,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '每次想学习多久'),
+                  items: [
+                    for (final n in [15, 30, 45, 60, 90])
+                      DropdownMenuItem(value: n, child: Text('$n分钟')),
+                  ],
+                  onChanged: busy ? null : (v) => setState(() => chunk = v!),
+                ),
+                const SizedBox(height: 12),
+                const SoftNotice(
+                  '系统会尽量按你选择的时长分段，最后一段可稍作调整。需要一次完成的任务会安排在同一个时段。',
+                ),
+              ],
+            ),
           ],
         ),
-        const SizedBox(height: 14),
-        DropdownButtonFormField<int>(
-          initialValue: lead,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: '最早从什么时候开始'),
-          items: [
-            for (final n in [0, 5, 10, 15])
-              DropdownMenuItem(value: n, child: Text('$n分钟后开始')),
-          ],
-          onChanged: busy ? null : (v) => setState(() => lead = v!),
-        ),
-        const SizedBox(height: 14),
-        DropdownButtonFormField<int>(
-          initialValue: chunk,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: '每次想学习多久'),
-          items: [
-            for (final n in [15, 30, 45, 60, 90])
-              DropdownMenuItem(value: n, child: Text('$n分钟')),
-          ],
-          onChanged: busy ? null : (v) => setState(() => chunk = v!),
-        ),
-        const SizedBox(height: 12),
-        const SoftNotice('系统会尽量按你选择的时长分段，最后一段可稍作调整。需要一次完成的任务会安排在同一个时段。'),
-        const SectionHeading('选择任务和安排时长'),
+        SectionHeading('任务 · 已选${selected.length}项'),
         const Text(
-          '所选日期内到期的任务，留空会安排剩余的全部工作；其他任务请填写这次想安排多久。已安排的时间也算在目标内。',
+          '范围内到期的任务可留空，安排全部剩余工作；其他任务填写目标时长。已安排时间计入目标。',
           style: TextStyle(fontSize: 13),
         ),
         const SizedBox(height: 12),
@@ -157,10 +171,13 @@ class _SchedulePageState extends State<SchedulePage> {
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: CampusPanel(
+              color: selected.contains(task['id'])
+                  ? CampusColors.blueSoft
+                  : CampusColors.surface,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  CheckboxListTile(
+                  AppCheckRow(
                     contentPadding: EdgeInsets.zero,
                     title: Text(task['title']),
                     subtitle: Text(
@@ -180,18 +197,18 @@ class _SchedulePageState extends State<SchedulePage> {
                   if (task['remaining_minutes'] == null ||
                       task['start_policy'] == null ||
                       task['start_policy'] == 'unconfirmed')
-                    const Text(
+                    Text(
                       '需先在事项详情补齐耗时和最早开始',
-                      style: TextStyle(color: Colors.deepOrange),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   if (selected.contains(task['id']))
-                    TextField(
+                    AppField(
                       controller: targets[task['id']],
                       enabled: !busy,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: '这次计划安排多久（分钟，可留空）',
-                      ),
+                      decoration: const InputDecoration(labelText: '本次安排（分钟）'),
                     ),
                 ],
               ),
@@ -208,12 +225,6 @@ class _SchedulePageState extends State<SchedulePage> {
           SoftNotice(error!, warning: true),
           const SizedBox(height: 12),
         ],
-        FilledButton(
-          onPressed: busy || selected.isEmpty ? null : generate,
-          child: Text(busy ? '正在生成…' : '生成计划方案'),
-        ),
-        const SizedBox(height: 10),
-        const Text('先看看方案，确认后才会保存到日程。', style: TextStyle(fontSize: 12)),
       ],
     ),
   );

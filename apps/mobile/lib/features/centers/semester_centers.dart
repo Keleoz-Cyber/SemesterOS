@@ -1,14 +1,21 @@
+import '../../ui/app_controls.dart';
+import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../ui/campus_widgets.dart';
+import '../../ui/campus_theme.dart';
+import '../../ui/detail_widgets.dart';
+import '../../ui/record_actions.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import '../items/item_form.dart';
+import '../import/manual_page.dart';
 import '../planning/risk_widgets.dart';
 import '../timetable/course_widgets.dart';
 import '../changes/changes_page.dart';
 import 'hub_data.dart';
 import 'exam_pages.dart';
+export 'semester_timeline.dart' show SemesterHome, SemesterHomeState;
 
 Future<void> openHubItem(
   BuildContext context,
@@ -99,35 +106,170 @@ class CourseHubPage extends StatelessWidget {
             await reload();
           }
 
+          Future<void> editCourse() async {
+            try {
+              final detail = Map<String, dynamic>.from(
+                await controller.api.request('GET', '/courses/$courseId'),
+              );
+              if (!context.mounted) return;
+              final saved = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ManualPage.edit(
+                    items: controller,
+                    existing: Map<String, dynamic>.from(detail['course']),
+                    revision: detail['revision'] as int,
+                    courseId: courseId,
+                  ),
+                ),
+              );
+              if (saved == true && context.mounted) await reload();
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(userError(e))));
+              }
+            }
+          }
+
+          Future<void> deleteCourse() async {
+            try {
+              final preview = Map<String, dynamic>.from(
+                await controller.api.request(
+                  'GET',
+                  '/courses/$courseId/delete-preview',
+                ),
+              );
+              if (!context.mounted) return;
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (dialog) => AppDialog(
+                  title: Text('删除“${preview['title']}”？'),
+                  content: Text(
+                    '将删除 ${preview['meetings']} 条上课安排。'
+                    '${preview['linked_items']} 条关联事项会保留，并解除课程关联。',
+                  ),
+                  actions: [
+                    AppTextButton(
+                      onPressed: () => Navigator.pop(dialog, false),
+                      child: const Text('保留课程'),
+                    ),
+                    AppButton(
+                      onPressed: () => Navigator.pop(dialog, true),
+                      child: const Text('确认删除'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed != true || !context.mounted) return;
+              final result = Map<String, dynamic>.from(
+                await controller.api.request(
+                  'DELETE',
+                  '/courses/$courseId?expected_revision=${preview['revision']}',
+                ),
+              );
+              await controller.onRealityChanged?.call(result);
+              await controller.refresh();
+              if (context.mounted) Navigator.pop(context);
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(userError(e))));
+              }
+            }
+          }
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              CampusHero(
-                eyebrow: '课程事务',
+              RecordHeading(
+                label: '课程事务',
                 title: course['title'],
-                subtitle: '${course['teacher'] ?? '教师待补充'}\n作业、考试与每一次课程变化',
+                icon: Icons.menu_book_rounded,
+                color: CoursePalette.forTitle(course['title']).ink,
               ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  TextButton.icon(
-                    onPressed: () => add('assignment'),
-                    icon: const Icon(Icons.edit_note),
-                    label: const Text('记作业'),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => add('task'),
-                    icon: const Icon(Icons.task_alt),
-                    label: const Text('记学习任务'),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => add('exam'),
-                    icon: const Icon(Icons.school_outlined),
-                    label: const Text('记考试'),
-                  ),
-                ],
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: CoursePalette.forTitle(course['title']).background,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    if ('${course['teacher'] ?? ''}'.trim().isNotEmpty) ...[
+                      RecordFact(
+                        label: '任课教师',
+                        value: '${course['teacher']}',
+                        icon: Icons.person_outline_rounded,
+                      ),
+                      const Divider(height: 1),
+                    ],
+                    RecordFact(
+                      label: '本学期课次',
+                      value:
+                          '${controller.rows(data['occurrences']).length} 次上课安排',
+                      icon: Icons.calendar_view_week_rounded,
+                    ),
+                  ],
+                ),
               ),
-              const SectionHeading('待办任务'),
+              const SizedBox(height: 16),
+              AppButton.icon(
+                onPressed: () async {
+                  final kind = await showModalBottomSheet<String>(
+                    context: context,
+                    useSafeArea: true,
+                    builder: (sheetContext) => Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            '添加课程事项',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 12),
+                          RecordActionTile(
+                            title: '作业',
+                            icon: Icons.edit_note_rounded,
+                            onTap: () =>
+                                Navigator.pop(sheetContext, 'assignment'),
+                          ),
+                          RecordActionTile(
+                            title: '学习任务',
+                            icon: Icons.task_alt_rounded,
+                            onTap: () => Navigator.pop(sheetContext, 'task'),
+                          ),
+                          RecordActionTile(
+                            title: '考试',
+                            icon: Icons.school_outlined,
+                            onTap: () => Navigator.pop(sheetContext, 'exam'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                  if (kind != null && context.mounted) await add(kind);
+                },
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('添加事项'),
+              ),
+              const SizedBox(height: 8),
+              AppTextButton.icon(
+                onPressed: editCourse,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('编辑课程安排'),
+              ),
+              if (all.any(
+                (i) => i['kind'] != 'exam' && i['lifecycle'] == 'active',
+              ))
+                const SectionHeading('待办任务'),
               for (final i in orderedItems(
                 all
                     .where(
@@ -136,27 +278,32 @@ class CourseHubPage extends StatelessWidget {
                     .toList(),
               ))
                 hubItem(context, controller, i, data, fresh, reload),
-              if (!all.any(
-                (i) => i['kind'] != 'exam' && i['lifecycle'] == 'active',
-              ))
-                const CampusPanel(child: Text('没有明确关联的待办任务')),
-              const SectionHeading('关联考试'),
+              if (all.any((i) => i['kind'] == 'exam'))
+                const SectionHeading('关联考试'),
               for (final e in orderedItems(
                 all.where((i) => i['kind'] == 'exam').toList(),
               ))
                 hubItem(context, controller, e, data, fresh, reload),
-              ExpansionTile(
-                title: const Text('已完成 / 已取消任务'),
-                children: [
-                  for (final i in all.where(
-                    (i) => i['kind'] != 'exam' && i['lifecycle'] != 'active',
-                  ))
-                    hubItem(context, controller, i, data, fresh, reload),
-                ],
-              ),
+              if (all.any(
+                (i) => i['kind'] != 'exam' && i['lifecycle'] != 'active',
+              ))
+                AppDisclosure(
+                  leading: const Icon(Icons.inventory_2_outlined),
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('已完成 / 已取消任务'),
+                  children: [
+                    for (final i in all.where(
+                      (i) => i['kind'] != 'exam' && i['lifecycle'] != 'active',
+                    ))
+                      hubItem(context, controller, i, data, fresh, reload),
+                  ],
+                ),
+              const Divider(height: 32),
               const SectionHeading('上课与变更记录'),
-              TextButton(
-                onPressed: () async {
+              RecordActionTile(
+                title: '调课或停课',
+                icon: Icons.edit_calendar_outlined,
+                onTap: () async {
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -165,17 +312,27 @@ class CourseHubPage extends StatelessWidget {
                   );
                   await reload();
                 },
-                child: const Text('记录调课或停课'),
               ),
               for (final change in controller.rows(data['changes']))
                 changeCard(change),
-              ExpansionTile(
+              AppDisclosure(
+                tilePadding: EdgeInsets.zero,
+                leading: const Icon(Icons.schedule_rounded),
                 title: Text(
                   '本学期上课安排（${controller.rows(data['occurrences']).length}次）',
                 ),
                 children: [
                   for (final e in controller.rows(data['occurrences']))
-                    ListTile(
+                    AppTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      leading: Icon(
+                        e['changed'] == true
+                            ? Icons.edit_calendar_outlined
+                            : Icons.event_outlined,
+                        color: e['changed'] == true
+                            ? CampusColors.primary
+                            : CampusColors.muted,
+                      ),
                       title: Text(displayInstant(e['start_at'])),
                       subtitle: Text(
                         '${e['location'] ?? ''}${e['changed'] == true ? ' · 已变更' : ''}',
@@ -183,6 +340,12 @@ class CourseHubPage extends StatelessWidget {
                       onTap: () => showCourseDetails(context, e),
                     ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              AppTextButton.icon(
+                onPressed: deleteCourse,
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text('删除这门课程'),
               ),
             ],
           );
@@ -192,176 +355,38 @@ class CourseHubPage extends StatelessWidget {
   );
 }
 
-Widget changeCard(Map<String, dynamic> change) => Padding(
-  padding: const EdgeInsets.only(bottom: 8),
-  child: CampusPanel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+Widget changeCard(Map<String, dynamic> change) => Container(
+  margin: const EdgeInsets.symmetric(vertical: 8),
+  padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+  decoration: const BoxDecoration(
+    border: Border(left: BorderSide(color: CampusColors.teal, width: 3)),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        '${changeNames[change['kind']] ?? '变化'} · ${change['title']}',
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 8),
+      for (final e in change['before'] ?? [])
         Text(
-          '${changeNames[change['kind']] ?? '变化'} · ${change['title']}',
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          '原：${displayInstant(e['start_at'])}',
+          style: const TextStyle(color: CampusColors.muted),
         ),
-        for (final e in change['before'] ?? [])
-          Text('原：${displayInstant(e['start_at'])}'),
-        for (final e in change['after'] ?? [])
-          Text('新：${displayInstant(e['start_at'])}'),
-        Text('依据：${change['source_text']}'),
-      ],
-    ),
+      for (final e in change['after'] ?? [])
+        Text(
+          '新：${displayInstant(e['start_at'])}',
+          style: const TextStyle(
+            color: CampusColors.teal,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      const SizedBox(height: 8),
+      Text(
+        '依据：${change['source_text']}',
+        style: const TextStyle(fontSize: 14, color: CampusColors.muted),
+      ),
+    ],
   ),
 );
-
-class SemesterHome extends StatelessWidget {
-  final ItemsController controller;
-  final VoidCallback onManage;
-  const SemesterHome({
-    super.key,
-    required this.controller,
-    required this.onManage,
-  });
-  @override
-  Widget build(BuildContext context) => HubData(
-    controller: controller,
-    path: '/semesters/${controller.semesterId}/hub',
-    builder: (context, data, fresh, reload) {
-      final semester = Map<String, dynamic>.from(data['semester']);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          CampusHero(
-            eyebrow: '本学期',
-            title: semester['name'],
-            subtitle:
-                '${semester['total_weeks']}周 · ${semester['first_monday']}开始',
-          ),
-          Wrap(
-            spacing: 8,
-            children: [
-              FilledButton.tonalIcon(
-                onPressed: () => context.push('/insights'),
-                icon: const Icon(Icons.bar_chart_rounded),
-                label: const Text('统计分析'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ExamCenterPage(
-                        controller: controller,
-                        semester: semester,
-                      ),
-                    ),
-                  );
-                  await reload();
-                },
-                icon: const Icon(Icons.school_outlined),
-                label: const Text('考试中心'),
-              ),
-              TextButton.icon(
-                onPressed: onManage,
-                icon: const Icon(Icons.settings_outlined),
-                label: const Text('管理学期与课表'),
-              ),
-            ],
-          ),
-          ExpansionTile(
-            // Keep the expansion flag separate from the parent tab's scroll offset.
-            key: PageStorageKey('semester-courses-${semester['id']}'),
-            title: Text('课程事务（${controller.rows(data['courses']).length}门）'),
-            children: [
-              for (final course in controller.rows(data['courses']))
-                ListTile(
-                  title: Text(course['title']),
-                  subtitle: Text(
-                    '${course['teacher']} · 待办${course['task_count']} · 考试${course['exam_count']}',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CourseHubPage(
-                          controller: controller,
-                          courseId: course['id'],
-                        ),
-                      ),
-                    );
-                    await reload();
-                  },
-                ),
-            ],
-          ),
-          const SectionHeading('学期时间轴'),
-          const SoftNotice('任务显示在截止日期所在周，也可以提前完成。每周忙不忙，按已安排的计划估算；紧急任务会单独提醒。'),
-          for (final week in controller.rows(data['weeks']))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: CampusPanel(
-                padding: EdgeInsets.zero,
-                child: ExpansionTile(
-                  key: PageStorageKey(
-                    'semester-week-${semester['id']}-${week['week']}',
-                  ),
-                  title: Text('第${week['week']}周 · ${week['start_date']}'),
-                  subtitle: Text(
-                    !fresh
-                        ? '负荷待刷新'
-                        : switch (week['load_level']) {
-                            'high' => '计划较满或含高风险事项',
-                            'unknown' => '时间信息不足，负荷待确认',
-                            'past' => '已过去的周',
-                            _ => '查看本周节点',
-                          },
-                  ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (fresh) ...[
-                            Text(
-                              '未来可学习 ${week['available_minutes'] == null ? '待确认' : minutesLabel(week['available_minutes'])} · 已安排 ${minutesLabel(week['planned_minutes'])}',
-                            ),
-                            Text(
-                              '本周明确截止的已知剩余工作 ${minutesLabel(week['known_due_remaining_minutes'])}',
-                            ),
-                          ],
-                          for (final item in controller.rows(week['items']))
-                            hubItem(
-                              context,
-                              controller,
-                              item,
-                              data,
-                              fresh,
-                              reload,
-                            ),
-                          for (final change in controller.rows(week['changes']))
-                            changeCard(change),
-                          if (controller.rows(week['items']).isEmpty &&
-                              controller.rows(week['changes']).isEmpty)
-                            const Text('没有已记录的重要节点'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (controller.rows(data['undated']).isNotEmpty) ...[
-            const SectionHeading('日期待确认'),
-            for (final i in controller.rows(data['undated']))
-              hubItem(context, controller, i, data, fresh, reload),
-          ],
-          if (controller.rows(data['outside']).isNotEmpty) ...[
-            const SectionHeading('学期范围外，需核对'),
-            for (final i in controller.rows(data['outside']))
-              hubItem(context, controller, i, data, fresh, reload),
-          ],
-        ],
-      );
-    },
-  );
-}

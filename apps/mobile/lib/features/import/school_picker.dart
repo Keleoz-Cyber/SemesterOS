@@ -1,3 +1,5 @@
+import '../../ui/app_controls.dart';
+import '../../ui/detail_widgets.dart';
 import 'package:flutter/material.dart';
 import '../../ui/campus_theme.dart';
 
@@ -25,32 +27,31 @@ class _SchoolPickerPageState extends State<SchoolPickerPage> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text(
-              '导入学校课表',
-              style: TextStyle(fontSize: 27, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              '选择学校后，在教务系统原网页登录。',
-              style: TextStyle(color: CampusColors.muted),
-            ),
-            const SizedBox(height: 24),
-            TextField(
+            const WorkflowHeader(steps: ['选择学校', '登录教务', '核对课表'], current: 0),
+            AppField(
               decoration: const InputDecoration(
+                labelText: '学校名称',
                 hintText: '搜索学校名称',
                 prefixIcon: Icon(Icons.search_rounded),
               ),
               onChanged: (value) => setState(() => query = value),
             ),
             const SizedBox(height: 22),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                '已适配学校',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+            ),
             if (matches)
               Material(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(22),
-                child: ListTile(
+                child: AppTile(
                   contentPadding: const EdgeInsets.all(18),
                   leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFEAE5FF),
+                    backgroundColor: CampusColors.tealSoft,
                     child: Icon(
                       Icons.school_outlined,
                       color: CampusColors.primary,
@@ -60,7 +61,7 @@ class _SchoolPickerPageState extends State<SchoolPickerPage> {
                     '河南工业大学',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  subtitle: const Text('已适配 · 正方教务'),
+                  subtitle: const Text('进入学校原网页，登录后读取个人课表'),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: widget.onSelect,
                 ),
@@ -71,7 +72,7 @@ class _SchoolPickerPageState extends State<SchoolPickerPage> {
                 child: Text('暂未适配这所学校。你可以先手工添加课程。'),
               ),
             const SizedBox(height: 24),
-            OutlinedButton.icon(
+            AppOutlineButton.icon(
               onPressed: widget.onManual,
               icon: const Icon(Icons.edit_calendar_outlined),
               label: const Text('手工添加课程'),

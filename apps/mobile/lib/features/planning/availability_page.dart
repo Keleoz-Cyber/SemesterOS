@@ -1,8 +1,11 @@
+import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
+import '../../ui/detail_widgets.dart';
+import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'date_time_picker.dart';
@@ -113,21 +116,21 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
     final label = TextEditingController(text: original?['label'] ?? '');
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => AppDialog(
         title: const Text('这段时间做什么（可留空）'),
-        content: TextField(
+        content: AppField(
           controller: label,
           maxLength: 120,
           decoration: const InputDecoration(hintText: '例如：社团活动、休息'),
         ),
         actions: [
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('取消'),
           ),
-          FilledButton(
+          AppButton(
             onPressed: () => Navigator.pop(context, label.text.trim()),
-            child: const Text('添加到待保存设置'),
+            child: const Text('添加'),
           ),
         ],
       ),
@@ -186,7 +189,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
       if (!mounted) return;
       final yes = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => AppDialog(
           title: const Text('确认新的可学习时间'),
           content: SingleChildScrollView(
             child: Column(
@@ -205,7 +208,6 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                 ),
                 ...summary(Map<String, dynamic>.from(preview['after'])),
                 const SizedBox(height: 12),
-                const Text('重叠学习时段会合并，保存后重新计算余量。'),
                 if ((preview['affected_plan_count'] ?? 0) > 0) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -223,11 +225,11 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
             ),
           ),
           actions: [
-            TextButton(
+            AppTextButton(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('继续编辑'),
             ),
-            FilledButton(
+            AppButton(
               onPressed: () => Navigator.pop(context, true),
               child: const Text('确认保存学习时间'),
             ),
@@ -263,6 +265,13 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('可学习时间')),
+    bottomNavigationBar: version == null
+        ? null
+        : ActionFooter(
+            label: busy ? '正在核对…' : '核对并保存学习时间',
+            icon: Icons.fact_check_outlined,
+            onPressed: busy ? null : save,
+          ),
     body: version == null
         ? Center(
             child: error == null
@@ -271,22 +280,20 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(error!),
-                      TextButton(onPressed: load, child: const Text('重试')),
+                      AppTextButton(onPressed: load, child: const Text('重试')),
                     ],
                   ),
           )
         : ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              const CampusHero(
-                eyebrow: '给自己留出时间',
-                title: '什么时候能学习',
-                subtitle: '只在你确认的时段内\n计算可规划时间',
+              const RecordHeading(
+                title: '每周学习时间',
+                label: '学习时间设置',
+                icon: Icons.event_available_outlined,
+                subtitle: '选择每周可用于学习的时段，已排课程会自动避开。',
               ),
-              const SizedBox(height: 16),
-              const SoftNotice('以下时间均为北京时间。没有课不一定有空，先确认你愿意用于学习的时段。'),
-              const SectionHeading('每周学习时段'),
-              TextButton(
+              AppTextButton(
                 onPressed: busy
                     ? null
                     : () => setState(
@@ -299,79 +306,124 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                           },
                         ),
                       ),
-                child: const Text('填入可编辑示例：每天19:00—21:00'),
+                child: const Text('快速设置：每天19:00—21:00'),
               ),
-              for (var day = 1; day <= 7; day++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: CampusPanel(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              EditorSection(
+                title: '每周学习时段',
+                icon: Icons.view_week_outlined,
+                subtitle: '${weekly.length}段每周时段 · 点击时间可修改',
+                children: [
+                  for (var day = 1; day <= 7; day++) ...[
+                    if (day > 1) const Divider(height: 24),
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      runSpacing: 8,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '周${'一二三四五六日'[day - 1]}',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: busy ? null : () => editWindow(day),
-                              child: const Text('添加时段'),
-                            ),
-                          ],
-                        ),
-                        if (!weekly.any((r) => r['weekday'] == day))
-                          const Text('未设置学习时段', style: TextStyle(fontSize: 13)),
-                        for (final row in weekly.where(
-                          (r) => r['weekday'] == day,
-                        ))
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextButton(
-                                  onPressed: busy
-                                      ? null
-                                      : () => editWindow(day, row),
-                                  child: Text('${row['start']}—${row['end']}'),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: '移除此时段',
-                                onPressed: busy
-                                    ? null
-                                    : () => setState(() => weekly.remove(row)),
-                                icon: const Icon(Icons.close),
-                              ),
-                            ],
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
                           ),
+                          decoration: BoxDecoration(
+                            color: day > 5
+                                ? CampusColors.tealSoft
+                                : CampusColors.blueSoft,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '周${'一二三四五六日'[day - 1]}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: day > 5
+                                  ? CampusColors.teal
+                                  : CampusColors.primary,
+                            ),
+                          ),
+                        ),
+                        AppTextButton.icon(
+                          onPressed: busy ? null : () => editWindow(day),
+                          icon: const Icon(Icons.add_rounded, size: 20),
+                          label: const Text('添加时段'),
+                        ),
                       ],
                     ),
-                  ),
-                ),
+                    if (!weekly.any((r) => r['weekday'] == day))
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4, bottom: 8),
+                        child: Text(
+                          '未设置学习时段',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: CampusColors.muted,
+                          ),
+                        ),
+                      ),
+                    for (final row in weekly.where((r) => r['weekday'] == day))
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 18,
+                            color: CampusColors.teal,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: AppTextButton(
+                              style: AppTextButton.styleFrom(
+                                alignment: Alignment.centerLeft,
+                              ),
+                              onPressed: busy
+                                  ? null
+                                  : () => editWindow(day, row),
+                              child: Text(
+                                '${row['start']}—${row['end']}',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          AppIconButton(
+                            tooltip: '移除此时段',
+                            onPressed: busy
+                                ? null
+                                : () => setState(() => weekly.remove(row)),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                  ],
+                ],
+              ),
               SectionHeading(
                 '临时不可用时段',
                 action: '添加',
                 onAction: busy ? null : () => editExclusion(),
               ),
               if (exclusions.isEmpty)
-                const CampusPanel(child: Text('活动、休息等不能学习的时间，可以单独排除。')),
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    '活动、休息等不能学习的时间，可以单独排除。',
+                    style: TextStyle(color: CampusColors.muted),
+                  ),
+                ),
               for (final row in exclusions)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: CampusPanel(
                     padding: EdgeInsets.zero,
-                    child: ListTile(
+                    child: AppTile(
                       title: Text(
                         '${displayInstant(row['start_at'])}\n至 ${displayInstant(row['end_at'])}',
                       ),
                       subtitle: Text('${row['label']}'),
                       onTap: busy ? null : () => editExclusion(row),
-                      trailing: IconButton(
+                      trailing: AppIconButton(
                         tooltip: '移除此不可用时段',
                         onPressed: busy
                             ? null
@@ -386,10 +438,6 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                 SoftNotice(error!, warning: true),
                 const SizedBox(height: 12),
               ],
-              FilledButton(
-                onPressed: busy ? null : save,
-                child: Text(busy ? '正在核对…' : '核对并保存学习时间'),
-              ),
             ],
           ),
   );

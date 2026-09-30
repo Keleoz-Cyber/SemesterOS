@@ -108,7 +108,7 @@ class TodayView extends StatelessWidget {
               hasData ? '${remaining.length}' : '—',
               '尚未结束',
               Icons.schedule_rounded,
-              const Color(0xFF328774),
+              CampusColors.teal,
             ),
           ],
         ),
@@ -123,7 +123,7 @@ class TodayView extends StatelessWidget {
         else if (today.isEmpty)
           EmptyPanel(
             title: '今天没有已记录的课程',
-            message: '给自己留一点从容，也可以提前看看本周安排。',
+            message: '可查看本周课程，或补充尚未记录的安排。',
             action: '查看周课表',
             onAction: onTimetable,
             icon: Icons.wb_sunny_outlined,
@@ -183,7 +183,7 @@ class TodayView extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: i + 1 == local.weekday
                                   ? CampusColors.primary
-                                  : const Color(0xFFE8E7FB),
+                                  : CampusColors.blueSoft,
                               borderRadius: BorderRadius.circular(6),
                             ),
                           ),

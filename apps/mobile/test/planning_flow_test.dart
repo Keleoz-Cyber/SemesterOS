@@ -209,11 +209,11 @@ void main() {
       );
       Future<void> save() async {
         await tester.scrollUntilVisible(
-          find.text('确认保存事项'),
+          find.text('保存'),
           350,
           scrollable: find.byType(Scrollable).first,
         );
-        await ioTap(tester, find.text('确认保存事项'));
+        await ioTap(tester, find.text('保存'));
       }
 
       await open();
@@ -276,9 +276,9 @@ void main() {
           ),
         ),
       );
-      expect(find.text('这些任务合计至少缺 1小时'), findsOneWidget);
-      expect(find.textContaining('单项余量 1小时30分钟'), findsOneWidget);
-      await tester.tap(find.text('查看计算依据 ›'));
+      expect(find.text('同期任务至少还缺 1小时'), findsOneWidget);
+      expect(find.textContaining('单项余量 1小时30分钟'), findsNothing);
+      await tester.tap(find.byType(RiskBadge));
       await tester.pumpAndSettle();
       expect(find.text('单看每项任务，时间可能够用；放在一起时，它们会争用同一段空闲时间。'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -299,7 +299,7 @@ void main() {
       final f = PlanningFixture();
       await bind(tester, f);
       await route(tester, AvailabilityPage(controller: f.c));
-      await tester.tap(find.text('填入可编辑示例：每天19:00—21:00'));
+      await tester.tap(find.text('快速设置：每天19:00—21:00'));
       await tester.pumpAndSettle();
       await capture(tester, 'learning-time');
       await tester.scrollUntilVisible(
@@ -307,6 +307,8 @@ void main() {
         500,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.text('核对并保存学习时间'));
+      await tester.pumpAndSettle();
       await ioTap(tester, find.text('核对并保存学习时间'));
       expect(f.previews, 1);
       expect(f.puts, 0);
@@ -381,18 +383,18 @@ void main() {
       );
       await tester.tap(find.text('更多设置'));
       await tester.pumpAndSettle();
-        await tester.ensureVisible(find.byKey(const Key('task-start-policy')));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const Key('task-start-policy')));
+      await tester.ensureVisible(find.byKey(const Key('task-start-policy')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('task-start-policy')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('从现在起可开始').last);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('确认保存事项'),
+        find.text('保存'),
         350,
         scrollable: find.byType(Scrollable).first,
       );
-      await ioTap(tester, find.text('确认保存事项'));
+      await ioTap(tester, find.text('保存'));
       expect(f.lastItem!['start_policy'], 'now');
       expect(f.lastItem!['earliest_start_at'], isNull);
       await tester.pumpWidget(const SizedBox());

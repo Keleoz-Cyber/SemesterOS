@@ -1,3 +1,4 @@
+import 'package:semester_os/ui/app_controls.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -154,7 +155,7 @@ void main() {
       await capture(tester, 'agent-plan-preview');
       expect(
         tester
-            .widget<FilledButton>(find.byKey(const Key('agent-plan-confirm')))
+            .widget<AppButton>(find.byKey(const Key('agent-plan-confirm')))
             .onPressed,
         isNull,
       );
@@ -163,7 +164,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<FilledButton>(find.byKey(const Key('agent-plan-confirm')))
+            .widget<AppButton>(find.byKey(const Key('agent-plan-confirm')))
             .onPressed,
         isNotNull,
       );
@@ -342,7 +343,25 @@ void main() {
         'text': '组会改到6302',
         'status': 'needs_confirmation',
         'answer': '请核对这次修改，确认后保存。',
-        'cards': [],
+        'cards': [
+          {
+            'kind': 'calendar',
+            'data': {
+              'from_date': '2026-09-28',
+              'to_date': '2026-10-04',
+              'entries': [
+                for (var i = 0; i < 21; i++)
+                  {
+                    'title': '参考课程$i',
+                    'resource_type': 'course',
+                    'resource_id': 'c$i',
+                    'start_at': '2026-09-30T08:00:00+08:00',
+                    'end_at': '2026-09-30T09:00:00+08:00',
+                  },
+              ],
+            },
+          },
+        ],
         'preview': {
           'kind': 'event',
           'action': 'update',
@@ -368,7 +387,16 @@ void main() {
         if (r.path.endsWith('/agent/threads/thread')) {
           return body({
             'id': 'thread',
-            'runs': [run],
+            'runs': [
+              {
+                'id': 'earlier',
+                'text': '之前的问题',
+                'status': 'completed',
+                'answer': '历史答复' * 80,
+                'cards': [],
+              },
+              run,
+            ],
           });
         }
         if (r.path.endsWith('/decision')) {
@@ -396,6 +424,10 @@ void main() {
       expect(find.textContaining('6412'), findsWidgets);
       expect(find.textContaining('6302'), findsWidgets);
       expect(applied, 0);
+      expect(find.text('历史消息 · 1'), findsOneWidget);
+      expect(find.text('历史答复' * 80), findsNothing);
+      expect(find.text('参考课程0'), findsNothing);
+      expect(find.text('确认修改').hitTestable(), findsOneWidget);
       await capture(tester, 'agent-change-preview');
       await tester.ensureVisible(find.text('确认修改'));
       await ioTap(tester, find.text('确认修改'));

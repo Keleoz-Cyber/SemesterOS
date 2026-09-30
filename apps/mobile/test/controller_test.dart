@@ -152,4 +152,51 @@ void main() {
       expect(controller.loggedIn, true);
     },
   );
+  test('deleting the last semester clears its offline timetable', () async {
+    final api = SemesterApi()..session = account('a');
+    final store = MemoryStore();
+    final s = semester(1);
+    var deleted = false;
+    final controller = AppController(
+      api,
+      store,
+      clearSchoolSession: () async {},
+    );
+    final key = 'semester-a/${controller.weekNow(s)}';
+    store.data['a'] = {
+      'semesters': [s],
+      'weeks': {
+        key: {
+          'revision': 1,
+          'events': [
+            {'title': '旧课程'},
+          ],
+        },
+      },
+    };
+    api.dio.httpClientAdapter = ControlledTransport((r) async {
+      if (r.method == 'DELETE') {
+        deleted = true;
+        return body({'deleted_semester_id': 'semester-a'});
+      }
+      if (r.path.endsWith('/semesters')) return body(deleted ? [] : [s]);
+      if (r.path.contains('/timetable')) {
+        return body({
+          'revision': 1,
+          'events': [
+            {'title': '旧课程'},
+          ],
+        });
+      }
+      return body({'id': 'a'});
+    });
+    await controller.openSession();
+    expect(controller.events.single['title'], '旧课程');
+    await controller.deleteSemester('semester-a', 1);
+    expect(controller.semester, isNull);
+    expect(controller.events, isEmpty);
+    expect(controller.savedWeeks, isEmpty);
+    expect(store.data['a']!['weeks'], isEmpty);
+    controller.dispose();
+  });
 }

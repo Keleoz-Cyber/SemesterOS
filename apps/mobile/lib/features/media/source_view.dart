@@ -1,3 +1,6 @@
+import '../../ui/app_controls.dart';
+import '../../ui/detail_widgets.dart';
+import '../items/item_widgets.dart' show displayInstant;
 import '../../core/api.dart' show userError;
 import 'dart:io';
 import 'dart:typed_data';
@@ -96,15 +99,15 @@ class _SourceViewPageState extends State<SourceViewPage> {
   Future<void> remove() async {
     final yes = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('删除原图 / 原录音？'),
         content: const Text('将删除账号中保存的原图或录音。识别文字、修改记录和已保存的事项会保留。'),
         actions: [
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('保留'),
           ),
-          FilledButton(
+          AppButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('确认删除原文件'),
           ),
@@ -140,6 +143,17 @@ class _SourceViewPageState extends State<SourceViewPage> {
         : ListView(
             padding: const EdgeInsets.all(20),
             children: [
+              if (source != null)
+                RecordHeading(
+                  title: source!['kind'] == 'image' ? '图片通知' : '语音记录',
+                  label: '原始来源',
+                  icon: source!['kind'] == 'image'
+                      ? Icons.image_outlined
+                      : Icons.mic_none_rounded,
+                  subtitle: displayInstant(
+                    source!['reference_at'] ?? source!['created_at'],
+                  ),
+                ),
               if (error != null) SoftNotice(error!, warning: true),
               if (source == null && error == null)
                 const LinearProgressIndicator(),
@@ -154,7 +168,7 @@ class _SourceViewPageState extends State<SourceViewPage> {
                   source?['file_deleted'] != true)
                 StreamBuilder<PlayerState>(
                   stream: player.playerStateStream,
-                  builder: (context, s) => TextButton.icon(
+                  builder: (context, s) => AppTextButton.icon(
                     onPressed: () async {
                       if (player.playing) {
                         await player.pause();
@@ -168,13 +182,15 @@ class _SourceViewPageState extends State<SourceViewPage> {
                   ),
                 ),
               if (source != null) ...[
-                const SectionHeading('AI识别的原文'),
-                SelectableText(source!['original_text'] ?? ''),
-                const SectionHeading('你确认的文字'),
-                SelectableText(source!['text'] ?? ''),
+                const SizedBox(height: 20),
+                DocumentPanel(title: '你确认的文字', text: source!['text'] ?? ''),
+                DocumentPanel(
+                  title: 'AI识别的原文',
+                  text: source!['original_text'] ?? '',
+                ),
               ],
               if (source != null && source!['file_deleted'] != true)
-                TextButton(
+                AppTextButton(
                   onPressed: remove,
                   child: const Text('删除原文件，保留文字与历史'),
                 ),
@@ -221,7 +237,7 @@ class _LocalAudioPreviewState extends State<LocalAudioPreview> {
       if (error != null) Text(error!),
       StreamBuilder<PlayerState>(
         stream: player.playerStateStream,
-        builder: (context, s) => TextButton.icon(
+        builder: (context, s) => AppTextButton.icon(
           onPressed: !ready
               ? null
               : () async {

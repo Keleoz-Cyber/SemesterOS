@@ -1,3 +1,5 @@
+import 'package:semester_os/ui/app_controls.dart';
+import 'package:semester_os/ui/app_picker_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/core/api.dart';
@@ -82,13 +84,16 @@ Future<void> openForm(
 }
 
 Future<void> save(WidgetTester tester) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
   await tester.scrollUntilVisible(
-    find.text('确认保存事项'),
+    find.text('保存'),
     350,
     scrollable: find.byType(Scrollable).first,
   );
+  await tester.pumpAndSettle();
   await tester.runAsync(() async {
-    await tester.tap(find.text('确认保存事项'));
+    await tester.tap(find.text('保存'));
     // bind() initialises the platform queue in the real async zone, as on device.
     // Let its chained I/O complete before asserting the resulting navigation.
     await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -123,7 +128,7 @@ void main() {
       await tester.pumpAndSettle();
       await save(tester);
       expect(f.submitted, isNull);
-      expect(find.text('预计耗时请填写1至525600之间的整数分钟，可在更多设置中修改'), findsOneWidget);
+      expect(find.text('预计耗时请填写1至525600之间的整数分钟，请在任务安排中修改'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
@@ -177,9 +182,24 @@ void main() {
       expect(find.text('需核对：请核对通知年份'), findsOneWidget);
       await save(tester);
       expect(f.submitted, isNull);
-      await tester.ensureVisible(find.byType(CheckboxListTile).last);
-      await tester.tap(find.byType(CheckboxListTile).last);
-      await tester.pump();
+      expect(find.text('请核对原文、日期和标出的推断后确认'), findsOneWidget);
+      final review = find.byKey(const Key('item-reviewed'));
+      // Saving is fixed at the bottom now; it does not scroll the lazy form to
+      // the explicit review control. Reveal that control through normal scrolling.
+      await tester.scrollUntilVisible(
+        review,
+        300,
+        scrollable: find
+            .byWidgetPredicate(
+              (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<AppCheckRow>(review).value, isFalse);
+      await tester.tap(review);
+      await tester.pumpAndSettle();
+      expect(tester.widget<AppCheckRow>(review).value, isTrue);
       await save(tester);
       expect(f.submitted!['remaining_minutes'], 180);
       expect(f.submitted!['time']['at'], '2099-09-25T23:59:00+08:00');
@@ -189,7 +209,7 @@ void main() {
         ItemDetailPage(controller: f.c, semester: semester, id: 'created'),
       );
       expect(
-        find.text('编辑事项'),
+        find.byTooltip('编辑事项'),
         findsOneWidget,
         reason: tester
             .widgetList<Text>(find.byType(Text))
@@ -216,7 +236,7 @@ void main() {
     },
   );
   testWidgets(
-    'exam review preset creates one reminder rule and large text remains usable',
+    'exam lead time creates one reminder without inventing a purpose and large text remains usable',
     (tester) async {
       Map<String, dynamic>? selected;
       await mount(
@@ -236,7 +256,10 @@ void main() {
       );
       await tester.tap(find.text('设置提醒'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('14天 · 开始复习'));
+      await tester.ensureVisible(find.byType(AppPickerField<int>));
+      await tester.tap(find.byType(AppPickerField<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('提前14天').last);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text('确认这条提醒'),
@@ -246,7 +269,7 @@ void main() {
       await tester.tap(find.text('确认这条提醒'));
       await tester.pumpAndSettle();
       expect(selected!['lead_minutes'], 20160);
-      expect(selected!['purpose'], 'start_review');
+      expect(selected!['purpose'], 'item');
       expect(tester.takeException(), isNull);
     },
   );

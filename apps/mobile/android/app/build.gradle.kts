@@ -18,6 +18,11 @@ android {
 
     defaultConfig {
         applicationId = "cn.semesteros.semester_os"
+        // Opt-in isolated sandbox for device verification; normal builds keep
+        // their existing application ID, data and launcher name.
+        val qa = providers.gradleProperty("semesterosQa").orNull == "true"
+        if (qa) applicationIdSuffix = ".qa"
+        resValue("string", "app_label", if (qa) "拾日 · 验证" else "拾日")
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24

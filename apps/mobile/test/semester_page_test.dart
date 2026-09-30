@@ -1,3 +1,5 @@
+import 'package:semester_os/ui/forui_theme.dart';
+import 'package:semester_os/ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -29,20 +31,26 @@ void main() {
         clearSchoolSession: () async {},
       );
       await tester.pumpWidget(
-        MaterialApp(home: SemesterPage(controller: controller)),
+        MaterialApp(
+          builder: (context, child) => ShiriForuiTheme(child: child!),
+          home: SemesterPage(controller: controller),
+        ),
       );
       await tester.scrollUntilVisible(
-        find.byType(CheckboxListTile),
+        find.byType(AppCheckRow),
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byType(AppCheckRow));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(AppCheckRow));
       await tester.pump();
       await tester.ensureVisible(find.text('确认创建学期'));
       await tester.tap(find.text('确认创建学期'));
       await tester.pumpAndSettle();
       expect(requests, 0);
-      expect(find.text('请选择学校校历第1周的周一'), findsOneWidget);
+      expect(find.text('请选择学校校历第1周的周一').hitTestable(), findsAtLeastNWidgets(1));
     },
   );
 
@@ -55,7 +63,10 @@ void main() {
         clearSchoolSession: () async {},
       );
       await tester.pumpWidget(
-        MaterialApp(home: SemesterPage(controller: controller)),
+        MaterialApp(
+          builder: (context, child) => ShiriForuiTheme(child: child!),
+          home: SemesterPage(controller: controller),
+        ),
       );
       await tester.tap(find.byKey(const Key('first-monday')));
       await tester.pumpAndSettle();
@@ -134,6 +145,7 @@ void main() {
     addTearDown(router.dispose);
     await tester.pumpWidget(
       MaterialApp.router(
+        builder: (context, child) => ShiriForuiTheme(child: child!),
         routerConfig: router,
         locale: const Locale('zh', 'CN'),
         supportedLocales: const [Locale('zh', 'CN')],
@@ -152,11 +164,14 @@ void main() {
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.byType(CheckboxListTile),
+      find.byType(AppCheckRow),
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byType(AppCheckRow));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(AppCheckRow));
     await tester.pump();
     await tester.ensureVisible(find.text('确认创建学期'));
     await tester.tap(find.text('确认创建学期'));
@@ -167,4 +182,84 @@ void main() {
     );
     expect(find.text('学期已创建'), findsOneWidget);
   });
+
+  testWidgets(
+    'existing semester shows saved periods and submits a versioned edit',
+    (tester) async {
+      final original = {
+        'id': 's',
+        'name': '测试学期',
+        'first_monday': '2026-08-31',
+        'total_weeks': 20,
+        'revision': 3,
+        'periods': [
+          {'number': 1, 'start': '08:15', 'end': '09:05'},
+        ],
+      };
+      Map<String, dynamic>? submitted;
+      final api = SemesterApi()..session = account('student');
+      api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.method == 'PUT' && request.path.endsWith('/semesters/s')) {
+          submitted = Map<String, dynamic>.from(request.data);
+          return body({...original, ...submitted!, 'revision': 4});
+        }
+        if (request.path.endsWith('/semesters')) {
+          return body([
+            {
+              ...original,
+              if (submitted != null) ...submitted!,
+              'revision': submitted == null ? 3 : 4,
+            },
+          ]);
+        }
+        if (request.path.contains('/timetable')) {
+          return body({'revision': 4, 'events': []});
+        }
+        return body({'id': 'student'});
+      });
+      final controller = AppController(
+        api,
+        MemoryStore(),
+        clearSchoolSession: () async {},
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (_, child) => ShiriForuiTheme(child: child!),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SemesterPage(
+                      controller: controller,
+                      existing: original,
+                    ),
+                  ),
+                ),
+                child: const Text('打开修改'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('打开修改'));
+      await tester.pumpAndSettle();
+      expect(find.text('修改学期设置'), findsOneWidget);
+      expect(find.text('08:15'), findsAtLeastNWidgets(1));
+      await tester.scrollUntilVisible(
+        find.byType(AppCheckRow),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.byType(AppCheckRow));
+      await tester.pump();
+      await tester.tap(find.text('保存学期设置'));
+      await tester.pumpAndSettle();
+      expect(submitted?['expected_revision'], 3);
+      expect((submitted?['periods'] as List).single['start'], '08:15');
+      expect(find.text('打开修改'), findsOneWidget);
+      controller.dispose();
+    },
+  );
 }

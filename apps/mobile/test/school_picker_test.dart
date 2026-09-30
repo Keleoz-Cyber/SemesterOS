@@ -1,3 +1,4 @@
+import 'package:semester_os/ui/forui_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/import/school_picker.dart';
@@ -9,6 +10,7 @@ void main() {
       var selected = 0, manual = 0;
       await tester.pumpWidget(
         MaterialApp(
+          builder: (context, child) => ShiriForuiTheme(child: child!),
           home: SchoolPickerPage(
             onSelect: () => selected++,
             onManual: () => manual++,
@@ -16,12 +18,14 @@ void main() {
         ),
       );
       await tester.tap(find.text('河南工业大学'));
+      await tester.pumpAndSettle();
       expect(selected, 1);
       await tester.enterText(find.byType(TextField), '不存在的示例高校');
       await tester.pump();
       expect(find.text('河南工业大学'), findsNothing);
       expect(find.textContaining('暂未适配'), findsOneWidget);
       await tester.tap(find.text('手工添加课程'));
+      await tester.pumpAndSettle();
       expect(manual, 1);
     },
   );

@@ -1,8 +1,16 @@
+import '../../ui/campus_widgets.dart';
+import '../../ui/app_controls.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../core/api.dart';
+import '../../ui/detail_widgets.dart';
+import '../../ui/record_actions.dart';
+import '../../ui/app_picker_field.dart';
+import '../../ui/time_input_options.dart';
+import '../items/reminder_editor.dart';
+import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'calendar_repository.dart';
@@ -44,7 +52,7 @@ class _EventFormPageState extends State<EventFormPage> {
       tags = TextEditingController(),
       source = TextEditingController();
   final form = GlobalKey<FormState>();
-  String precision = 'exact', certainty = 'formal';
+  String precision = 'exact_start', certainty = 'formal';
   String? category, error;
   late DateTime start, end;
   int week = 1, revision = 0;
@@ -152,9 +160,47 @@ class _EventFormPageState extends State<EventFormPage> {
     });
   }
 
+  Future<DateTime?> pickEnd() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: end,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (date == null || !mounted) return null;
+    final clock = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(end),
+    );
+    if (clock == null) return null;
+    return DateTime(date.year, date.month, date.day, clock.hour, clock.minute);
+  }
+
+  Future<void> editEventReminder([int? index]) async {
+    final result = await editReminder(
+      context,
+      kind: 'event',
+      relativeOnly: true,
+      initial: index == null
+          ? null
+          : {'mode': 'relative', 'lead_minutes': reminders[index]},
+    );
+    if (result == null || !mounted) return;
+    final minutes = result['lead_minutes'] as int;
+    setState(() {
+      if (index != null) reminders.removeAt(index);
+      if (!reminders.contains(minutes)) reminders.add(minutes);
+    });
+  }
+
   Future<void> save() async {
     if (!same || !ready || busy) return;
     if (submitted == null) {
+      if (title.text.trim().isEmpty) {
+        form.currentState?.validate();
+        setState(() => error = '请填写日程名称');
+        return;
+      }
       if (!(form.currentState?.validate() ?? false)) return;
       if ((precision == 'exact' && !end.isAfter(start)) ||
           (precision == 'range' && end.isBefore(start))) {
@@ -234,6 +280,26 @@ class _EventFormPageState extends State<EventFormPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.original == null ? '添加日程' : '修改日程')),
+    bottomNavigationBar: ActionFooter(
+      label: busy
+          ? '正在保存…'
+          : submitted != null
+          ? '重试保存'
+          : widget.original == null
+          ? '添加日程'
+          : '保存修改',
+      icon: Icons.check_rounded,
+      secondary: error == null
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+      onPressed: busy || !ready || !same ? null : save,
+    ),
     body: Form(
       key: form,
       child: ListView(
@@ -250,99 +316,133 @@ class _EventFormPageState extends State<EventFormPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextFormField(
-                  controller: title,
-                  maxLength: 120,
-                  decoration: const InputDecoration(
-                    labelText: '日程名称',
-                    hintText: '例如：课题组组会',
-                  ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? '请填写日程名称' : null,
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: precision,
-                  decoration: const InputDecoration(labelText: '时间'),
-                  items: const [
-                    DropdownMenuItem(value: 'exact', child: Text('已确定开始和结束时间')),
-                    DropdownMenuItem(
-                      value: 'exact_start',
-                      child: Text('只确定开始时间'),
-                    ),
-                    DropdownMenuItem(value: 'date', child: Text('只确定日期')),
-                    DropdownMenuItem(value: 'week', child: Text('只确定周次')),
-                    DropdownMenuItem(value: 'range', child: Text('日期范围')),
-                    DropdownMenuItem(value: 'unknown', child: Text('时间待确认')),
-                  ],
-                  onChanged: (v) => setState(() => precision = v!),
-                ),
-                if (!['unknown', 'week'].contains(precision)) ...[
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => pick(false),
-                    icon: const Icon(Icons.calendar_today_outlined),
-                    label: Text(
-                      '${precision.startsWith('exact') ? '开始' : '日期'}：${calendarDate(start)}${precision.startsWith('exact') ? ' ${hhmm(start)}' : ''}',
-                    ),
-                  ),
-                  if (precision == 'exact' || precision == 'range')
-                    OutlinedButton.icon(
-                      onPressed: () => pick(true),
-                      icon: const Icon(Icons.schedule),
-                      label: Text(
-                        '结束：${calendarDate(end)}${precision == 'exact' ? ' ${hhmm(end)}' : ''}',
-                      ),
-                    ),
-                ],
-                if (precision == 'week')
-                  DropdownButtonFormField<int>(
-                    initialValue: week,
-                    decoration: const InputDecoration(labelText: '周次'),
-                    items: List.generate(
-                      widget.semester['total_weeks'],
-                      (i) => DropdownMenuItem(
-                        value: i + 1,
-                        child: Text('第${i + 1}周'),
-                      ),
-                    ),
-                    onChanged: (v) => setState(() => week = v!),
-                  ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: location,
-                  maxLength: 120,
-                  decoration: const InputDecoration(labelText: '地点（选填）'),
-                ),
-                Wrap(
-                  spacing: 8,
+                EditorSection(
+                  title: '日程内容',
+                  icon: Icons.event_note_outlined,
                   children: [
-                    for (final value in [15, 30, 60, 1440])
-                      FilterChip(
-                        label: Text(value == 1440 ? '提前1天' : '提前$value分钟'),
-                        selected: reminders.contains(value),
-                        onSelected: (on) => setState(() {
-                          if (on) {
-                            reminders.add(value);
-                          } else {
-                            reminders.remove(value);
+                    AppFormField(
+                      controller: title,
+                      maxLength: 120,
+                      decoration: const InputDecoration(
+                        labelText: '日程名称',
+                        hintText: '例如：课题组组会',
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? '请填写日程名称' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    AppFormField(
+                      controller: location,
+                      maxLength: 120,
+                      decoration: const InputDecoration(labelText: '地点（选填）'),
+                    ),
+                  ],
+                ),
+                EditorSection(
+                  title: '时间安排',
+                  icon: Icons.schedule_rounded,
+                  children: [
+                    if (!['unknown', 'week'].contains(precision)) ...[
+                      const SizedBox(height: 12),
+                      AppOutlineButton.icon(
+                        onPressed: () => pick(false),
+                        icon: const Icon(Icons.calendar_today_outlined),
+                        label: Text(
+                          '${precision.startsWith('exact') ? '开始' : '日期'}：${calendarDate(start)}${precision.startsWith('exact') ? ' ${hhmm(start)}' : ''}',
+                        ),
+                      ),
+                      if (precision == 'exact' || precision == 'range')
+                        AppOutlineButton.icon(
+                          onPressed: () => pick(true),
+                          icon: const Icon(Icons.schedule),
+                          label: Text(
+                            '结束：${calendarDate(end)}${precision == 'exact' ? ' ${hhmm(end)}' : ''}',
+                          ),
+                        ),
+                    ],
+                    if (precision == 'week')
+                      AppPickerField<int>(
+                        initialValue: week,
+                        decoration: const InputDecoration(labelText: '周次'),
+                        items: List.generate(
+                          widget.semester['total_weeks'],
+                          (i) => DropdownMenuItem(
+                            value: i + 1,
+                            child: Text('第${i + 1}周'),
+                          ),
+                        ),
+                        onChanged: (v) => setState(() => week = v!),
+                      ),
+                    if (precision == 'exact_start')
+                      AppTextButton.icon(
+                        onPressed: () async {
+                          final value = await pickEnd();
+                          if (value != null && mounted) {
+                            setState(() {
+                              end = value;
+                              precision = 'exact';
+                            });
                           }
-                        }),
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('添加结束时间'),
+                      ),
+                    if (precision == 'exact')
+                      AppTextButton(
+                        onPressed: () =>
+                            setState(() => precision = 'exact_start'),
+                        child: const Text('移除结束时间'),
+                      ),
+                    TimeInputOptions(
+                      precision: precision,
+                      exactValue: 'exact_start',
+                      onChanged: (value) => setState(() => precision = value),
+                    ),
+                    TentativeSwitch(
+                      certainty: certainty,
+                      onChanged: (value) => setState(() => certainty = value),
+                    ),
+                  ],
+                ),
+                EditorSection(
+                  title: '提醒',
+                  icon: Icons.notifications_outlined,
+                  accent: CampusColors.teal,
+                  children: [
+                    for (var i = 0; i < reminders.length; i++)
+                      AppTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          '${reminderLabel({'mode': 'relative', 'lead_minutes': reminders[i]})}提醒',
+                        ),
+                        trailing: AppIconButton(
+                          tooltip: '删除这条提醒',
+                          icon: const Icon(Icons.close),
+                          onPressed: () =>
+                              setState(() => reminders.removeAt(i)),
+                        ),
+                        onTap: () => editEventReminder(i),
+                      ),
+                    AppTextButton.icon(
+                      onPressed: () => editEventReminder(),
+                      icon: const Icon(Icons.add),
+                      label: Text(reminders.isEmpty ? '添加提醒' : '再添加一条提醒'),
+                    ),
+                    if (reminders.isNotEmpty && !precision.startsWith('exact'))
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text('补全开始时间后，这些提醒才会生效。'),
                       ),
                   ],
                 ),
-                if (!precision.startsWith('exact'))
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text('补全开始时间后，提前提醒才会生效。'),
-                  ),
-                const SizedBox(height: 14),
-                ExpansionTile(
+                AppDisclosure(
+                  leading: const Icon(Icons.tune_rounded),
                   title: const Text('分类与更多设置'),
+                  childrenPadding: const EdgeInsets.only(top: 12),
                   children: [
-                    DropdownButtonFormField<String>(
+                    AppPickerField<String>(
                       initialValue: category ?? '',
-                      decoration: const InputDecoration(labelText: '主分类'),
+                      decoration: const InputDecoration(labelText: '分类'),
                       items: [
                         const DropdownMenuItem(value: '', child: Text('未分类')),
                         for (final c in eventCategories.entries)
@@ -352,7 +452,7 @@ class _EventFormPageState extends State<EventFormPage> {
                           setState(() => category = v == '' ? null : v),
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
+                    AppFormField(
                       controller: tags,
                       decoration: const InputDecoration(
                         labelText: '标签（选填）',
@@ -361,18 +461,7 @@ class _EventFormPageState extends State<EventFormPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: certainty,
-                      decoration: const InputDecoration(labelText: '确定程度'),
-                      items: const [
-                        DropdownMenuItem(value: 'formal', child: Text('已确定')),
-                        DropdownMenuItem(value: 'tentative', child: Text('暂定')),
-                        DropdownMenuItem(value: 'unknown', child: Text('待确认')),
-                      ],
-                      onChanged: (v) => setState(() => certainty = v!),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
+                    AppFormField(
                       controller: source,
                       readOnly:
                           widget.candidate != null || widget.original != null,
@@ -385,29 +474,9 @@ class _EventFormPageState extends State<EventFormPage> {
               ],
             ),
           ),
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
           if (!ready && error != null)
-            TextButton(onPressed: loadRevision, child: const Text('重新连接')),
+            AppTextButton(onPressed: loadRevision, child: const Text('重新连接')),
           const SizedBox(height: 16),
-          FilledButton(
-            onPressed: busy || !ready || !same ? null : save,
-            child: Text(
-              busy
-                  ? '正在保存…'
-                  : submitted != null
-                  ? '重试保存'
-                  : widget.original == null
-                  ? '确认添加日程'
-                  : '保存修改',
-            ),
-          ),
         ],
       ),
     ),
@@ -440,6 +509,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
   }
 
   Future<void> load() async {
+    if (mounted) setState(() => error = null);
     try {
       final result = Map<String, dynamic>.from(
         await widget.controller.api.request('GET', '/events/${widget.eventId}'),
@@ -455,27 +525,32 @@ class _EventDetailPageState extends State<EventDetailPage> {
   Future<void> cancel() async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(
+      builder: (c) => AppDialog(
         title: const Text('取消这条日程？'),
         content: const Text('取消后将停止提醒并释放占用时间。已有个人计划不会自动移动。'),
         actions: [
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.pop(c, false),
             child: const Text('保留日程'),
           ),
-          FilledButton(
+          AppButton(
             onPressed: () => Navigator.pop(c, true),
             child: const Text('确认取消'),
           ),
         ],
       ),
     );
-    if (ok != true || !mounted) return;
+    if (ok != true ||
+        !mounted ||
+        generation != widget.controller.api.generation) {
+      return;
+    }
     setState(() => busy = true);
     try {
       final semesters = List<Map<String, dynamic>>.from(
         await widget.controller.api.request('GET', '/semesters'),
       );
+      if (!mounted || generation != widget.controller.api.generation) return;
       final revision = semesters.firstWhere(
         (s) => s['id'] == data!['semester_id'],
       )['revision'];
@@ -496,107 +571,204 @@ class _EventDetailPageState extends State<EventDetailPage> {
     }
   }
 
+  Future<void> edit() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventFormPage(
+          controller: widget.controller,
+          semester: widget.semester,
+          original: data!,
+        ),
+      ),
+    );
+    if (mounted) await load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final row = data;
+    final timing = Map<String, dynamic>.from(row?['time'] ?? {});
     return Scaffold(
-      appBar: AppBar(title: const Text('日程详情')),
+      appBar: AppBar(
+        title: const Text('日程详情'),
+        actions: [
+          if (row != null && row['lifecycle'] != 'cancelled')
+            AppIconButton(
+              tooltip: '编辑日程',
+              onPressed: busy ? null : edit,
+              icon: const Icon(Icons.edit_outlined),
+            ),
+          if (row != null)
+            RecordMenuButton<String>(
+              enabled: !busy,
+              onSelected: (value) async {
+                if (value == 'cancel') await cancel();
+                if (value == 'refresh') await load();
+                if (value == 'source' && context.mounted) {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SourceViewPage(
+                        controller: widget.controller,
+                        id: row['source_id'],
+                      ),
+                    ),
+                  );
+                }
+              },
+              actions: [
+                if (row['source_id'] != null)
+                  const RecordMenuAction(
+                    'source',
+                    '原始通知',
+                    Icons.description_outlined,
+                  ),
+                const RecordMenuAction('refresh', '刷新', Icons.refresh_rounded),
+                if (row['lifecycle'] != 'cancelled')
+                  const RecordMenuAction(
+                    'cancel',
+                    '取消日程',
+                    Icons.event_busy_outlined,
+                    destructive: true,
+                  ),
+              ],
+            ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           if (error != null)
-            Text(
-              error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ),
           if (row == null)
-            const LinearProgressIndicator()
+            if (error == null)
+              const LinearProgressIndicator()
+            else
+              AppTextButton(onPressed: load, child: const Text('重新读取日程'))
           else ...[
-            Text(
-              row['title'],
-              style: Theme.of(context).textTheme.headlineSmall,
+            RecordHeading(
+              title: row['title'],
+              label: row['lifecycle'] == 'cancelled'
+                  ? '日程 · 已取消'
+                  : row['certainty'] == 'formal'
+                  ? '日程'
+                  : '日程 · 暂定',
+              icon: Icons.event_outlined,
+              color: CampusColors.teal,
             ),
-            const SizedBox(height: 18),
-            Text(
-              calendarTimeLabel({
-                'time_precision': row['time']['precision'],
-                ...Map<String, dynamic>.from(row['time']),
-                'start_at': row['time']['at'],
-                'end_at': row['time']['end_at'],
-              }),
-            ),
-            if (row['certainty'] != 'formal') const Text('时间或安排尚待确认'),
-            if ('${row['location']}'.isNotEmpty)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.place_outlined),
-                title: Text(row['location']),
-              ),
-            Wrap(
-              spacing: 8,
-              children: [
-                if (row['category_id'] != null)
-                  Chip(label: Text(eventCategories[row['category_id']]!)),
-                for (final tag in row['tags']) Chip(label: Text(tag['name'])),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text('提醒', style: TextStyle(fontWeight: FontWeight.bold)),
-            if ((row['reminders'] as List).isEmpty) const Text('未设置提醒'),
-            for (final r in row['reminders'])
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.notifications_none),
-                title: Text(reminderLabel(Map<String, dynamic>.from(r))),
-                subtitle: Text(reminderState(r['schedule_state'])),
-              ),
-            if ('${row['source_text']}'.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              const Text('通知原文', style: TextStyle(fontWeight: FontWeight.bold)),
-              SelectableText(row['source_text']),
-            ],
-            if (row['source_id'] != null)
-              TextButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SourceViewPage(
-                      controller: widget.controller,
-                      id: row['source_id'],
-                    ),
-                  ),
+            if ((timing['precision'] != null &&
+                    timing['precision'] != 'unknown') ||
+                '${row['location'] ?? ''}'.trim().isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
                 ),
-                icon: const Icon(Icons.description_outlined),
-                label: const Text('查看原始通知'),
+                decoration: BoxDecoration(
+                  color: CampusColors.tealSoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    if (timing['at'] != null) ...[
+                      RecordFact(
+                        label: '开始',
+                        value: displayInstant(timing['at']),
+                        icon: Icons.play_circle_outline_rounded,
+                        color: CampusColors.teal,
+                      ),
+                      if (timing['end_at'] != null) ...[
+                        const Divider(height: 1),
+                        RecordFact(
+                          label: '结束',
+                          value: displayInstant(timing['end_at']),
+                          icon: Icons.stop_circle_outlined,
+                          color: CampusColors.teal,
+                        ),
+                      ],
+                    ] else if (timing['precision'] != null &&
+                        timing['precision'] != 'unknown')
+                      RecordFact(
+                        label: '时间',
+                        value: calendarTimeLabel({
+                          'time_precision': timing['precision'],
+                          ...timing,
+                          'start_at': timing['at'],
+                          'end_at': timing['end_at'],
+                        }, includeMissing: false),
+                        icon: Icons.schedule_rounded,
+                        color: CampusColors.teal,
+                      ),
+                    if ('${row['location'] ?? ''}'.isNotEmpty) ...[
+                      const Divider(height: 1),
+                      RecordFact(
+                        label: '地点',
+                        value: row['location'],
+                        icon: Icons.place_outlined,
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            const SizedBox(height: 24),
-            if (row['lifecycle'] == 'cancelled')
-              const Text('这条日程已取消')
-            else ...[
-              FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => EventFormPage(
-                              controller: widget.controller,
-                              semester: widget.semester,
-                              original: row,
-                            ),
-                          ),
-                        );
-                        await load();
-                      },
-                child: const Text('修改日程'),
+            if (row['category_id'] != null ||
+                (row['tags'] as List? ?? []).isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (row['category_id'] != null)
+                      StatusPill(eventCategories[row['category_id']] ?? '其他'),
+                    for (final tag in row['tags'] ?? [])
+                      StatusPill(tag['name']),
+                  ],
+                ),
               ),
-              const SizedBox(height: 10),
-              OutlinedButton(
-                onPressed: busy ? null : cancel,
-                child: const Text('取消日程'),
+            const SizedBox(height: 20),
+            if ((row['reminders'] as List? ?? []).isNotEmpty)
+              EditorSection(
+                title: '提醒',
+                icon: Icons.notifications_outlined,
+                accent: CampusColors.teal,
+                children: [
+                  for (final r in row['reminders'])
+                    AppTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        r['schedule_state'] == 'scheduled'
+                            ? Icons.notifications_active_outlined
+                            : Icons.notifications_none,
+                        color: CampusColors.teal,
+                      ),
+                      title: Text(reminderLabel(Map<String, dynamic>.from(r))),
+                      subtitle: Text(reminderState(r['schedule_state'])),
+                      trailing: row['lifecycle'] == 'cancelled'
+                          ? null
+                          : const Icon(Icons.chevron_right_rounded),
+                      onTap: busy || row['lifecycle'] == 'cancelled'
+                          ? null
+                          : edit,
+                    ),
+                ],
               ),
-            ],
+            if ('${row['notes'] ?? ''}'.trim().isNotEmpty)
+              DocumentPanel(title: '补充说明', text: row['notes']),
+            if ('${row['source_text'] ?? ''}'.trim().isNotEmpty)
+              AppDisclosure(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('通知原文'),
+                children: [
+                  DocumentPanel(title: '通知原文', text: row['source_text']),
+                ],
+              ),
           ],
         ],
       ),

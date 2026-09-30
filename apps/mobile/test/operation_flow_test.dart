@@ -1,3 +1,5 @@
+import 'package:semester_os/ui/app_controls.dart';
+import 'package:semester_os/ui/app_picker_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/operations/operation_page.dart';
@@ -99,7 +101,7 @@ void main() {
       await settleIo(t);
       expect(
         t
-            .widget<TextField>(find.byKey(const Key('operation-text')))
+            .widget<AppField>(find.byKey(const Key('operation-text')))
             .controller!
             .text,
         isEmpty,
@@ -215,7 +217,9 @@ void main() {
     );
     await settleIo(t);
     await showButton(t, '设置提醒时间');
-    await ioTap(t, find.text('2小时前'));
+    await t.ensureVisible(find.byType(AppPickerField<int>));
+    await ioTap(t, find.byType(AppPickerField<int>));
+    await ioTap(t, find.text('提前2小时').last);
     await ioTap(t, find.text('确认这条提醒'));
     await settleIo(t);
     await showButton(t, '查看修改前后');

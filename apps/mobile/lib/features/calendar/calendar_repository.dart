@@ -42,7 +42,10 @@ List<Map<String, dynamic>> calendarGridEntries(
   return result;
 }
 
-String calendarTimeLabel(Map<String, dynamic> row) {
+String calendarTimeLabel(
+  Map<String, dynamic> row, {
+  bool includeMissing = true,
+}) {
   String at(dynamic value) {
     final t = schoolTime('$value');
     return '${t.month}/${t.day} ${hhmm(t)}';
@@ -50,14 +53,16 @@ String calendarTimeLabel(Map<String, dynamic> row) {
 
   if (row['start_at'] != null) {
     return row['end_at'] == null
-        ? '${at(row['start_at'])} · 结束时间待定'
+        ? '${at(row['start_at'])}${includeMissing ? ' · 结束时间待定' : ''}'
         : '${at(row['start_at'])}—${at(row['end_at'])}';
   }
   if (row['due_at'] != null) return '${at(row['due_at'])} 截止';
   if (row['date'] != null) {
-    return '${row['date']}${row['end_date'] == null ? '' : ' 至 ${row['end_date']}'} · 时刻待定';
+    return '${row['date']}${row['end_date'] == null ? '' : ' 至 ${row['end_date']}'}${includeMissing ? ' · 时刻待定' : ''}';
   }
-  if (row['week'] != null) return '第${row['week']}周 · 日期待定';
+  if (row['week'] != null) {
+    return '第${row['week']}周${includeMissing ? ' · 日期待定' : ''}';
+  }
   return '时间待确认';
 }
 

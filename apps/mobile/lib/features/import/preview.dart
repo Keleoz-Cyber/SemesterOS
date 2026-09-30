@@ -1,9 +1,12 @@
-import '../../core/api.dart' show userError;
+import '../../ui/app_controls.dart';
+import '../../ui/detail_widgets.dart';
+import '../../core/api.dart' show ApiFailure, userError;
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/campus_widgets.dart';
 import '../timetable/timetable_layout.dart';
+import '../semester/semester_page.dart';
 
 Future<bool> showImportPreview(
   BuildContext context,
@@ -47,7 +50,18 @@ class ImportPreview extends StatefulWidget {
 class _ImportPreviewState extends State<ImportPreview> {
   Map<String, dynamic>? batch;
   String? error;
-  bool busy = true;
+  bool busy = true, calendarMismatch = false;
+  bool confirmChanged = false;
+  bool removeMissing = false;
+  List<Map<String, dynamic>> get changedCourses =>
+      List<Map<String, dynamic>>.from(batch?['changed_courses'] ?? []);
+  bool get hasChangeDetails =>
+      batch != null && changedCourses.length == batch!['changed_count'];
+  List<Map<String, dynamic>> get missingCourses =>
+      List<Map<String, dynamic>>.from(batch?['missing_courses'] ?? []);
+  bool get hasMissingDetails =>
+      batch != null &&
+      missingCourses.length == (batch!['missing_count'] as int? ?? 0);
   @override
   void initState() {
     super.initState();
@@ -58,6 +72,9 @@ class _ImportPreviewState extends State<ImportPreview> {
     setState(() {
       busy = true;
       error = null;
+      calendarMismatch = false;
+      confirmChanged = false;
+      removeMissing = false;
     });
     try {
       final result = Map<String, dynamic>.from(
@@ -74,10 +91,30 @@ class _ImportPreviewState extends State<ImportPreview> {
       );
       if (mounted) setState(() => batch = result);
     } catch (e) {
-      if (mounted) setState(() => error = userError(e));
+      if (mounted) {
+        setState(() {
+          error = userError(e);
+          calendarMismatch = e is ApiFailure && e.code == 'CALENDAR_MISMATCH';
+        });
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
+  }
+
+  Future<void> editCalendar() async {
+    final semester = widget.controller.semester;
+    if (semester == null) return;
+    final saved = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SemesterPage(
+          controller: widget.controller,
+          existing: Map<String, dynamic>.from(semester),
+        ),
+      ),
+    );
+    if (saved != null && mounted) await load();
   }
 
   Future<void> apply() async {
@@ -90,7 +127,11 @@ class _ImportPreviewState extends State<ImportPreview> {
         await widget.controller.api.request(
           'POST',
           '/imports/${batch!['id']}/apply',
-          data: {'expected_revision': batch!['base_revision']},
+          data: {
+            'expected_revision': batch!['base_revision'],
+            'replace_changed': confirmChanged,
+            'remove_missing': removeMissing,
+          },
         ),
       );
       await widget.controller.acknowledgeImport(receipt);
@@ -115,7 +156,7 @@ class _ImportPreviewState extends State<ImportPreview> {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: const Color(0xFFE8E5FF),
+                color: CampusColors.blueSoft,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(
@@ -151,6 +192,7 @@ class _ImportPreviewState extends State<ImportPreview> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           children: [
+            const WorkflowHeader(steps: ['读取课表', '核对课程', '保存'], current: 1),
             CampusPanel(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,7 +224,7 @@ class _ImportPreviewState extends State<ImportPreview> {
                       const Icon(
                         Icons.verified_outlined,
                         size: 18,
-                        color: Color(0xFF328774),
+                        color: CampusColors.teal,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -209,19 +251,25 @@ class _ImportPreviewState extends State<ImportPreview> {
                 children: [
                   StatusPill(
                     '新增 ${batch!['new_count']}',
-                    background: const Color(0xFFE0F5EB),
-                    foreground: const Color(0xFF287B5E),
+                    background: CampusColors.tealSoft,
+                    foreground: CampusColors.teal,
                   ),
                   StatusPill(
                     '已有 ${batch!['unchanged_count']}',
-                    background: const Color(0xFFEDF1F7),
+                    background: CampusColors.background,
                     foreground: CampusColors.muted,
                   ),
                   if (batch!['changed_count'] != 0)
                     StatusPill(
                       '需核对 ${batch!['changed_count']}',
-                      background: const Color(0xFFFFF0D2),
-                      foreground: const Color(0xFF825C1D),
+                      background: CampusColors.warningSoft,
+                      foreground: CampusColors.warning,
+                    ),
+                  if ((batch!['missing_count'] as int? ?? 0) > 0)
+                    StatusPill(
+                      '旧课表未出现 ${batch!['missing_count']}',
+                      background: CampusColors.warningSoft,
+                      foreground: CampusColors.warning,
                     ),
                 ],
               ),
@@ -237,8 +285,83 @@ class _ImportPreviewState extends State<ImportPreview> {
               _ImportCourseTile(course: course),
               const SizedBox(height: 11),
             ],
-            if (batch != null && batch!['changed_count'] != 0)
-              const SoftNotice('部分课次与已保存信息不同，请返回核对变更后再保存。', warning: true),
+            if (batch != null && batch!['changed_count'] != 0) ...[
+              const SectionHeading('需要核对的变化'),
+              if (!hasChangeDetails)
+                const SoftNotice(
+                  '服务暂时没有返回完整的旧／新课程差异，请重新读取课表后再试。',
+                  warning: true,
+                ),
+              for (final change in changedCourses)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: CampusColors.warning, width: 3),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${change['after']['title']}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '原：${_courseLine(change['before'])}',
+                          style: const TextStyle(color: CampusColors.muted),
+                        ),
+                        Text(
+                          '新：${_courseLine(change['after'])}',
+                          style: const TextStyle(color: CampusColors.ink),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (hasChangeDetails)
+                AppCheckRow(
+                  value: confirmChanged,
+                  onChanged: busy
+                      ? null
+                      : (value) =>
+                            setState(() => confirmChanged = value ?? false),
+                  title: const Text('我已核对，替换这些旧课次'),
+                ),
+            ],
+            if (batch != null &&
+                (batch!['missing_count'] as int? ?? 0) > 0) ...[
+              const SectionHeading('本次未出现的旧教务课程'),
+              const Text(
+                '默认保留这些课程。若确认学校课表已不再包含它们，可以在保存时一并移除；关联任务会保留并解除课程关联。',
+                style: TextStyle(fontSize: 13, color: CampusColors.muted),
+              ),
+              const SizedBox(height: 8),
+              if (!hasMissingDetails)
+                const SoftNotice('旧课程明细尚未完整读取，本次不会移除旧课程。', warning: true),
+              for (final missing in missingCourses)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '• ${missing['before']['title']} · ${_courseLine(missing['before'])}',
+                  ),
+                ),
+              if (hasMissingDetails)
+                AppCheckRow(
+                  value: removeMissing,
+                  onChanged: busy
+                      ? null
+                      : (value) =>
+                            setState(() => removeMissing = value ?? false),
+                  title: const Text('同时移除这些旧教务课程'),
+                ),
+            ],
           ],
         ),
       ),
@@ -255,18 +378,27 @@ class _ImportPreviewState extends State<ImportPreview> {
             children: [
               if (error != null) ...[
                 SoftNotice(error!, warning: true),
-                TextButton(
+                if (calendarMismatch)
+                  AppOutlineButton(
+                    onPressed: busy ? null : editCalendar,
+                    child: const Text('修改学期周数或节次'),
+                  ),
+                AppTextButton(
                   onPressed: busy ? null : load,
                   child: const Text('重新检查课表'),
                 ),
               ],
-              FilledButton(
-                onPressed: busy || batch == null || batch!['changed_count'] != 0
+              AppButton(
+                onPressed:
+                    busy ||
+                        batch == null ||
+                        (batch!['changed_count'] != 0 &&
+                            (!hasChangeDetails || !confirmChanged))
                     ? null
                     : apply,
                 child: Text(busy ? '正在核对…' : '确认保存课表'),
               ),
-              TextButton(
+              AppTextButton(
                 onPressed: busy ? null : () => Navigator.pop(context, false),
                 child: const Text('返回核对'),
               ),
@@ -278,18 +410,27 @@ class _ImportPreviewState extends State<ImportPreview> {
   );
 }
 
+String _courseLine(dynamic value) {
+  final course = Map<String, dynamic>.from(value as Map);
+  final weekday = course['weekday'] as int;
+  final sections = List<int>.from(course['sections'] as List);
+  final location = '${course['location'] ?? ''}'.trim();
+  return '周${'一二三四五六日'[weekday - 1]} · 第${sections.join('、')}节 · '
+      '${compactWeeks(course['weeks'] as List)}'
+      '${location.isEmpty ? '' : ' · $location'}';
+}
+
 class _ImportCourseTile extends StatelessWidget {
   final Map<String, dynamic> course;
   const _ImportCourseTile({required this.course});
   @override
   Widget build(BuildContext context) {
-    final palette = CoursePalette.forTitle('${course['title']}');
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(19),
-        border: Border(left: BorderSide(color: palette.accent, width: 4)),
+        color: CampusColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: const Border(bottom: BorderSide(color: CampusColors.line)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -299,21 +440,13 @@ class _ImportCourseTile extends StatelessWidget {
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [
-              StatusPill(
-                '周${'一二三四五六日'[(course['weekday'] as int) - 1]}',
-                background: palette.background,
-                foreground: palette.ink,
-              ),
-              StatusPill(
-                '第${(course['sections'] as List).join('、')}节',
-                background: const Color(0xFFF2F5FA),
-                foreground: CampusColors.muted,
-              ),
-            ],
+          Text(
+            '周${'一二三四五六日'[(course['weekday'] as int) - 1]}  ·  第${(course['sections'] as List).join('、')}节',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: CampusColors.primary,
+            ),
           ),
           const SizedBox(height: 10),
           Text(

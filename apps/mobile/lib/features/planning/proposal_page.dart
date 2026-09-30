@@ -1,7 +1,10 @@
+import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../ui/campus_widgets.dart';
+import '../../ui/detail_widgets.dart';
+import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'risk_widgets.dart';
@@ -130,23 +133,29 @@ class _ProposalPageState extends State<ProposalPage> {
         same;
     return Scaffold(
       appBar: AppBar(title: Text(replan ? '查看调整方案' : '查看计划方案')),
+      bottomNavigationBar: canApply
+          ? ActionFooter(
+              label: partial
+                  ? '保存已安排部分（仍有${minutesLabel(missing)}未安排）'
+                  : replan
+                  ? '确认调整计划'
+                  : '确认保存计划',
+              icon: Icons.check_rounded,
+              onPressed: busy || (partial && !partialConfirmed) ? null : accept,
+            )
+          : null,
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          CampusHero(
-            eyebrow: p['phase'] == 'ready' ? '计划方案 / 等你确认' : '计划方案 / 历史记录',
+          RecordHeading(
+            icon: Icons.fact_check_outlined,
+            label: p['phase'] == 'ready' ? '待确认' : '历史方案',
             title: replan && p['status'] == 'FEASIBLE_COMPLETE'
                 ? (p['moved_tasks'] == 0 ? '现有安排无需移动' : '已生成调整方案')
                 : proposalStatus(p['status']),
             subtitle:
                 '${displayInstant(p['window_start'])}\n至 ${displayInstant(p['window_end'])}',
           ),
-          const SizedBox(height: 16),
-          if (p['valid_until'] != null)
-            Text(
-              '请在此时间前确认： ${displayInstant(p['valid_until'])}',
-              style: const TextStyle(fontSize: 12),
-            ),
           if (expired) const SoftNotice('方案中的时间已经过去，请重新生成。', warning: true),
           if (p['phase'] == 'stale' || stale)
             const SoftNotice('你的安排已有变化，请重新生成计划。', warning: true),
@@ -176,14 +185,13 @@ class _ProposalPageState extends State<ProposalPage> {
             Text(
               '移动 ${p['moved_tasks'] ?? 0} 项任务 · ${p['moved_blocks'] ?? 0} 段计划\n开始时间共调整了 ${p['shift_minutes'] ?? 0} 分钟',
             ),
-            const SoftNotice('这里只调整已有计划的时间，每段时长不变，锁定的计划不移动。你确认后才会保存。'),
             for (final b in p['locked_conflicts'] ?? [])
               SoftNotice(
                 '${b['title'] ?? '个人计划'} · ${displayInstant(b['start_at'])}\n这段计划目前不能移动：可能已锁定、即将开始，或不在本次选择范围内。请到计划详情处理。',
                 warning: true,
               ),
           ] else
-            const SectionHeading('各任务安排了多久'),
+            const SectionHeading('任务安排'),
           for (final task in p['tasks'] ?? [])
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -198,12 +206,23 @@ class _ProposalPageState extends State<ProposalPage> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Text(
-                      '这次目标 ${minutesLabel(task['target_minutes'])} · 已安排 ${minutesLabel(task['existing_minutes'])}',
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 24,
+                      runSpacing: 12,
+                      children: [
+                        _proposalMetric('目标时长', task['target_minutes']),
+                        _proposalMetric('原有安排', task['existing_minutes']),
+                        _proposalMetric('本次新增', task['new_minutes']),
+                        _proposalMetric(
+                          '未安排',
+                          task['unarranged_minutes'],
+                          attention:
+                              (task['unarranged_minutes'] as num? ?? 0) > 0,
+                        ),
+                      ],
                     ),
-                    Text(
-                      '新增 ${minutesLabel(task['new_minutes'])} · 仍未安排 ${minutesLabel(task['unarranged_minutes'])}',
-                    ),
+                    const SizedBox(height: 8),
                     if ((task['outside_minutes'] ?? 0) > 0)
                       Text('其他日期已安排 ${minutesLabel(task['outside_minutes'])}'),
                     if ((task['later_minutes'] ?? 0) > 0)
@@ -212,30 +231,84 @@ class _ProposalPageState extends State<ProposalPage> {
                 ),
               ),
             ),
-          SectionHeading('${replan ? '重排对照' : '新增安排'}（${blocks.length}段）'),
+          SectionHeading('${replan ? '调整前后' : '新增安排'}（${blocks.length}段）'),
           for (final b in blocks)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: CampusPanel(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      b['title'],
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: 24,
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.schedule_rounded,
+                          size: 20,
+                          color: CampusColors.teal,
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: Container(width: 2, color: CampusColors.line),
+                        ),
+                      ],
                     ),
-                    if (replan)
-                      Text(
-                        DateTime.parse(b['start_at']) ==
-                                DateTime.parse(b['before_start_at'])
-                            ? '保持原位${b['locked'] == true ? ' · 已锁定' : ''}'
-                            : '原安排：${displayInstant(b['before_start_at'])} — ${displayInstant(b['before_end_at'])}',
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: CampusColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              displayInstant(b['start_at']),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: CampusColors.teal,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              b['title'],
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '至 ${displayInstant(b['end_at'])} · ${minutesLabel(b['minutes'])}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: CampusColors.muted,
+                              ),
+                            ),
+                            if (replan) ...[
+                              const Divider(height: 24),
+                              Text(
+                                DateTime.parse(b['start_at']) ==
+                                        DateTime.parse(b['before_start_at'])
+                                    ? '保持原位${b['locked'] == true ? ' · 已锁定' : ''}'
+                                    : '原安排：${displayInstant(b['before_start_at'])} — ${displayInstant(b['before_end_at'])}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: CampusColors.muted,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    Text(
-                      '${displayInstant(b['start_at'])}\n至 ${displayInstant(b['end_at'])} · ${minutesLabel(b['minutes'])}',
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           if (blocks.isEmpty)
@@ -247,7 +320,7 @@ class _ProposalPageState extends State<ProposalPage> {
               ),
             ),
           if (partial && canApply)
-            CheckboxListTile(
+            AppCheckRow(
               contentPadding: EdgeInsets.zero,
               title: Text('我确认仅保存已安排部分，仍有${minutesLabel(missing)}未安排'),
               value: partialConfirmed,
@@ -260,17 +333,6 @@ class _ProposalPageState extends State<ProposalPage> {
             const SizedBox(height: 12),
           ],
           if (busy) const LinearProgressIndicator(),
-          if (canApply)
-            FilledButton(
-              onPressed: busy || (partial && !partialConfirmed) ? null : accept,
-              child: Text(
-                partial
-                    ? '保存已安排部分（仍有${minutesLabel(missing)}未安排）'
-                    : replan
-                    ? '确认调整计划'
-                    : '确认保存计划',
-              ),
-            ),
           if (!replan &&
               [
                 'INFEASIBLE',
@@ -278,18 +340,18 @@ class _ProposalPageState extends State<ProposalPage> {
                 'TIMEOUT',
               ].contains(p['status']) &&
               p['request']['allow_partial'] != true)
-            OutlinedButton(
+            AppOutlineButton(
               onPressed: busy ? null : () => regenerate(true),
               child: const Text('查看可安排部分'),
             ),
           if (p['phase'] != 'applied' && p['phase'] != 'undone')
-            TextButton(
+            AppTextButton(
               onPressed: busy
                   ? null
                   : () => regenerate(p['request']['allow_partial'] == true),
               child: const Text('重新生成方案'),
             ),
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('返回修改要求'),
           ),
@@ -298,3 +360,23 @@ class _ProposalPageState extends State<ProposalPage> {
     );
   }
 }
+
+Widget _proposalMetric(String label, dynamic value, {bool attention = false}) =>
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: CampusColors.muted),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          minutesLabel(value),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: attention ? CampusColors.warning : CampusColors.ink,
+          ),
+        ),
+      ],
+    );

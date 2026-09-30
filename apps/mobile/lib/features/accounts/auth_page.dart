@@ -1,3 +1,7 @@
+import '../../ui/app_controls.dart';
+import '../../ui/app_selection.dart';
+import '../../ui/brand.dart';
+import '../../ui/campus_theme.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
@@ -55,7 +59,7 @@ class _AuthPageState extends State<AuthPage> {
         await showDialog<void>(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
+          builder: (context) => AppDialog(
             title: const Text('保存账户恢复码'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -70,7 +74,7 @@ class _AuthPageState extends State<AuthPage> {
               ],
             ),
             actions: [
-              TextButton(
+              AppTextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('我已保存'),
               ),
@@ -108,108 +112,134 @@ class _AuthPageState extends State<AuthPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
-                    Icons.school_rounded,
-                    size: 64,
-                    color: Color(0xFF4F46E5),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    '学期OS',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
-                  ),
-                  const Text('把分散的安排，整理成自己的学期', textAlign: TextAlign.center),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '测试版',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF667085), fontSize: 14),
-                  ),
-                  const SizedBox(height: 32),
-                  SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment(value: 0, label: Text('登录')),
-                      ButtonSegment(value: 1, label: Text('注册')),
+                  const Row(
+                    children: [
+                      BrandMark(size: 44),
+                      SizedBox(width: 12),
+                      Text(
+                        appName,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          color: CampusColors.ink,
+                        ),
+                      ),
                     ],
-                    selected: {mode == 2 ? 0 : mode},
-                    onSelectionChanged: busy
-                        ? null
-                        : (v) => setState(() {
-                            mode = v.first;
+                  ),
+                  const SizedBox(height: 44),
+                  Text(
+                    mode == 2
+                        ? '恢复账户'
+                        : mode == 1
+                        ? '创建你的账户'
+                        : '登录拾日',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                      color: CampusColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    mode == 2 ? '输入注册时保存的恢复码，设置新密码。' : '登录后同步课表、通知和个人计划。',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: CampusColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (mode != 2)
+                        AppSegmentedControl<int>(
+                          options: const {0: '登录', 1: '注册'},
+                          value: mode,
+                          enabled: !busy,
+                          onChanged: (value) => setState(() {
+                            mode = value;
                             error = null;
                           }),
-                  ),
-                  const SizedBox(height: 20),
-                  TextFormField(
-                    key: const Key('username'),
-                    controller: username,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      labelText: '学期OS用户名',
-                      helperText: '4—32位字母、数字或下划线',
-                    ),
-                    validator: (v) =>
-                        RegExp(
-                          r'^[a-zA-Z0-9_]{4,32}$',
-                        ).hasMatch(v?.trim() ?? '')
-                        ? null
-                        : '请填写有效用户名',
-                  ),
-                  const SizedBox(height: 16),
-                  if (mode == 2) ...[
-                    TextFormField(
-                      controller: recovery,
-                      decoration: const InputDecoration(labelText: '账户恢复码'),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  TextFormField(
-                    key: const Key('password'),
-                    controller: password,
-                    obscureText: obscure,
-                    autocorrect: false,
-                    decoration: InputDecoration(
-                      labelText: mode == 2 ? '新密码' : '密码',
-                      helperText: '至少8位；这是学期OS账号的密码',
-                      suffixIcon: IconButton(
-                        onPressed: () => setState(() => obscure = !obscure),
-                        icon: Icon(
-                          obscure ? Icons.visibility_off : Icons.visibility,
                         ),
-                        tooltip: '切换密码显示',
+                      const SizedBox(height: 20),
+                      AppFormField(
+                        key: const Key('username'),
+                        controller: username,
+                        autocorrect: false,
+                        autofillHints: const [AutofillHints.username],
+                        decoration: const InputDecoration(
+                          labelText: '用户名',
+                          helperText: '4—32位字母、数字或下划线',
+                          helperMaxLines: 2,
+                        ),
+                        validator: (v) =>
+                            RegExp(
+                              r'^[a-zA-Z0-9_]{4,32}$',
+                            ).hasMatch(v?.trim() ?? '')
+                            ? null
+                            : '请填写有效用户名',
                       ),
-                    ),
-                    validator: (v) =>
-                        (v?.length ?? 0) >= 8 && (v?.length ?? 0) <= 128
-                        ? null
-                        : '密码需要8—128位',
-                  ),
-                  const SizedBox(height: 20),
-                  if (error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
+                      const SizedBox(height: 16),
+                      if (mode == 2) ...[
+                        AppFormField(
+                          controller: recovery,
+                          decoration: const InputDecoration(labelText: '账户恢复码'),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      AppFormField(
+                        key: const Key('password'),
+                        controller: password,
+                        obscureText: obscure,
+                        autofillHints: [
+                          mode == 0
+                              ? AutofillHints.password
+                              : AutofillHints.newPassword,
+                        ],
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: mode == 2 ? '新密码' : '密码',
+                          helperText: '至少8位',
+                          suffixIcon: AppIconButton(
+                            onPressed: () => setState(() => obscure = !obscure),
+                            icon: Icon(
+                              obscure ? Icons.visibility_off : Icons.visibility,
+                            ),
+                            tooltip: '切换密码显示',
+                          ),
+                        ),
+                        validator: (v) =>
+                            (v?.length ?? 0) >= 8 && (v?.length ?? 0) <= 128
+                            ? null
+                            : '密码需要8—128位',
+                      ),
+                      const SizedBox(height: 20),
+                      if (error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      AppButton(
+                        key: const Key('auth-submit'),
+                        onPressed: busy ? null : submit,
+                        child: Text(
+                          busy
+                              ? '请稍候…'
+                              : mode == 2
+                              ? '恢复账户'
+                              : mode == 1
+                              ? '创建账户'
+                              : '登录',
                         ),
                       ),
-                    ),
-                  FilledButton(
-                    key: const Key('auth-submit'),
-                    onPressed: busy ? null : submit,
-                    child: Text(
-                      busy
-                          ? '请稍候…'
-                          : mode == 2
-                          ? '恢复账户'
-                          : mode == 1
-                          ? '创建账户'
-                          : '登录',
-                    ),
+                    ],
                   ),
-                  TextButton(
+                  AppTextButton(
                     onPressed: busy
                         ? null
                         : () => setState(() {

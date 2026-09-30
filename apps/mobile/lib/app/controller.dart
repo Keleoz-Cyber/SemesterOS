@@ -84,6 +84,10 @@ class AppController extends ChangeNotifier {
           : matching.isEmpty
           ? semesters.first
           : matching.first;
+      if (semester == null) {
+        events = [];
+        week = 1;
+      }
       if (semester != null) {
         week = weekNow(semester!);
         final saved = savedWeeks['${semester!['id']}/$week'];
@@ -105,6 +109,10 @@ class AppController extends ChangeNotifier {
       );
       if (stamp != api.generation || sequence != _catalogRequest) return;
       semesters = catalog;
+      final knownIds = semesters.map((s) => '${s['id']}').toSet();
+      savedWeeks.removeWhere(
+        (key, _) => !knownIds.contains(key.split('/').first),
+      );
       for (final s in semesters) {
         savedWeeks.removeWhere(
           (key, value) =>
@@ -133,7 +141,12 @@ class AppController extends ChangeNotifier {
         : matching.isEmpty
         ? semesters.first
         : matching.first;
-    if (semester != null) await loadWeek(weekNow(semester!));
+    if (semester != null) {
+      await loadWeek(weekNow(semester!));
+    } else {
+      events = [];
+      week = 1;
+    }
     if (stamp != api.generation || sequence != _catalogRequest) return;
     await saveCache();
     notifyListeners();
@@ -153,6 +166,31 @@ class AppController extends ChangeNotifier {
     semester = s;
     events = [];
     await loadWeek(weekNow(s));
+  }
+
+  Future<Map<String, dynamic>> deleteSemester(
+    String sid,
+    int expectedRevision,
+  ) async {
+    final receipt = Map<String, dynamic>.from(
+      await api.request(
+        'DELETE',
+        '/semesters/$sid?expected_revision=$expectedRevision',
+      ),
+    );
+    ++_weekRequest;
+    ++_catalogRequest;
+    semesters.removeWhere((s) => s['id'] == sid);
+    savedWeeks.removeWhere((key, _) => key.startsWith('$sid/'));
+    if (semester?['id'] == sid) {
+      semester = null;
+      events = [];
+      week = 1;
+    }
+    await saveCache();
+    notifyListeners();
+    await openSession();
+    return receipt;
   }
 
   Future<void> acknowledgeImport(Map<String, dynamic> receipt) async {

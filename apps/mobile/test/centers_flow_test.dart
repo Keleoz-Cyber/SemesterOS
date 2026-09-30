@@ -1,9 +1,8 @@
+import 'package:semester_os/ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/centers/semester_centers.dart';
 import 'package:semester_os/features/centers/exam_pages.dart';
-import 'package:semester_os/features/timetable/shell_page.dart';
-import 'package:semester_os/app/controller.dart';
 import 'schedule_flow_test.dart' show ScheduleFixture;
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'planning_flow_test.dart' show route, ioTap;
@@ -87,6 +86,14 @@ Future<ScheduleFixture> fixture(WidgetTester tester) async {
   final old = f.api.dio.httpClientAdapter as ControlledTransport;
   f.api.dio.httpClientAdapter = ControlledTransport((r) async {
     if (r.path.endsWith('/hub')) return body(hub(f));
+    if (r.path.contains('/calendar?')) {
+      return body({
+        'semester_id': 's',
+        'revision': 1,
+        'entries': [],
+        'undated': [],
+      });
+    }
     return old.respond(r);
   });
   return f;
@@ -104,41 +111,32 @@ Future<void> settleIo(WidgetTester tester) async {
 
 void main() {
   setUpAll(loadPreviewFonts);
-  testWidgets('semester expansions do not overwrite tab scroll position', (
-    tester,
-  ) async {
-    final f = await fixture(tester);
-    final app = AppController(f.api, f.c.cache, clearSchoolSession: () async {})
-      ..ready = true
-      ..semester = {...semester(), 'periods': <Map<String, dynamic>>[]}
-      ..semesters = [semester()];
-    await mount(tester, ShellPage(controller: app, items: f.c));
-    Future<void> tab(int index) async {
-      await tester.tap(find.byType(NavigationDestination).at(index));
+  testWidgets(
+    'semester course access is secondary and returns to visible timeline',
+    (tester) async {
+      final f = await fixture(tester);
+      await mount(
+        tester,
+        Scaffold(
+          body: SingleChildScrollView(
+            child: SemesterHome(controller: f.c, onManage: () {}),
+          ),
+        ),
+      );
       await settleIo(tester);
-      expect(tester.takeException(), isNull);
-    }
-
-    await tab(3);
-    await tester.ensureVisible(find.text('课程事务（1门）'));
-    await tester.tap(find.text('课程事务（1门）'));
-    await tester.pumpAndSettle();
-    expect(find.text('合成概率论'), findsOneWidget);
-    await tab(1);
-    await tab(3);
-    expect(find.text('合成概率论'), findsOneWidget);
-    expect(find.text('合成概率论考试'), findsNothing);
-    await tester.ensureVisible(find.text('第14周 · 2026-11-30'));
-    await tester.tap(find.text('第14周 · 2026-11-30'));
-    await tester.pumpAndSettle();
-    await tab(1);
-    await tab(3);
-    expect(find.text('合成概率论考试'), findsOneWidget);
-    expect(find.text('合成概率论'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
-    f.c.dispose();
-    app.dispose();
-  });
+      expect(find.text('合成概率论考试'), findsOneWidget);
+      await tester.ensureVisible(find.text('课程事务（1门）'));
+      await tester.tap(find.text('课程事务（1门）'));
+      await tester.pumpAndSettle();
+      expect(find.text('合成概率论'), findsOneWidget);
+      Navigator.pop(tester.element(find.text('合成概率论')));
+      await tester.pumpAndSettle();
+      expect(find.text('合成概率论考试'), findsOneWidget);
+      expect(find.byType(AppDisclosure), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+    },
+  );
   testWidgets('course hub renders related work and stale risk is labelled', (
     tester,
   ) async {
@@ -154,6 +152,61 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     f.c.dispose();
   });
+  testWidgets(
+    'course hub offers edit and shows deletion impact before writing',
+    (tester) async {
+      final f = await fixture(tester);
+      final old = f.api.dio.httpClientAdapter as ControlledTransport;
+      f.api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.path.endsWith('/courses/c')) {
+          return body({
+            'id': 'c',
+            'semester_id': 's',
+            'revision': 1,
+            'course': {
+              'title': '合成概率论',
+              'teacher': '示例教师',
+              'location': 'A305',
+              'weekday': 3,
+              'weeks': [1, 3, 5],
+              'sections': [1, 2],
+              'source_id': '',
+            },
+          });
+        }
+        if (request.path.endsWith('/courses/c/delete-preview')) {
+          return body({
+            'course_id': 'c',
+            'semester_id': 's',
+            'title': '合成概率论',
+            'revision': 1,
+            'meetings': 1,
+            'linked_items': 1,
+          });
+        }
+        return old.respond(request);
+      });
+      await route(tester, CourseHubPage(controller: f.c, courseId: 'c'));
+      await settleIo(tester);
+      await tester.ensureVisible(find.text('编辑课程安排'));
+      await tester.tap(find.text('编辑课程安排'));
+      await settleIo(tester);
+      expect(find.text('编辑课程'), findsOneWidget);
+      Navigator.pop(tester.element(find.text('编辑课程')));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('删除这门课程'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('删除这门课程'));
+      await settleIo(tester);
+      expect(find.textContaining('1 条关联事项会保留'), findsOneWidget);
+      expect(find.text('确认删除'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+    },
+  );
   testWidgets('timeline shows week-only exam without inventing a date', (
     tester,
   ) async {
@@ -169,19 +222,12 @@ void main() {
       textScale: 1.6,
     );
     await settleIo(tester);
-    await tester.scrollUntilVisible(
-      find.text('第14周 · 2026-11-30'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.text('第14周 · 2026-11-30'));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('第14周 · 具体日期待确认'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('第14周 · 具体日期待确认'), findsOneWidget);
+    final week = find.byKey(const ValueKey('semester-week-14'));
+    await tester.ensureVisible(week);
+    expect(tester.widget<Semantics>(week).properties.selected, isTrue);
+    final weekOnly = find.textContaining('第14周 · 具体日期待确认');
+    await tester.ensureVisible(weekOnly);
+    expect(weekOnly, findsOneWidget);
     expect(tester.takeException(), isNull);
     await capture(tester, 'semester-timeline-large');
     await tester.pumpWidget(const SizedBox());
@@ -202,11 +248,11 @@ void main() {
       });
       await route(tester, ReviewSetupPage(controller: f.c, exam: exam(f)));
       expect(find.text('确认以考试开始时刻为截止'), findsNothing);
-      await ioTap(tester, find.text('确认创建复习任务'));
+      await ioTap(tester, find.text('创建复习任务'));
       expect(sent, isNull);
       expect(find.text('请明确填写复习剩余分钟数'), findsOneWidget);
       await tester.enterText(find.byKey(const Key('review-minutes')), '180');
-      await ioTap(tester, find.text('确认创建复习任务'));
+      await ioTap(tester, find.text('创建复习任务'));
       expect(sent!['remaining_minutes'], 180);
       expect(sent!['deadline_mode'], 'unknown');
       expect(sent!['start_policy'], 'unconfirmed');
@@ -250,7 +296,7 @@ void main() {
       );
       expect(
         tester
-            .widget<FilledButton>(find.widgetWithText(FilledButton, '确认考试新安排'))
+            .widget<AppButton>(find.widgetWithText(AppButton, '确认考试新安排'))
             .onPressed,
         isNull,
       );

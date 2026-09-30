@@ -1,23 +1,34 @@
 import 'package:flutter/material.dart';
 
 abstract final class CampusColors {
-  static const background = Color(0xFFF6F8FC);
-  static const primary = Color(0xFF4F46E5);
-  static const ink = Color(0xFF202B46);
-  static const muted = Color(0xFF68748C);
-  static const line = Color(0xFFE8EDF5);
-  static const mint = Color(0xFFE0F6ED);
+  static const background = Color(0xFFF5F7FB);
+  static const surface = Color(0xFFFFFFFF);
+  static const primary = Color(0xFF3D66C1);
+  static const teal = Color(0xFF34766F);
+  static const blueSoft = Color(0xFFEEF3FC);
+  static const tealSoft = Color(0xFFEDF5F2);
+  static const ink = Color(0xFF24344D);
+  static const muted = Color(0xFF5F6F84);
+  static const line = Color(0xFFE3E9F1);
+  static const mint = tealSoft;
+  static const warning = Color(0xFF866A37);
+  static const warningSoft = Color(0xFFFAF6EC);
+  static const error = Color(0xFFA35350);
+  static const errorSoft = Color(0xFFFBF1F0);
+  static const success = Color(0xFF397363);
+  static const chartPurple = Color(0xFF8A789F);
+  static const chartSand = Color(0xFFA28A60);
 }
 
 class CoursePalette {
   final Color background, ink, accent;
   const CoursePalette(this.background, this.ink, this.accent);
   static const values = [
-    CoursePalette(Color(0xFFECE7FF), Color(0xFF514084), Color(0xFF9280DB)),
-    CoursePalette(Color(0xFFDEF5EA), Color(0xFF176348), Color(0xFF5FB99B)),
-    CoursePalette(Color(0xFFFFE8DF), Color(0xFF913E29), Color(0xFFE8A185)),
-    CoursePalette(Color(0xFFFFF2CD), Color(0xFF745000), Color(0xFFD8B15A)),
-    CoursePalette(Color(0xFFE4EEFF), Color(0xFF254A91), Color(0xFF7FA5E4)),
+    CoursePalette(Color(0xFFE9F0FB), Color(0xFF365981), Color(0xFF6A8AB8)),
+    CoursePalette(Color(0xFFE9F3F0), Color(0xFF396E61), Color(0xFF70A594)),
+    CoursePalette(Color(0xFFF1EFF8), Color(0xFF635682), Color(0xFF9A8BB8)),
+    CoursePalette(Color(0xFFF6F0E6), Color(0xFF7F6949), Color(0xFFB49A6C)),
+    CoursePalette(Color(0xFFEAF2F5), Color(0xFF3F6878), Color(0xFF79A0B1)),
   ];
   static CoursePalette forTitle(String title) =>
       values[title.runes.fold<int>(0, (sum, r) => sum + r) % values.length];
@@ -26,23 +37,48 @@ class CoursePalette {
 ThemeData campusTheme() {
   final scheme = ColorScheme.fromSeed(seedColor: CampusColors.primary).copyWith(
     primary: CampusColors.primary,
+    secondary: CampusColors.teal,
+    primaryContainer: CampusColors.blueSoft,
+    onPrimaryContainer: CampusColors.primary,
+    secondaryContainer: CampusColors.tealSoft,
+    onSecondaryContainer: CampusColors.teal,
     onPrimary: Colors.white,
     surface: Colors.white,
     onSurface: CampusColors.ink,
     onSurfaceVariant: CampusColors.muted,
+    surfaceContainerHighest: CampusColors.blueSoft,
     outlineVariant: CampusColors.line,
+    error: CampusColors.error,
+    errorContainer: CampusColors.errorSoft,
+    onError: Colors.white,
+    onErrorContainer: CampusColors.error,
   );
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: CampusColors.background,
+    datePickerTheme: DatePickerThemeData(
+      backgroundColor: CampusColors.surface,
+      surfaceTintColor: Colors.transparent,
+      headerBackgroundColor: CampusColors.primary,
+      headerForegroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
+    timePickerTheme: TimePickerThemeData(
+      backgroundColor: CampusColors.surface,
+      dialBackgroundColor: CampusColors.blueSoft,
+      dialHandColor: CampusColors.primary,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
     appBarTheme: const AppBarTheme(
       backgroundColor: CampusColors.background,
       surfaceTintColor: Colors.transparent,
       centerTitle: false,
+      elevation: 0,
+      scrolledUnderElevation: 0,
       titleTextStyle: TextStyle(
         fontSize: 21,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w700,
         color: CampusColors.ink,
       ),
       iconTheme: IconThemeData(color: CampusColors.ink),
@@ -52,26 +88,26 @@ ThemeData campusTheme() {
       color: Colors.white,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
         side: const BorderSide(color: CampusColors.line),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       labelStyle: const TextStyle(color: CampusColors.muted, fontSize: 14),
-      helperStyle: const TextStyle(color: CampusColors.muted, fontSize: 12),
+      helperStyle: const TextStyle(color: CampusColors.muted, fontSize: 13),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: CampusColors.line),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: CampusColors.line),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: CampusColors.primary, width: 1.5),
       ),
     ),
@@ -99,7 +135,7 @@ ThemeData campusTheme() {
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
       height: 74,
-      indicatorColor: const Color(0xFFEEEBFF),
+      indicatorColor: CampusColors.blueSoft,
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
           fontSize: 13,
@@ -132,9 +168,37 @@ ThemeData campusTheme() {
       color: CampusColors.line,
       thickness: 1,
     ),
+    chipTheme: ChipThemeData(
+      backgroundColor: CampusColors.surface,
+      selectedColor: CampusColors.blueSoft,
+      secondarySelectedColor: CampusColors.tealSoft,
+      side: const BorderSide(color: CampusColors.line),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      labelStyle: const TextStyle(fontSize: 13, color: CampusColors.ink),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+    ),
+    listTileTheme: const ListTileThemeData(
+      iconColor: CampusColors.muted,
+      titleTextStyle: TextStyle(
+        fontSize: 16,
+        color: CampusColors.ink,
+        fontWeight: FontWeight.w600,
+      ),
+      subtitleTextStyle: TextStyle(
+        fontSize: 14,
+        color: CampusColors.muted,
+        height: 1.4,
+      ),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: CampusColors.ink,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      contentTextStyle: const TextStyle(fontSize: 14, color: Colors.white),
+    ),
     textTheme: const TextTheme(
       bodyMedium: TextStyle(
-        fontSize: 15,
+        fontSize: 16,
         height: 1.45,
         color: CampusColors.ink,
       ),
@@ -142,7 +206,7 @@ ThemeData campusTheme() {
       titleLarge: TextStyle(
         fontSize: 22,
         height: 1.25,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w700,
         color: CampusColors.ink,
       ),
       titleMedium: TextStyle(

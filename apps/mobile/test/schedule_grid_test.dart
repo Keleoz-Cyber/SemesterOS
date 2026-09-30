@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/calendar/schedule_grid.dart';
 import 'ui_polish_test.dart' show mount, capture, loadPreviewFonts;
+import 'package:calendar_view/calendar_view.dart' as cv;
 
 Map<String, dynamic> event(String id, String name, String start, String end) =>
     {
@@ -18,6 +19,93 @@ Map<String, dynamic> event(String id, String name, String start, String end) =>
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
+  testWidgets(
+    'hidden calendar suspends library timers and restores its scroll',
+    (tester) async {
+      final visible = ValueNotifier(true);
+      await mount(
+        tester,
+        Scaffold(
+          body: ValueListenableBuilder(
+            valueListenable: visible,
+            builder: (_, show, _) => SizedBox(
+              height: 400,
+              child: ScheduleGrid(
+                firstDay: DateTime.utc(2026, 9, 21),
+                entries: const [],
+                onOpen: (_) {},
+                visible: show,
+              ),
+            ),
+          ),
+        ),
+      );
+      final view = find.byWidgetPredicate((w) => w is cv.WeekView);
+      Finder vertical() => find
+          .descendant(
+            of: view,
+            matching: find.byWidgetPredicate(
+              (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+            ),
+          )
+          .first;
+      tester.state<ScrollableState>(vertical()).position.jumpTo(170);
+      await tester.pump();
+      visible.value = false;
+      await tester.pumpAndSettle();
+      expect(view, findsNothing);
+      await tester.pump(const Duration(minutes: 2));
+      visible.value = true;
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<ScrollableState>(vertical()).position.pixels,
+        closeTo(170, 1),
+      );
+      await tester.pumpWidget(const SizedBox());
+      visible.dispose();
+    },
+  );
+  testWidgets(
+    'phone week fits viewport and overlapping entries open day context',
+    (tester) async {
+      DateTime? opened;
+      final list = [
+        event(
+          'a',
+          '课程甲',
+          '2026-09-21T08:00:00+08:00',
+          '2026-09-21T10:00:00+08:00',
+        ),
+        event(
+          'b',
+          '课程乙',
+          '2026-09-21T08:30:00+08:00',
+          '2026-09-21T09:30:00+08:00',
+        ),
+      ];
+      await mount(
+        tester,
+        Scaffold(
+          body: SizedBox(
+            height: 550,
+            child: ScheduleGrid(
+              firstDay: DateTime(2026, 9, 21),
+              entries: list,
+              onOpen: (_) {},
+              onDay: (d) => opened = d,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.text('周日')).right, lessThanOrEqualTo(390));
+      expect(find.text('2项重叠'), findsOneWidget);
+      await tester.tap(find.text('2项重叠'));
+      await tester.pumpAndSettle();
+      expect(opened?.day, 21);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets(
     'mature calendar lays out overlaps separately and opens original event',
     (tester) async {

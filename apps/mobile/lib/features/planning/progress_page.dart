@@ -1,7 +1,10 @@
+import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
+import '../../ui/detail_widgets.dart';
+import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'risk_widgets.dart';
@@ -85,7 +88,7 @@ class _ProgressPageState extends State<ProgressPage> {
           ? selection != null
           : await showDialog<bool>(
               context: context,
-              builder: (context) => AlertDialog(
+              builder: (context) => AppDialog(
                 title: Text(complete ? '确认任务已经完成' : '确认现在还需要多久'),
                 content: SingleChildScrollView(
                   child: Column(
@@ -102,20 +105,16 @@ class _ProgressPageState extends State<ProgressPage> {
                           '本次实际用时：${minutesLabel(preview['actual_minutes'])}',
                         ),
                       const SizedBox(height: 12),
-                      Text(
-                        complete
-                            ? '确认后标记完成，并停用未触发提醒。'
-                            : '仅按你确认的新剩余值保存；实际用时单独记录。',
-                      ),
+                      Text(complete ? '确认后标记完成，并停用未触发提醒。' : ''),
                     ],
                   ),
                 ),
                 actions: [
-                  TextButton(
+                  AppTextButton(
                     onPressed: () => Navigator.pop(context, false),
                     child: const Text('返回修改'),
                   ),
-                  FilledButton(
+                  AppButton(
                     onPressed: () => Navigator.pop(context, true),
                     child: Text(complete ? '确认完成并停止提醒' : '确认更新进度'),
                   ),
@@ -145,54 +144,71 @@ class _ProgressPageState extends State<ProgressPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('更新任务进度')),
+    bottomNavigationBar: ActionFooter(
+      label: busy ? '正在核对…' : '确认本次进度',
+      icon: Icons.fact_check_outlined,
+      onPressed: busy ? null : save,
+    ),
     body: Form(
       key: form,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          CampusHero(
-            eyebrow: '以实际工作为准',
-            title: '还需要多少时间',
-            subtitle: '${widget.item['title']}',
+          RecordHeading(
+            label: '任务进度',
+            icon: Icons.track_changes_rounded,
+            title: '${widget.item['title']}',
           ),
-          const SizedBox(height: 18),
-          const SoftNotice('安排过或时间已经过去，都不代表完成。请根据实际情况确认还需要的时间。'),
-          const SizedBox(height: 18),
-          TextFormField(
-            key: const Key('progress-remaining'),
-            controller: remaining,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: '预计还需要多久（分钟，必填）',
-              helperText: '填0后，还需明确确认完成',
-            ),
-            validator: (v) => number(v, required: true),
+          EditorSection(
+            title: '剩余工作',
+            icon: Icons.timelapse_rounded,
+            children: [
+              if (widget.item['remaining_minutes'] != null)
+                RecordFact(
+                  label: '上次记录',
+                  value: minutesLabel(widget.item['remaining_minutes']),
+                  icon: Icons.history_rounded,
+                ),
+              const SizedBox(height: 8),
+              AppFormField(
+                key: const Key('progress-remaining'),
+                controller: remaining,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '预计剩余（分钟）',
+                  helperText: '填0表示已完成',
+                ),
+                validator: (v) => number(v, required: true),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          TextFormField(
-            key: const Key('progress-actual'),
-            controller: actual,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: '这次实际用了多久（分钟，可留空）'),
-            validator: number,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: note,
-            maxLines: 3,
-            maxLength: 500,
-            decoration: const InputDecoration(labelText: '进度说明（可留空）'),
+          EditorSection(
+            title: '本次用时',
+            icon: Icons.timer_outlined,
+            accent: CampusColors.teal,
+            children: [
+              AppFormField(
+                key: const Key('progress-actual'),
+                controller: actual,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '实际用时（分钟，选填）'),
+                validator: number,
+              ),
+              const SizedBox(height: 16),
+              AppFormField(
+                controller: note,
+                maxLines: 3,
+                maxLength: 500,
+                decoration: const InputDecoration(labelText: '备注（选填）'),
+              ),
+            ],
           ),
           if (error != null) ...[
             SoftNotice(error!, warning: true),
             const SizedBox(height: 12),
           ],
-          FilledButton(
-            onPressed: busy ? null : save,
-            child: Text(busy ? '正在核对…' : '确认本次进度'),
-          ),
           const SizedBox(height: 16),
-          ExpansionTile(
+          AppDisclosure(
             title: const Text('查看进度记录'),
             onExpansionChanged: (open) async {
               if (!open) return;
@@ -216,12 +232,12 @@ class _ProgressPageState extends State<ProgressPage> {
               else if (history!.isEmpty)
                 const Text('尚无单独记录的进度更新'),
               for (final row in history ?? <Map<String, dynamic>>[])
-                ListTile(
+                AppTile(
                   title: Text(
                     '${minutesLabel(row['before_remaining_minutes'])} → ${minutesLabel(row['remaining_minutes'])}',
                   ),
                   subtitle: Text(
-                    '${displayInstant(row['created_at'])}\n实际投入：${minutesLabel(row['actual_minutes'])}\n${row['note']}',
+                    '${row['undone'] == true ? '已撤销，不计入统计\n' : ''}${displayInstant(row['created_at'])}\n实际投入：${row['actual_minutes'] == null ? '未记录' : minutesLabel(row['actual_minutes'])}\n${row['note']}',
                   ),
                 ),
             ],

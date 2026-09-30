@@ -1,8 +1,14 @@
+import '../../ui/app_controls.dart';
 import '../calendar/calendar_panel.dart';
-import 'dart:async';
+import '../../ui/app_navigation.dart';
+import '../../ui/motion.dart';
+import '../../ui/assistant_scope.dart';
+import '../../ui/brand.dart';
+import '../home/today_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
+import '../../core/api.dart' show userError;
 import '../../ui/campus_theme.dart';
 import '../../ui/campus_widgets.dart';
 import 'course_widgets.dart';
@@ -12,6 +18,8 @@ import 'semester_view.dart';
 import '../items/items_controller.dart';
 import '../items/items_view.dart';
 import '../centers/semester_centers.dart';
+import '../semester/semester_page.dart';
+import '../media/drafts.dart';
 
 class ShellPage extends StatefulWidget {
   final AppController controller;
@@ -22,29 +30,20 @@ class ShellPage extends StatefulWidget {
 }
 
 class _ShellPageState extends State<ShellPage> {
-  final calendarKey = GlobalKey<CalendarPanelState>();
-  final todayKey = GlobalKey<CalendarPanelState>();
+  var calendarKey = GlobalKey<CalendarPanelState>();
+  var todayKey = GlobalKey<TodayDashboardState>();
+  var semesterKey = GlobalKey<SemesterHomeState>();
+  String? actor;
   final visitedTabs = <int>{0};
   int tab = 0;
+  double tabDirection = 1;
   bool grid = true;
-  Timer? clock;
   AppController get c => widget.controller;
-  @override
-  void initState() {
-    super.initState();
-    clock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    clock?.cancel();
-    super.dispose();
-  }
 
   void switchTab(int value) {
+    if (value == tab) return;
     setState(() {
+      tabDirection = value > tab ? 1 : -1;
       tab = value;
       visitedTabs.add(value);
     });
@@ -74,6 +73,96 @@ class _ShellPageState extends State<ShellPage> {
     }
   }
 
+  Future<void> editSemester() async {
+    final selected = c.semester;
+    if (selected == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SemesterPage(
+          controller: c,
+          existing: Map<String, dynamic>.from(selected),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> deleteSemester() async {
+    final selected = c.semester;
+    if (selected == null) return;
+    Map<String, dynamic> preview;
+    try {
+      preview = Map<String, dynamic>.from(
+        await c.api.request(
+          'GET',
+          '/semesters/${selected['id']}/delete-preview',
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userError(e))));
+      }
+      return;
+    }
+    if (!mounted || c.semester?['id'] != selected['id']) return;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AppDialog(
+        title: Text('删除“${preview['name']}”？'),
+        content: Text(
+          '将一并删除 ${preview['courses']} 门课程、${preview['items']} 条事项、'
+          '${preview['events']} 条日程、${preview['plans']} 段计划和'
+          '${preview['sources']} 份来源记录，以及 ${preview['conversations']} 段助手对话与相关历史。'
+          '删除后无法恢复。',
+        ),
+        actions: [
+          AppTextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('保留学期'),
+          ),
+          AppButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('确认删除'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted || c.semester?['id'] != selected['id']) return;
+    try {
+      final owner = '${c.user['id']}';
+      final receipt = await c.deleteSemester(
+        '${selected['id']}',
+        preview['revision'] as int,
+      );
+      try {
+        await widget.items?.forgetDeletedSemester('${selected['id']}');
+        await CaptureDrafts.clearSemester(c.cache, owner, '${selected['id']}');
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('学期已删除，本机提醒或草稿清理未完成，请重新打开App核对')),
+          );
+        }
+      }
+      if (mounted) Navigator.pop(context);
+      if (mounted &&
+          (receipt['media_files_pending_cleanup'] as int? ?? 0) > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('学期已删除，旧图片或录音已从App移除，服务器下次启动会继续清理')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userError(e))));
+      }
+    }
+  }
+
   Future<void> manageSemester() async {
     await Navigator.push(
       context,
@@ -92,6 +181,8 @@ class _ShellPageState extends State<ShellPage> {
               onCreate: () => context.push('/semester/new'),
               onImport: openImport,
               onManual: manual,
+              onEdit: editSemester,
+              onDelete: deleteSemester,
             ),
           ),
         ),
@@ -109,6 +200,7 @@ class _ShellPageState extends State<ShellPage> {
     await widget.items?.refresh();
     if (tab == 0) await todayKey.currentState?.reload();
     if (tab == 1) await calendarKey.currentState?.reload();
+    if (tab == 3) await semesterKey.currentState?.reload();
   }
 
   Future<void> add() async {
@@ -116,146 +208,7 @@ class _ShellPageState extends State<ShellPage> {
       context.push('/semester/new');
       return;
     }
-    await showModalBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (sheet) => SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(22, 0, 22, 26),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              '添加记录',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '选择一种方式，保存前都可以核对。',
-              style: TextStyle(color: CampusColors.muted, fontSize: 14),
-            ),
-            const SizedBox(height: 22),
-            CampusPanel(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  if (widget.items != null) ...[
-                    ListTile(
-                      leading: const Icon(
-                        Icons.auto_awesome_rounded,
-                        color: CampusColors.primary,
-                      ),
-                      title: const Text('日程助手'),
-                      subtitle: const Text('查询安排、记录通知、修改日程和提醒'),
-                      onTap: () {
-                        Navigator.pop(sheet);
-                        context.push('/assistant');
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.event_available_outlined),
-                      title: const Text('添加日程'),
-                      subtitle: const Text('组会、活动和其他固定安排'),
-                      onTap: () {
-                        Navigator.pop(sheet);
-                        context.push('/events/new');
-                      },
-                    ),
-                    for (final type in {
-                      'image': '图片通知录入',
-                      'audio': '语音快速记录',
-                    }.entries)
-                      ListTile(
-                        leading: Icon(
-                          type.key == 'image'
-                              ? Icons.image_outlined
-                              : Icons.mic_none,
-                        ),
-                        title: Text(type.value),
-                        subtitle: const Text('保留来源，识别后核对'),
-                        onTap: () {
-                          Navigator.pop(sheet);
-                          context.push('/assistant?input=${type.key}');
-                        },
-                      ),
-                    for (final entry in {
-                      'assignment': '记录作业',
-                      'exam': '记录考试',
-                      'task': '记录个人任务',
-                    }.entries)
-                      ListTile(
-                        leading: Icon(
-                          entry.key == 'exam'
-                              ? Icons.school_outlined
-                              : Icons.edit_note_rounded,
-                          color: CampusColors.primary,
-                        ),
-                        title: Text(entry.value),
-                        trailing: const Icon(Icons.chevron_right_rounded),
-                        onTap: () {
-                          Navigator.pop(sheet);
-                          context.push('/items/new?kind=${entry.key}');
-                        },
-                      ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                  ],
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    leading: const Icon(
-                      Icons.language_rounded,
-                      color: CampusColors.primary,
-                      size: 28,
-                    ),
-                    title: const Text(
-                      '从学校教务导入',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    subtitle: const Text(
-                      '在学校原始网页自行登录',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () {
-                      Navigator.pop(sheet);
-                      openImport();
-                    },
-                  ),
-                  const Divider(height: 1, indent: 58, endIndent: 16),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    leading: const Icon(
-                      Icons.edit_calendar_outlined,
-                      color: Color(0xFF328774),
-                      size: 28,
-                    ),
-                    title: const Text(
-                      '手工添加课程',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    subtitle: const Text(
-                      '填写名称、周次、节次和地点',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () {
-                      Navigator.pop(sheet);
-                      manual();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    await AssistantScope.open(context);
   }
 
   Future<void> account() => showModalBottomSheet<void>(
@@ -272,7 +225,7 @@ class _ShellPageState extends State<ShellPage> {
             children: [
               const CircleAvatar(
                 radius: 27,
-                backgroundColor: Color(0xFFE7E5FC),
+                backgroundColor: CampusColors.blueSoft,
                 child: Icon(
                   Icons.person_outline_rounded,
                   color: CampusColors.primary,
@@ -292,7 +245,7 @@ class _ShellPageState extends State<ShellPage> {
                       ),
                     ),
                     const Text(
-                      '我的学期OS账号',
+                      '我的账号',
                       style: TextStyle(fontSize: 13, color: CampusColors.muted),
                     ),
                   ],
@@ -303,7 +256,7 @@ class _ShellPageState extends State<ShellPage> {
           const SizedBox(height: 23),
           const SoftNotice('退出后会清理本机缓存，云端已保存的课表仍保留。'),
           const SizedBox(height: 18),
-          OutlinedButton.icon(
+          AppOutlineButton.icon(
             onPressed: () {
               Navigator.pop(sheet);
               c.logout();
@@ -368,11 +321,7 @@ class _ShellPageState extends State<ShellPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const CampusHero(
-              eyebrow: '',
-              title: '个人计划',
-              subtitle: '',
-            ),
+            const CampusHero(eyebrow: '', title: '个人计划', subtitle: ''),
             const SizedBox(height: 22),
             const Align(
               alignment: Alignment.centerLeft,
@@ -391,7 +340,7 @@ class _ShellPageState extends State<ShellPage> {
       case 3:
         if (widget.items != null) {
           return SemesterHome(
-            key: ValueKey(c.semester!['id']),
+            key: semesterKey,
             controller: widget.items!,
             onManage: manageSemester,
           );
@@ -403,14 +352,16 @@ class _ShellPageState extends State<ShellPage> {
           onCreate: () => context.push('/semester/new'),
           onImport: openImport,
           onManual: manual,
+          onEdit: editSemester,
+          onDelete: deleteSemester,
         );
       default:
         if (widget.items != null) {
-          return CalendarPanel(
+          return TodayDashboard(
             key: todayKey,
             app: c,
             items: widget.items!,
-            todayOnly: true,
+            onCalendar: () => switchTab(1),
           );
         }
         return TodayView(
@@ -441,30 +392,28 @@ class _ShellPageState extends State<ShellPage> {
       if (!c.ready) {
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
       }
+      final nextActor = '${c.user['id']}:${c.semester?['id']}';
+      if (actor != nextActor) {
+        actor = nextActor;
+        calendarKey = GlobalKey<CalendarPanelState>();
+        todayKey = GlobalKey<TodayDashboardState>();
+        semesterKey = GlobalKey<SemesterHomeState>();
+        visitedTabs
+          ..clear()
+          ..add(tab);
+      }
       return Scaffold(
         appBar: AppBar(
-          toolbarHeight: 68,
+          toolbarHeight: 52,
           title: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: CampusColors.primary,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.school_rounded,
-                  color: Colors.white,
-                  size: 21,
-                ),
-              ),
+              const ExcludeSemantics(child: BrandMark(size: 30)),
               const SizedBox(width: 9),
               const Text(
-                '学期OS',
+                appName,
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -.5,
                 ),
@@ -472,16 +421,16 @@ class _ShellPageState extends State<ShellPage> {
             ],
           ),
           actions: [
-            IconButton(
+            AppIconButton(
               onPressed: account,
               tooltip: '账户',
               icon: const CircleAvatar(
                 radius: 18,
-                backgroundColor: Color(0xFFE9EDFA),
+                backgroundColor: CampusColors.blueSoft,
                 child: Icon(
                   Icons.person_outline_rounded,
                   size: 23,
-                  color: Color(0xFF6F78A3),
+                  color: CampusColors.primary,
                 ),
               ),
             ),
@@ -499,65 +448,39 @@ class _ShellPageState extends State<ShellPage> {
                   key: ValueKey(
                     'tab-${c.user['id']}-${c.semester?['id']}-$index',
                   ),
-                  child: RefreshIndicator(
-                    onRefresh: refresh,
-                    child: ListView(
-                      key: PageStorageKey(
-                        'semester-tab-${c.user['id']}-${c.semester?['id']}-$index',
+                  child: TickerMode(
+                    enabled: tab == index,
+                    child: TabEntrance(
+                      active: tab == index,
+                      animateOnMount: index != 0,
+                      direction: tabDirection,
+                      child: RefreshIndicator(
+                        onRefresh: refresh,
+                        child: ListView(
+                          key: PageStorageKey(
+                            'semester-tab-${c.user['id']}-${c.semester?['id']}-$index',
+                          ),
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 22),
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            if (c.notice != null &&
+                                (!c.notice!.startsWith('正在同步') ||
+                                    c.offline)) ...[
+                              SoftNotice(c.notice!, warning: c.offline),
+                              const SizedBox(height: 14),
+                            ],
+                            page(index),
+                          ],
+                        ),
                       ),
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 106),
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        if (c.notice != null &&
-                            (!c.notice!.startsWith('正在同步') || c.offline)) ...[
-                          SoftNotice(c.notice!, warning: c.offline),
-                          const SizedBox(height: 14),
-                        ],
-                        page(index),
-                      ],
                     ),
                   ),
                 ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: add,
-          icon: const Icon(Icons.add_rounded, size: 24),
-          label: const Text(
-            '记录',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-          ),
-        ),
-        bottomNavigationBar: DecoratedBox(
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: CampusColors.line)),
-          ),
-          child: NavigationBar(
-            selectedIndex: tab,
-            onDestinationSelected: switchTab,
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home_rounded),
-                label: '今日',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.calendar_month_outlined),
-                selectedIcon: Icon(Icons.calendar_month_rounded),
-                label: '日程',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.check_box_outlined),
-                selectedIcon: Icon(Icons.check_box_rounded),
-                label: '计划',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.auto_stories_outlined),
-                selectedIcon: Icon(Icons.auto_stories_rounded),
-                label: '学期',
-              ),
-            ],
-          ),
+        bottomNavigationBar: AppNavigation(
+          selected: tab,
+          onSelected: switchTab,
         ),
       );
     },

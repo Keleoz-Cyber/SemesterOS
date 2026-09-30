@@ -97,6 +97,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "3.0.7"
+  cupertino_icons:
+    dependency: "direct main"
+    description:
+      name: cupertino_icons
+      sha256: "41e005c33bd814be4d3096aff55b1908d419fde52ca656c8c47719ec745873cd"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.0.9"
   cupertino_ui:
     dependency: "direct main"
     description:
@@ -222,6 +230,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_animate:
+    dependency: "direct main"
+    description:
+      name: flutter_animate
+      sha256: "7befe2d3252728afb77aecaaea1dec88a89d35b9b1d2eea6d04479e8af9117b5"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "4.5.2"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -275,6 +291,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_markdown_plus:
+    dependency: "direct main"
+    description:
+      name: flutter_markdown_plus
+      sha256: fce641d6c2106cc495de1cd603f97a4f9d615a97a64011928ded380dbdade935
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.0.12"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -339,6 +363,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "4.2.2"
+  flutter_shaders:
+    dependency: transitive
+    description:
+      name: flutter_shaders
+      sha256: "34794acadd8275d971e02df03afee3dee0f98dbfb8c4837082ad0034f612a3e2"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.1.3"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -349,6 +381,22 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  forui:
+    dependency: "direct main"
+    description:
+      name: forui
+      sha256: bf2a76293044ec8fbe8869032a67e79b6dfb12a471c9c3ecacb45626e69744d2
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.25.0"
+  forui_assets:
+    dependency: transitive
+    description:
+      name: forui_assets
+      sha256: "43b219f28399786b8ac51c01048f583b3155c0e39ac163845b1e73c959240139"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.25.0"
   go_router:
     dependency: "direct main"
     description:
@@ -549,6 +597,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.3.0"
+  markdown:
+    dependency: transitive
+    description:
+      name: markdown
+      sha256: ee85086ad7698b42522c6ad42fe195f1b9898e4d974a1af4576c1a3a176cada9
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "7.3.1"
   matcher:
     dependency: transitive
     description:
@@ -589,6 +645,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "2.1.0"
+  navigator_resizable:
+    dependency: transitive
+    description:
+      name: navigator_resizable
+      sha256: "689f591b70218e152c6496b41142d9058e6c9ba5581a4126a7db978a8239d2eb"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "3.1.0"
   objective_c:
     dependency: transitive
     description:
@@ -646,7 +710,7 @@ packages:
     source: hosted
     version: "2.2.2"
   path_provider_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: path_provider_platform_interface
       sha256: "484838772624c3a4b94f1e44a3e19897fee738f2d5c4ce448443b0417f7c9dda"
@@ -786,6 +850,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  smooth_sheets:
+    dependency: "direct main"
+    description:
+      name: smooth_sheets
+      sha256: ce88a0aa9db65c660af051e6f0678ffbf04eacc612acd232b725892a652e1422
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.2.0"
   source_span:
     dependency: transitive
     description:
@@ -842,6 +914,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.4.1"
+  sugar:
+    dependency: transitive
+    description:
+      name: sugar
+      sha256: a0a97f1d3552a3ef4cbec7c6e62c7b52c151cd5c11e984e8311700a918f73dc5
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "4.0.0"
   synchronized:
     dependency: transitive
     description:

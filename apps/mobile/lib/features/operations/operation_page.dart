@@ -1,3 +1,6 @@
+import '../../ui/app_controls.dart';
+import '../../ui/app_picker_field.dart';
+import '../../ui/detail_widgets.dart';
 import '../../core/api.dart' show userError;
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -463,69 +466,88 @@ class _OperationPageState extends State<OperationPage> {
     final preview = p?['preview'];
     final applied = p?['phase'] == 'applied';
     final rejected = p?['phase'] == 'rejected';
+    final compactRequest =
+        p != null && preview != null && !editing && !rejected;
     return Scaffold(
-      appBar: AppBar(title: const Text('用一句话修改')),
+      appBar: AppBar(title: const Text('智能修改')),
       body: !same
           ? const Center(child: Text('账号或学期已切换，请返回'))
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                const CampusHero(
-                  eyebrow: '先看变化',
-                  title: '说出你想调整的事',
-                  subtitle: '先选中要修改的事项\n看过前后变化，再确认保存',
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  key: const Key('operation-text'),
-                  controller: text,
-                  minLines: 2,
-                  maxLines: 5,
-                  maxLength: 10000,
-                  enabled: !busy,
-                  onChanged: (_) {
-                    setState(() {
-                      operation = null;
-                      finished = false;
-                    });
-                    saveTimer?.cancel();
-                    saveTimer = Timer(
-                      const Duration(milliseconds: 350),
-                      () => saveDraft(),
-                    );
-                  },
-                  decoration: const InputDecoration(
-                    labelText: '想怎么调整',
-                    hintText: 'Java报告还需要两小时；提醒改到周四晚上八点',
-                  ),
-                ),
-                TextButton(
-                  onPressed: busy
-                      ? null
-                      : () async {
-                          final date = await pickSchoolDateTime(
-                            context,
-                            initial: DateTime.parse(reference),
+                if (!compactRequest) ...[
+                  EditorSection(
+                    title: '修改要求',
+                    icon: Icons.edit_note_rounded,
+                    children: [
+                      AppField(
+                        key: const Key('operation-text'),
+                        controller: text,
+                        minLines: 2,
+                        maxLines: 5,
+                        maxLength: 10000,
+                        enabled: !busy,
+                        onChanged: (_) {
+                          setState(() {
+                            operation = null;
+                            finished = false;
+                          });
+                          saveTimer?.cancel();
+                          saveTimer = Timer(
+                            const Duration(milliseconds: 350),
+                            () => saveDraft(),
                           );
-                          if (date != null && mounted) {
-                            setState(() {
-                              reference = date.toUtc().toIso8601String();
-                              operation = null;
-                            });
-                            await saveDraft();
-                          }
                         },
-                  child: Text('这段话说于：${displayInstant(reference)}'),
-                ),
-                const SoftNotice(
-                  '这段文字会交给AI理解。先查看修改内容，再决定是否保存；课程或考试改期，请到对应的详情页处理。',
-                ),
-                FilledButton(
-                  onPressed: busy ? null : parse,
-                  child: const Text('让AI整理修改'),
-                ),
+                        decoration: const InputDecoration(
+                          labelText: '想怎么调整',
+                          hintText: 'Java报告还需要两小时；提醒改到周四晚上八点',
+                        ),
+                      ),
+                    ],
+                  ),
+                  AppDisclosure(
+                    title: const Text('原通知时间'),
+                    children: [
+                      AppTextButton(
+                        onPressed: busy
+                            ? null
+                            : () async {
+                                final date = await pickSchoolDateTime(
+                                  context,
+                                  initial: DateTime.parse(reference),
+                                );
+                                if (date != null && mounted) {
+                                  setState(() {
+                                    reference = date.toUtc().toIso8601String();
+                                    operation = null;
+                                  });
+                                  await saveDraft();
+                                }
+                              },
+                        child: Text('消息时间：${displayInstant(reference)}'),
+                      ),
+                    ],
+                  ),
+                  AppButton(
+                    onPressed: busy ? null : parse,
+                    child: const Text('让AI整理修改'),
+                  ),
+                ] else ...[
+                  AppTextButton.icon(
+                    onPressed: busy
+                        ? null
+                        : () => setState(() => editing = true),
+                    icon: const Icon(Icons.edit_note_rounded),
+                    label: const Text('修改这次要求'),
+                  ),
+                  if (stale)
+                    AppTextButton(
+                      onPressed: busy ? null : parse,
+                      child: const Text('重新整理修改'),
+                    ),
+                ],
                 if (sourceId != null)
-                  TextButton(
+                  AppTextButton(
                     onPressed: busy
                         ? null
                         : () => setState(() {
@@ -539,8 +561,7 @@ class _OperationPageState extends State<OperationPage> {
                 if (error != null) SoftNotice(error!, warning: true),
                 if (busy) const LinearProgressIndicator(),
                 if (p != null) ...[
-                  const SectionHeading('这次想修改的内容'),
-                  Text(p['source_text']),
+                  DocumentPanel(title: '修改要求', text: p['source_text']),
                   for (final q in p['suggestion']['questions'] ?? [])
                     SoftNotice('$q'),
                   if (p['clarification'] != null && editing)
@@ -566,26 +587,26 @@ class _OperationPageState extends State<OperationPage> {
                   if (!editing && preview != null)
                     ...previewWidgets(Map<String, dynamic>.from(preview)),
                   if (p['phase'] == 'ready' && !editing && !applied && !stale)
-                    FilledButton(
+                    AppButton(
                       onPressed: busy ? null : apply,
                       child: Text(
                         intent == 'request_plan' ? '按这个范围生成计划' : '确认保存修改',
                       ),
                     ),
                   if (!applied && !rejected) ...[
-                    TextButton(
+                    AppTextButton(
                       onPressed: busy
                           ? null
                           : () => setState(() => editing = true),
                       child: const Text('调整修改内容'),
                     ),
-                    TextButton(
+                    AppTextButton(
                       onPressed: busy ? null : reject,
                       child: const Text('放弃这次修改'),
                     ),
                   ],
                   if (applied && p['receipt']?['planning_request'] != null)
-                    OutlinedButton(
+                    AppOutlineButton(
                       onPressed: busy
                           ? null
                           : () => run(
@@ -596,34 +617,40 @@ class _OperationPageState extends State<OperationPage> {
                       child: const Text('继续查看计划方案'),
                     ),
                 ],
-                const SectionHeading('最近的修改（最多50条）'),
-                for (final h in history)
-                  ListTile(
-                    title: Text(
-                      h['source_text'],
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      {
-                            'ready': '待确认',
-                            'needs_clarification': '待补充',
-                            'stale': '需重新核对',
-                            'applied': '已确认',
-                            'rejected': '已放弃',
-                          }[h['phase']] ??
-                          '',
-                    ),
-                    onTap: busy
-                        ? null
-                        : () => run(() async {
-                            final r = await widget.controller.changeRequest(
-                              'GET',
-                              '/operations/${h['id']}',
-                            );
-                            contextId = null;
-                            await setOperation(r);
-                          }),
+                if (history.isNotEmpty)
+                  AppDisclosure(
+                    title: const Text('修改记录'),
+                    children: [
+                      for (final h in history)
+                        AppTile(
+                          title: Text(
+                            h['source_text'],
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            {
+                                  'ready': '待确认',
+                                  'needs_clarification': '待补充',
+                                  'stale': '需重新核对',
+                                  'applied': '已确认',
+                                  'rejected': '已放弃',
+                                }[h['phase']] ??
+                                '',
+                          ),
+                          onTap: busy
+                              ? null
+                              : () => run(() async {
+                                  final r = await widget.controller
+                                      .changeRequest(
+                                        'GET',
+                                        '/operations/${h['id']}',
+                                      );
+                                  contextId = null;
+                                  await setOperation(r);
+                                }),
+                        ),
+                    ],
                   ),
               ],
             ),
@@ -634,7 +661,7 @@ class _OperationPageState extends State<OperationPage> {
     final result = <Widget>[];
     if (operation?['source']?['kind'] == 'image') {
       result.add(
-        CheckboxListTile(
+        AppCheckRow(
           title: const Text('我确认要按图片中的内容修改我的安排'),
           value: direct,
           onChanged: busy ? null : (v) => setState(() => direct = v!),
@@ -643,7 +670,7 @@ class _OperationPageState extends State<OperationPage> {
     }
     if (intent != 'request_plan') {
       result.add(
-        DropdownButtonFormField<String>(
+        AppPickerField<String>(
           key: ValueKey('${operation!['id']}/$targetId'),
           initialValue: targetId,
           isExpanded: true,
@@ -665,7 +692,7 @@ class _OperationPageState extends State<OperationPage> {
       if (target != null) result.add(Text(itemTimeLabel(target!)));
       if (targetId != null) {
         result.add(
-          TextButton(
+          AppTextButton(
             onPressed: busy ? null : () => run(() => pickTarget(targetId!)),
             child: const Text('查看事项和提醒的最新内容'),
           ),
@@ -674,16 +701,16 @@ class _OperationPageState extends State<OperationPage> {
     }
     if (intent == 'update_task') {
       result.addAll([
-        TextField(
+        AppField(
           controller: title,
           decoration: const InputDecoration(labelText: '新标题（留空不改）'),
         ),
-        TextField(
+        AppField(
           controller: effort,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: '还需要多久（分钟，留空不改）'),
         ),
-        DropdownButtonFormField<String>(
+        AppPickerField<String>(
           initialValue: split,
           key: ValueKey('split:$split'),
           decoration: const InputDecoration(labelText: '是否分次完成'),
@@ -696,7 +723,7 @@ class _OperationPageState extends State<OperationPage> {
     }
     if (intent == 'update_reminder') {
       result.addAll([
-        DropdownButtonFormField<String>(
+        AppPickerField<String>(
           initialValue: reminderAction,
           key: ValueKey('action:$reminderAction'),
           decoration: const InputDecoration(labelText: '提醒操作'),
@@ -709,7 +736,7 @@ class _OperationPageState extends State<OperationPage> {
           }),
         ),
         if (reminderAction != 'add')
-          DropdownButtonFormField<String>(
+          AppPickerField<String>(
             initialValue: ruleId,
             key: ValueKey('rule:$targetId:$ruleId'),
             isExpanded: true,
@@ -732,7 +759,7 @@ class _OperationPageState extends State<OperationPage> {
             }),
           ),
         if (reminderAction != 'disable')
-          TextButton(
+          AppTextButton(
             onPressed: busy || target == null
                 ? null
                 : () => run(reminderSettings),
@@ -743,7 +770,7 @@ class _OperationPageState extends State<OperationPage> {
     if (intent == 'request_plan') {
       result.addAll([
         const SoftNotice('先选择要安排的任务，确认每项还需要多久。已经做完一部分？可以先更新任务进度。'),
-        DropdownButtonFormField<String>(
+        AppPickerField<String>(
           initialValue: planMode,
           key: ValueKey('plan:$planMode'),
           items: const [
@@ -761,7 +788,7 @@ class _OperationPageState extends State<OperationPage> {
           ),
         );
         result.add(
-          CheckboxListTile(
+          AppCheckRow(
             title: Text(task['title']),
             subtitle: Text(
               '剩余 ${task['remaining_minutes'] == null ? '待确认' : minutesLabel(task['remaining_minutes'])}',
@@ -777,7 +804,7 @@ class _OperationPageState extends State<OperationPage> {
           ),
         );
         result.add(
-          TextButton(
+          AppTextButton(
             onPressed: () async {
               await context.push('/items/${task['id']}');
               await widget.controller.refresh();
@@ -787,7 +814,7 @@ class _OperationPageState extends State<OperationPage> {
         );
         if (selected.contains(task['id']) && planMode == 'schedule') {
           result.add(
-            TextField(
+            AppField(
               controller: targets[task['id']],
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
@@ -801,7 +828,7 @@ class _OperationPageState extends State<OperationPage> {
       }
       result.addAll([
         if (planMode == 'schedule')
-          DropdownButtonFormField<int>(
+          AppPickerField<int>(
             initialValue: days,
             key: ValueKey('days:$days'),
             items: [
@@ -810,13 +837,13 @@ class _OperationPageState extends State<OperationPage> {
             ],
             onChanged: (v) => setState(() => days = v!),
           ),
-        SwitchListTile(
+        AppSwitchRow(
           title: const Text('指定安排的起止时间'),
           value: customWindow,
           onChanged: (v) => setState(() => customWindow = v),
         ),
         if (customWindow) ...[
-          TextButton(
+          AppTextButton(
             onPressed: () async {
               final t = await pickSchoolDateTime(context, initial: start);
               if (t != null && mounted) setState(() => start = t);
@@ -827,7 +854,7 @@ class _OperationPageState extends State<OperationPage> {
                   : displayInstant(start!.toIso8601String()),
             ),
           ),
-          TextButton(
+          AppTextButton(
             onPressed: () async {
               final t = await pickSchoolDateTime(context, initial: end);
               if (t != null && mounted) setState(() => end = t);
@@ -838,7 +865,7 @@ class _OperationPageState extends State<OperationPage> {
           ),
         ],
         if (!customWindow && operation!['suggestion']['needs_window'] == true)
-          CheckboxListTile(
+          AppCheckRow(
             title: const Text('改用上方天数和已设置的学习时间'),
             value: useDefault,
             onChanged: (v) => setState(() => useDefault = v!),
@@ -846,10 +873,7 @@ class _OperationPageState extends State<OperationPage> {
       ]);
     }
     result.add(
-      FilledButton(
-        onPressed: busy ? null : resolve,
-        child: const Text('查看修改前后'),
-      ),
+      AppButton(onPressed: busy ? null : resolve, child: const Text('查看修改前后')),
     );
     return result;
   }
@@ -882,8 +906,12 @@ class _OperationPageState extends State<OperationPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (final e in (preview['task_patch'] as Map).entries)
-                Text(
-                  '${{'title': '标题', 'remaining_minutes': '还需时间', 'splittable': '完成方式'}[e.key]}：${operationValue(e.key, before[e.key])} → ${operationValue(e.key, e.value)}',
+                RecordFact(
+                  label:
+                      '${{'title': '标题', 'remaining_minutes': '还需时间', 'splittable': '完成方式'}[e.key]}',
+                  value:
+                      '${operationValue(e.key, before[e.key])} → ${operationValue(e.key, e.value)}',
+                  icon: Icons.compare_arrows_rounded,
                 ),
             ],
           ),
