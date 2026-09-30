@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('Api', 'Android', 'Test')]
     [string]$Action = 'Api',
     [string]$Device = 'auto',

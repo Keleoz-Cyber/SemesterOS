@@ -1,4 +1,4 @@
-function Set-SemesterGradleJava {
+﻿function Set-SemesterGradleJava {
     $javaCandidates = @($env:SEMESTEROS_JDK_HOME, $env:JAVA_HOME)
     foreach ($vendorFolder in @('Microsoft', 'Java', 'Eclipse Adoptium')) {
         $javaVendorPath = Join-Path $env:ProgramFiles $vendorFolder
