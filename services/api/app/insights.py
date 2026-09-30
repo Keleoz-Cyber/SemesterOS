@@ -9,7 +9,7 @@ from .academics import owned_semester
 from .auth import current_user, error
 from .capacity import merge
 from .database import get_db
-from .event_store import CATEGORIES, classification_value, event_rows
+from .event_store import CATEGORIES, classification_value, event_rows, canonical_tag, canonical_tag_ids
 from .models import CalendarTag, PlanBlock, ProgressEntry, StudyItem, User
 from .occurrences import effective_courses, expand
 from .reminder_rules import SHANGHAI, instant, utcnow
@@ -78,6 +78,8 @@ def source_records(db, user, semester):
     progress = db.scalars(select(ProgressEntry).join(StudyItem, ProgressEntry.item_id == StudyItem.id).where(
         ProgressEntry.user_id == user.id, StudyItem.user_id == user.id, StudyItem.semester_id == semester.id))
     for p in progress:
+        if p.payload.get('undone'):
+            continue
         records.append(record('progress', p.id, by_id[p.item_id].payload['title'],
             resource_id=p.item_id, progress_id=p.id, recorded_at=p.created_at,
             date=instant(p.created_at).astimezone(SHANGHAI).date().isoformat(), time_precision='date',
@@ -116,9 +118,10 @@ def insights(sid: str, from_date: date = Query(), to_date: date = Query(),
         error(422, 'INVALID_CATEGORY', '请选择已有分类')
     selected_tags = sorted({t.strip() for t in (tag_ids or '').split(',') if t.strip()})
     tags = [{'id': t.id, 'name': t.name} for t in db.scalars(select(CalendarTag).where(
-        CalendarTag.user_id == user.id).order_by(CalendarTag.name, CalendarTag.id))]
-    if not set(selected_tags).issubset({t['id'] for t in tags}):
+        CalendarTag.user_id == user.id, CalendarTag.merged_into.is_(None)).order_by(CalendarTag.name, CalendarTag.id))]
+    if any(canonical_tag(db, user.id, tid) is None for tid in selected_tags):
         error(404, 'NOT_FOUND', '找不到所选标签')
+    selected_tags = sorted(canonical_tag_ids(db, user.id, selected_tags))
     begin = midnight(from_date); end = midnight(to_date + timedelta(days=1))
     daily = {str(from_date + timedelta(days=i)): {'date': str(from_date + timedelta(days=i)),
         'fixed_scheduled_minutes': 0, 'personal_planned_minutes': 0,

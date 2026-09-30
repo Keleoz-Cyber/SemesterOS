@@ -2,7 +2,7 @@
 from copy import deepcopy
 from collections import Counter
 from datetime import date, timedelta
-from typing import Literal
+from typing import Literal, Annotated
 from pydantic import Field, model_validator
 from sqlalchemy import select
 from .schemas import Input
@@ -18,6 +18,7 @@ from .capacity import local_day, merge, subtract, iso
 from .reminder_rules import instant
 from .operation_schemas import TaskPatch, OperationSuggestion, OperationResolve, OperationAction
 from .agent_planning import PlanRequest, prepare_agent_plan, apply_agent_plan
+from .agent_education import OccurrenceQuery, CourseChange, ExamChange, query_occurrences, prepare_course, prepare_exam, apply_education
 
 
 class Range(Input):
@@ -55,7 +56,7 @@ class EventChange(Input):
 
 
 class ItemDraft(Input):
-    kind: Literal['assignment', 'task']
+    kind: Literal['assignment', 'task', 'exam']
     title: str = Field(min_length=1, max_length=120)
     time: ItemTime = Field(default_factory=ItemTime)
     course_id: str | None = Field(default=None, max_length=36)
@@ -66,6 +67,9 @@ class ItemDraft(Input):
     category_id: Literal['study', 'research', 'affairs', 'life'] | None = None
     tags: list[str] = Field(default_factory=list, max_length=12)
     reminders: list[ReminderInput] = Field(default_factory=list, max_length=20)
+
+    location: str = Field(default='', max_length=120)
+    reserve_time: bool = True
 
 
 class ItemNew(Input):
@@ -101,7 +105,62 @@ class TaskChange(Input):
     reminder: ReminderInput | None = None
 
 
+class BatchEvent(Input):
+    tool: Literal['prepare_event']
+    arguments: EventChange
+
+
+class BatchItem(Input):
+    tool: Literal['prepare_item']
+    arguments: ItemNew
+
+
+class BatchTask(Input):
+    tool: Literal['prepare_task_change']
+    arguments: TaskChange
+
+
+class BatchCourse(Input):
+    tool: Literal['prepare_course_change']
+    arguments: CourseChange
+
+
+class BatchExam(Input):
+    tool: Literal['prepare_exam_change']
+    arguments: ExamChange
+
+
+class BatchGroup(Input):
+    title: str = Field(min_length=1, max_length=120)
+    operations: list[Annotated[BatchEvent | BatchItem | BatchTask | BatchCourse | BatchExam,
+                               Field(discriminator='tool')]] = Field(min_length=1, max_length=8)
+
+
+class BatchRequest(Input):
+    groups: list[BatchGroup] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode='after')
+    def bounded(self):
+        if sum(len(g.operations) for g in self.groups)>8:
+            raise ValueError('每次最多整理8项，请分批处理')
+        return self
+
+
+class RecentActions(Input):
+    pass
+
+
+class UndoAction(Input):
+    run_id: str = Field(min_length=1,max_length=36)
+
+
 SCHEMAS = {
+    'list_recent_actions': (RecentActions, '查询当前学期最近由助手确认保存的操作及是否已撤销。撤销前先查询，不猜run_id。'),
+    'prepare_undo': (UndoAction, '准备撤销已保存操作的预览。先list_recent_actions定位run_id；有多条可能匹配的操作时请明确时间和内容再继续。后续修改或依赖冲突会拒绝，不强行覆盖。'),
+    'prepare_batch': (BatchRequest, '把一份通知里的多项安排一次生成分组预览。groups每组title和operations，operation含tool和arguments，参数与单项prepare工具一致。最多8项，可选组保存。同一对象不能重复修改；修改前先查询。课程/考试/会议事实与个人重排分开，不包含prepare_plan或撤销。点名给其他人的任务不能擅自录为用户任务。'),
+    'query_course_occurrences': (OccurrenceQuery, '按原上课日期范围和课程名称查询真实课次；返回课次ID、原时间与地点。调课/停课前必须查询；课程ID不等于课次ID。'),
+    'prepare_course_change': (CourseChange, '按老师或学校通知准备调课(move)、单次停课(cancel)、范围停课(suspend)或补课(add)预览。targets必须来自query_course_occurrences的课次ID。多课次未明确时追问原日期；范围停课需核对整组。缺新起止时间不猜，不移动个人计划。'),
+    'prepare_exam_change': (ExamChange, '按学校通知准备考试改期/地点/确定性变化；先find_records查考试。time保留exact/date/week/range/unknown精度。align_review_deadlines默认false，仅用户明确要求同步复习截止才true，不猜耗时或移动个人计划。'),
     'query_calendar': (Range, '查询日期范围内的真实课程、日程、截止事项和个人计划；返回事实与数据版本。'),
     'find_records': (Find, '按名称搜索当前学期的日程、任务、考试与课程。修改前先搜索，不猜ID；同名时询问用户。'),
     'prepare_plan': (PlanRequest, '用现有约束求解器准备个人计划，确认前不写入时间块。先find_records查询任务(全部任务可query为空且resource_type=item)。新增安排用schedule；移动已有个人计划用replan，replan只传mode/task_ids/lead_minutes，不能带日期窗口等排程字段。缺耗时、学习时间或最早开始时刻时请追问，不擅自补造。不改固定课程、考试或活动。'),
@@ -109,7 +168,7 @@ SCHEMAS = {
     'query_insights': (InsightQuery, '读取与统计页面一致的汇总。全学期使用scope=semester，指定日期用scope=range+from_date/to_date；可按主分类、已查到的稳定标签ID筛选。明确区分安排时长、重叠去重占用、实际进度记录和未知值，不能生成效率评分。'),
     'find_free_windows': (FreeWindows, '查找用户学习时间设置内的连续空闲时段，扣除固定安排与个人计划。信息不完整时返回待补充。'),
     'prepare_event': (EventChange, '仅准备一般固定日程的新增/修改/取消预览。fields可含title,time,certainty,location,notes,category_id,tags,reminder_minutes。time遵循precision=exact/date/week/range/unknown；exact用含时区的at,end_at，不猜结束时间。修改时仅传需要改变的完整字段。分类study/research/affairs/life；建议1到3标签。不能改课程或考试；不能擅自移动固定安排。'),
-    'prepare_item': (ItemNew, '准备新增作业或任务的确认预览。fields含kind(task或assignment),title,time，可含course_id,remaining_minutes,priority,notes,reminders。日期只有天时precision=date，勿推断23:59；未说耗时不猜。'),
+    'prepare_item': (ItemNew, '准备新增作业、个人任务或学校考试通知的确认预览。fields含kind(task或assignment或exam),title,time，可含course_id,remaining_minutes,priority,notes,reminders。日期只有天时precision=date，勿推断23:59；未说耗时不猜。'),
     'prepare_task_change': (TaskChange, '准备任务标题/剩余分钟/是否拆分，或任务考试提醒的修改预览。先find_records定位item_id；同名先问。update_task使用task_patch；update_reminder使用reminder_action和reminder(mode/lead_minutes/trigger_at/purpose)。有多条提醒时提供reminder_id。不更改课程或考试时间，不自行取消已有计划。'),
 }
 
@@ -163,6 +222,16 @@ def execute_tool(name, raw, db, user, thread, state, source):
     sid = thread.semester_id
     s = owned_semester(db, user, sid, lock=True)
     source_guard(db, user, sid, state.get('source'))
+    if name=='list_recent_actions':
+        from .models import AgentRun, AgentThread
+        rows=list(db.scalars(select(AgentRun).join(AgentThread,AgentThread.id==AgentRun.thread_id).where(
+            AgentRun.user_id==user.id,AgentThread.semester_id==sid,AgentRun.status=='applied').order_by(AgentRun.created_at.desc()).limit(20)))
+        actions=[{'id':r.id,'text':r.text,'created_at':r.created_at,'undone':bool(r.state.get('undone_by')),
+                  'has_undo_record':bool(r.state.get('undo_data')),'kind':(r.state.get('preview') or {}).get('kind')} for r in rows]
+        state['known_action_ids']=[r.id for r in rows]
+        state['cards'].append({'kind':'recent_actions','data':{'actions':actions}})
+        return {'actions':actions}
+    if name == 'query_course_occurrences': return query_occurrences(db,user,s,state,args)
     if name == 'query_insights':
         from .insights import insights
         begin=date.fromisoformat(s.first_monday) if args.scope=='semester' else args.from_date
@@ -221,7 +290,19 @@ def execute_tool(name, raw, db, user, thread, state, source):
     if state.get('preview'): error(422,'ONE_CHANGE','请先确认当前修改，再处理下一项')
     before = None
     fields = args.fields.model_dump(mode='json', exclude_unset=True) if hasattr(args, 'fields') else {}
-    if name == 'prepare_plan':
+    if name == 'prepare_undo':
+        if args.run_id not in state.get('known_action_ids',[]):error(422,'READ_FIRST','请先查询最近保存的操作')
+        from .agent_undo import prepare_undo
+        preview=prepare_undo(db,user,s,args.run_id)
+        preview['undo_run_id']=state['run_id']
+    elif name == 'prepare_batch':
+        from .agent_batches import prepare_batch
+        preview=prepare_batch(db,user,thread,s,state,args,source)
+    elif name == 'prepare_course_change':
+        preview=prepare_course(db,user,s,state,args,source)
+    elif name == 'prepare_exam_change':
+        preview=prepare_exam(db,user,s,state,args,source)
+    elif name == 'prepare_plan':
         preview = prepare_agent_plan(db, user, s, state, args)
         if preview.get('kind') != 'plan':
             state['cards'].append({'kind':'planning_result','data':preview})
@@ -282,11 +363,10 @@ def execute_tool(name, raw, db, user, thread, state, source):
         allowed=set(ItemCreate.model_fields)-{'semester_id','source_id','candidate_id','source_text'}
         if set(fields)-allowed: error(422,'INVALID_FIELDS','请只填写事项本身的信息')
         body=ItemCreate.model_validate({**fields,'semester_id':sid,'source_text':source})
-        if 'category_id' not in fields and body.kind == 'assignment':
+        if 'category_id' not in fields and body.kind in ('assignment','exam'):
             body.category_id = 'study'
         if body.time.day_end_confirmed:
             error(422,'DEADLINE_POLICY_REQUIRED','只有日期时保留日期，不自动设为当天结束；用户明确了时刻才能填具体截止时间')
-        if body.kind=='exam': error(422,'AUTHORITATIVE_ITEM','考试请通过考试录入核对学校通知')
         if body.course_id:
             course=db.scalar(select(CourseMeeting).where(CourseMeeting.id==body.course_id,CourseMeeting.user_id==user.id,CourseMeeting.semester_id==sid))
             if course is None: error(422,'INVALID_COURSE','找不到关联课程，请先查询课程名称')
@@ -310,11 +390,19 @@ def execute_tool(name, raw, db, user, thread, state, source):
     return {'status':'needs_confirmation','preview':preview,'message':'尚未保存，请用户核对预览后点击确认。'}
 
 
-def apply_preview(db,user,preview):
+def apply_preview(db,user,preview,*,confirm_fixed_conflicts=False,prepared_base_revision=None,selected_group_ids=None):
     s=owned_semester(db,user,preview['semester_id'],lock=True)
     source_guard(db, user, s.id, preview.get('source'), True)
     if s.revision!=preview['expected_revision']:error(409,'PREVIEW_STALE','安排已有更新，请重新生成修改预览')
+    if preview['kind']=='batch':
+        from .agent_batches import apply_batch
+        return apply_batch(db,user,s,preview,selected_group_ids,confirm_fixed_conflicts)
+    if preview['kind']=='undo':
+        from .agent_undo import apply_undo
+        return apply_undo(db,user,preview)
     data=deepcopy(preview['body'])
+    if preview['kind'] in ('course_change','exam_change'):
+        return apply_education(db,user,preview,confirm_fixed_conflicts=confirm_fixed_conflicts,prepared_base_revision=prepared_base_revision)
     if preview['kind']=='plan': return apply_agent_plan(db,user,preview)
     if preview['kind']=='operation':
         from .operations import apply_command

@@ -132,6 +132,11 @@ def preview_exam(id:str,body:ExamChangeInput,user:User=Depends(current_user),db:
 
 @router.post('/exams/{id}/reschedule')
 def apply_exam(id:str,body:ExamChangeApply,user:User=Depends(current_user),db:Session=Depends(get_db),idempotency_key:str|None=Header(default=None)):
+    result=apply_exam_command(db,user,id,body,idempotency_key)
+    db.commit();return result
+
+
+def apply_exam_command(db,user,id,body,idempotency_key=None):
     e=owned_exam(db,user,id);data=body.model_dump(mode='json');op='exam-change/'+id
     cached=replay(db,user,op,idempotency_key,data)
     if cached is not None:return cached
@@ -144,4 +149,4 @@ def apply_exam(id:str,body:ExamChangeApply,user:User=Depends(current_user),db:Se
     s.revision+=1
     result={'semester_id':s.id,'revision':s.revision,'item':serialize_item(db,e),
         'changed_items':[serialize_item(db,e)]+[serialize_item(db,owned_item(db,user,id)) for id in tasks],'impact':preview}
-    remember(db,user,op,idempotency_key,data,result);db.commit();return result
+    remember(db,user,op,idempotency_key,data,result);return result

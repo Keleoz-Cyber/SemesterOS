@@ -27,6 +27,35 @@ def run(c, model):
     assert work_once(c.app.state.engine, model=model)
 
 
+@pytest.mark.parametrize('reply', ['下面是待确认预览：组会，周三17点。请确认是否按此保存。', '请确认：组会生成补录预览吗？'])
+def test_text_only_preview_is_repaired_into_real_confirmable_preview(client, reply):
+    _, h = register(client); s = semester(client, h)
+    request = turn(client, h, thread(client, h, s['id']), '整理这份会议通知')
+    count = 0
+    def model(messages, tools):
+        nonlocal count
+        count += 1
+        if count == 1:
+            return {'content': reply}
+        assert 'prepare' in messages[-1]['content']
+        return call('prepare_event', {'action': 'create', 'fields': {'title': '组会'}})
+    run(client, model)
+    result = client.get('/api/v1/agent/runs/' + request['id'], headers=h).json()
+    assert result['status'] == 'needs_confirmation' and result['preview']['token']
+    assert revision(client, h, s['id']) == 0
+    assert count == 2
+
+
+def test_repeated_unbacked_preview_does_not_report_a_completed_action(client):
+    _, h = register(client); s = semester(client, h)
+    request = turn(client, h, thread(client, h, s['id']), '帮我记录组会')
+    run(client, lambda m, t: {'content': '下面是待确认预览：请确认是否按此保存。'})
+    result = client.get('/api/v1/agent/runs/' + request['id'], headers=h).json()
+    assert result['status'] == 'failed' and result['preview'] is None
+    assert not result['answer']
+    assert revision(client, h, s['id']) == 0
+
+
 def test_agent_queries_real_owned_data_and_remembers_followup(client):
     _, h = register(client); _, other = register(client, 'other'); s = semester(client, h)
     e = create_event(client, h, s['id']).json()['event']
@@ -191,8 +220,8 @@ def test_apply_failure_rolls_back_both_business_data_and_agent_receipt(client,mo
     run(client,lambda m,t:call('prepare_event',{'action':'create','fields':{'title':'组会'}}))
     url='/api/v1/agent/runs/'+req['id'];v=client.get(url,headers=h).json()
     original=agent_tools.apply_preview
-    def broken(*args):
-        original(*args)
+    def broken(*args,**kwargs):
+        original(*args,**kwargs)
         raise HTTPException(503,detail={'code':'TEST_INTERRUPTION','message':'模拟事务中断'})
     monkeypatch.setattr(agent_tools,'apply_preview',broken)
     decision={'decision':'confirm','token':v['preview']['token']}

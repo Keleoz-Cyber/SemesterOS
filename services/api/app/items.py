@@ -30,8 +30,11 @@ def check_version(item, expected):
 
 
 def rules_for(db, item):
-    return list(db.scalars(select(ReminderRule).where(ReminderRule.item_id == item.id,
+    rows = list(db.scalars(select(ReminderRule).where(ReminderRule.item_id == item.id,
         ReminderRule.user_id == item.user_id).order_by(ReminderRule.created_at, ReminderRule.id)))
+    return sorted(rows, key=lambda rule: (
+        evaluate(rule.payload, item.payload, item.lifecycle).get('trigger_at') or '9999',
+        rule.created_at, rule.id))
 
 
 def serialize_rule(rule, item, peers=()):

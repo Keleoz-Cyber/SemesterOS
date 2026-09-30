@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir --index-url "${PIP_INDEX_URL}" -r requirements.lo
 COPY services/api/app ./app
 COPY services/api/alembic ./alembic
 COPY services/api/alembic.ini ./alembic.ini
-RUN useradd --create-home appuser && mkdir -p /app/.local-data/media && chown -R appuser:appuser /app/.local-data
+RUN useradd --create-home appuser && mkdir -p /app/.local-data/media && chown -R appuser:appuser /app
 USER appuser
 EXPOSE 8000
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

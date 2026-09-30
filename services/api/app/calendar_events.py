@@ -54,7 +54,7 @@ def receipt(db, user, s, row, reason):
 @router.get('/taxonomy')
 def taxonomy(user: User = Depends(current_user), db: Session = Depends(get_db)):
     return {'categories': CATEGORIES, 'tags': [{'id': t.id, 'name': t.name} for t in db.scalars(
-        select(CalendarTag).where(CalendarTag.user_id == user.id).order_by(CalendarTag.name))]}
+        select(CalendarTag).where(CalendarTag.user_id == user.id, CalendarTag.merged_into.is_(None)).order_by(CalendarTag.name))]}
 
 
 @router.post('/events', status_code=201)

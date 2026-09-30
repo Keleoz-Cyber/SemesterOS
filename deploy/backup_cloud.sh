@@ -9,9 +9,10 @@ compose() { docker compose --env-file "$task_root/.env" -f "$task_release/deploy
 task_backup="$task_root/backups/$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -m 700 "$task_backup"
 task_api_id=$(compose ps -q api)
-test -n "$task_api_id"
+task_worker_id=$(compose ps -q worker)
+test -n "$task_api_id" && test -n "$task_worker_id"
 task_image=$(docker inspect --format '{{.Config.Image}}' "$task_api_id")
-trap 'compose start api worker >/dev/null' EXIT
+trap 'docker start "$task_api_id" "$task_worker_id" >/dev/null' EXIT
 compose stop api worker >/dev/null
 compose exec -T db pg_dump -U semesteros -Fc semesteros >"$task_backup/database.dump"
 docker run --rm --network none --volumes-from "$task_api_id" --entrypoint tar "$task_image" -czf - -C /app/.local-data/media . >"$task_backup/media.tar.gz"

@@ -24,7 +24,7 @@ class TurnInput(Input):
     request_id: str = Field(min_length=1, max_length=100)
     source_id: str | None = Field(default=None, max_length=36)
     source_version: int | None = Field(default=None, ge=1)
-    selected_record_ids: list[Annotated[str, Field(min_length=1, max_length=36)]] = Field(default_factory=list, max_length=30)
+    selected_record_ids: list[Annotated[str, Field(min_length=1, max_length=160)]] = Field(default_factory=list, max_length=100)
     detach_source: bool = False
 
     @model_validator(mode='after')
@@ -43,6 +43,17 @@ class TurnInput(Input):
 class Decision(Input):
     decision: Literal['confirm', 'reject']
     token: str = Field(min_length=1, max_length=64)
+    confirm_fixed_conflicts: bool = False
+    selected_group_ids: list[str] | None = Field(default=None, max_length=8)
+
+
+class UndoRequest(Input):
+    request_id: str = Field(min_length=1, max_length=100)
+
+
+class SelectionPreview(Input):
+    token: str = Field(min_length=1,max_length=64)
+    selected_group_ids: list[str] = Field(min_length=1,max_length=8)
 
 
 def owned_thread(db, user, tid, lock=False):
@@ -66,12 +77,26 @@ def public_run(row):
             'stage': state.get('stage', '等待处理'), 'cards': state.get('cards', []),
             'preview': state.get('preview'), 'receipt': state.get('receipt'),
             'source': state.get('source'),
+            'undo_available': row.status=='applied' and bool(state.get('undo_data')) and not state.get('undone_by') and (state.get('preview') or {}).get('kind')!='undo',
+            'undone_by':state.get('undone_by'),
             'ambiguous_ids': state.get('ambiguous_ids', []),
             'error': state.get('error'), 'sequence': state.get('sequence', 0)}
 
 
 def invalidate_preview(db, row):
     preview = row.state.get('preview') or {}
+    if preview.get('kind') == 'batch':
+        from types import SimpleNamespace
+        from .agent_batches import children
+        for child in children(preview):
+            invalidate_preview(db,SimpleNamespace(user_id=row.user_id,state={'preview':child}))
+    if preview.get('kind') == 'course_change':
+        from .models import RealityChange
+        user=db.get(User,row.user_id)
+        owned_semester(db,user,preview['semester_id'],lock=True)
+        change=db.scalar(select(RealityChange).where(RealityChange.id==preview['change_id'],RealityChange.user_id==user.id))
+        if change is not None and change.receipt is None:
+            change.payload={**change.payload,'agent_invalidated':True}
     if preview.get('kind') == 'plan':
         from .agent_planning import invalidate_agent_plan
         user = db.get(User, row.user_id)
@@ -190,7 +215,12 @@ def decide(rid: str, body: Decision, user: User = Depends(current_user), db: Ses
     row = owned_run(db, user, rid, True)
     preview = row.state.get('preview')
     if not preview or body.token != preview['token']: error(409, 'PREVIEW_STALE', '请重新打开当前修改预览')
-    if row.status == 'applied' and body.decision == 'confirm': return public_run(row)
+    signature=fingerprint({'token':body.token,'groups':sorted(body.selected_group_ids or []),
+                           'confirm_fixed_conflicts':body.confirm_fixed_conflicts})
+    if row.status == 'applied' and body.decision == 'confirm':
+        if row.state.get('decision_signature',signature)!=signature:
+            error(409,'IDEMPOTENCY_CONFLICT','这次操作已按先前的选择保存，请查看结果')
+        return public_run(row)
     if row.status == 'cancelled' and body.decision == 'reject': return public_run(row)
     if row.status != 'needs_confirmation': error(409, 'PREVIEW_STALE', '这次预览已失效，请重新描述修改')
     if body.decision == 'reject':
@@ -199,9 +229,63 @@ def decide(rid: str, body: Decision, user: User = Depends(current_user), db: Ses
     if utcnow() - instant(row.created_at) > timedelta(hours=24):
         error(409, 'PREVIEW_EXPIRED', '这份预览已经超过一天，请重新核对安排')
     from .agent_tools import apply_preview
+    from .agent_undo import capture, changes
     # Command and agent receipt share a transaction: no commit gap on process failure.
-    receipt = apply_preview(db, user, preview)
-    row.state = {**row.state, 'receipt': receipt, 'stage': '已保存', 'answer': '已保存。',
+    if preview['kind']!='batch' and body.selected_group_ids is not None:
+        error(422,'INVALID_SELECTION','这次操作不需要选择分组')
+    owned_semester(db,user,preview['semester_id'],lock=True)
+    before=capture(db,user,preview['semester_id']) if preview['kind']!='undo' else None
+    receipt = apply_preview(db, user, preview, confirm_fixed_conflicts=body.confirm_fixed_conflicts,selected_group_ids=body.selected_group_ids)
+    undo_data=changes(before,capture(db,user,preview['semester_id'])) if before is not None else None
+    row.state = {**row.state, 'receipt': receipt, 'decision_signature':signature,'stage': '已保存', 'answer': '已保存。',
+                 'undo_data':undo_data,
                  'sequence': row.state.get('sequence', 0) + 1}
+    if preview['kind']=='undo':row.state={**row.state,'stage':'已撤销','answer':'已撤销这次操作。'}
     row.status = 'applied'; db.commit()
     return public_run(row)
+
+
+@router.post('/runs/{rid}/request-undo',status_code=201)
+def request_undo(rid:str,body:UndoRequest,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    # Read the source without locking it before the semester. Source receipts
+    # are immutable; this new confirmation run owns the undo transaction.
+    source=owned_run(db,user,rid)
+    thread=owned_thread(db,user,source.thread_id,True)
+    signature=fingerprint({'undo_source':rid,'request_id':body.request_id})
+    existing=db.scalar(select(AgentRun).where(AgentRun.thread_id==thread.id,AgentRun.request_id==body.request_id))
+    if existing:
+        if existing.state.get('input_signature')!=signature:error(409,'IDEMPOTENCY_CONFLICT','这次请求已用于另一项操作')
+        return public_run(existing)
+    if db.scalar(select(AgentRun.id).where(AgentRun.thread_id==thread.id,AgentRun.status.in_(['queued','running']))):
+        error(409,'RUN_BUSY','请等当前回复结束后再撤销')
+    pendings=list(db.scalars(select(AgentRun).where(AgentRun.thread_id==thread.id,AgentRun.status=='needs_confirmation').with_for_update()))
+    s=owned_semester(db,user,thread.semester_id,lock=True)
+    from .agent_undo import prepare_undo
+    preview=prepare_undo(db,user,s,rid)
+    for pending in pendings:
+        invalidate_preview(db,pending);pending.status='superseded'
+    now=utcnow().isoformat()
+    row=AgentRun(user_id=user.id,thread_id=thread.id,request_id=body.request_id,text='撤销这次操作',
+                 status='needs_confirmation',state={},created_at=now)
+    db.add(row);db.flush()
+    preview.update(undo_run_id=row.id,semester_id=s.id,expected_revision=s.revision)
+    preview['token']=fingerprint({'run_id':row.id,'preview':preview})
+    row.state={'run_id':row.id,'input_signature':signature,'preview':preview,'cards':[],
+               'stage':'等待确认','answer':'请核对将撤销的内容。','sequence':1}
+    thread.updated_at=now;db.commit();return public_run(row)
+
+
+@router.post('/runs/{rid}/selection-preview')
+def selection_preview(rid:str,body:SelectionPreview,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    row=owned_run(db,user,rid,True);preview=row.state.get('preview') or {}
+    if row.status!='needs_confirmation' or preview.get('kind')!='batch' or preview.get('token')!=body.token:
+        error(409,'PREVIEW_STALE','分组预览已更新，请重新打开')
+    from .agent_tools import source_guard
+    from .agent_batches import selected_groups,guard_dependencies,simulate
+    s=owned_semester(db,user,preview['semester_id'],lock=True)
+    if s.revision!=preview['expected_revision']:error(409,'PREVIEW_STALE','安排已变化，请重新整理通知')
+    source_guard(db,user,s.id,preview.get('source'),True)
+    groups=selected_groups(preview,body.selected_group_ids)
+    guard_dependencies(db,user,s,[p for g in groups for p in g['operations']])
+    result=simulate(db,user,s,groups,preview['expected_revision'])
+    return {'token':body.token,'selected_group_ids':sorted(body.selected_group_ids),'impact':result}

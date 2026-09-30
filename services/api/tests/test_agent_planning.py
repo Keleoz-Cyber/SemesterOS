@@ -289,8 +289,8 @@ def test_confirmation_failure_before_agent_receipt_rolls_back_plan_apply(client,
     h, s, item = setup(client, monkeypatch)
     _, url, value = agent_plan(client, h, s, item)
     preview = value['preview']; original = agent_tools.apply_preview
-    def fail_after_business_write(db, user, p):
-        original(db, user, p)
+    def fail_after_business_write(db, user, p, **kwargs):
+        original(db, user, p, **kwargs)
         raise RuntimeError('simulate interrupted AgentRun receipt')
     monkeypatch.setattr(agent_tools, 'apply_preview', fail_after_business_write)
     with pytest.raises(RuntimeError, match='simulate interrupted'):

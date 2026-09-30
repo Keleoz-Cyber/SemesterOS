@@ -1,7 +1,7 @@
 """Fixed event persistence helpers, shared by every scheduling entry point."""
 from datetime import timedelta
 from sqlalchemy import select
-from .models import CalendarEvent, CalendarTag, User
+from .models import CalendarEvent, CalendarTag, CalendarTagAlias, User
 from .reminder_rules import utcnow, instant
 
 CATEGORIES = [{'id': key, 'name': name} for key, name in (
@@ -33,11 +33,41 @@ def tag_ids(db, user, names):
     db.scalar(select(User).where(User.id == user.id).with_for_update())
     ids = []
     for name in names:
-        row = db.scalar(select(CalendarTag).where(CalendarTag.user_id == user.id, CalendarTag.normalized == name.casefold()))
+        row = tag_by_name(db, user.id, name)
         if row is None:
             row = CalendarTag(user_id=user.id, name=name, normalized=name.casefold()); db.add(row); db.flush()
-        ids.append(row.id)
+        if row.id not in ids:
+            ids.append(row.id)
     return ids
+
+
+def canonical_tag(db, user_id, tag_id):
+    seen = set()
+    while tag_id and tag_id not in seen:
+        seen.add(tag_id)
+        row = db.scalar(select(CalendarTag).where(CalendarTag.user_id == user_id, CalendarTag.id == tag_id))
+        if row is None or row.merged_into is None:
+            return row
+        tag_id = row.merged_into
+    return None
+
+
+def tag_by_name(db, user_id, name):
+    row = db.scalar(select(CalendarTag).where(CalendarTag.user_id == user_id,
+        CalendarTag.normalized == name.casefold(), CalendarTag.merged_into.is_(None)))
+    if row is not None:
+        return row
+    alias = db.get(CalendarTagAlias, (user_id, name.casefold()))
+    return canonical_tag(db, user_id, alias.tag_id) if alias else None
+
+
+def canonical_tag_ids(db, user_id, ids):
+    result = []
+    for tag_id in ids:
+        tag = canonical_tag(db, user_id, tag_id)
+        if tag is not None and tag.id not in result:
+            result.append(tag.id)
+    return result
 
 
 def reminder_values(row):
@@ -56,7 +86,7 @@ def reminder_values(row):
 
 
 def classification_value(db, row):
-    ids = row.payload.get('tag_ids', [])
+    ids = canonical_tag_ids(db, row.user_id, row.payload.get('tag_ids', []))
     by_id = {t.id: {'id': t.id, 'name': t.name} for t in db.scalars(select(CalendarTag).where(
         CalendarTag.user_id == row.user_id, CalendarTag.id.in_(ids)))} if ids else {}
     default = 'study' if row.payload.get('kind') in ('assignment', 'exam') else None

@@ -10,7 +10,9 @@ from sqlalchemy import text
 from . import calendar_events
 from . import agent_api
 from . import insights
-from . import academics, auth, items, capture, planning, schedule_api, changes, change_parser, centers, exam_planning, media, operations
+from . import briefs
+from . import taxonomy
+from . import academics, auth, items, capture, planning, schedule_api, changes, change_parser, centers, exam_planning, media, operations, semester_management, course_management
 from pathlib import Path
 from dotenv import dotenv_values
 from threading import Lock, BoundedSemaphore
@@ -31,6 +33,10 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
     async def lifespan(app):
         import subprocess,sys
         worker=None
+        if database_url is None or os.environ.get('MEDIA_ROOT'):
+            from sqlalchemy.orm import Session
+            with Session(app.state.engine) as cleanup_db:
+                semester_management.drain_media_cleanup(cleanup_db, app.state.media_root)
         if database_url is None and os.environ.get('MEDIA_WORKER_MODE','managed')=='managed':
             worker=subprocess.Popen([sys.executable,'-m','app.media_worker'],env={**os.environ,'MEDIA_PARENT_PID':str(os.getpid())},
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
@@ -42,7 +48,7 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
                 except subprocess.TimeoutExpired:worker.kill();worker.wait()
             engine.dispose()
 
-    app = FastAPI(title="SemesterOS", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="SemesterOS", version="0.1.0", lifespan=lifespan)
     app.state.engine = engine
     from .media_files import root
     app.state.media_root=root()
@@ -85,13 +91,17 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
     def health():
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"status": "ok", "version": "0.2.0", "database": engine.dialect.name}
+        return {"status": "ok", "version": "0.1.0", "database": engine.dialect.name}
 
     app.include_router(calendar_events.router, prefix="/api/v1")
     app.include_router(agent_api.router, prefix="/api/v1")
     app.include_router(insights.router, prefix="/api/v1")
+    app.include_router(briefs.router, prefix="/api/v1")
+    app.include_router(taxonomy.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(academics.router, prefix="/api/v1")
+    app.include_router(semester_management.router, prefix="/api/v1")
+    app.include_router(course_management.router, prefix="/api/v1")
     app.include_router(items.router, prefix="/api/v1")
     app.include_router(capture.router, prefix="/api/v1")
     app.include_router(planning.router, prefix="/api/v1")

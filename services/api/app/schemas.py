@@ -62,6 +62,10 @@ class SemesterInput(Input):
         return self
 
 
+class SemesterUpdate(SemesterInput):
+    expected_revision: int = Field(ge=0)
+
+
 class CourseInput(Input):
     title: str = Field(min_length=1, max_length=120)
     teacher: str = Field(default="", max_length=120)
@@ -79,6 +83,10 @@ class CourseInput(Input):
         return sorted(set(values))
 
 
+class CourseUpdate(CourseInput):
+    expected_revision: int = Field(ge=0)
+
+
 class ImportInput(Input):
     semester_id: str = Field(min_length=1, max_length=36)
     source: Literal["haut_webview", "manual"]
@@ -88,3 +96,5 @@ class ImportInput(Input):
 
 class ApplyInput(Input):
     expected_revision: int = Field(ge=0)
+    replace_changed: bool = False
+    remove_missing: bool = False

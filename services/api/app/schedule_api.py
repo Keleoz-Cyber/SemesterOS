@@ -145,6 +145,14 @@ def accept_proposal_command(db,user,id,body:ProposalAction):
 
 @router.post('/plan-proposals/{id}/undo')
 def undo_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    if owned_proposal(db,user,id).payload.get('agent_run_id'):
+        error(409,'AGENT_CONFIRMATION_REQUIRED','请在日程助手中核对并确认撤销这次计划')
+    receipt=undo_proposal_command(db,user,id,body)
+    db.commit();return receipt
+
+
+def undo_proposal_command(db,user,id,body:ProposalAction):
+    """Undo in the caller's transaction so agent receipts remain atomic."""
     p=owned_proposal(db,user,id);s=owned_semester(db,user,p.semester_id,lock=True);db.refresh(p)
     if p.phase=='undone':return p.receipt
     latest=db.scalar(select(PlanProposal).where(PlanProposal.user_id==user.id,PlanProposal.semester_id==s.id,
@@ -159,7 +167,7 @@ def undo_proposal(id:str,body:ProposalAction,user:User=Depends(current_user),db:
     for b in blocks:b.status='cancelled';b.version+=1;b.updated_at=now.isoformat()
     s.revision+=1;p.phase='undone';p.version+=1
     p.receipt={'proposal_id':p.id,'proposal_version':p.version,'semester_id':s.id,'revision':s.revision,'undone':True}
-    record(db,user,s.id,'undo_proposal',p.receipt,now);db.commit();return p.receipt
+    record(db,user,s.id,'undo_proposal',p.receipt,now);return p.receipt
 
 
 def apply_replan(db,user,s,p,result):
@@ -194,7 +202,7 @@ def undo_replan(db,user,s,p):
         rows[id].start_at=b['start_at'];rows[id].end_at=b['end_at'];rows[id].version+=1;rows[id].updated_at=now.isoformat()
     s.revision+=1;p.phase='undone';p.version+=1
     p.receipt={'proposal_id':p.id,'proposal_version':p.version,'semester_id':s.id,'revision':s.revision,'undone':True}
-    record(db,user,s.id,'undo_replan',p.receipt,now);db.commit();return p.receipt
+    record(db,user,s.id,'undo_replan',p.receipt,now);return p.receipt
 
 
 @router.get('/semesters/{sid}/plans')

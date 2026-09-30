@@ -60,7 +60,7 @@ def impact(source,patch,now):
 
 def value(row,s):
     return {'id':row.id,'semester_id':row.semester_id,'base_revision':row.base_revision,
-        'phase':'applied' if row.receipt else 'stale' if s.revision!=row.base_revision else 'ready',
+        'phase':'applied' if row.receipt else 'stale' if s.revision!=row.base_revision or row.payload.get('agent_invalidated') else 'ready',
         **row.payload,'receipt':row.receipt,'created_at':row.created_at}
 
 
@@ -74,6 +74,11 @@ def list_changes(sid:str,user:User=Depends(current_user),db:Session=Depends(get_
 
 @router.post('/semesters/{sid}/changes',status_code=201)
 def preview_change(sid:str,body:ChangeInput,user:User=Depends(current_user),db:Session=Depends(get_db),idempotency_key:str|None=Header(default=None)):
+    result=preview_change_command(db,user,sid,body,idempotency_key)
+    db.commit();return result
+
+
+def preview_change_command(db,user,sid,body,idempotency_key=None,*,agent_run_id=None):
     s=owned_semester(db,user,sid,lock=True);data=body.model_dump(mode='json');op='preview-change/'+sid
     if body.source_id:
         from .media import owned_source
@@ -82,17 +87,25 @@ def preview_change(sid:str,body:ChangeInput,user:User=Depends(current_user),db:S
     if cached is not None:return cached
     now=utcnow();source=source_snapshot(db,user,s);patch=make_patch(source,data,now)
     row=RealityChange(user_id=user.id,semester_id=sid,base_revision=s.revision,
-        payload={'request':data,'patch':patch,'impact':impact(source,patch,now)},created_at=now.isoformat())
-    db.add(row);db.flush();result=value(row,s);remember(db,user,op,idempotency_key,data,result);db.commit();return result
+        payload={'request':data,'patch':patch,'impact':impact(source,patch,now),**({'agent_run_id':agent_run_id} if agent_run_id else {})},created_at=now.isoformat())
+    db.add(row);db.flush();result=value(row,s);remember(db,user,op,idempotency_key,data,result);return result
 
 
 @router.post('/changes/{id}/apply')
 def apply_change(id:str,body:ChangeApply,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    result=apply_change_command(db,user,id,body)
+    db.commit();return result
+
+
+def apply_change_command(db,user,id,body,*,agent_run_id=None,prepared_base_revision=None):
     row=db.scalar(select(RealityChange).where(RealityChange.id==id,RealityChange.user_id==user.id))
     if row is None:error(404,'NOT_FOUND','找不到变化预览')
     s=owned_semester(db,user,row.semester_id,lock=True);db.refresh(row)
+    if row.payload.get('agent_run_id') != agent_run_id:
+        error(409,'AGENT_CONFIRMATION_REQUIRED','请在助手中的当前预览确认这次变更')
+    if row.payload.get('agent_invalidated'):error(409,'PREVIEW_STALE','这份变化预览已失效，请重新核对')
     if row.receipt:return row.receipt
-    if s.revision!=body.expected_revision or row.base_revision!=s.revision:error(409,'SNAPSHOT_STALE','预览后安排已变化，请重新核对')
+    if s.revision!=body.expected_revision or row.base_revision!=(s.revision if prepared_base_revision is None else prepared_base_revision):error(409,'SNAPSHOT_STALE','预览后安排已变化，请重新核对')
     source=source_snapshot(db,user,s);now=utcnow()
     make_patch(source,row.payload['request'],now)
     current=impact(source,row.payload['patch'],now)
@@ -100,4 +113,4 @@ def apply_change(id:str,body:ChangeApply,user:User=Depends(current_user),db:Sess
         error(422,'CONFIRM_FIXED_CONFLICTS','学校固定安排存在冲突，需明确确认记录现实情况')
     s.revision+=1;row.applied_revision=s.revision
     row.receipt={'change_id':row.id,'semester_id':s.id,'revision':s.revision,'impact':current}
-    db.commit();return row.receipt
+    return row.receipt

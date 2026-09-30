@@ -48,7 +48,7 @@ def main():
     print('Building release image', flush=True)
     compose(release, 'build', 'api', env=new_env)
     print('Backing up existing database and media', flush=True)
-    run(['bash', str(previous / 'deploy/backup_cloud.sh')])
+    run(['bash', str(release / 'deploy/backup_cloud.sh')])
     try:
         lines = original_env.decode().splitlines()
         lines = [line for line in lines if not line.startswith('APP_TAG=')]
@@ -58,7 +58,7 @@ def main():
         compose(release, 'up', '-d', '--no-deps', '--wait', '--wait-timeout', '100', 'api', 'worker', env=new_env)
         with urllib.request.urlopen('http://127.0.0.1:8871/health', timeout=10) as response:
             health = json.load(response)
-        assert health['status'] == 'ok' and health['version'] == '0.2.0', 'Unexpected API health'
+        assert health['status'] == 'ok' and health['version'] == '0.1.0', 'Unexpected API health'
         temporary = ROOT / ('current-' + stamp)
         temporary.symlink_to(release)
         os.replace(temporary, current)

@@ -14,11 +14,33 @@ class Base(DeclarativeBase):
 
 class CalendarTag(Base):
     __tablename__ = 'calendar_tags'
-    __table_args__ = (UniqueConstraint('user_id', 'normalized'), UniqueConstraint('user_id', 'id'))
+    __table_args__ = (UniqueConstraint('user_id', 'normalized'), UniqueConstraint('user_id', 'id'),
+        ForeignKeyConstraint(['user_id', 'merged_into'], ['calendar_tags.user_id', 'calendar_tags.id']))
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
     name: Mapped[str] = mapped_column(String(24))
     normalized: Mapped[str] = mapped_column(String(100))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    merged_into: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+
+class CalendarTagAlias(Base):
+    __tablename__ = 'calendar_tag_aliases'
+    __table_args__ = (ForeignKeyConstraint(['user_id', 'tag_id'], ['calendar_tags.user_id', 'calendar_tags.id']),)
+    user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    normalized: Mapped[str] = mapped_column(String(100), primary_key=True)
+    tag_id: Mapped[str] = mapped_column(String(36))
+
+
+class CalendarTagChange(Base):
+    __tablename__ = 'calendar_tag_changes'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    snapshot_hash: Mapped[str] = mapped_column(String(64))
+    preview: Mapped[dict] = mapped_column(JSON)
+    receipt: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[str] = mapped_column(String(40))
 
 
 class CalendarEvent(Base):
@@ -105,6 +127,15 @@ class CourseMeeting(Base):
     identity_key: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict] = mapped_column(JSON)
     source_batch_id: Mapped[str] = mapped_column(ForeignKey("import_batches.id"))
+    manually_edited: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class MediaCleanupJob(Base):
+    __tablename__ = 'media_cleanup_jobs'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    storage_key: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[str] = mapped_column(String(40))
 
 
 class IdempotencyRecord(Base):
