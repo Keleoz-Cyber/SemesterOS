@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/items/items_view.dart';
-import 'planning_flow_test.dart' show PlanningFixture, bind;
+import 'planning_flow_test.dart' show PlanningFixture, bind, ioTap;
 import 'ui_polish_test.dart' show capture, loadPreviewFonts, mount;
 
 void main() {
@@ -43,6 +43,19 @@ void main() {
     await capture(tester, 'task-list-seven-compact');
     expect(tester.getSize(first).height, lessThan(180));
     expect(tester.getSize(second).height, lessThan(130));
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.byTooltip('调整任务顺序'));
+    await ioTap(tester, find.byTooltip('调整任务顺序'));
+    await ioTap(tester, find.text('拖动排序'));
+    await tester.ensureVisible(find.byTooltip('移动任务').first);
+    await ioTap(tester, find.byTooltip('移动任务').first);
+    expect(find.text('下移'), findsOneWidget);
+    await capture(tester, 'task-order-tap-menu');
+    await ioTap(tester, find.text('下移'));
+    expect(
+      tester.getTopLeft(first).dy,
+      greaterThan(tester.getTopLeft(second).dy),
+    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     fixture.c.dispose();

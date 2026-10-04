@@ -1,4 +1,3 @@
-import 'package:semester_os/ui/app_controls.dart';
 import 'package:semester_os/ui/app_picker_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -113,22 +112,22 @@ void main() {
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('更多设置'),
+        find.text('安排学习时间'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('更多设置'));
+      await tester.tap(find.text('安排学习时间'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('item-minutes')), '1.5');
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('更多设置'));
-      await tester.tap(find.text('更多设置'));
+      await tester.ensureVisible(find.text('安排学习时间'));
+      await tester.tap(find.text('安排学习时间'));
       await tester.pumpAndSettle();
       await save(tester);
       expect(f.submitted, isNull);
-      expect(find.text('预计耗时请填写1至525600之间的整数分钟，请在任务安排中修改'), findsOneWidget);
+      expect(find.text('预计耗时请填写整数分钟'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
@@ -160,7 +159,7 @@ void main() {
     },
   );
   testWidgets(
-    'AI exact deadline and effort require explicit review before saving',
+    'AI deadline and effort are reviewed by the explicit save action',
     (tester) async {
       final f = Fixture();
       await openForm(
@@ -180,26 +179,7 @@ void main() {
         },
       );
       expect(find.text('需核对：请核对通知年份'), findsOneWidget);
-      await save(tester);
       expect(f.submitted, isNull);
-      expect(find.text('请核对原文、日期和标出的推断后确认'), findsOneWidget);
-      final review = find.byKey(const Key('item-reviewed'));
-      // Saving is fixed at the bottom now; it does not scroll the lazy form to
-      // the explicit review control. Reveal that control through normal scrolling.
-      await tester.scrollUntilVisible(
-        review,
-        300,
-        scrollable: find
-            .byWidgetPredicate(
-              (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
-            )
-            .first,
-      );
-      await tester.pumpAndSettle();
-      expect(tester.widget<AppCheckRow>(review).value, isFalse);
-      await tester.tap(review);
-      await tester.pumpAndSettle();
-      expect(tester.widget<AppCheckRow>(review).value, isTrue);
       await save(tester);
       expect(f.submitted!['remaining_minutes'], 180);
       expect(f.submitted!['time']['at'], '2099-09-25T23:59:00+08:00');

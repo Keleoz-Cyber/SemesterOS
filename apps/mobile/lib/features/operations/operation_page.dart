@@ -1,6 +1,9 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/campus_theme.dart';
 import '../../ui/app_picker_field.dart';
 import '../../ui/detail_widgets.dart';
+import '../../ui/record_actions.dart';
 import '../../core/api.dart' show userError;
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -8,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import '../../ui/campus_widgets.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
+import '../items/task_surfaces.dart';
 import '../items/reminder_editor.dart';
 import '../planning/date_time_picker.dart';
 import '../planning/plan_change_confirmation.dart';
@@ -16,7 +20,7 @@ import '../planning/risk_widgets.dart';
 import '../media/drafts.dart';
 
 String operationValue(dynamic field, dynamic value) {
-  if (value == null) return '待确认';
+  if (value == null) return '移除此项设置';
   if (field == 'splittable') return value == true ? '可以分次完成' : '需要一次完成';
   if (field == 'remaining_minutes') return minutesLabel(value);
   return '$value';
@@ -298,6 +302,42 @@ class _OperationPageState extends State<OperationPage> {
     }
   }
 
+  Future<void> chooseWindow() async {
+    if (busy || !same || !customWindow || operation == null) return;
+    final operationId = operation!['id'], version = operation!['version'];
+    final previousStart = start, previousEnd = end;
+    final value = await pickSchoolDateTimeRange(
+      context,
+      initialStart: start,
+      initialEnd: end,
+      title: '安排时段',
+    );
+    if (value == null ||
+        !mounted ||
+        !same ||
+        busy ||
+        !customWindow ||
+        operation?['id'] != operationId ||
+        operation?['version'] != version ||
+        start != previousStart ||
+        end != previousEnd) {
+      return;
+    }
+    setState(() {
+      start = value.start;
+      end = value.end;
+      error = null;
+    });
+  }
+
+  String get windowLabel => start != null && end != null
+      ? displayInterval(start!.toIso8601String(), end!.toIso8601String())
+      : start != null
+      ? '${displayInstant(start!.toIso8601String())} 起'
+      : end != null
+      ? '至 ${displayInstant(end!.toIso8601String())}'
+      : '选择起止时间';
+
   Future<void> resolve() => run(() async {
     final p = operation!;
     final data = <String, dynamic>{
@@ -348,6 +388,9 @@ class _OperationPageState extends State<OperationPage> {
       }
       if (customWindow && (start == null || end == null)) {
         throw Exception('请选择开始和结束时间，或使用已设置的学习时间');
+      }
+      if (customWindow && !end!.isAfter(start!)) {
+        throw Exception('结束时间需晚于开始时间');
       }
       data.addAll({
         'plan_mode': planMode,
@@ -472,187 +515,187 @@ class _OperationPageState extends State<OperationPage> {
       appBar: AppBar(title: const Text('智能修改')),
       body: !same
           ? const Center(child: Text('账号或学期已切换，请返回'))
-          : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                if (!compactRequest) ...[
-                  EditorSection(
-                    title: '修改要求',
-                    icon: Icons.edit_note_rounded,
-                    children: [
-                      AppField(
-                        key: const Key('operation-text'),
-                        controller: text,
-                        minLines: 2,
-                        maxLines: 5,
-                        maxLength: 10000,
-                        enabled: !busy,
-                        onChanged: (_) {
-                          setState(() {
-                            operation = null;
-                            finished = false;
-                          });
-                          saveTimer?.cancel();
-                          saveTimer = Timer(
-                            const Duration(milliseconds: 350),
-                            () => saveDraft(),
-                          );
-                        },
-                        decoration: const InputDecoration(
-                          labelText: '想怎么调整',
-                          hintText: 'Java报告还需要两小时；提醒改到周四晚上八点',
+          : AppLoadingOverlay(
+              loading: busy,
+              label: '正在整理',
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  if (!compactRequest) ...[
+                    EditorSection(
+                      title: '修改要求',
+                      icon: Icons.edit_note_rounded,
+                      children: [
+                        AppField(
+                          key: const Key('operation-text'),
+                          controller: text,
+                          minLines: 2,
+                          maxLines: 5,
+                          maxLength: 10000,
+                          enabled: !busy,
+                          onChanged: (_) {
+                            setState(() {
+                              operation = null;
+                              finished = false;
+                            });
+                            saveTimer?.cancel();
+                            saveTimer = Timer(
+                              const Duration(milliseconds: 350),
+                              () => saveDraft(),
+                            );
+                          },
+                          decoration: const InputDecoration(
+                            labelText: '想怎么调整',
+                            hintText: 'Java报告还需要两小时；提醒改到周四晚上八点',
+                            counterText: '',
+                          ),
+                        ),
+                      ],
+                    ),
+                    AppDisclosure(
+                      title: const Text('原通知时间'),
+                      children: [
+                        AppTextButton(
+                          onPressed: busy
+                              ? null
+                              : () async {
+                                  final date = await pickSchoolDateTime(
+                                    context,
+                                    initial: DateTime.parse(reference),
+                                  );
+                                  if (date != null && mounted) {
+                                    setState(() {
+                                      reference = date
+                                          .toUtc()
+                                          .toIso8601String();
+                                      operation = null;
+                                    });
+                                    await saveDraft();
+                                  }
+                                },
+                          child: Text('消息时间：${displayInstant(reference)}'),
+                        ),
+                      ],
+                    ),
+                    AppButton(
+                      onPressed: busy ? null : parse,
+                      child: const Text('让AI整理修改'),
+                    ),
+                  ] else ...[
+                    if (stale)
+                      AppTextButton(
+                        onPressed: busy ? null : parse,
+                        child: const Text('重新整理修改'),
+                      ),
+                  ],
+                  if (sourceId != null)
+                    AppTextButton(
+                      onPressed: busy
+                          ? null
+                          : () => setState(() {
+                              sourceId = null;
+                              sourceVersion = null;
+                              operation = null;
+                              direct = false;
+                            }),
+                      child: const Text('不引用原图或录音，改用当前文字'),
+                    ),
+                  if (error != null) SoftNotice(error!, warning: true),
+                  if (p != null) ...[
+                    if (!editing || applied)
+                      DocumentPanel(title: '修改要求', text: p['source_text']),
+                    for (final q in p['suggestion']['questions'] ?? [])
+                      SoftNotice('$q'),
+                    if (p['clarification'] != null && editing)
+                      SoftNotice(p['clarification'], warning: true),
+                    if (stale && !applied)
+                      const SoftNotice('事项或提醒已有更新，请重新查看修改内容。', warning: true),
+                    if (applied)
+                      SoftNotice(
+                        intent == 'request_plan'
+                            ? '已确认规划范围。请查看生成的方案，满意后再保存到日程。'
+                            : '修改已保存',
+                      ),
+                    if (rejected) const SoftNotice('已放弃这次修改，原来的安排保留。'),
+                    if (editing &&
+                        !applied &&
+                        !rejected &&
+                        [
+                          'update_task',
+                          'update_reminder',
+                          'request_plan',
+                        ].contains(intent))
+                      ...editor(),
+                    if (!editing && preview != null)
+                      ...previewWidgets(Map<String, dynamic>.from(preview)),
+                    if (p['phase'] == 'ready' && !editing && !applied && !stale)
+                      AppButton(
+                        onPressed: busy ? null : apply,
+                        child: Text(
+                          intent == 'request_plan' ? '按这个范围生成计划' : '确认保存修改',
                         ),
                       ),
-                    ],
-                  ),
-                  AppDisclosure(
-                    title: const Text('原通知时间'),
-                    children: [
+                    if (!applied && !rejected) ...[
                       AppTextButton(
                         onPressed: busy
                             ? null
-                            : () async {
-                                final date = await pickSchoolDateTime(
-                                  context,
-                                  initial: DateTime.parse(reference),
-                                );
-                                if (date != null && mounted) {
-                                  setState(() {
-                                    reference = date.toUtc().toIso8601String();
-                                    operation = null;
-                                  });
-                                  await saveDraft();
-                                }
-                              },
-                        child: Text('消息时间：${displayInstant(reference)}'),
+                            : () => setState(() => editing = true),
+                        child: const Text('调整修改内容'),
+                      ),
+                      AppTextButton(
+                        onPressed: busy ? null : reject,
+                        child: const Text('放弃这次修改'),
                       ),
                     ],
-                  ),
-                  AppButton(
-                    onPressed: busy ? null : parse,
-                    child: const Text('让AI整理修改'),
-                  ),
-                ] else ...[
-                  AppTextButton.icon(
-                    onPressed: busy
-                        ? null
-                        : () => setState(() => editing = true),
-                    icon: const Icon(Icons.edit_note_rounded),
-                    label: const Text('修改这次要求'),
-                  ),
-                  if (stale)
-                    AppTextButton(
-                      onPressed: busy ? null : parse,
-                      child: const Text('重新整理修改'),
-                    ),
-                ],
-                if (sourceId != null)
-                  AppTextButton(
-                    onPressed: busy
-                        ? null
-                        : () => setState(() {
-                            sourceId = null;
-                            sourceVersion = null;
-                            operation = null;
-                            direct = false;
-                          }),
-                    child: const Text('不引用原图或录音，改用当前文字'),
-                  ),
-                if (error != null) SoftNotice(error!, warning: true),
-                if (busy) const LinearProgressIndicator(),
-                if (p != null) ...[
-                  DocumentPanel(title: '修改要求', text: p['source_text']),
-                  for (final q in p['suggestion']['questions'] ?? [])
-                    SoftNotice('$q'),
-                  if (p['clarification'] != null && editing)
-                    SoftNotice(p['clarification'], warning: true),
-                  if (stale && !applied)
-                    const SoftNotice('事项或提醒已有更新，请重新查看修改内容。', warning: true),
-                  if (applied)
-                    SoftNotice(
-                      intent == 'request_plan'
-                          ? '已确认规划范围。请查看生成的方案，满意后再保存到日程。'
-                          : '修改已保存',
-                    ),
-                  if (rejected) const SoftNotice('已放弃这次修改，原来的安排保留。'),
-                  if (editing &&
-                      !applied &&
-                      !rejected &&
-                      [
-                        'update_task',
-                        'update_reminder',
-                        'request_plan',
-                      ].contains(intent))
-                    ...editor(),
-                  if (!editing && preview != null)
-                    ...previewWidgets(Map<String, dynamic>.from(preview)),
-                  if (p['phase'] == 'ready' && !editing && !applied && !stale)
-                    AppButton(
-                      onPressed: busy ? null : apply,
-                      child: Text(
-                        intent == 'request_plan' ? '按这个范围生成计划' : '确认保存修改',
-                      ),
-                    ),
-                  if (!applied && !rejected) ...[
-                    AppTextButton(
-                      onPressed: busy
-                          ? null
-                          : () => setState(() => editing = true),
-                      child: const Text('调整修改内容'),
-                    ),
-                    AppTextButton(
-                      onPressed: busy ? null : reject,
-                      child: const Text('放弃这次修改'),
-                    ),
-                  ],
-                  if (applied && p['receipt']?['planning_request'] != null)
-                    AppOutlineButton(
-                      onPressed: busy
-                          ? null
-                          : () => run(
-                              () => generate(
-                                Map<String, dynamic>.from(p['receipt']),
+                    if (applied && p['receipt']?['planning_request'] != null)
+                      AppOutlineButton(
+                        onPressed: busy
+                            ? null
+                            : () => run(
+                                () => generate(
+                                  Map<String, dynamic>.from(p['receipt']),
+                                ),
                               ),
+                        child: const Text('继续查看计划方案'),
+                      ),
+                  ],
+                  if (history.isNotEmpty)
+                    AppDisclosure(
+                      title: const Text('修改记录'),
+                      children: [
+                        for (final h in history)
+                          AppTile(
+                            title: Text(
+                              h['source_text'],
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                      child: const Text('继续查看计划方案'),
+                            subtitle: Text(
+                              {
+                                    'ready': '待确认',
+                                    'needs_clarification': '待补充',
+                                    'stale': '需重新核对',
+                                    'applied': '已确认',
+                                    'rejected': '已放弃',
+                                  }[h['phase']] ??
+                                  '',
+                            ),
+                            onTap: busy
+                                ? null
+                                : () => run(() async {
+                                    final r = await widget.controller
+                                        .changeRequest(
+                                          'GET',
+                                          '/operations/${h['id']}',
+                                        );
+                                    contextId = null;
+                                    await setOperation(r);
+                                  }),
+                          ),
+                      ],
                     ),
                 ],
-                if (history.isNotEmpty)
-                  AppDisclosure(
-                    title: const Text('修改记录'),
-                    children: [
-                      for (final h in history)
-                        AppTile(
-                          title: Text(
-                            h['source_text'],
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            {
-                                  'ready': '待确认',
-                                  'needs_clarification': '待补充',
-                                  'stale': '需重新核对',
-                                  'applied': '已确认',
-                                  'rejected': '已放弃',
-                                }[h['phase']] ??
-                                '',
-                          ),
-                          onTap: busy
-                              ? null
-                              : () => run(() async {
-                                  final r = await widget.controller
-                                      .changeRequest(
-                                        'GET',
-                                        '/operations/${h['id']}',
-                                      );
-                                  contextId = null;
-                                  await setOperation(r);
-                                }),
-                        ),
-                    ],
-                  ),
-              ],
+              ),
             ),
     );
   }
@@ -705,10 +748,11 @@ class _OperationPageState extends State<OperationPage> {
           controller: title,
           decoration: const InputDecoration(labelText: '新标题（留空不改）'),
         ),
-        AppField(
+        WorkMinuteField(
           controller: effort,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: '还需要多久（分钟，留空不改）'),
+          enabled: !busy,
+          label: '还需时间',
+          helper: '留空不改',
         ),
         AppPickerField<String>(
           initialValue: split,
@@ -814,14 +858,11 @@ class _OperationPageState extends State<OperationPage> {
         );
         if (selected.contains(task['id']) && planMode == 'schedule') {
           result.add(
-            AppField(
-              controller: targets[task['id']],
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: '这次计划安排多久（分钟）',
-                helperText: '包含已安排的时间。所选日期内到期的任务可留空，安排全部剩余工作。',
-                helperMaxLines: 3,
-              ),
+            WorkMinuteField(
+              controller: targets[task['id']]!,
+              enabled: !busy,
+              label: '本次安排',
+              helper: '含已有安排。该时段内到期的任务可留空。',
             ),
           );
         }
@@ -842,28 +883,13 @@ class _OperationPageState extends State<OperationPage> {
           value: customWindow,
           onChanged: (v) => setState(() => customWindow = v),
         ),
-        if (customWindow) ...[
-          AppTextButton(
-            onPressed: () async {
-              final t = await pickSchoolDateTime(context, initial: start);
-              if (t != null && mounted) setState(() => start = t);
-            },
-            child: Text(
-              start == null
-                  ? '选择开始时间'
-                  : displayInstant(start!.toIso8601String()),
-            ),
+        if (customWindow)
+          RecordActionTile(
+            key: const ValueKey('operation-plan-range'),
+            onTap: busy ? null : chooseWindow,
+            icon: Icons.date_range_outlined,
+            title: windowLabel,
           ),
-          AppTextButton(
-            onPressed: () async {
-              final t = await pickSchoolDateTime(context, initial: end);
-              if (t != null && mounted) setState(() => end = t);
-            },
-            child: Text(
-              end == null ? '选择结束时间' : displayInstant(end!.toIso8601String()),
-            ),
-          ),
-        ],
         if (!customWindow && operation!['suggestion']['needs_window'] == true)
           AppCheckRow(
             title: const Text('改用上方天数和已设置的学习时间'),
@@ -882,7 +908,7 @@ class _OperationPageState extends State<OperationPage> {
     if (intent == 'request_plan') {
       final request = preview['planning_request'];
       return [
-        const SectionHeading('确认规划范围'),
+        const SectionHeading('确认安排范围'),
         for (final item in widget.controller.rows(preview['tasks']))
           Text(
             '${item['title']} · 剩余${minutesLabel(item['remaining_minutes'])}',
@@ -901,43 +927,99 @@ class _OperationPageState extends State<OperationPage> {
     if (intent == 'update_task') {
       return [
         SectionHeading(before['title']),
-        CampusPanel(
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: CampusColors.line)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (final e in (preview['task_patch'] as Map).entries)
-                RecordFact(
-                  label:
-                      '${{'title': '标题', 'remaining_minutes': '还需时间', 'splittable': '完成方式'}[e.key]}',
-                  value:
-                      '${operationValue(e.key, before[e.key])} → ${operationValue(e.key, e.value)}',
-                  icon: Icons.compare_arrows_rounded,
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: before[e.key] == null
+                      ? TaskFactStrip(
+                          label:
+                              '${{'title': '标题', 'remaining_minutes': '还需时间', 'splittable': '完成方式'}[e.key]}',
+                          value: operationValue(e.key, e.value),
+                          icon: Icons.add_rounded,
+                        )
+                      : TaskChangeFacts(
+                          beforeLabel:
+                              '原${{'title': '标题', 'remaining_minutes': '还需时间', 'splittable': '完成方式'}[e.key]}',
+                          afterLabel: '修改后',
+                          before: operationValue(e.key, before[e.key]),
+                          after: operationValue(e.key, e.value),
+                        ),
                 ),
             ],
           ),
         ),
-        Text(
-          '可能受影响的后续安排：${widget.controller.rows(preview['affected_blocks']).length}段',
-        ),
+        if (widget.controller.rows(preview['affected_blocks']).isNotEmpty)
+          Text(
+            '涉及 ${widget.controller.rows(preview['affected_blocks']).length}段后续安排',
+          ),
       ];
     }
     final old = preview['reminder_before'],
         after = Map<String, dynamic>.from(preview['reminder_after']);
+    const purposes = {
+      'item': '事项提醒',
+      'start_review': '开始复习',
+      'check_notice': '核实正式通知',
+    };
     return [
       SectionHeading(before['title']),
-      CampusPanel(
+      Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: CampusColors.line)),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              old == null
-                  ? '原：没有这条提醒'
-                  : '原：${reminderLabel(Map<String, dynamic>.from(old))} · ${displayInstant(old['trigger_at'])} · ${reminderState(old['schedule_state'])}',
+            if (old != null) ...[
+              RecordFact(
+                label: old['enabled'] == false ? '当前提醒 · 已停用' : '当前提醒',
+                value:
+                    '${reminderLabel(Map<String, dynamic>.from(old))}${old['trigger_at'] == null ? '' : ' · ${displayInstant(old['trigger_at'])}'}',
+                icon: Icons.notifications_none_rounded,
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Icon(
+                  Icons.arrow_downward_rounded,
+                  size: 18,
+                  color: CampusColors.teal,
+                ),
+              ),
+            ],
+            RecordFact(
+              label: after['enabled'] == false
+                  ? '停用这条提醒'
+                  : old == null
+                  ? '添加提醒'
+                  : old['enabled'] == false
+                  ? '启用提醒'
+                  : '调整后',
+              value:
+                  '${reminderLabel(after)}${after['trigger_at'] == null ? '' : ' · ${displayInstant(after['trigger_at'])}'}',
+              icon: after['enabled'] == false
+                  ? Icons.notifications_off_outlined
+                  : Icons.notifications_active_outlined,
+              color: after['enabled'] == false
+                  ? CampusColors.muted
+                  : CampusColors.teal,
             ),
-            Text(
-              '新：${reminderLabel(after)} · ${displayInstant(after['trigger_at'])} · ${reminderState(after['schedule_state'])}',
-            ),
-            const Text('只修改这条提醒，事项时间和计划安排不变。'),
+            if ((old?['purpose'] ?? 'item') != (after['purpose'] ?? 'item'))
+              RecordFact(
+                label: '提醒用途',
+                value: old == null
+                    ? purposes[after['purpose']] ?? '事项提醒'
+                    : '${purposes[old['purpose'] ?? 'item']} → ${purposes[after['purpose'] ?? 'item']}',
+                icon: Icons.label_outline_rounded,
+              ),
           ],
         ),
       ),

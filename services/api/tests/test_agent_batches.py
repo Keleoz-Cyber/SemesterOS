@@ -52,7 +52,10 @@ def test_batch_second_failure_rolls_back_first(client,monkeypatch):
     assert client.get(url,headers=h).json()['status']=='needs_confirmation'
 
 
-def test_batch_combined_conflicts_need_explicit_confirmation(client):
+def test_batch_combined_conflicts_need_explicit_confirmation(client,monkeypatch):
+    from app import reminder_rules
+    from datetime import datetime
+    monkeypatch.setattr(reminder_rules,'utcnow',lambda:datetime.fromisoformat('2026-09-30T08:00:00+08:00'))
     _,h=register(client);s=semester(client,h)
     groups=[{'title':title,'operations':[{'tool':'prepare_event','arguments':{'action':'create','fields':{
         'title':title,'certainty':'formal','time':{'precision':'exact','at':'2026-10-01T09:00:00+08:00','end_at':'2026-10-01T10:00:00+08:00'}}}}]}

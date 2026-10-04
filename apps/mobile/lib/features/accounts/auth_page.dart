@@ -5,10 +5,17 @@ import '../../ui/campus_theme.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
+import 'recovery_code_dialog.dart';
 
 class AuthPage extends StatefulWidget {
   final AppController controller;
-  const AuthPage({super.key, required this.controller});
+  final int initialMode, pendingNoticeCount;
+  const AuthPage({
+    super.key,
+    required this.controller,
+    this.initialMode = 0,
+    this.pendingNoticeCount = 0,
+  });
   @override
   State<AuthPage> createState() => _AuthPageState();
 }
@@ -20,7 +27,40 @@ class _AuthPageState extends State<AuthPage> {
   final form = GlobalKey<FormState>();
   int mode = 0;
   bool busy = false, obscure = true;
-  String? error;
+  String? error, success;
+  @override
+  void initState() {
+    super.initState();
+    mode = widget.initialMode;
+  }
+
+  @override
+  void didUpdateWidget(covariant AuthPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialMode != widget.initialMode) {
+      mode = widget.initialMode;
+      error = null;
+      success = null;
+    }
+  }
+
+  Future<void> tryDemo() async {
+    if (busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      busy = true;
+      error = null;
+      success = null;
+    });
+    try {
+      await widget.controller.startDemo();
+    } catch (e) {
+      if (mounted) setState(() => error = userError(e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   @override
   void dispose() {
     username.dispose();
@@ -30,10 +70,12 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Future<void> submit() async {
-    if (!form.currentState!.validate() || busy) return;
+    if (!validateAppForm(form) || busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       busy = true;
       error = null;
+      success = null;
     });
     try {
       final data = Map<String, dynamic>.from(
@@ -59,34 +101,14 @@ class _AuthPageState extends State<AuthPage> {
         await showDialog<void>(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AppDialog(
-            title: const Text('保存账户恢复码'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('忘记密码时可用此码恢复账户。请妥善保存，它只在此显示一次。'),
-                const SizedBox(height: 16),
-                SelectableText(
-                  '${data['recovery_code']}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            actions: [
-              AppTextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('我已保存'),
-              ),
-            ],
-          ),
+          builder: (_) => RecoveryCodeDialog(code: '${data['recovery_code']}'),
         );
       }
       if (mode == 2) {
         if (mounted) {
           setState(() {
             mode = 0;
-            error = '密码已更新，请登录';
+            success = '密码已更新，请登录';
           });
         }
       } else {
@@ -104,7 +126,7 @@ class _AuthPageState extends State<AuthPage> {
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: Form(
@@ -114,40 +136,54 @@ class _AuthPageState extends State<AuthPage> {
                 children: [
                   const Row(
                     children: [
-                      BrandMark(size: 44),
+                      BrandMark(size: 36),
                       SizedBox(width: 12),
                       Text(
                         appName,
                         style: TextStyle(
-                          fontSize: 26,
+                          fontSize: 22,
                           fontWeight: FontWeight.w700,
                           color: CampusColors.ink,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 44),
+                  const SizedBox(height: 24),
                   Text(
                     mode == 2
                         ? '恢复账户'
                         : mode == 1
-                        ? '创建你的账户'
+                        ? '创建账户'
                         : '登录拾日',
                     style: const TextStyle(
-                      fontSize: 32,
+                      fontSize: 28,
                       fontWeight: FontWeight.w700,
                       color: CampusColors.ink,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    mode == 2 ? '输入注册时保存的恢复码，设置新密码。' : '登录后同步课表、通知和个人计划。',
+                    mode == 2
+                        ? '输入账户恢复码，设置新密码。'
+                        : mode == 1
+                        ? '课表与安排将保存在这个账户中。'
+                        : '继续查看课表与安排。',
                     style: const TextStyle(
                       fontSize: 14,
                       color: CampusColors.muted,
                     ),
                   ),
                   const SizedBox(height: 24),
+                  if (widget.pendingNoticeCount > 0) ...[
+                    const Text(
+                      '分享的通知已暂存。登录或先体验后，可以继续核对。',
+                      style: TextStyle(
+                        color: CampusColors.primary,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -159,17 +195,20 @@ class _AuthPageState extends State<AuthPage> {
                           onChanged: (value) => setState(() {
                             mode = value;
                             error = null;
+                            success = null;
                           }),
                         ),
                       const SizedBox(height: 20),
                       AppFormField(
                         key: const Key('username'),
                         controller: username,
+                        enabled: !busy,
                         autocorrect: false,
                         autofillHints: const [AutofillHints.username],
-                        decoration: const InputDecoration(
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
                           labelText: '用户名',
-                          helperText: '4—32位字母、数字或下划线',
+                          helperText: mode == 1 ? '4—32位字母、数字或下划线' : null,
                           helperMaxLines: 2,
                         ),
                         validator: (v) =>
@@ -177,19 +216,24 @@ class _AuthPageState extends State<AuthPage> {
                               r'^[a-zA-Z0-9_]{4,32}$',
                             ).hasMatch(v?.trim() ?? '')
                             ? null
-                            : '请填写有效用户名',
+                            : '用户名需4—32位字母、数字或下划线',
                       ),
                       const SizedBox(height: 16),
                       if (mode == 2) ...[
                         AppFormField(
                           controller: recovery,
+                          enabled: !busy,
+                          textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(labelText: '账户恢复码'),
+                          validator: (value) =>
+                              (value ?? '').trim().isEmpty ? '请填写账户恢复码' : null,
                         ),
                         const SizedBox(height: 16),
                       ],
                       AppFormField(
                         key: const Key('password'),
                         controller: password,
+                        enabled: !busy,
                         obscureText: obscure,
                         autofillHints: [
                           mode == 0
@@ -197,11 +241,15 @@ class _AuthPageState extends State<AuthPage> {
                               : AutofillHints.newPassword,
                         ],
                         autocorrect: false,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => submit(),
                         decoration: InputDecoration(
                           labelText: mode == 2 ? '新密码' : '密码',
-                          helperText: '至少8位',
+                          helperText: mode == 0 ? null : '至少8位',
                           suffixIcon: AppIconButton(
-                            onPressed: () => setState(() => obscure = !obscure),
+                            onPressed: busy
+                                ? null
+                                : () => setState(() => obscure = !obscure),
                             icon: Icon(
                               obscure ? Icons.visibility_off : Icons.visibility,
                             ),
@@ -214,14 +262,35 @@ class _AuthPageState extends State<AuthPage> {
                             : '密码需要8—128位',
                       ),
                       const SizedBox(height: 20),
-                      if (error != null)
+                      if (error != null || success != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            error!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                success != null
+                                    ? Icons.check_circle_outline_rounded
+                                    : Icons.error_outline_rounded,
+                                size: 20,
+                                color: success != null
+                                    ? CampusColors.teal
+                                    : CampusColors.error,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  success ?? error!,
+                                  style: TextStyle(
+                                    height: 1.5,
+                                    fontSize: 14,
+                                    color: success != null
+                                        ? CampusColors.teal
+                                        : CampusColors.error,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       AppButton(
@@ -231,7 +300,7 @@ class _AuthPageState extends State<AuthPage> {
                           busy
                               ? '请稍候…'
                               : mode == 2
-                              ? '恢复账户'
+                              ? '设置新密码'
                               : mode == 1
                               ? '创建账户'
                               : '登录',
@@ -239,15 +308,36 @@ class _AuthPageState extends State<AuthPage> {
                       ),
                     ],
                   ),
-                  AppTextButton(
-                    onPressed: busy
-                        ? null
-                        : () => setState(() {
-                            mode = mode == 2 ? 0 : 2;
-                            error = null;
-                          }),
-                    child: Text(mode == 2 ? '返回登录' : '使用恢复码找回密码'),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 8,
+                    children: [
+                      if (mode != 2)
+                        AppTextButton.icon(
+                          key: const Key('auth-demo'),
+                          onPressed: busy ? null : tryDemo,
+                          icon: const Icon(Icons.explore_outlined, size: 18),
+                          label: const Text('先体验'),
+                        ),
+                      AppTextButton(
+                        onPressed: busy
+                            ? null
+                            : () => setState(() {
+                                mode = mode == 2 ? 0 : 2;
+                                error = null;
+                                success = null;
+                              }),
+                        child: Text(mode == 2 ? '返回登录' : '忘记密码'),
+                      ),
+                    ],
                   ),
+                  if (mode != 2)
+                    const Text(
+                      '体验使用独立演示数据。',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: CampusColors.muted),
+                    ),
                 ],
               ),
             ),

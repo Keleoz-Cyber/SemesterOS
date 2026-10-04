@@ -8,7 +8,7 @@ from .database import get_db
 from .event_schemas import EventFields, EventEdit, EventCancel
 from .event_store import CATEGORIES, tag_ids, event_rows, event_value, classification_value, classification_request
 from .models import CalendarEvent, CalendarEventRevision, CalendarTag, StudyItem, TextCandidate, User
-from .reminder_rules import utcnow, instant
+from .reminder_rules import utcnow, instant, notice_arrival_at, reservation_enabled
 
 router = APIRouter()
 
@@ -129,10 +129,22 @@ def edit_event_command(db, user, eid, body, idempotency_key=None):
     if body.candidate_id not in (None, row.payload.get('candidate_id')):
         error(422, 'SOURCE_IMMUTABLE', '不能更换日程的原始来源')
     updated = payload(db, user, s, body)
-    for field, stored in (('category_id', 'category_id'), ('tags', 'tag_ids')):
+    for field, stored in (('category_id', 'category_id'), ('tags', 'tag_ids'), ('details', 'details')):
         if field not in body.model_fields_set and stored in row.payload:
             updated[stored] = row.payload[stored]
+    if 'details' in body.model_fields_set:
+        updated['details'] = {**row.payload.get('details', {}),
+                              **body.details.model_dump(mode='json', exclude_unset=True)}
+    if 'reserve_time' not in body.model_fields_set:
+        status_changed = ('details' in body.model_fields_set
+            and 'participation_status' in body.details.model_fields_set
+            and body.details.participation_status != row.payload.get('details', {}).get('participation_status', 'unspecified'))
+        updated['reserve_time'] = body.reserve_time if status_changed else row.payload.get('reserve_time', True)
+    from .items import preserve_notice_time
+    preserve_notice_time(row.payload['time'], body.time, updated['time'])
     updated['source_text'] = row.payload.get('source_text', '')
+    if 'import_origin' in row.payload:
+        updated['import_origin'] = row.payload['import_origin']
     if row.payload.get('candidate_id'):
         updated.update({k: row.payload.get(k) for k in ('candidate_id', 'source_id', 'source_text')})
     row.payload = updated; row.version += 1; row.updated_at = utcnow().isoformat(); s.revision += 1
@@ -162,6 +174,39 @@ def cancel_event_command(db, user, eid, body, idempotency_key=None):
     return response
 
 
+def restore_impact(db,user,s,row):
+    from copy import deepcopy
+    from .schedule_api import snapshot
+    from .capacity import calendar_context
+    from .plan_rules import classify
+    from .conflict_changes import introduced_conflicts
+    from .academics import fingerprint
+    source=snapshot(db,user,s);now=utcnow()
+    before=calendar_context(*source[:4],now)
+    before_issues=classify(source[4],source[3],before['free'].spans,before['begin'])[1]
+    restored=deepcopy(source[0])
+    restored['fixed_events'].append({**row.payload,'id':row.id,'version':row.version})
+    after=calendar_context(restored,*source[1:4],now)
+    after_issues=classify(source[4],source[3],after['free'].spans,after['begin'])[1]
+    old={fingerprint(issue) for issue in before_issues}
+    affected={issue['block_id'] for issue in after_issues if fingerprint(issue) not in old}
+    return {'fixed_conflicts':after['conflicts'],
+        'new_fixed_conflicts':introduced_conflicts(before['conflicts'],after['conflicts']),
+        'affected_plan_count':len(affected),'affected_blocks':[block for block in source[4] if block['id'] in affected]}
+
+
+def restore_event_command(db,user,eid,body,*,confirm_fixed_conflicts=False):
+    row=owned_event(db,user,eid);s=owned_semester(db,user,row.semester_id,lock=True);db.refresh(row)
+    guard(s,body.expected_revision,row,body.expected_version)
+    if row.lifecycle!='cancelled':error(409,'EVENT_ACTIVE','这条日程已经恢复，无需重复操作')
+    impact=restore_impact(db,user,s,row)
+    if impact['new_fixed_conflicts'] and not confirm_fixed_conflicts:
+        error(422,'CONFIRM_FIXED_CONFLICTS','恢复后存在时间冲突，请核对后勾选确认')
+    row.lifecycle='active';row.version+=1;row.updated_at=utcnow().isoformat();s.revision+=1
+    db.flush()
+    return {**receipt(db,user,s,row,'用户确认恢复日程'),'impact':impact}
+
+
 @router.get('/semesters/{sid}/calendar')
 def calendar(sid: str, from_date: date = Query(), to_date: date = Query(),
              user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -178,23 +223,34 @@ def calendar(sid: str, from_date: date = Query(), to_date: date = Query(),
     for e in expand(source[0], source[2]):
         add({'id': e['id'], 'resource_id': e.get('course_id'), 'resource_type': 'course', 'title': e['title'],
              'start_at': e['start_at'], 'end_at': e['end_at'], 'location': e.get('location', ''),
-             'category_id': 'study', 'tags': [], 'time_precision': 'exact', 'fixed': True},
+             'category_id': 'study', 'tags': [], 'time_precision': 'exact',
+             'attendance_exempt': bool(e.get('attendance_exempt')), 'fixed': not e.get('attendance_exempt', False)},
             instant(e['start_at']).timestamp(), instant(e['end_at']).timestamp())
     term_start = local_day(s.first_monday).timestamp(); term_end = term_start + s.total_weeks * 7 * 86400
     facts = [('event', event_value(db, r)) for r in event_rows(db, user, sid)]
     facts += [('exam' if r.payload['kind'] == 'exam' else 'deadline', {**r.payload, **classification_value(db, r), 'id': r.id, 'version': r.version})
               for r in db.scalars(select(StudyItem).where(StudyItem.user_id == user.id, StudyItem.semester_id == sid, StudyItem.lifecycle == 'active'))]
     for kind, e in facts:
-        t = e['time']; exact = t['precision'] == 'exact'; fixed = kind in ('event', 'exam')
+        t = e['time']; exact = t['precision'] == 'exact'
+        fixed_time = kind in ('event', 'exam') and t.get('meaning') not in ('window', 'candidate', 'course_anchor')
+        reserved = reservation_enabled(e, kind)
+        fixed = fixed_time and reserved
+        deadline = kind == 'deadline' and t.get('meaning') not in ('window', 'candidate', 'course_anchor', 'start')
+        arrival = notice_arrival_at(e) if fixed_time else None
         entry = {'id': kind + ':' + e['id'], 'resource_id': e['id'], 'resource_type': kind, 'title': e['title'],
-                 'start_at': t.get('at') if exact and fixed else None, 'end_at': t.get('end_at') if exact and fixed else None,
-                 'due_at': t.get('at') if exact and not fixed else None, 'date': t.get('date'), 'week': t.get('week'),
+                 'start_at': t.get('at') if exact and fixed_time else None, 'end_at': t.get('end_at') if exact and fixed_time else None,
+                 'due_at': t.get('at') if exact and deadline else None, 'date': t.get('date'), 'week': t.get('week'),
                  'end_date': t.get('end_date'), 'time_precision': t['precision'], 'certainty': e['certainty'],
                  'location': e.get('location', ''), 'category_id': e.get('category_id'),
-                 'tags': e.get('tags', []), 'fixed': fixed, 'version': e['version']}
+                 'tags': e.get('tags', []), 'fixed': fixed, 'version': e['version'],
+                 'time': t, 'details': e.get('details', {}), 'reserve_time': reserved if kind in ('event','exam') else e.get('reserve_time', True)}
+        entry['arrival_at'] = arrival.isoformat() if arrival else None
+        entry['occupancy_start_at'] = (entry['arrival_at'] or entry['start_at']) if fixed else None
         if t['precision'] == 'unknown': undated.append(entry); continue
         a, b = exam_window(e, term_start, term_end)
-        if exact and (not fixed or not t.get('end_at')): b = a + .000001
+        if arrival: a = arrival.timestamp()
+        if exact and ((not fixed_time and t.get('meaning') != 'window') or not t.get('end_at')):
+            b = instant(t['at']).timestamp() + .000001
         add(entry, a, b)
     item_labels = {r.id: classification_value(db, r) for r in db.scalars(select(StudyItem).where(
         StudyItem.user_id == user.id, StudyItem.semester_id == sid))}
@@ -206,12 +262,12 @@ def calendar(sid: str, from_date: date = Query(), to_date: date = Query(),
             instant(p['start_at']).timestamp(), instant(p['end_at']).timestamp())
     context = calendar_context(*source[:4], utcnow())
     def ordering(entry):
-        timestamp = entry.get('start_at') or entry.get('due_at')
+        timestamp = entry.get('start_at') or entry.get('due_at') or entry.get('time', {}).get('at')
         if timestamp:
             return instant(timestamp).timestamp(), entry['id']
         if entry.get('date'):
             return local_day(entry['date']).timestamp(), entry['id']
-        return term_start + (entry.get('week', 1) - 1) * 7 * 86400, entry['id']
+        return term_start + ((entry.get('week') or 1) - 1) * 7 * 86400, entry['id']
     result.sort(key=ordering)
     return {'semester_id': sid, 'revision': s.revision, 'from_date': from_date.isoformat(), 'to_date': to_date.isoformat(),
             'entries': result, 'undated': undated,

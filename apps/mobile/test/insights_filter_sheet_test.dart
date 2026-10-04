@@ -67,7 +67,11 @@ void main() {
         isTrue,
       );
       await ioTap(tester, find.byKey(const ValueKey('category-research')));
-      await tester.ensureVisible(find.widgetWithText(AppFilterChip, '组会'));
+      await tester.scrollUntilVisible(
+        find.widgetWithText(AppFilterChip, '组会'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
       await ioTap(tester, find.widgetWithText(AppFilterChip, '组会'));
       await ioTap(tester, find.text('应用筛选'));
       expect(queries.length, reads + 1);

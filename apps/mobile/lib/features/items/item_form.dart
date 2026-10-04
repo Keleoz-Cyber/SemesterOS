@@ -1,5 +1,7 @@
+import '../../ui/app_date_time_picker.dart';
 import '../../ui/app_selection.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/date_labels.dart';
 import '../../core/api.dart' show userError;
 import 'dart:convert';
 import 'dart:math';
@@ -12,9 +14,12 @@ import '../../ui/time_input_options.dart';
 import '../../ui/campus_theme.dart';
 import 'items_controller.dart';
 import 'item_widgets.dart';
+import 'task_surfaces.dart';
 import 'reminder_editor.dart';
 import '../planning/date_time_picker.dart';
 import '../centers/exam_pages.dart';
+import '../notices/notice_fields.dart';
+import '../tags/tag_picker_field.dart';
 
 class ItemFormPage extends StatefulWidget {
   final ItemsController controller;
@@ -41,8 +46,10 @@ class _ItemFormPageState extends State<ItemFormPage> {
       notes = TextEditingController(),
       source = TextEditingController(),
       reason = TextEditingController(),
-      tags = TextEditingController(),
+      expression = TextEditingController(),
       week = TextEditingController();
+  List<String> tags = [];
+  Map<String, dynamic> originalTime = {}, details = {};
   late String kind, precision, certainty, priority;
   String? course;
   String? categoryId;
@@ -59,19 +66,24 @@ class _ItemFormPageState extends State<ItemFormPage> {
   bool get sameSession => generation == widget.controller.api.generation;
   bool get editing => widget.initial != null;
   bool get parsed => widget.candidate?['id'] != null;
+  bool get window => originalTime['meaning'] == 'window' && kind != 'exam';
   @override
   void initState() {
     super.initState();
     final data =
         widget.initial ?? widget.candidate?['item'] ?? <String, dynamic>{};
     final t = data['time'] ?? {};
+    originalTime = noticeMap(t);
+    details = noticeMap(data['details']);
+    expression.text = t['expression'] ?? '';
     kind = data['kind'] ?? widget.kind;
     categoryId = data.containsKey('category_id')
         ? data['category_id']
         : (kind == 'task' ? null : 'study');
-    tags.text = (data['tags'] is List ? data['tags'] as List : [])
+    tags = (data['tags'] is List ? data['tags'] as List : [])
         .map((t) => t is Map ? t['name'] : t)
-        .join('，');
+        .whereType<String>()
+        .toList();
     precision = t['precision'] ?? 'unknown';
     certainty = data['certainty'] ?? 'formal';
     priority = data['priority'] ?? 'normal';
@@ -109,7 +121,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
       source,
       reason,
       week,
-      tags,
+      expression,
     ]) {
       c.dispose();
     }
@@ -117,16 +129,91 @@ class _ItemFormPageState extends State<ItemFormPage> {
   }
 
   String day(DateTime value) => value.toIso8601String().substring(0, 10);
-  Future<void> pickDate({bool end = false}) async {
+  Future<void> selectPrecision(String value) async {
+    final previous = precision;
+    setState(() {
+      precision = value;
+      timeError = null;
+    });
+    if (value == 'exact' &&
+        (date == null || time == null || previous != 'exact')) {
+      final chosen = await pickExact(
+        initialSection: date == null
+            ? AppDateTimeSection.date
+            : AppDateTimeSection.time,
+      );
+      if (!chosen && mounted && sameSession) {
+        setState(() => precision = previous);
+      }
+      return;
+    }
+    if ({'date', 'exact', 'range'}.contains(value) && date == null) {
+      await pickDate();
+      if (!mounted || !sameSession) return;
+      if (date == null) {
+        setState(() => precision = previous);
+        return;
+      }
+    }
+  }
+
+  Future<bool> pickExact({
+    AppDateTimeSection initialSection = AppDateTimeSection.date,
+  }) async {
+    if (!sameSession) return false;
     final now = schoolNow();
-    final selected = await showDatePicker(
+    final selectedDay = date ?? DateTime(now.year, now.month, now.day);
+    final clock = time ?? const TimeOfDay(hour: 9, minute: 0);
+    final selected = await showAppDateTimePicker(
       context: context,
-      initialDate:
-          (end ? endDate : date) ?? DateTime(now.year, now.month, now.day),
+      initialDate: DateTime.utc(
+        selectedDay.year,
+        selectedDay.month,
+        selectedDay.day,
+        clock.hour,
+        clock.minute,
+      ),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: kind == 'exam' ? '考试开始时间' : '选择日期和时间',
+      initialSection: initialSection,
+    );
+    if (selected == null ||
+        !mounted ||
+        !sameSession ||
+        widget.controller.semesterId != widget.semester['id']) {
+      return false;
+    }
+    setState(() {
+      date = DateUtils.dateOnly(selected);
+      time = TimeOfDay.fromDateTime(selected);
+      timeError = null;
+    });
+    return true;
+  }
+
+  Future<void> pickDate({bool end = false}) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final now = schoolNow();
+    final initial =
+        (end ? (endDate ?? date) : date) ??
+        DateTime(now.year, now.month, now.day);
+    final bounds = appDatePickerBounds(
+      initialDate: initial,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (selected != null && mounted) {
+    final selected = await showDatePicker(
+      context: context,
+      currentDate: appSchoolToday(),
+      initialDate: initial,
+      firstDate: bounds.start,
+      lastDate: bounds.end,
+    );
+    if (selected != null &&
+        mounted &&
+        sameSession &&
+        widget.controller.semesterId == widget.semester['id']) {
       setState(() {
         if (end) {
           endDate = selected;
@@ -145,12 +232,14 @@ class _ItemFormPageState extends State<ItemFormPage> {
     if (precision == 'exact' && time == null) {
       throw const FormatException('请选择具体时刻；不确定时可改为仅日期');
     }
-    if (kind == 'exam' && precision == 'exact' && examEndAt != null) {
+    if ((kind == 'exam' || window) &&
+        precision == 'exact' &&
+        examEndAt != null) {
       final start = DateTime.parse(
         '${day(date!)}T${time!.hour.toString().padLeft(2, '0')}:${time!.minute.toString().padLeft(2, '0')}:00+08:00',
       );
       if (!examEndAt!.isAfter(start)) {
-        throw const FormatException('考试结束必须晚于开始时间');
+        throw const FormatException('结束时间应晚于开始时间');
       }
     }
     if (precision == 'range' && (endDate == null || endDate!.isBefore(date!))) {
@@ -164,8 +253,22 @@ class _ItemFormPageState extends State<ItemFormPage> {
       throw const FormatException('请填写当前学期内的周次');
     }
     return {
+      'meaning':
+          precision != 'unknown' &&
+              {'candidate', 'course_anchor'}.contains(originalTime['meaning'])
+          ? kind == 'exam'
+                ? 'start'
+                : 'deadline'
+          : originalTime['meaning'] ?? 'unspecified',
+      'expression': expression.text.trim(),
+      if (precision == 'unknown') ...{
+        if (originalTime['candidate_dates'] != null)
+          'candidate_dates': originalTime['candidate_dates'],
+        if (originalTime['course_anchor'] != null)
+          'course_anchor': originalTime['course_anchor'],
+      },
       'precision': precision,
-      'end_at': kind == 'exam' && precision == 'exact'
+      'end_at': (kind == 'exam' || window) && precision == 'exact'
           ? examEndAt?.toIso8601String()
           : null,
       if (precision == 'exact')
@@ -174,7 +277,8 @@ class _ItemFormPageState extends State<ItemFormPage> {
       if (precision == 'date' || precision == 'range') 'date': day(date!),
       if (precision == 'range') 'end_date': day(endDate!),
       if (precision == 'week') 'week': number,
-      'day_end_confirmed': precision == 'date' && kind != 'exam' && dayEnd,
+      'day_end_confirmed':
+          precision == 'date' && kind != 'exam' && !window && dayEnd,
     };
   }
 
@@ -188,14 +292,9 @@ class _ItemFormPageState extends State<ItemFormPage> {
       setState(() => error = '请输入事项标题');
       return;
     }
-    if (editing && reason.text.trim().isEmpty) {
-      form.currentState?.validate();
-      setState(() => error = '请说明修改依据');
-      return;
-    }
 
     if (kind != 'exam' && startPolicy == 'at' && earliestAt == null) {
-      setState(() => error = '请选择最早开始时间，暂时不确定也可以选择“待确认”');
+      setState(() => error = '请选择开始时间，或移除开始条件');
       return;
     }
     final effortText = minutes.text.trim();
@@ -203,25 +302,16 @@ class _ItemFormPageState extends State<ItemFormPage> {
     if (kind != 'exam' &&
         effortText.isNotEmpty &&
         (effort == null || effort < 1 || effort > 525600)) {
-      setState(() => error = '预计耗时请填写1至525600之间的整数分钟，请在任务安排中修改');
+      setState(() => error = '预计耗时请填写整数分钟');
       return;
     }
     if (kind != 'exam') {
-      final values = tags.text
-          .split(RegExp('[,，\n]'))
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toSet();
-      if (values.length > 12 || values.any((s) => s.length > 24)) {
+      if (tags.length > 12 || tags.any((s) => s.length > 24)) {
         setState(() => error = '最多12个标签，每个不超过24字');
         return;
       }
     }
-    if (!form.currentState!.validate()) return;
-    if (parsed && !reviewed) {
-      setState(() => error = '请核对原文、日期和标出的推断后确认');
-      return;
-    }
+    if (!validateAppForm(form)) return;
     Map<String, dynamic> t;
     try {
       t = timeData();
@@ -238,27 +328,20 @@ class _ItemFormPageState extends State<ItemFormPage> {
       'title': title.text.trim(),
       'course_id': course,
       'time': t,
+      'details': details,
       'certainty': certainty,
       'start_policy': kind == 'exam' ? 'unconfirmed' : startPolicy,
       'earliest_start_at': kind != 'exam' && startPolicy == 'at'
           ? earliestAt?.toIso8601String()
           : null,
-      'reserve_time': kind == 'exam' && certainty != 'formal'
-          ? reserveTime
-          : true,
+      'reserve_time': kind == 'exam' ? reserveTime : true,
       'remaining_minutes': kind == 'exam' || minutes.text.trim().isEmpty
           ? null
           : effort,
       'splittable': split,
       'priority': priority,
       if (kind != 'exam') 'category_id': categoryId,
-      if (kind != 'exam')
-        'tags': tags.text
-            .split(RegExp('[,，\n]'))
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toSet()
-            .toList(),
+      if (kind != 'exam') 'tags': tags,
       'location': location.text.trim(),
       'notes': notes.text.trim(),
       'source_text': source.text.trim(),
@@ -275,7 +358,9 @@ class _ItemFormPageState extends State<ItemFormPage> {
             .toList(),
       if (editing) ...{
         'expected_version': widget.initial!['version'],
-        'change_reason': reason.text.trim(),
+        'change_reason': reason.text.trim().isEmpty
+            ? '用户修改'
+            : reason.text.trim(),
       },
     };
     final encoded = jsonEncode(data);
@@ -295,6 +380,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
         final request = <String, dynamic>{
           'expected_version': data['expected_version'],
           'time': t,
+          'details': data['details'],
           'certainty': certainty,
           'location': data['location'],
           'reserve_time': data['reserve_time'],
@@ -336,11 +422,11 @@ class _ItemFormPageState extends State<ItemFormPage> {
     }
   }
 
-  Widget estimate() => AppFormField(
-    key: const Key('item-minutes'),
+  Widget estimate() => WorkMinuteField(
+    fieldKey: const Key('item-minutes'),
     controller: minutes,
-    keyboardType: TextInputType.number,
-    decoration: const InputDecoration(labelText: '预计剩余耗时（分钟，可留空）'),
+    enabled: !busy,
+    label: '预计还需',
     validator: (v) =>
         v!.trim().isEmpty ||
             (int.tryParse(v) != null &&
@@ -371,9 +457,16 @@ class _ItemFormPageState extends State<ItemFormPage> {
   }
 
   Future<void> addReminder([int? index]) async {
+    var hasReferenceTime = false;
+    try {
+      hasReferenceTime = reminderHasReferenceTime(kind, timeData());
+    } on FormatException {
+      // An unset event time does not prevent choosing a reminder time.
+    }
     final result = await editReminder(
       context,
       kind: kind,
+      hasReferenceTime: hasReferenceTime,
       initial: index == null ? null : reminders[index],
     );
     if (result != null && mounted) {
@@ -464,7 +557,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
             icon: Icons.edit_note_rounded,
             children: [
               AppSegmentedControl<String>(
-                key: ValueKey('item-kind-$kind'),
+                key: const Key('item-kind'),
                 value: kind,
                 enabled: !editing,
                 options: const {
@@ -510,7 +603,12 @@ class _ItemFormPageState extends State<ItemFormPage> {
                     DropdownMenuItem(
                       value: c['id'],
                       child: Text(
-                        '${c['title']} · 周${'一二三四五六日'[(c['weekday'] as int) - 1]} ${c['teacher']}',
+                        [
+                          '${c['title']}',
+                          '周${'一二三四五六日'[(c['weekday'] as int) - 1]}',
+                          if ('${c['teacher'] ?? ''}'.trim().isNotEmpty)
+                            '${c['teacher']}',
+                        ].join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -521,38 +619,48 @@ class _ItemFormPageState extends State<ItemFormPage> {
             ],
           ),
           EditorSection(
-            title: kind == 'exam' ? '考试时间' : '截止时间',
+            title: kind == 'exam'
+                ? '考试时间'
+                : window
+                ? '办理时间'
+                : '时间',
             icon: Icons.schedule_rounded,
             children: [
-              if (['date', 'range', 'exact'].contains(precision))
+              if (['date', 'range'].contains(precision))
                 AppOutlineButton.icon(
                   key: const Key('item-date'),
                   onPressed: () => pickDate(),
+                  guardAsync: false,
                   icon: const Icon(Icons.calendar_today_outlined),
-                  label: Text(date == null ? '选择日期' : day(date!)),
+                  label: Text(
+                    date == null ? '选择日期' : studentDate(date!, weekday: true),
+                  ),
                 ),
               if (precision == 'exact')
                 AppOutlineButton.icon(
-                  onPressed: () async {
-                    final selected = await showTimePicker(
-                      context: context,
-                      initialTime: time ?? const TimeOfDay(hour: 9, minute: 0),
-                    );
-                    if (mounted && selected != null) {
-                      setState(() => time = selected);
-                    }
-                  },
+                  key: const Key('item-date-time'),
+                  onPressed: () => pickExact(
+                    initialSection: date == null
+                        ? AppDateTimeSection.date
+                        : AppDateTimeSection.time,
+                  ),
+                  guardAsync: false,
                   icon: const Icon(Icons.schedule),
                   label: Text(
-                    time == null ? '选择具体时间（北京时间）' : time!.format(context),
+                    time == null || date == null
+                        ? '选择日期和时间'
+                        : '${studentDate(date!, weekday: true)} ${time!.hour.toString().padLeft(2, '0')}:${time!.minute.toString().padLeft(2, '0')}',
                   ),
                 ),
               if (precision == 'range')
                 AppOutlineButton.icon(
                   onPressed: () => pickDate(end: true),
+                  guardAsync: false,
                   icon: const Icon(Icons.date_range),
                   label: Text(
-                    endDate == null ? '选择范围结束日期' : '至 ${day(endDate!)}',
+                    endDate == null
+                        ? '选择范围结束日期'
+                        : '至 ${studentDate(endDate!, weekday: true)}',
                   ),
                 ),
               if (precision == 'week')
@@ -564,11 +672,10 @@ class _ItemFormPageState extends State<ItemFormPage> {
                     labelText: '第几周（1—${widget.semester['total_weeks']}）',
                   ),
                 ),
-              if (precision == 'date' && kind != 'exam')
+              if (precision == 'date' && kind != 'exam' && !window)
                 AppCheckRow(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('在这一天结束前完成'),
-                  subtitle: const Text('确认后可按当天结束计算提醒和计划'),
                   value: dayEnd,
                   onChanged: (v) => setState(() => dayEnd = v!),
                 ),
@@ -583,39 +690,61 @@ class _ItemFormPageState extends State<ItemFormPage> {
                   ),
                 ),
               const SizedBox(height: 12),
-              if (kind == 'exam' && precision == 'exact') ...[
+              if ((kind == 'exam' || window) && precision == 'exact') ...[
                 AppOutlineButton.icon(
                   key: const Key('exam-end'),
+                  guardAsync: false,
                   onPressed: () async {
                     final selected = await pickSchoolDateTime(
                       context,
-                      initial: examEndAt,
+                      initial:
+                          examEndAt ??
+                          (date != null && time != null
+                              ? DateTime.utc(
+                                  date!.year,
+                                  date!.month,
+                                  date!.day,
+                                  time!.hour,
+                                  time!.minute,
+                                ).subtract(const Duration(hours: 8))
+                              : null),
                     );
-                    if (mounted && selected != null) {
+                    if (mounted &&
+                        selected != null &&
+                        sameSession &&
+                        widget.controller.semesterId == widget.semester['id']) {
                       setState(() => examEndAt = selected);
                     }
                   },
                   icon: const Icon(Icons.schedule_outlined),
                   label: Text(
                     examEndAt == null
-                        ? '补充考试结束时间'
+                        ? '添加结束时间'
                         : '结束：${displayInstant(examEndAt!.toIso8601String())}',
                   ),
                 ),
                 if (examEndAt != null)
                   AppTextButton(
                     onPressed: () => setState(() => examEndAt = null),
-                    child: const Text('结束时间改为待确认'),
+                    child: const Text('移除结束时间'),
                   ),
                 const SizedBox(height: 12),
               ],
               TimeInputOptions(
                 precision: precision,
-                onChanged: (value) => setState(() {
-                  precision = value;
-                  timeError = null;
-                }),
+                onChanged: selectPrecision,
               ),
+              if (precision == 'unknown')
+                AppFormField(
+                  key: const Key('item-time-expression'),
+                  controller: expression,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: '时间说明（选填）',
+                    hintText: '例如：等老师通知',
+                    counterText: '',
+                  ),
+                ),
               TentativeSwitch(
                 certainty: certainty,
                 onChanged: (value) => setState(() => certainty = value),
@@ -630,10 +759,11 @@ class _ItemFormPageState extends State<ItemFormPage> {
             ],
           ),
           if (kind != 'exam')
-            EditorSection(
-              title: '任务安排',
-              icon: Icons.timelapse_outlined,
-              accent: CampusColors.teal,
+            AppDisclosure(
+              title: const Text('安排学习时间'),
+              leading: const Icon(Icons.timelapse_outlined),
+              initiallyExpanded:
+                  minutes.text.isNotEmpty || startPolicy != 'unconfirmed',
               children: [
                 estimate(),
                 const SizedBox(height: 14),
@@ -643,7 +773,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: '最早何时可以开始'),
                   items: const [
-                    DropdownMenuItem(value: 'unconfirmed', child: Text('待确认')),
+                    DropdownMenuItem(value: 'unconfirmed', child: Text('未设置')),
                     DropdownMenuItem(value: 'now', child: Text('从现在起可开始')),
                     DropdownMenuItem(value: 'at', child: Text('指定最早开始时间')),
                   ],
@@ -651,12 +781,17 @@ class _ItemFormPageState extends State<ItemFormPage> {
                 ),
                 if (startPolicy == 'at')
                   AppOutlineButton(
+                    guardAsync: false,
                     onPressed: () async {
                       final selected = await pickSchoolDateTime(
                         context,
                         initial: earliestAt,
                       );
-                      if (selected != null && mounted) {
+                      if (selected != null &&
+                          mounted &&
+                          sameSession &&
+                          widget.controller.semesterId ==
+                              widget.semester['id']) {
                         setState(() => earliestAt = selected);
                       }
                     },
@@ -731,33 +866,19 @@ class _ItemFormPageState extends State<ItemFormPage> {
                   }),
                 ),
                 const SizedBox(height: 14),
-                AppFormField(
-                  controller: tags,
+                TagPickerField(
                   key: const Key('item-tags'),
-                  decoration: const InputDecoration(
-                    labelText: '标签',
-                    hintText: '例如：实验报告，社团；用逗号分隔',
-                  ),
-                  validator: (text) {
-                    final values = (text ?? '')
-                        .split(RegExp('[,，\n]'))
-                        .map((s) => s.trim())
-                        .where((s) => s.isNotEmpty)
-                        .toSet();
-                    if (values.length > 12 ||
-                        values.any((s) => s.length > 24)) {
-                      return '最多12个标签，每个不超过24字';
-                    }
-                    return null;
-                  },
+                  controller: widget.controller,
+                  values: tags,
+                  enabled: !busy && sameSession,
+                  onChanged: (values) => setState(() => tags = values),
                 ),
                 const SizedBox(height: 14),
               ],
-              if (kind == 'exam' && certainty != 'formal')
+              if (kind == 'exam')
                 AppSwitchRow(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('为尚未确定的考试预留时间'),
-                  subtitle: const Text('开始和结束完整后才扣除时段；信息缺失时提示核对。'),
+                  title: const Text('为这场考试预留时间'),
                   value: reserveTime,
                   onChanged: (v) => setState(() => reserveTime = v),
                 ),
@@ -779,40 +900,42 @@ class _ItemFormPageState extends State<ItemFormPage> {
                 onChanged: (v) => setState(() => priority = v!),
               ),
               const SizedBox(height: 14),
-              AppFormField(
-                controller: notes,
-                maxLines: 3,
-                maxLength: 3000,
-                decoration: const InputDecoration(labelText: '补充说明'),
-              ),
+              if (kind != 'exam')
+                AppFormField(
+                  controller: location,
+                  maxLength: 120,
+                  decoration: const InputDecoration(
+                    labelText: '地点（选填）',
+                    counterText: '',
+                  ),
+                ),
               if (!parsed && !editing)
                 AppFormField(
                   controller: source,
                   maxLines: 3,
                   maxLength: 10000,
-                  decoration: const InputDecoration(labelText: '来源原文（可留空）'),
+                  decoration: const InputDecoration(
+                    labelText: '来源原文（可留空）',
+                    counterText: '',
+                  ),
+                ),
+              if (editing)
+                AppFormField(
+                  key: const Key('item-change-reason'),
+                  controller: reason,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: '修改原因（选填）',
+                    counterText: '',
+                  ),
                 ),
             ],
           ),
-          if (editing)
-            AppFormField(
-              key: const Key('item-change-reason'),
-              controller: reason,
-              maxLength: 500,
-              decoration: const InputDecoration(
-                labelText: '修改原因',
-                hintText: '例如：根据老师的新通知核对截止时间',
-              ),
-              validator: (v) => v!.trim().isEmpty ? '请说明修改依据' : null,
-            ),
-          if (parsed)
-            AppCheckRow(
-              key: const Key('item-reviewed'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('我已核对原文、日期和标出的推断'),
-              value: reviewed,
-              onChanged: (v) => setState(() => reviewed = v!),
-            ),
+          NoticeDetailsEditor(
+            value: details,
+            onChanged: (value) => details = value,
+            notesController: notes,
+          ),
 
           const SizedBox(height: 12),
         ],

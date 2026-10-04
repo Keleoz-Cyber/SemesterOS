@@ -84,19 +84,17 @@ def update_semester(sid: str, body: SemesterUpdate,
                 error(422, 'CALENDAR_MISMATCH',
                       f'课表使用到第{maximum}周，请把学期周数设为至少{maximum}周')
             missing = set(course.payload['sections']) - known
-            if missing:
+            if missing and not course.payload.get('start_time'):
                 section = min(missing)
                 error(422, 'CALENDAR_MISMATCH', f'课表使用第{section}节，请补上该节时间')
-        active_plan = db.scalar(select(PlanBlock.id).where(
-            PlanBlock.user_id == user.id, PlanBlock.semester_id == sid,
-            PlanBlock.status == 'active').limit(1))
-        if active_plan is not None:
-            error(409, 'ACTIVE_PLAN', '请先在安排记录中取消已有个人计划，再修改校历和节次')
-        applied_change = db.scalar(select(RealityChange.id).where(
+        applied_changes = list(db.scalars(select(RealityChange).where(
             RealityChange.user_id == user.id, RealityChange.semester_id == sid,
-            RealityChange.applied_revision.is_not(None)).limit(1))
-        if applied_change is not None:
-            error(409, 'APPLIED_CHANGE', '本学期有已确认的调课或停课，请先核对这些变化，再调整校历')
+            RealityChange.applied_revision.is_not(None))))
+        # Legacy releases forbade calendar corrections once an exception was
+        # saved. Their unchanged calendar is therefore the original anchor.
+        for change in applied_changes:
+            if 'base_calendar' not in change.payload:
+                change.payload = {**change.payload, 'base_calendar': {'first_monday': before['first_monday']}}
     if before['name'] != body.name or changed_time:
         semester.name = body.name
         semester.first_monday = request['first_monday']
@@ -104,6 +102,15 @@ def update_semester(sid: str, body: SemesterUpdate,
         semester.periods = request['periods']
         semester.revision += 1
     response = serialize_semester(semester)
+    if changed_time:
+        db.flush()
+        from .schedule_api import snapshot
+        from .capacity import calendar_context
+        from .plan_rules import classify
+        source = snapshot(db, user, semester)
+        context = calendar_context(*source[:4], utcnow())
+        _, issues = classify(source[4], source[3], context['free'].spans, context['begin'])
+        response['affected_plan_count'] = len({i['block_id'] for i in issues})
     remember(db, user, f'update-semester:{sid}', idempotency_key, request, response)
     db.commit()
     return response

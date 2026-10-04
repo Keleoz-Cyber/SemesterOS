@@ -2,7 +2,7 @@ import unicodedata
 from typing import Literal
 from pydantic import Field, field_validator, model_validator
 from .schemas import Input
-from .item_schemas import ItemTime
+from .item_schemas import ItemTime, NoticeDetails
 
 
 class EventFields(Input):
@@ -10,9 +10,11 @@ class EventFields(Input):
     title: str = Field(min_length=1, max_length=120)
     time: ItemTime = Field(default_factory=ItemTime)
     certainty: Literal['formal', 'tentative', 'unknown'] = 'formal'
+    reserve_time: bool = True
     location: str = Field(default='', max_length=120)
     notes: str = Field(default='', max_length=3000)
     source_text: str = Field(default='', max_length=10000)
+    details: NoticeDetails = Field(default_factory=NoticeDetails)
     category_id: Literal['study', 'research', 'affairs', 'life'] | None = None
     tags: list[str] = Field(default_factory=list, max_length=12)
     reminder_minutes: list[int] = Field(default_factory=list, max_length=12)
@@ -42,6 +44,11 @@ class EventFields(Input):
     def no_deadline_policy(self):
         if self.time.day_end_confirmed:
             raise ValueError('活动时间不是任务截止时间')
+        if ('reserve_time' not in self.model_fields_set
+                and self.details.participation_status in ('optional', 'conditional', 'other')):
+            # Preserve the distinction between a derived default and an explicit
+            # user flag, so old edit clients cannot overwrite stored choices.
+            object.__setattr__(self, 'reserve_time', False)
         return self
 
 

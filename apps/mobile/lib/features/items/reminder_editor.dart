@@ -1,34 +1,55 @@
+import '../../ui/app_date_time_picker.dart';
 import '../../ui/app_selection.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/app_picker_field.dart';
+import '../../ui/app_sheet.dart';
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_widgets.dart';
 import '../../ui/detail_widgets.dart';
-import '../../ui/campus_theme.dart';
+import '../../ui/date_labels.dart';
+
+bool reminderHasReferenceTime(String kind, Map<String, dynamic> time) {
+  if (const {
+    'window',
+    'candidate',
+    'course_anchor',
+  }.contains(time['meaning'])) {
+    return false;
+  }
+  return (time['precision'] == 'exact' && time['at'] != null) ||
+      (time['precision'] == 'date' &&
+          time['day_end_confirmed'] == true &&
+          kind != 'exam');
+}
 
 Future<Map<String, dynamic>?> editReminder(
   BuildContext context, {
   required String kind,
   Map<String, dynamic>? initial,
   bool relativeOnly = false,
-}) => showModalBottomSheet<Map<String, dynamic>>(
+  bool hasReferenceTime = true,
+}) => showAppSheet<Map<String, dynamic>>(
   context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  builder: (_) =>
-      ReminderEditor(kind: kind, initial: initial, relativeOnly: relativeOnly),
+  builder: (_) => ReminderEditor(
+    kind: kind,
+    initial: initial,
+    relativeOnly: relativeOnly,
+    hasReferenceTime: hasReferenceTime,
+  ),
 );
 
 class ReminderEditor extends StatefulWidget {
   final String kind;
   final bool relativeOnly;
+  final bool hasReferenceTime;
   final Map<String, dynamic>? initial;
   const ReminderEditor({
     super.key,
     required this.kind,
     this.initial,
     this.relativeOnly = false,
+    this.hasReferenceTime = true,
   });
   @override
   State<ReminderEditor> createState() => _ReminderEditorState();
@@ -45,9 +66,11 @@ class _ReminderEditorState extends State<ReminderEditor> {
   void initState() {
     super.initState();
     final r = widget.initial;
-    mode = r?['mode'] ?? 'relative';
-    purpose = r?['purpose'] ?? 'item';
-    enabled = r?['enabled'] ?? true;
+    mode = widget.relativeOnly
+        ? 'relative'
+        : r?['mode'] ?? (widget.hasReferenceTime ? 'relative' : 'absolute');
+    purpose = widget.relativeOnly ? 'item' : r?['purpose'] ?? 'item';
+    enabled = widget.relativeOnly ? true : r?['enabled'] ?? true;
     lead = TextEditingController(
       text: '${r?['lead_minutes'] ?? (widget.kind == 'event' ? 30 : 1440)}',
     );
@@ -66,21 +89,28 @@ class _ReminderEditorState extends State<ReminderEditor> {
 
   Future<void> pick() async {
     final now = schoolNow();
-    final day = await showDatePicker(
+    final day = date ?? DateTime(now.year, now.month, now.day);
+    final time = clock ?? const TimeOfDay(hour: 9, minute: 0);
+    final selected = await showAppDateTimePicker(
       context: context,
-      initialDate: date ?? DateTime(now.year, now.month, now.day),
+      initialDate: DateTime.utc(
+        day.year,
+        day.month,
+        day.day,
+        time.hour,
+        time.minute,
+      ),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      helpText: '提醒日期和时间',
+      initialSection: date == null
+          ? AppDateTimeSection.date
+          : AppDateTimeSection.time,
     );
-    if (day == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: clock ?? const TimeOfDay(hour: 9, minute: 0),
-    );
-    if (time != null && mounted) {
+    if (selected != null && mounted) {
       setState(() {
-        date = day;
-        clock = time;
+        date = DateUtils.dateOnly(selected);
+        clock = TimeOfDay.fromDateTime(selected);
       });
     }
   }
@@ -127,7 +157,7 @@ class _ReminderEditorState extends State<ReminderEditor> {
         ];
 
   String leadLabel(int minutes) => minutes == 0
-      ? '开始时'
+      ? '到时间时'
       : minutes % 1440 == 0
       ? '提前${minutes ~/ 1440}天'
       : minutes % 60 == 0
@@ -145,12 +175,14 @@ class _ReminderEditorState extends State<ReminderEditor> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        RecordHeading(
+        AppSheetHeading(
           title: widget.initial == null ? '添加提醒' : '修改提醒',
-          label: '通知设置',
-          icon: Icons.notifications_active_outlined,
+          leading: const Icon(Icons.notifications_active_outlined),
+          padding: EdgeInsets.zero,
         ),
-        if (!widget.relativeOnly) ...[
+        if (!widget.relativeOnly &&
+            (widget.hasReferenceTime ||
+                widget.initial?['mode'] == 'relative')) ...[
           AppSegmentedControl<String>(
             value: mode,
             options: const {'relative': '提前提醒', 'absolute': '指定时刻'},
@@ -196,11 +228,12 @@ class _ReminderEditorState extends State<ReminderEditor> {
             ] else
               AppOutlineButton.icon(
                 onPressed: pick,
+                guardAsync: false,
                 icon: const Icon(Icons.event_outlined),
                 label: Text(
                   date == null
-                      ? '选择提醒日期和时间（北京时间）'
-                      : '${date!.toIso8601String().substring(0, 10)} ${clock!.format(context)}',
+                      ? '选择提醒日期和时间'
+                      : '${studentDate(date!, weekday: true)} ${clock!.hour.toString().padLeft(2, '0')}:${clock!.minute.toString().padLeft(2, '0')}',
                 ),
               ),
           ],
@@ -239,11 +272,6 @@ class _ReminderEditorState extends State<ReminderEditor> {
           const SizedBox(height: 12),
         ],
         AppButton(onPressed: save, child: const Text('确认这条提醒')),
-        const SizedBox(height: 12),
-        const Text(
-          '保存后，请开启系统通知。手机省电设置可能让提醒延迟。',
-          style: TextStyle(fontSize: 12, color: CampusColors.muted),
-        ),
       ],
     ),
   );

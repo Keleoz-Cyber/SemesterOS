@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/centers/semester_centers.dart';
 import 'package:semester_os/features/centers/exam_pages.dart';
 import 'package:semester_os/features/changes/changes_page.dart';
+import 'package:semester_os/features/timetable/course_widgets.dart';
+import 'package:semester_os/features/calendar/event_overview.dart';
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'centers_flow_test.dart' show fixture, hub, exam, semester, settleIo;
 import 'changes_flow_test.dart' show change;
@@ -204,6 +206,85 @@ Future<void> _close(WidgetTester tester, _AcademicFixture f) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
+  testWidgets('small course details retain a long title and compact periods', (
+    tester,
+  ) async {
+    final course = <String, dynamic>{
+      'title': '习近平新时代中国特色社会主义思想概论',
+      'start_at': '2026-10-03T14:30:00+08:00',
+      'end_at': '2026-10-03T16:05:00+08:00',
+      'weeks': List.generate(15, (i) => i + 1),
+      'sections': [5, 6],
+      'attendance_exempt': true,
+    };
+    await mount(
+      tester,
+      Scaffold(
+        body: Builder(
+          builder: (context) => ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              AppButton(
+                onPressed: () => showCourseDetails(context, course),
+                child: Text(courseTitle(course)),
+              ),
+            ],
+          ),
+        ),
+      ),
+      width: 320,
+      height: 740,
+      textScale: 1.6,
+    );
+    await _shot(tester, 'course-long-small');
+    await tester.tap(find.text(courseTitle(course)));
+    await tester.pumpAndSettle();
+    await _show(tester, find.text('第5–6节'));
+    expect(find.text('地点'), findsNothing);
+    expect(find.text('教师'), findsNothing);
+    expect(find.textContaining('学校的固定安排'), findsNothing);
+    await _shot(tester, 'course-detail-small');
+    await _show(tester, find.text('返回课表'));
+    await tester.tap(find.text('返回课表'));
+    await tester.pumpAndSettle();
+    expect(find.text(courseTitle(course)), findsOneWidget);
+  });
+
+  testWidgets(
+    'small event overview keeps a start-only time and no absent facts',
+    (tester) async {
+      await mount(
+        tester,
+        const Scaffold(
+          body: SingleChildScrollView(
+            padding: EdgeInsets.all(20),
+            child: EventOverview(
+              category: '校园事务',
+              row: {
+                'title': '学生代表座谈会与意见收集',
+                'time': {
+                  'precision': 'exact_start',
+                  'at': '2026-10-03T14:00:00+08:00',
+                },
+                'tags': [
+                  {'name': '座谈会'},
+                  {'name': '线下'},
+                ],
+              },
+            ),
+          ),
+        ),
+        width: 320,
+        height: 740,
+        textScale: 1.6,
+      );
+      expect(find.text('14:00'), findsOneWidget);
+      expect(find.text('地点'), findsNothing);
+      expect(find.text('结束'), findsNothing);
+      expect(find.text('校园事务 · 线下'), findsOneWidget);
+      await _shot(tester, 'event-overview-small');
+    },
+  );
   for (final scale in [1.0, 1.6]) {
     final size = scale == 1 ? 'normal' : 'large';
 
@@ -212,6 +293,8 @@ void main() {
       await mount(
         tester,
         CourseHubPage(controller: f.data.c, courseId: 'c'),
+        width: scale == 1 ? 390 : 320,
+        height: scale == 1 ? 844 : 740,
         textScale: scale,
       );
       await settleIo(tester);
@@ -227,10 +310,12 @@ void main() {
       await mount(
         tester,
         ExamCenterPage(controller: f.data.c, semester: semester()),
+        width: scale == 1 ? 390 : 320,
+        height: scale == 1 ? 844 : 740,
         textScale: scale,
       );
       await settleIo(tester);
-      expect(find.text('第14周 · 具体日期待确认'), findsOneWidget);
+      expect(find.text('第14周'), findsOneWidget);
       expect(find.text('暂定'), findsOneWidget);
       await _shot(tester, 'exam-center-$size');
       await _show(tester, find.text('复习任务'));
@@ -246,11 +331,13 @@ void main() {
         await mount(
           tester,
           ReviewSetupPage(controller: f.data.c, exam: exam(f.data)),
+          width: scale == 1 ? 390 : 320,
+          height: scale == 1 ? 844 : 740,
           textScale: scale,
         );
-        expect(find.text('确认以考试开始时刻为截止'), findsNothing);
+        expect(find.text('考试开始前'), findsNothing);
         await _shot(tester, 'review-setup-$size');
-        await _show(tester, find.text('截止与开始条件'));
+        await _show(tester, find.text('复习时间'));
         await _shot(tester, 'review-setup-conditions-$size');
         await tester.tap(find.text('创建复习任务'));
         await tester.pumpAndSettle();
@@ -260,23 +347,34 @@ void main() {
       },
     );
 
-    testWidgets('academic exam reschedule gallery and reason gate $size', (
-      tester,
-    ) async {
-      final f = await _prepare(tester);
-      await mount(
-        tester,
-        ExamReschedulePage(controller: f.data.c, exam: exam(f.data)),
-        textScale: scale,
-      );
-      await _shot(tester, 'exam-reschedule-$size');
-      await _show(tester, find.text('确认状态与复习'));
-      await _shot(tester, 'exam-reschedule-conditions-$size');
-      await tester.tap(find.text('查看改期影响'));
-      await tester.pumpAndSettle();
-      expect(find.text('请填写改期原因'), findsOneWidget);
-      await _close(tester, f);
-    });
+    testWidgets(
+      'academic exam reschedule gallery with optional note and required valid week $size',
+      (tester) async {
+        final f = await _prepare(tester);
+        await mount(
+          tester,
+          ExamReschedulePage(controller: f.data.c, exam: exam(f.data)),
+          width: scale == 1 ? 390 : 320,
+          height: scale == 1 ? 844 : 740,
+          textScale: scale,
+        );
+        await _shot(tester, 'exam-reschedule-$size');
+        await _show(tester, find.text('确认状态与复习'));
+        await _shot(tester, 'exam-reschedule-conditions-$size');
+        final weekField = find.byWidgetPredicate(
+          (w) => w is AppField && w.decoration.labelText == '第几周',
+        );
+        await _show(tester, weekField);
+        await tester.enterText(weekField, '');
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('查看改期影响'));
+        await tester.pumpAndSettle();
+        expect(find.text('请输入周次'), findsOneWidget);
+        expect(find.text('请填写改期原因'), findsNothing);
+        await _close(tester, f);
+      },
+    );
 
     testWidgets(
       'academic exam change preview gallery and fixed conflict gate $size',
@@ -289,6 +387,8 @@ void main() {
             preview: f.examPreview,
             request: {'reason': _AcademicFixture.notice},
           ),
+          width: scale == 1 ? 390 : 320,
+          height: scale == 1 ? 844 : 740,
           textScale: scale,
         );
         await _shot(tester, 'exam-preview-$size');
@@ -321,12 +421,14 @@ void main() {
             controller: f.data.c,
             initialText: _AcademicFixture.notice,
           ),
+          width: scale == 1 ? 390 : 320,
+          height: scale == 1 ? 844 : 740,
           textScale: scale,
         );
         await settleIo(tester);
         await _shot(tester, 'changes-editor-$size');
-        await _show(tester, find.text('让AI整理通知'));
-        await tester.tap(find.text('让AI整理通知'));
+        await _show(tester, find.text('智能填写'));
+        await tester.tap(find.text('智能填写'));
         await settleIo(tester);
         expect(f.parses, 1);
         await _show(tester, find.text('选择受影响课次（已选1次）'));
@@ -344,13 +446,15 @@ void main() {
         await mount(
           tester,
           ChangePreviewPage(controller: f.data.c, preview: f.coursePreview),
+          width: scale == 1 ? 390 : 320,
+          height: scale == 1 ? 844 : 740,
           textScale: scale,
         );
         await _shot(tester, 'course-preview-$size');
-        await _show(tester, find.text('本次预览时的影响'));
+        await _show(tester, find.text('相关个人计划'));
         await _shot(tester, 'course-preview-impact-$size');
-        final submit = find.widgetWithText(AppButton, '确认现实变化，暂不移动个人计划');
-        await _show(tester, find.text('确认现实变化，暂不移动个人计划'));
+        final submit = find.widgetWithText(AppButton, '保存修改');
+        await _show(tester, find.text('保存修改'));
         expect(tester.widget<AppButton>(submit).onPressed, isNull);
         await _shot(tester, 'course-preview-confirm-$size');
         await tester.tap(find.byType(AppCheckRow));

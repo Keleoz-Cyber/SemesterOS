@@ -24,6 +24,7 @@ class AppController extends ChangeNotifier {
   int _weekRequest = 0;
   int _catalogRequest = 0;
   bool ready = false, busy = false, offline = false;
+  bool sessionLoading = false;
   String? notice;
   List<Map<String, dynamic>> semesters = [];
   Map<String, dynamic>? semester;
@@ -42,6 +43,14 @@ class AppController extends ChangeNotifier {
   bool get loggedIn => api.session != null;
   Map<String, dynamic> get user =>
       Map<String, dynamic>.from(api.session?['user'] ?? {});
+  bool get isDemo => api.session?['is_demo'] == true || user['is_demo'] == true;
+
+  Future<void> startDemo() async {
+    final data = Map<String, dynamic>.from(
+      await api.request('POST', '/auth/demo', authenticated: false),
+    );
+    await openSession(data, data['semester_id'] as String?);
+  }
 
   int weekNow(Map<String, dynamic> s) {
     final now = schoolNow();
@@ -70,86 +79,111 @@ class AppController extends ChangeNotifier {
   ]) async {
     final selected =
         preferredSemesterId ?? (session == null ? (semester?['id']) : null);
-    if (session != null) await api.saveSession(session);
+    if (session != null) {
+      await api.saveSession(session);
+      semesters = [];
+      semester = null;
+      events = [];
+      savedWeeks = {};
+      offline = false;
+    }
     final stamp = api.generation;
     final sequence = ++_catalogRequest;
-    final local = await cache.read('${user['id']}');
-    if (stamp != api.generation || sequence != _catalogRequest) return;
-    if (local != null) {
-      semesters = List<Map<String, dynamic>>.from(local['semesters'] ?? []);
-      savedWeeks = Map<String, dynamic>.from(local['weeks'] ?? {});
+    sessionLoading = true;
+    notifyListeners();
+    try {
+      final local = await cache.read('${user['id']}');
+      if (stamp != api.generation || sequence != _catalogRequest) return;
+      if (local != null) {
+        semesters = List<Map<String, dynamic>>.from(local['semesters'] ?? []);
+        savedWeeks = Map<String, dynamic>.from(local['weeks'] ?? {});
+        final matching = semesters.where((s) => s['id'] == selected);
+        semester = semesters.isEmpty
+            ? null
+            : matching.isEmpty
+            ? semesters.first
+            : matching.first;
+        if (semester == null) {
+          events = [];
+          week = 1;
+        }
+        if (semester != null) {
+          week = weekNow(semester!);
+          final saved = savedWeeks['${semester!['id']}/$week'];
+          events = saved?['revision'] == semester!['revision']
+              ? List<Map<String, dynamic>>.from(saved['events'])
+              : [];
+        }
+        ready = true;
+        notice = '正在更新，先显示本机保存的课表';
+        notifyListeners();
+      } else {
+        semesters = [];
+        savedWeeks = {};
+      }
+      try {
+        final me = await api.request('GET', '/me');
+        if (stamp != api.generation || sequence != _catalogRequest) return;
+        if (me is Map && me['id'] != null) {
+          await api.saveSession({
+            ...api.session!,
+            'user': {...user, ...Map<String, dynamic>.from(me)},
+            if (me['is_demo'] != null) 'is_demo': me['is_demo'],
+          }, replacement: false);
+        }
+        final catalog = List<Map<String, dynamic>>.from(
+          await api.request('GET', '/semesters'),
+        );
+        if (stamp != api.generation || sequence != _catalogRequest) return;
+        semesters = catalog;
+        final knownIds = semesters.map((s) => '${s['id']}').toSet();
+        savedWeeks.removeWhere(
+          (key, _) => !knownIds.contains(key.split('/').first),
+        );
+        for (final s in semesters) {
+          savedWeeks.removeWhere(
+            (key, value) =>
+                key.startsWith('${s['id']}/') &&
+                value['revision'] != s['revision'],
+          );
+        }
+        offline = false;
+        notice = null;
+      } on ApiFailure catch (e) {
+        if (stamp != api.generation ||
+            sequence != _catalogRequest ||
+            e.staleSession) {
+          return;
+        }
+        if (e.unauthorized) {
+          await logout(remote: false);
+          rethrow;
+        }
+        offline = true;
+        notice = e.message;
+      }
+      if (stamp != api.generation || sequence != _catalogRequest) return;
       final matching = semesters.where((s) => s['id'] == selected);
       semester = semesters.isEmpty
           ? null
           : matching.isEmpty
           ? semesters.first
           : matching.first;
-      if (semester == null) {
+      if (semester != null) {
+        await loadWeek(weekNow(semester!));
+      } else {
         events = [];
         week = 1;
       }
-      if (semester != null) {
-        week = weekNow(semester!);
-        final saved = savedWeeks['${semester!['id']}/$week'];
-        events = saved?['revision'] == semester!['revision']
-            ? List<Map<String, dynamic>>.from(saved['events'])
-            : [];
-      }
-      ready = true;
-      notice = '正在更新，先显示本机保存的课表';
-      notifyListeners();
-    } else {
-      semesters = [];
-      savedWeeks = {};
-    }
-    try {
-      await api.request('GET', '/me');
-      final catalog = List<Map<String, dynamic>>.from(
-        await api.request('GET', '/semesters'),
-      );
       if (stamp != api.generation || sequence != _catalogRequest) return;
-      semesters = catalog;
-      final knownIds = semesters.map((s) => '${s['id']}').toSet();
-      savedWeeks.removeWhere(
-        (key, _) => !knownIds.contains(key.split('/').first),
-      );
-      for (final s in semesters) {
-        savedWeeks.removeWhere(
-          (key, value) =>
-              key.startsWith('${s['id']}/') &&
-              value['revision'] != s['revision'],
-        );
+      await saveCache();
+      notifyListeners();
+    } finally {
+      if (stamp == api.generation && sequence == _catalogRequest) {
+        sessionLoading = false;
+        notifyListeners();
       }
-      offline = false;
-    } on ApiFailure catch (e) {
-      if (stamp != api.generation ||
-          sequence != _catalogRequest ||
-          e.staleSession) {
-        return;
-      }
-      if (e.unauthorized) {
-        await logout(remote: false);
-        rethrow;
-      }
-      offline = true;
-      notice = e.message;
     }
-    if (stamp != api.generation || sequence != _catalogRequest) return;
-    final matching = semesters.where((s) => s['id'] == selected);
-    semester = semesters.isEmpty
-        ? null
-        : matching.isEmpty
-        ? semesters.first
-        : matching.first;
-    if (semester != null) {
-      await loadWeek(weekNow(semester!));
-    } else {
-      events = [];
-      week = 1;
-    }
-    if (stamp != api.generation || sequence != _catalogRequest) return;
-    await saveCache();
-    notifyListeners();
   }
 
   Future<void> saveCache() async {
@@ -163,6 +197,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> selectSemester(Map<String, dynamic> s) async {
     _catalogRequest++;
+    sessionLoading = false;
     semester = s;
     events = [];
     await loadWeek(weekNow(s));
@@ -195,6 +230,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> acknowledgeImport(Map<String, dynamic> receipt) async {
     _catalogRequest++;
+    sessionLoading = false;
     final sid = receipt['semester_id'];
     for (final s in semesters.where((s) => s['id'] == sid)) {
       s['revision'] = receipt['revision'];
@@ -242,7 +278,9 @@ class AppController extends ChangeNotifier {
       } else {
         return;
       }
-      if (semester?['id'] == selectedId && week == selectedWeek) {
+      if (sequence == _weekRequest &&
+          semester?['id'] == selectedId &&
+          week == selectedWeek) {
         events = List<Map<String, dynamic>>.from(data['events']);
         offline = false;
         notice = null;
@@ -254,7 +292,9 @@ class AppController extends ChangeNotifier {
         await logout(remote: false);
         return;
       }
-      if (semester?['id'] == selectedId && week == selectedWeek) {
+      if (sequence == _weekRequest &&
+          semester?['id'] == selectedId &&
+          week == selectedWeek) {
         offline = true;
         notice = local == null ? '离线：这一周尚无缓存，联网后可读取' : '离线：正在查看上次保存的课表';
       }
@@ -282,6 +322,7 @@ class AppController extends ChangeNotifier {
     savedWeeks = {};
     offline = false;
     busy = false;
+    sessionLoading = false;
     notice = null;
     notifyListeners();
     await forgetting;

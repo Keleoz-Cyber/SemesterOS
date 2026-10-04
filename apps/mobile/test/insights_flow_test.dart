@@ -57,6 +57,22 @@ Map<String, dynamic> insightData(String from, String to, {String? category}) =>
       'tags': [
         {'id': 'tag', 'name': '组会'},
       ],
+      'course_summary': [
+        if (category == null || category == 'study') ...[
+          {
+            'title': '概率论',
+            'course_scheduled_minutes': 120,
+            'personal_planned_minutes': 0,
+            'actual_minutes': null,
+          },
+          {
+            'title': '计算机网络实验',
+            'course_scheduled_minutes': 60,
+            'personal_planned_minutes': 0,
+            'actual_minutes': null,
+          },
+        ],
+      ],
       'records': [
         if (category == null || category == 'study')
           {
@@ -181,9 +197,17 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 80)),
       );
       await tester.pumpAndSettle();
-      expect(find.text('未记录'), findsWidgets);
+      expect(find.text('未记录'), findsNothing);
       expect(queries.first.queryParameters['from_date'], '2026-10-05');
       expect(queries.first.queryParameters['to_date'], '2026-10-11');
+      expect(find.text('课程时间 · 2门'), findsOneWidget);
+      expect(find.text('计算机网络实验'), findsNothing);
+      await tester.tap(find.text('课程时间 · 2门'));
+      await tester.pumpAndSettle();
+      await capture(tester, 'insights-course-breakdown');
+      expect(find.text('计算机网络实验'), findsOneWidget);
+      await tester.tap(find.text('课程时间 · 2门'));
+      await tester.pumpAndSettle();
       expect(find.byType(BarChart), findsOneWidget);
       await capture(tester, 'insights-overview');
       await tester.ensureVisible(find.byType(PieChart));

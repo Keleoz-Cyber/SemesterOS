@@ -1,4 +1,5 @@
 import 'package:semester_os/ui/app_controls.dart';
+import 'package:semester_os/features/tags/tag_picker_field.dart';
 import 'package:forui/forui.dart';
 import 'package:semester_os/ui/app_picker_field.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/items/item_detail.dart';
 import 'package:semester_os/features/items/item_form.dart';
 import 'package:semester_os/features/items/reminder_editor.dart';
+import 'package:semester_os/features/items/reminder_settings.dart';
 import 'package:semester_os/features/calendar/event_form.dart';
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'calendar_flow_test.dart' show semester;
@@ -144,6 +146,67 @@ Future<void> shot(WidgetTester tester, String name) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
+  testWidgets('tag picker cancels drafts and preserves one name per value', (
+    tester,
+  ) async {
+    final f = await fixture(tester);
+    final original = f.api.dio.httpClientAdapter as ControlledTransport;
+    f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+      if (r.path.endsWith('/tags')) {
+        return body({
+          'owner_id': 'preview',
+          'tags': [
+            {'name': '组会'},
+          ],
+        });
+      }
+      return original.respond(r);
+    });
+    var values = <String>['实验报告'];
+    var changes = 0;
+    await mount(
+      tester,
+      Scaffold(
+        body: StatefulBuilder(
+          builder: (context, rebuild) => Padding(
+            padding: const EdgeInsets.all(20),
+            child: TagPickerField(
+              controller: f.c,
+              values: values,
+              onChanged: (next) => rebuild(() {
+                values = next;
+                changes++;
+              }),
+            ),
+          ),
+        ),
+      ),
+      width: 375,
+      textScale: 1.6,
+    );
+    await tester.tap(find.text('实验报告'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('组会'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(values, ['实验报告']);
+    expect(changes, 0);
+    await tester.tap(find.text('实验报告'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('tag-name-input')), '设计，报告');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加“设计，报告”'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'tag-picker-375-large');
+    await tester.tap(find.text('确认标签'));
+    await tester.pumpAndSettle();
+    expect(values, ['实验报告', '设计，报告']);
+    expect(changes, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    f.c.dispose();
+  });
   testWidgets('fixed item save shows missing time even from the form bottom', (
     tester,
   ) async {
@@ -217,6 +280,7 @@ void main() {
       await mount(
         tester,
         ItemDetailPage(controller: f.c, semester: semester(), id: 't'),
+        width: scale > 1 ? 320 : 390,
         textScale: scale,
       );
       await settle(tester);
@@ -227,8 +291,12 @@ void main() {
       await tester.tap(find.text('提醒 · 2条'));
       await tester.pumpAndSettle();
       await shot(tester, 'inner-item-detail-reminders-$suffix');
-      Navigator.of(tester.element(find.text('添加提醒'))).pop();
-      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('系统通知设置'));
+      await settle(tester);
+      expect(find.byType(ReminderSettingsPage), findsOneWidget);
+      await shot(tester, 'inner-item-reminder-settings-$suffix');
+      Navigator.of(tester.element(find.byType(ReminderSettingsPage))).pop();
+      await settle(tester);
       await reveal(tester, find.text('通知原文'));
       await tester.tap(find.text('通知原文'));
       await tester.pumpAndSettle();
@@ -284,17 +352,21 @@ void main() {
         await reveal(tester, find.byKey(const Key('item-tags')));
         expect(
           tester
-              .widget<AppFormField>(find.byKey(const Key('item-tags')))
-              .controller!
-              .text,
-          '实验报告，误差分析',
+              .widget<TagPickerField>(find.byKey(const Key('item-tags')))
+              .values,
+          ['实验报告', '误差分析'],
         );
         await shot(tester, 'inner-item-form-$mode-more-$suffix');
         if (editing) {
-          // Saving from the fixed action must still enforce the modification reason.
-          await tester.tap(find.text('保存修改'));
-          await tester.pumpAndSettle();
-          expect(find.text('请说明修改依据'), findsWidgets);
+          await reveal(tester, find.byKey(const Key('item-change-reason')));
+          final field = tester.widget<AppFormField>(
+            find.byKey(const Key('item-change-reason')),
+          );
+          expect(
+            field.validator?.call(''),
+            isNull,
+            reason: 'Changing a task does not require an explanation',
+          );
         }
         await tester.pumpWidget(const SizedBox());
         f.c.dispose();
@@ -398,16 +470,40 @@ void main() {
       );
       await settle(tester);
       expect(find.text('课题组阶段汇报'), findsOneWidget);
-      expect(find.text('2026-10-03 14:00'), findsOneWidget);
+      expect(find.textContaining('10月3日 · 周六'), findsOneWidget);
+      final displayedTimes = tester
+          .widgetList<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey('event-when')),
+              matching: find.byType(Text),
+            ),
+          )
+          .map((text) => text.data)
+          .toList();
+      expect(
+        displayedTimes,
+        scale == 1.0 ? ['14:00—15:30'] : ['开始', '14:00', '结束', '15:30'],
+      );
       expect(find.byTooltip('编辑日程').hitTestable(), findsOneWidget);
       await shot(tester, 'inner-event-detail-$suffix');
       await reveal(tester, find.text('提前30分钟'));
       await shot(tester, 'inner-event-detail-reminders-$suffix');
+      await tester.tap(find.text('提前30分钟'));
+      await settle(tester);
+      expect(find.byType(ReminderEditor), findsOneWidget);
+      expect(find.byType(EventFormPage), findsNothing);
+      await shot(tester, 'inner-event-reminder-edit-$suffix');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(ReminderEditor), findsNothing);
       await reveal(tester, find.text('通知原文'));
+      final source = find.text(eventRecord()['source_text']);
+      expect(source, findsNothing);
       await tester.tap(find.text('通知原文'));
       await tester.pumpAndSettle();
+      await reveal(tester, source);
       await shot(tester, 'inner-event-detail-source-$suffix');
-      expect(find.byType(SelectableText), findsOneWidget);
+      expect(source.hitTestable(), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
     });

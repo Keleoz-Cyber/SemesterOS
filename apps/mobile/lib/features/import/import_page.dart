@@ -1,5 +1,7 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
-import '../../ui/detail_widgets.dart';
+import '../../ui/campus_theme.dart';
+import '../centers/academic_visuals.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -8,13 +10,18 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../app/controller.dart';
-import 'haut_parser.dart';
 import 'preview.dart';
+import 'school_adapters.dart';
 import 'school_navigation.dart';
 
 class ImportPage extends StatefulWidget {
   final AppController controller;
-  const ImportPage({super.key, required this.controller});
+  final SchoolAdapter school;
+  const ImportPage({
+    super.key,
+    required this.controller,
+    this.school = hautSchool,
+  });
   @override
   State<ImportPage> createState() => _ImportPageState();
 }
@@ -23,11 +30,12 @@ class _ImportPageState extends State<ImportPage> {
   late final WebViewController web;
   bool loading = true, reading = false, closed = false, closing = false;
   String? notice, nonce;
+  String? pageUrl;
   Timer? timeout;
   final redirectBudget = SchoolRedirectBudget();
-  static const school =
-      'https://jwglxt.haut.edu.cn/jwglxt/xtgl/login_slogin.html';
-  bool allowed(String url) => isTrustedSchoolUrl(url);
+  SchoolAdapter get school => widget.school;
+  bool allowed(String url) => isTrustedSchoolUrl(url, school: school);
+  bool coursePage(String url) => isSchoolCourseUrl(url, school: school);
 
   @override
   void initState() {
@@ -43,6 +51,7 @@ class _ImportPageState extends State<ImportPage> {
             if (mounted) {
               setState(() {
                 loading = true;
+                pageUrl = url;
                 reading = false;
                 if (allowed(url)) notice = null;
               });
@@ -52,11 +61,12 @@ class _ImportPageState extends State<ImportPage> {
             if (mounted) setState(() => loading = false);
           },
           onNavigationRequest: (r) {
-            final decision = schoolNavigation(r.url);
+            final decision = schoolNavigation(r.url, school: school);
             if (decision.action == SchoolNavigationAction.allow) {
               return NavigationDecision.navigate;
             }
-            if (decision.action == SchoolNavigationAction.upgradeHttps &&
+            if ((decision.action == SchoolNavigationAction.upgradeHttps ||
+                    decision.action == SchoolNavigationAction.redirectLogin) &&
                 r.isMainFrame) {
               if (!redirectBudget.allowUpgrade(DateTime.now())) {
                 if (mounted) {
@@ -111,7 +121,7 @@ class _ImportPageState extends State<ImportPage> {
     redirectBudget.reset();
     await WebViewCookieManager().clearCookies();
     await web.clearLocalStorage();
-    await web.loadRequest(Uri.parse(school));
+    await web.loadRequest(Uri.parse(school.loginUrl));
   }
 
   Future<void> refreshSchool() async {
@@ -127,10 +137,10 @@ class _ImportPageState extends State<ImportPage> {
     final current = await web.currentUrl();
     if (current == null ||
         !allowed(current) ||
-        (Uri.tryParse(current)?.path.contains('login_') ?? false)) {
+        (Uri.tryParse(current)?.path.contains('login') ?? false)) {
       // A fresh GET avoids re-submitting a login form whose password field was
       // replaced with ciphertext by the school's own script.
-      await web.loadRequest(Uri.parse(school));
+      await web.loadRequest(Uri.parse(school.loginUrl));
     } else {
       await web.reload();
     }
@@ -139,7 +149,7 @@ class _ImportPageState extends State<ImportPage> {
   Future<void> read() async {
     final current = await web.currentUrl();
     if (!mounted) return;
-    if (current == null || !allowed(current)) {
+    if (current == null || !coursePage(current)) {
       setState(() => notice = '请先进入学校原始课表页面');
       return;
     }
@@ -163,7 +173,7 @@ class _ImportPageState extends State<ImportPage> {
     });
     try {
       final script = await rootBundle.loadString(
-        'assets/haut_reader.js',
+        school.readerAsset,
         cache: false,
       );
       await web.runJavaScript('$script\nsemesterRead(${jsonEncode(nonce)});');
@@ -182,7 +192,8 @@ class _ImportPageState extends State<ImportPage> {
     if (!mounted || !reading) return;
     try {
       final packet = jsonDecode(message.message) as Map;
-      if (packet['nonce'] != nonce || !allowed(await web.currentUrl() ?? '')) {
+      if (packet['nonce'] != nonce ||
+          !coursePage(await web.currentUrl() ?? '')) {
         return;
       }
       nonce = null;
@@ -192,18 +203,23 @@ class _ImportPageState extends State<ImportPage> {
       }
       if (packet['kind'] != 'courses') return;
       final value = packet['value'] as Map;
-      final rows = parseHautCourses(value['rows'] as List);
+      final parsed = school.parse(value);
+      final rows = parsed.courses;
       if (!mounted) return;
       setState(() {
         reading = false;
-        notice = '读取到${rows.length}条课程，正在核对学期与节次';
+        notice = '正在核对课表';
       });
       if (await showImportPreview(
         context,
         widget.controller,
         rows,
-        'haut_webview',
-        sourceTerm: '${value['sourceTerm'] ?? ''}',
+        school.source,
+        sourceTerm: parsed.sourceTerm,
+        extras: parsed.extras,
+        sourceFirstMonday: parsed.sourceFirstMonday,
+        warnings: parsed.warnings,
+        metadata: parsed.metadata,
       )) {
         await leave(home: true);
       }
@@ -218,11 +234,23 @@ class _ImportPageState extends State<ImportPage> {
   }
 
   Future<void> clearSchool() async {
-    await web.removeJavaScriptChannel('SemesterImport');
-    await WebViewCookieManager().clearCookies();
-    await web.clearLocalStorage();
-    await web.clearCache();
-    await web.loadRequest(Uri.parse('about:blank'));
+    Object? failure;
+    StackTrace? failureStack;
+    for (final action in <Future<dynamic> Function()>[
+      () => web.removeJavaScriptChannel('SemesterImport'),
+      () => WebViewCookieManager().clearCookies(),
+      web.clearLocalStorage,
+      web.clearCache,
+      () => web.loadRequest(Uri.parse('about:blank')),
+    ]) {
+      try {
+        await action();
+      } catch (error, stack) {
+        failure ??= error;
+        failureStack ??= stack;
+      }
+    }
+    if (failure != null) Error.throwWithStackTrace(failure, failureStack!);
   }
 
   Future<void> leave({bool home = false}) async {
@@ -230,7 +258,16 @@ class _ImportPageState extends State<ImportPage> {
     closing = true;
     nonce = null;
     timeout?.cancel();
-    await clearSchool();
+    try {
+      await clearSchool();
+    } catch (error) {
+      debugPrint('School WebView cleanup incomplete (${error.runtimeType})');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已退出课表导入；学校登录缓存清理未完成，请重新打开App重试。')),
+        );
+      }
+    }
     if (!mounted) return;
     setState(() => closed = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -248,7 +285,13 @@ class _ImportPageState extends State<ImportPage> {
   void dispose() {
     timeout?.cancel();
     if (!closing) {
-      clearSchool();
+      unawaited(
+        clearSchool().catchError((Object error) {
+          debugPrint(
+            'School WebView cleanup incomplete (${error.runtimeType})',
+          );
+        }),
+      );
     }
     super.dispose();
   }
@@ -261,16 +304,30 @@ class _ImportPageState extends State<ImportPage> {
     },
     child: Scaffold(
       appBar: AppBar(
+        toolbarHeight: MediaQuery.textScalerOf(context).scale(1) > 1.4
+            ? 96
+            : 60,
         leading: AppIconButton(
           onPressed: leave,
           icon: const Icon(Icons.arrow_back),
           tooltip: '返回并退出教务登录',
         ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('河南工业大学', style: TextStyle(fontSize: 18)),
-            Text('jwglxt.haut.edu.cn', style: TextStyle(fontSize: 12)),
+            Text(
+              school.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 18, height: 1.25),
+            ),
+            Text(
+              Uri.tryParse(pageUrl ?? school.loginUrl)?.host ??
+                  Uri.parse(school.loginUrl).host,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
           ],
         ),
         actions: [
@@ -283,37 +340,88 @@ class _ImportPageState extends State<ImportPage> {
       ),
       body: Column(
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: WorkflowHeader(steps: ['选择学校', '登录教务', '核对课表'], current: 1),
-          ),
-          const Padding(
-            padding: EdgeInsets.all(10),
-            child: Text(
-              '在学校原页登录，进入“信息查询 → 个人课表查询”。密码只发送给学校。',
-              style: TextStyle(fontSize: 14),
-            ),
-          ),
-          if (loading) const LinearProgressIndicator(),
-          Expanded(child: WebViewWidget(controller: web)),
-          if (notice != null)
+          if (MediaQuery.viewInsetsOf(context).bottom == 0)
             Padding(
-              padding: const EdgeInsets.all(10),
-              child: Text(notice!, style: const TextStyle(fontSize: 14)),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const AcademicStepRail(
+                    steps: ['选择学校', '登录教务', '核对课表'],
+                    current: 1,
+                  ),
+                  Text(
+                    school.instructions,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.4,
+                      color: CampusColors.muted,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: SizedBox(
-                width: double.infinity,
-                child: AppButton(
-                  onPressed: reading || closing ? null : read,
-                  child: Text(reading ? '正在读取课表…' : '读取当前学期课表'),
+          Expanded(
+            // Keep the native view and its input focus when keyboard chrome hides.
+            key: const ValueKey('school-webview'),
+            child: AppLoadingOverlay(
+              loading: loading,
+              label: '正在打开',
+              child: Container(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: CampusColors.line),
+                    bottom: BorderSide(color: CampusColors.line),
+                  ),
                 ),
+                child: WebViewWidget(controller: web),
               ),
             ),
           ),
+          if (MediaQuery.viewInsetsOf(context).bottom == 0)
+            Material(
+              color: CampusColors.surface,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (notice != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                size: 18,
+                                color: CampusColors.muted,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  notice!,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    height: 1.4,
+                                    color: CampusColors.ink,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      AppButton(
+                        onPressed: loading || reading || closing ? null : read,
+                        child: Text(reading ? '正在读取课表…' : '读取当前学期课表'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     ),

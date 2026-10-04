@@ -135,6 +135,7 @@ class SemesterApi {
     Duration? receiveTimeout,
     String? contentType,
     ResponseType? responseType,
+    Map<String, dynamic>? queryParameters,
   }) async {
     final stamp = generation;
     final key =
@@ -148,7 +149,8 @@ class SemesterApi {
       try {
         final response = await dio.request(
           '/api/v1$path',
-          data: data,
+          data: data is FormData ? data.clone() : data,
+          queryParameters: queryParameters,
           options: Options(
             method: method,
             receiveTimeout: receiveTimeout,

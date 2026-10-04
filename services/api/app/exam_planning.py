@@ -10,7 +10,7 @@ from .academics import owned_semester,replay,remember,fingerprint
 from .items import owned_item,check_version,serialize_item,audit,rules_for,serialize_rule
 from .item_schemas import ItemFields,ItemTime
 from .exam_schemas import ReviewInput,ExamChangeInput,ExamChangeApply
-from .reminder_rules import utcnow,anchor_at,instant
+from .reminder_rules import utcnow,anchor_at,notice_arrival_at
 from .capacity import analyze,calendar_context
 from .plan_rules import classify
 
@@ -71,6 +71,9 @@ def exam_change_context(db,user,e,body):
     if e.lifecycle!='active':error(422,'INACTIVE_EXAM','请先核对考试状态')
     s=owned_semester(db,user,e.semester_id);source=snapshot(db,user,s);now=utcnow()
     updated={**e.payload,'time':body.time.model_dump(mode='json'),'certainty':body.certainty,'location':body.location,'reserve_time':body.reserve_time}
+    if body.details is not None:
+        updated['details']={**e.payload.get('details',{}),
+                            **body.details.model_dump(mode='json',exclude_unset=True)}
     for key in ('title','notes'):
         if getattr(body,key) is not None:updated[key]=getattr(body,key)
     if 'course_id' in body.model_fields_set:
@@ -95,6 +98,9 @@ def exam_change_context(db,user,e,body):
         if row['id']==e.id:after[i]={**row,**updated}
         elif row['id'] in after_tasks:after[i]={**row,**after_tasks[row['id']]}
     c=calendar_context(*source[:3],after,now);_,issues=classify(source[4],after,c['free'].spans,c['begin'])
+    before_context=calendar_context(*source[:4],now)
+    from .conflict_changes import introduced_conflicts
+    new_conflicts=introduced_conflicts(before_context['conflicts'],c['conflicts'])
     ids={r['block_id'] for r in issues}
     before_risk=analyze(*source[:4],now,source[4]);after_risk=analyze(*source[:3],after,now,source[4])
     old={r['item_id']:r for r in before_risk['items']}
@@ -113,14 +119,17 @@ def exam_change_context(db,user,e,body):
         review_reminders.extend(serialize_rule(r,view,task_rules) for r in task_rules)
     token=fingerprint({'revision':s.revision,'exam_version':e.version,'payload_after':updated,'request':body.model_dump(mode='json',include=set(ExamChangeInput.model_fields)),
         'reminder_dependencies':sorted(dependencies,key=lambda r:r['item_id'])})
+    arrival=notice_arrival_at(updated)
     result={'base_revision':s.revision,'item_version':e.version,'before':serialize_item(db,e),
         'preview_token':token,
-        'after':{**serialize_item(db,e),**updated,'anchor_at':anchor_at(updated).isoformat() if anchor_at(updated) else None,'reminders':changed_reminders},
+        'after':{**serialize_item(db,e),**updated,'anchor_at':anchor_at(updated).isoformat() if anchor_at(updated) else None,
+            'arrival_at':arrival.isoformat() if arrival else None,'reminders':changed_reminders},
         'reminders_after':changed_reminders,'review_reminders_after':review_reminders,
         'reviews':[{'id':r.id,'title':r.payload['title'],'version':r.version,'before_time':r.payload['time'],
             'after_time':after_tasks.get(r.id,r.payload)['time'],'will_align':r.id in after_tasks} for r in active],
         'affected_blocks':[b for b in source[4] if b['id'] in ids],'risk_changes':risk_changes,
-        'fixed_conflicts':after_risk['fixed_conflicts'],'fixed_conflict_count':after_risk['summary']['fixed_conflict_count']}
+        'fixed_conflicts':c['conflicts'],'fixed_conflict_count':len(c['conflicts']),
+        'new_fixed_conflicts':new_conflicts,'new_fixed_conflict_count':len(new_conflicts)}
     return s,updated,after_tasks,result,now
 
 
@@ -143,7 +152,7 @@ def apply_exam_command(db,user,id,body,idempotency_key=None):
     s,updated,tasks,preview,now=exam_change_context(db,user,e,body)
     if s.revision!=body.expected_revision:error(409,'SNAPSHOT_STALE','核对后学期安排已变化，请重新预览')
     if preview['preview_token']!=body.preview_token:error(409,'PREVIEW_STALE','核对后提醒或输入已变化，请重新预览考试影响')
-    if preview['fixed_conflict_count'] and not body.confirm_fixed_conflicts:error(422,'CONFIRM_FIXED_CONFLICTS','请明确确认记录存在固定冲突的考试安排')
+    if preview['new_fixed_conflict_count'] and not body.confirm_fixed_conflicts:error(422,'CONFIRM_FIXED_CONFLICTS','修改后新增了时间冲突，请核对后保存')
     update_payload(db,e,updated,body.reason,now)
     for task_id,payload in tasks.items():update_payload(db,owned_item(db,user,task_id),payload,('用户随考试改期同步复习截止：'+body.reason)[:500],now)
     s.revision+=1

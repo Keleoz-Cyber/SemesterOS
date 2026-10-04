@@ -90,6 +90,14 @@ class LoginSession(Base):
     refresh_expires: Mapped[int] = mapped_column()
 
 
+class UserProfile(Base):
+    """Self-reported personal context; never an authentication/permission role."""
+    __tablename__ = 'user_profiles'
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
 class Semester(Base):
     __tablename__ = "semesters"
     __table_args__ = (UniqueConstraint("user_id", "id"),)
@@ -111,6 +119,8 @@ class ImportBatch(Base):
     source: Mapped[str] = mapped_column(String(30))
     source_term: Mapped[str] = mapped_column(String(120), default="")
     courses: Mapped[list] = mapped_column(JSON)
+    extras: Mapped[list] = mapped_column(JSON, default=list)
+    source_first_monday: Mapped[str | None] = mapped_column(String(10), nullable=True)
     base_revision: Mapped[int] = mapped_column(Integer)
     receipt: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
@@ -345,6 +355,7 @@ class AgentThread(Base):
     title: Mapped[str] = mapped_column(String(80), default='新对话')
     created_at: Mapped[str] = mapped_column(String(40))
     updated_at: Mapped[str] = mapped_column(String(40))
+    context: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class AgentRun(Base):

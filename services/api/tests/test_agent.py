@@ -132,7 +132,10 @@ def test_agent_rejects_stale_preview_and_can_dismiss_it(client):
     assert revision(client,h,s['id'])==1
 
 
-def test_agent_modifies_task_and_reminder_via_existing_business_rules(client):
+def test_agent_modifies_task_and_reminder_via_existing_business_rules(client, monkeypatch):
+    from datetime import datetime
+    from app import reminder_rules
+    monkeypatch.setattr(reminder_rules, 'utcnow', lambda: datetime.fromisoformat('2026-09-30T08:00:00+08:00'))
     _,h=register(client); s=semester(client,h); tid=thread(client,h,s['id'])
     item=client.post('/api/v1/items',headers=h,json={'semester_id':s['id'],'kind':'task','title':'Java报告'}).json()
     req=turn(client,h,tid,'Java报告重命名为Java实验报告')
@@ -156,7 +159,8 @@ def test_agent_modifies_task_and_reminder_via_existing_business_rules(client):
     url='/api/v1/agent/runs/'+req['id']; result=client.get(url,headers=h).json()
     assert result['status']=='needs_confirmation',result
     assert client.post(url+'/decision',headers=h,json={'decision':'confirm','token':result['preview']['token']}).status_code==200
-    assert len(client.get('/api/v1/items/'+item['id'],headers=h).json()['reminders'])==1
+    reminders=client.get('/api/v1/items/'+item['id'],headers=h).json()['reminders']
+    assert len(reminders)==1 and reminders[0]['trigger_at']=='2026-10-01T12:00:00+00:00'
 
 
 def test_agent_cancelled_worker_and_restart_checkpoint_do_not_duplicate(client):
@@ -195,22 +199,31 @@ def test_agent_analysis_counts_overlap_once_and_preserves_unknowns(client):
     assert client.get('/api/v1/agent/runs/'+req['id'],headers=h).json()['status']=='completed'
 
 
-def test_free_windows_waits_for_cross_day_unknown_end(client, monkeypatch):
-    from datetime import datetime
+@pytest.mark.parametrize('start_at,expected_end', [
+    ('2026-09-20T23:00:00+08:00', '2026-09-21T13:00:00+08:00'),
+    ('2026-09-21T10:00:00+08:00', '2026-09-21T10:00:00+08:00'),
+])
+def test_free_windows_respect_known_day_and_keep_unknown_end_warning(client, monkeypatch, start_at, expected_end):
+    from datetime import datetime, timezone
     from app import reminder_rules
     monkeypatch.setattr(reminder_rules,'utcnow',lambda:datetime.fromisoformat('2026-09-21T08:00:00+08:00'))
     from test_schedule_api import setup
     h,s,_=setup(client,monkeypatch)
-    e=create_event(client,h,s['id'],time={'precision':'exact','at':'2026-09-20T23:00:00+08:00'}).json()['event']
+    e=create_event(client,h,s['id'],time={'precision':'exact','at':start_at}).json()['event']
     tid=thread(client,h,s['id']);req=turn(client,h,tid,'9月21日有没有一小时空闲')
     def model(m,t):
         if m[-1]['role']=='user':return call('find_free_windows',{'from_date':'2026-09-21','to_date':'2026-09-21','duration_minutes':60})
-        return {'role':'assistant','content':'请先补全活动结束时间。'}
+        return {'role':'assistant','content':'这些候选时段按已知日期避让；活动结束时间仍需核对。'}
     run(client,model)
     value=client.get('/api/v1/agent/runs/'+req['id'],headers=h).json()
     result=value['cards'][0]['data']
-    assert result['windows']==[]
-    assert any(x['id']=='event:'+e['id'] for x in result['needs_input'])
+    assert value['status']=='completed'
+    assert result['windows']==[{'start_at':'2026-09-21T01:00:00+00:00',
+        'end_at':datetime.fromisoformat(expected_end).astimezone(timezone.utc).isoformat()}]
+    warning=next(x for x in result['uncertainty_warnings'] if x['id']=='event:'+e['id'])
+    assert warning['exclusion_applied'] and warning['end_unknown'] and '结束时间' in warning['message']
+    assert result['needs_input']==[]
+    assert client.get('/api/v1/events/'+e['id'],headers=h).json()['time']['end_at'] is None
 
 
 def test_apply_failure_rolls_back_both_business_data_and_agent_receipt(client,monkeypatch):

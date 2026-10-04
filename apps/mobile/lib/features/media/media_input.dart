@@ -11,12 +11,39 @@ abstract interface class MediaInput {
   Future<void> dispose();
 }
 
-class DeviceMediaInput implements MediaInput {
+abstract interface class NoticeImagesInput {
+  Future<List<String>> images({bool recover = false});
+}
+
+/// Old/fake inputs still work without having to implement the batch picker.
+Future<List<String>> pickNoticeImages(
+  MediaInput input, {
+  bool recover = false,
+}) async {
+  if (input is NoticeImagesInput) {
+    return (input as NoticeImagesInput).images(recover: recover);
+  }
+  final path = await input.image(recover: recover);
+  return path == null ? [] : [path];
+}
+
+class DeviceMediaInput implements MediaInput, NoticeImagesInput {
   final recorder = AudioRecorder();
   final picker = ImagePicker();
   String? recordingPath;
   final recordings = <String>{};
   bool disposed = false;
+  @override
+  Future<List<String>> images({bool recover = false}) async {
+    if (recover) {
+      if (!Platform.isAndroid) return [];
+      final lost = await picker.retrieveLostData();
+      return lost.files?.map((file) => file.path).toList() ?? [];
+    }
+    if (Platform.isAndroid) await picker.retrieveLostData();
+    return (await picker.pickMultiImage()).map((file) => file.path).toList();
+  }
+
   @override
   Future<String?> image({bool recover = false}) async {
     if (recover) {

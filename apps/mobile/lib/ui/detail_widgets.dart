@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'campus_theme.dart';
+import 'app_controls.dart';
 
 /// A record's identity, separate from its dates, actions and editable fields.
 class RecordHeading extends StatelessWidget {
@@ -40,15 +43,17 @@ class RecordHeading extends StatelessWidget {
                       color: CampusColors.ink,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  if (label.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -119,7 +124,7 @@ class EditorSection extends StatelessWidget {
                   ),
                 ),
               ),
-              ?action,
+              if (action != null) ...[const SizedBox(width: 12), action!],
             ],
           ),
         ),
@@ -183,75 +188,9 @@ class RecordFact extends StatelessWidget {
   );
 }
 
-class WorkflowHeader extends StatelessWidget {
-  final List<String> steps;
-  final int current;
-  const WorkflowHeader({super.key, required this.steps, required this.current});
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 24),
-    child: Wrap(
-      spacing: 8,
-      runSpacing: 10,
-      children: [
-        for (var i = 0; i < steps.length; i++)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (i > 0)
-                const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    size: 16,
-                    color: CampusColors.muted,
-                  ),
-                ),
-              Flexible(
-                child: Semantics(
-                  label:
-                      '${steps[i]}，${i < current
-                          ? '已完成'
-                          : i == current
-                          ? '当前步骤'
-                          : '待完成'}',
-                  excludeSemantics: true,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: i == current
-                          ? CampusColors.blueSoft
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      steps[i],
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: i == current
-                            ? FontWeight.w700
-                            : FontWeight.w400,
-                        color: i <= current
-                            ? CampusColors.primary
-                            : CampusColors.muted,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-      ],
-    ),
-  );
-}
-
 class ActionFooter extends StatelessWidget {
   final String label;
-  final VoidCallback? onPressed;
+  final FutureOr<void> Function()? onPressed;
   final IconData? icon;
   final Widget? secondary;
   const ActionFooter({
@@ -273,11 +212,11 @@ class ActionFooter extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ?secondary,
-            FButton(
-              onPress: onPressed,
-              size: FButtonSizeVariant.lg,
-              prefix: icon == null ? null : Icon(icon),
-              child: Flexible(child: Text(label, textAlign: TextAlign.center)),
+            AppButton.base(
+              onPressed: onPressed,
+              variant: FButtonVariant.primary,
+              icon: icon == null ? null : Icon(icon),
+              child: Text(label, textAlign: TextAlign.center),
             ),
           ],
         ),

@@ -1,20 +1,26 @@
 import '../../ui/app_controls.dart';
 import '../../ui/app_picker_field.dart';
 import '../../core/api.dart' show userError;
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/detail_widgets.dart';
+import '../../ui/record_actions.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
+import '../items/task_surfaces.dart';
+import '../notices/notice_fields.dart' show noticeTime;
 import '../planning/date_time_picker.dart';
 import '../planning/proposal_page.dart';
+import '../planning/risk_widgets.dart' show minutesLabel;
 import '../media/source_view.dart';
+import 'course_change_display.dart';
 
 const changeNames = {
   'move': '调课',
   'cancel': '停课',
-  'suspend': '放假停课（明确选择课次）',
+  'suspend': '多次停课',
   'add': '补课',
   'block': '固定活动',
 };
@@ -88,7 +94,7 @@ class _ChangesPageState extends State<ChangesPage> {
     if (mounted && same) setState(() => feed = result);
   });
   Future<void> parse() => act(() async {
-    if (source.text.trim().isEmpty) throw Exception('先粘贴学校通知或填写变更依据');
+    if (source.text.trim().isEmpty) throw Exception('请输入要修改的安排');
     final r = await widget.controller.changeRequest(
       'POST',
       '/changes/parse',
@@ -119,10 +125,73 @@ class _ChangesPageState extends State<ChangesPage> {
       }
     });
   });
-  Future<void> preview() => act(() async {
-    if (title.text.trim().isEmpty || source.text.trim().isEmpty) {
-      throw Exception('请填写标题与原始通知/变更依据');
+  Future<void> chooseWindow() async {
+    if (busy || !same) return;
+    final previousStart = start, previousEnd = end, previousKind = kind;
+    final previousTargets = {...targets};
+    final selected = widget.controller
+        .rows(feed?['occurrences'])
+        .where((row) => targets.contains(row['id']))
+        .toList();
+    final original = selected.length == 1 ? selected.first : null;
+    final originalStart = DateTime.tryParse('${original?['start_at'] ?? ''}');
+    final originalEnd = DateTime.tryParse('${original?['end_at'] ?? ''}');
+    final duration =
+        originalStart != null &&
+            originalEnd != null &&
+            originalEnd.isAfter(originalStart)
+        ? originalEnd.difference(originalStart)
+        : null;
+    final value = await pickSchoolDateTimeRange(
+      context,
+      initialStart:
+          start ??
+          (end != null && duration != null
+              ? end!.subtract(duration)
+              : originalStart),
+      initialEnd:
+          end ??
+          (start != null && duration != null
+              ? start!.add(duration)
+              : originalEnd),
+      title: '${kind == 'block' ? '活动' : changeNames[kind] ?? '安排'}时间',
+    );
+    if (value == null || !mounted || !same || busy || kind != previousKind) {
+      return;
     }
+    if (start != previousStart ||
+        end != previousEnd ||
+        !setEquals(targets, previousTargets)) {
+      return;
+    }
+    setState(() {
+      start = value.start;
+      end = value.end;
+      error = null;
+    });
+  }
+
+  String get windowLabel => start != null && end != null
+      ? displayInterval(start!.toIso8601String(), end!.toIso8601String())
+      : start != null
+      ? '${displayInstant(start!.toIso8601String())} 起'
+      : end != null
+      ? '至 ${displayInstant(end!.toIso8601String())}'
+      : '选择起止时间';
+
+  Future<void> preview() => act(() async {
+    final selectedRows = widget.controller
+        .rows(feed?['occurrences'])
+        .where((e) => targets.contains(e['id']))
+        .toList();
+    final name = title.text.trim().isNotEmpty
+        ? title.text.trim()
+        : selectedRows.length == 1
+        ? '${selectedRows.first['title']}'
+        : kind == 'suspend'
+        ? '课程停课'
+        : '';
+    if (name.isEmpty) throw Exception('请填写课程或活动名称');
     if (['move', 'cancel', 'suspend'].contains(kind) && targets.isEmpty) {
       throw Exception('请选择实际受影响的课次');
     }
@@ -136,8 +205,10 @@ class _ChangesPageState extends State<ChangesPage> {
       data: {
         'kind': kind,
         'targets': targets.toList(),
-        'title': title.text.trim(),
-        'source_text': source.text.trim(),
+        'title': name,
+        'source_text': source.text.trim().isEmpty
+            ? '用户更正个人安排'
+            : source.text.trim(),
         if (widget.initialSourceId != null) 'source_id': widget.initialSourceId,
         'location': location.text.trim(),
         if (['move', 'add', 'block'].contains(kind)) ...{
@@ -174,18 +245,16 @@ class _ChangesPageState extends State<ChangesPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, update) => AppDialog(
-          title: const Text('明确选择受影响课次'),
+          title: const Text('选择课次'),
           content: SizedBox(
             width: 500,
             child: ListView(
               shrinkWrap: true,
               children: [
-                const Text('每行代表一次课。放假只停用所选课次，不默认停掉所有课程。'),
                 for (final e in all)
                   AppCheckRow(
-                    title: Text(
-                      '${e['title']}\n${displayInstant(e['start_at'])}',
-                    ),
+                    title: Text('${e['title']}'),
+                    subtitle: Text(displayInterval(e['start_at'], e['end_at'])),
                     value: selected.contains(e['id']),
                     onChanged: (v) => update(() {
                       if (v == true) {
@@ -228,7 +297,7 @@ class _ChangesPageState extends State<ChangesPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('现实变化'),
+      title: const Text('修改课程安排'),
       actions: [
         AppIconButton(
           onPressed: busy ? null : load,
@@ -242,12 +311,12 @@ class _ChangesPageState extends State<ChangesPage> {
       children: [
         const RecordHeading(
           label: '课程与固定活动',
-          title: '记录现实变化',
+          title: '修改安排',
           icon: Icons.edit_calendar_outlined,
         ),
 
         EditorSection(
-          title: '学校通知或变更依据',
+          title: '一句话修改',
           icon: Icons.description_outlined,
           accent: CampusColors.teal,
           children: [
@@ -256,14 +325,14 @@ class _ChangesPageState extends State<ChangesPage> {
               minLines: 3,
               maxLines: 6,
               decoration: const InputDecoration(
-                labelText: '变更通知或修改原因',
-                hintText: '粘贴调课、停课、补课、放假或活动通知',
+                labelText: '修改内容（可选）',
+                hintText: '例如：10月1日至7日停课',
               ),
             ),
             AppTextButton.icon(
               onPressed: busy ? null : parse,
               icon: const Icon(Icons.auto_awesome_outlined),
-              label: const Text('让AI整理通知'),
+              label: const Text('智能填写'),
             ),
             if (suggestion != null) ...[
               const SoftNotice('AI已整理出通知内容。请检查课程、日期和时间，确认后才会保存。'),
@@ -305,15 +374,18 @@ class _ChangesPageState extends State<ChangesPage> {
                 onPressed: busy || feed == null ? null : chooseTargets,
                 child: Text('选择受影响课次（已选${targets.length}次）'),
               ),
-              for (final e
-                  in widget.controller
-                      .rows(feed?['occurrences'])
-                      .where((e) => targets.contains(e['id'])))
-                RecordFact(
-                  label: '已选课次',
-                  value: '${e['title']} · ${displayInstant(e['start_at'])}',
-                  icon: Icons.check_circle_outline_rounded,
-                  color: CampusColors.teal,
+              if (targets.isNotEmpty)
+                CourseChangeSummary(
+                  showTitle: false,
+                  showSource: false,
+                  change: {
+                    'kind': kind,
+                    'before': widget.controller
+                        .rows(feed?['occurrences'])
+                        .where((e) => targets.contains(e['id']))
+                        .toList(),
+                    'after': const [],
+                  },
                 ),
             ],
           ],
@@ -323,40 +395,14 @@ class _ChangesPageState extends State<ChangesPage> {
             title: '新的时间与地点',
             icon: Icons.event_outlined,
             children: [
-              AppOutlineButton.icon(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        final v = await pickSchoolDateTime(
-                          context,
-                          initial: start,
-                        );
-                        if (v != null && mounted) setState(() => start = v);
-                      },
-                icon: const Icon(Icons.schedule_rounded),
-                label: Text(
-                  start == null
-                      ? '选择新的开始日期与时间'
-                      : '新开始：${displayInstant(start!.toIso8601String())}',
-                ),
-              ),
-              const SizedBox(height: 8),
-              AppOutlineButton.icon(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        final v = await pickSchoolDateTime(
-                          context,
-                          initial: end ?? start,
-                        );
-                        if (v != null && mounted) setState(() => end = v);
-                      },
-                icon: const Icon(Icons.schedule_rounded),
-                label: Text(
-                  end == null
-                      ? '选择新的结束日期与时间'
-                      : '新结束：${displayInstant(end!.toIso8601String())}',
-                ),
+              RecordActionTile(
+                key: const ValueKey('change-time-range'),
+                onTap: busy ? null : chooseWindow,
+                icon: Icons.calendar_month_outlined,
+                title: windowLabel,
+                subtitle: start != null && end != null && end!.isAfter(start!)
+                    ? '时长 ${minutesLabel(end!.difference(start!).inMinutes)}'
+                    : null,
               ),
               const SizedBox(height: 12),
               AppField(
@@ -368,53 +414,40 @@ class _ChangesPageState extends State<ChangesPage> {
         const SizedBox(height: 12),
 
         const Divider(height: 32),
-        const SectionHeading('最近50条变化预览与记录'),
+        const SectionHeading('最近的课程调整'),
         for (final p in widget.controller.rows(feed?['changes']))
-          AppTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 4,
-              vertical: 4,
-            ),
-            leading: Icon(
-              p['phase'] == 'applied'
-                  ? Icons.check_circle_outline_rounded
-                  : p['phase'] == 'stale'
-                  ? Icons.history_rounded
-                  : Icons.pending_actions_rounded,
-              color: p['phase'] == 'applied'
-                  ? CampusColors.teal
-                  : CampusColors.muted,
-            ),
-            title: Text(
-              '${p['request']['title']} · ${changeNames[p['request']['kind']]}',
-            ),
-            subtitle: Text(
-              p['phase'] == 'applied'
-                  ? '新安排已保存'
-                  : p['phase'] == 'stale'
-                  ? '旧预览已失效'
-                  : '待确认',
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ChangePreviewPage(
-                  controller: widget.controller,
-                  preview: p,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              CourseChangeSummary(
+                change: p,
+                onOpen: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChangePreviewPage(
+                      controller: widget.controller,
+                      preview: p,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              if (p['phase'] != 'applied')
+                Text(
+                  p['phase'] == 'stale' ? '此预览已失效' : '尚未保存',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: CampusColors.muted,
+                  ),
+                ),
+              const Divider(height: 24),
+            ],
           ),
       ],
     ),
     bottomNavigationBar: ActionFooter(
       secondary: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          if (error != null) SoftNotice(error!, warning: true),
-          if (busy) const LinearProgressIndicator(),
-        ],
+        children: [if (error != null) SoftNotice(error!, warning: true)],
       ),
       label: '预览变化与影响',
       onPressed: busy ? null : preview,
@@ -500,127 +533,53 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
     }
   }
 
-  Widget event(Map e) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          '${e['title']}',
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-        ),
-        RecordFact(
-          label: '时间',
-          value:
-              '${displayInstant(e['start_at'])} — ${displayInstant(e['end_at'])}',
-          icon: Icons.schedule_rounded,
-        ),
-        RecordFact(
-          label: '地点',
-          value: '${e['location'] ?? ''}'.isEmpty
-              ? '地点待确认'
-              : '${e['location']}',
-          icon: Icons.location_on_outlined,
-        ),
-      ],
-    ),
-  );
-
-  Widget comparison(Map patch) {
-    Widget side(bool after) => Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: after ? CampusColors.tealSoft : CampusColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: after
-              ? CampusColors.teal.withValues(alpha: .3)
-              : CampusColors.line,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            after ? '变化后' : '变化前',
-            style: TextStyle(
-              fontSize: 14,
-              color: after ? CampusColors.teal : CampusColors.muted,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          for (final e in patch[after ? 'after' : 'before']) event(e),
-          if ((patch[after ? 'after' : 'before'] as List).isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(after ? '所选课次停课，其余课次保持' : '新增安排'),
-            ),
-        ],
-      ),
-    );
-    return LayoutBuilder(
-      builder: (context, box) {
-        if (box.maxWidth < 600 ||
-            MediaQuery.textScalerOf(context).scale(1) > 1.3) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              side(false),
-              const Padding(
-                padding: EdgeInsets.all(8),
-                child: Icon(
-                  Icons.arrow_downward_rounded,
-                  color: CampusColors.teal,
-                ),
-              ),
-              side(true),
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: side(false)),
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: Icon(
-                Icons.arrow_forward_rounded,
-                color: CampusColors.teal,
-              ),
-            ),
-            Expanded(child: side(true)),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final impact = p['impact'], patch = p['patch'];
-    final conflict = (impact['after_summary']['fixed_conflict_count'] ?? 0) > 0;
+    final impact = p['impact'];
+    final blocks = widget.controller.rows(impact['affected_blocks']);
+    final risks = widget.controller
+        .rows(impact['risk_changes'])
+        .where((r) => r['before_slack'] is num && r['after_slack'] is num)
+        .toList();
+    final conflicts =
+        impact['new_fixed_conflicts'] ?? impact['fixed_conflicts'] ?? [];
+    final conflict = conflicts.isNotEmpty;
+    final display = CourseChangeDisplay(p);
     final stale = widget.controller.revisionIsStale(
       p['semester_id'],
       p['base_revision'],
     );
     return Scaffold(
-      appBar: AppBar(title: Text(applied ? '新安排已保存' : '确认课程或活动变更')),
+      appBar: AppBar(
+        title: Text(
+          applied
+              ? display.restoration
+                    ? '已恢复原安排'
+                    : '调整已保存'
+              : '核对课程调整',
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           RecordHeading(
-            label: changeNames[p['request']['kind']] ?? '安排变化',
-            title: '${p['request']['title']}',
-            icon: Icons.compare_arrows_rounded,
+            label: display.action,
+            title: display.title.isEmpty ? '课程安排' : display.title,
+            icon: display.icon,
           ),
 
-          comparison(patch),
-          const SizedBox(height: 20),
-          DocumentPanel(
-            title: '变更通知',
-            text: '${p['request']['source_text']}',
-            footer: p['request']['source_id'] != null
-                ? AppTextButton(
+          CourseChangeSummary(change: p, showTitle: false, showSource: false),
+          if ('${p['request']['source_text'] ?? ''}'.trim().isNotEmpty)
+            AppDisclosure(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('查看通知'),
+              children: [
+                SelectableText(
+                  '${p['request']['source_text']}',
+                  style: const TextStyle(fontSize: 15, height: 1.5),
+                ),
+                if (p['request']['source_id'] != null)
+                  AppTextButton(
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -631,44 +590,65 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
                       ),
                     ),
                     child: const Text('查看原图 / 原录音'),
-                  )
-                : null,
-          ),
-          EditorSection(
-            title: '本次预览时的影响',
-            icon: Icons.fact_check_outlined,
-            children: [
-              Text('个人计划需核对 ${(impact['affected_blocks'] as List).length} 段'),
-              for (final b in impact['affected_blocks'])
-                RecordFact(
-                  label: b['locked'] == true ? '已锁定的个人计划' : '个人计划',
-                  value: '${b['title']} · ${displayInstant(b['start_at'])}',
-                  icon: b['locked'] == true
-                      ? Icons.lock_outline_rounded
-                      : Icons.event_note_outlined,
-                ),
-              for (final r in impact['risk_changes'])
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    '${r['title']}\n计划余量：${r['before_slack'] ?? '待确认'} → ${r['after_slack'] ?? '待确认'} 分钟',
                   ),
-                ),
-            ],
-          ),
-          if (conflict)
-            const SoftNotice('固定安排之间已有冲突，个人重排不会移动学校安排。', warning: true),
-          for (final collision in impact['fixed_conflicts'] ?? [])
-            SoftNotice(
-              '${(collision['titles'] as List).join(' 与 ')}\n冲突时段：${displayInstant(collision['start_at'])} — ${displayInstant(collision['end_at'])}',
-              warning: true,
+              ],
             ),
-          if ((impact['after_summary']['fixed_conflict_count'] ?? 0) >
-              (impact['fixed_conflicts'] as List? ?? []).length)
-            const Text('此处列出前30处冲突，其余请在课表核对。'),
+          if (blocks.isNotEmpty || risks.isNotEmpty)
+            EditorSection(
+              title: '相关个人计划',
+              icon: Icons.event_note_outlined,
+              children: [
+                if (blocks.isNotEmpty) Text('${blocks.length} 段个人计划需要调整'),
+                for (final b in blocks)
+                  RecordFact(
+                    label: b['locked'] == true ? '已锁定的个人计划' : '个人计划',
+                    value: '${b['title']} · ${displayInstant(b['start_at'])}',
+                    icon: b['locked'] == true
+                        ? Icons.lock_outline_rounded
+                        : Icons.event_note_outlined,
+                  ),
+                if (risks.isNotEmpty)
+                  AppDisclosure(
+                    tilePadding: EdgeInsets.zero,
+                    title: const Text('查看任务时间变化'),
+                    children: [
+                      for (final r in risks)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                '${r['title']}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TaskChangeFacts(
+                                beforeLabel: '原剩余可用时间',
+                                afterLabel: '修改后',
+                                before: minutesLabel(r['before_slack']),
+                                after: minutesLabel(r['after_slack']),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+          for (final collision in conflicts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SoftNotice(
+                '${(collision['titles'] as List).join(' 与 ')}时间重叠\n${noticeTime({'at': collision['start_at'], 'end_at': collision['end_at']})}',
+                warning: true,
+              ),
+            ),
           if (conflict && !applied)
             AppCheckRow(
-              title: const Text('我已核实通知，确认保存并保留时间冲突提示'),
+              title: const Text('保留这些重叠安排'),
               value: confirmConflict,
               onChanged: busy
                   ? null
@@ -678,14 +658,14 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
           if (stale && !applied)
             const SoftNotice('此预览已失效，请返回重新预览', warning: true),
           if (error != null) SoftNotice(error!, warning: true),
-          if (busy) const LinearProgressIndicator(),
+
           if (!applied)
             AppButton(
               onPressed:
                   busy || !same || stale || (conflict && !confirmConflict)
                   ? null
                   : () => act(false),
-              child: const Text('确认现实变化，暂不移动个人计划'),
+              child: const Text('保存修改'),
             ),
           if (applied) ...[
             const SoftNotice('新安排已保存。接下来可以调整受影响的个人计划，查看方案后再确认。'),

@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/ui/app_picker_field.dart';
 import 'package:semester_os/features/agent/agent_page.dart';
 import 'package:semester_os/features/media/hold_voice_button.dart';
-import 'package:semester_os/features/media/media_capture_page.dart';
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'schedule_flow_test.dart' show ScheduleFixture;
 import 'centers_flow_test.dart' show settleIo;
@@ -68,7 +67,7 @@ void main() {
         );
         await settleIo(tester);
         expect(find.byType(HoldVoiceButton), findsOneWidget);
-        expect(find.byType(MediaCapturePage), findsNothing);
+
         expect(find.text('开始录音'), findsNothing);
         await capture(tester, 'voice-composer-$scale');
         await tester.tap(find.byTooltip('切换键盘输入'));

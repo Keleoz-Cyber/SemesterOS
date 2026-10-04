@@ -18,7 +18,7 @@ def impact(db,user,s):
     context=calendar_context(*data[:4],utcnow())
     _,issues=classify(data[4],data[3],context['free'].spans,context['begin'])
     # No simulated IDs escape the savepoint as actionable records.
-    conflicts=[{k:c[k] for k in ('start_at','end_at','titles')} for c in context['conflicts']]
+    conflicts=context['conflicts']
     return {'fixed_conflicts':conflicts,'affected_plan_count':len({i['block_id'] for i in issues})}
 
 
@@ -57,20 +57,28 @@ def run_children(db,user,s,groups,base):
 
 
 def simulate(db,user,s,groups,base):
+    before=impact(db,user,s)
     transaction=db.begin_nested()
     try:
         run_children(db,user,s,groups,base)
-        return impact(db,user,s)
+        result=impact(db,user,s)
+        from .conflict_changes import introduced_conflicts
+        return {**result,'new_fixed_conflicts':introduced_conflicts(before['fixed_conflicts'],result['fixed_conflicts'])}
     finally:
         transaction.rollback()
 
 
 def prepare_batch(db,user,thread,s,state,args,source):
     from .agent_tools import execute_tool
-    groups=[]; touched=set()
+    groups=[]; touched=set();new_items=set()
     for group in args.groups:
         previews=[]
         for operation in group.operations:
+            fields=getattr(operation.arguments,'fields',None)
+            if operation.tool=='prepare_item' or (operation.tool=='prepare_event' and operation.arguments.action=='create'):
+                signature=fingerprint({'tool':operation.tool,'fields':fields.model_dump(mode='json')})
+                if signature in new_items:error(422,'DUPLICATE_NOTICE_ITEM','同一项通知内容重复出现，请合并信息后生成一条预览')
+                new_items.add(signature)
             local=deepcopy(state);local.pop('preview',None);local['cards']=[]
             execute_tool(operation.tool,operation.arguments.model_dump(mode='json',exclude_unset=True),db,user,thread,local,source)
             p=local['preview']
@@ -96,7 +104,7 @@ def apply_batch(db,user,s,preview,ids,confirm_fixed_conflicts):
     groups=selected_groups(preview,ids)
     guard_dependencies(db,user,s,[p for g in groups for p in g['operations']])
     summary=simulate(db,user,s,groups,preview['expected_revision'])
-    if summary['fixed_conflicts'] and not confirm_fixed_conflicts:
+    if summary['new_fixed_conflicts'] and not confirm_fixed_conflicts:
         error(422,'CONFIRM_FIXED_CONFLICTS','这些安排存在时间冲突，请核对后勾选确认')
     results=run_children(db,user,s,groups,preview['expected_revision'])
     return {'semester_id':s.id,'revision':s.revision,'groups':results,'impact':summary}

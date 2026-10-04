@@ -1,4 +1,5 @@
 from datetime import datetime
+import pytest
 from test_foundation import client,register,semester
 from test_schedule_api import setup,proposal,accept
 from test_calendar_events import create_event
@@ -29,11 +30,22 @@ def test_new_notice_conflict_has_contextual_action_not_only_a_count(client,monke
     assert all(x['resource_type'] in ('event','plan','deadline','course','exam') for x in data['entries'])
 
 
-def test_unknown_fixed_end_blocks_optimistic_gap_suggestion(client,monkeypatch):
+@pytest.mark.parametrize('start_at,expected_minutes', [
+    ('2026-09-20T23:00:00+08:00',240), ('2026-09-21T10:00:00+08:00',60),
+])
+def test_unknown_fixed_end_keeps_candidate_windows_qualified(client,monkeypatch,start_at,expected_minutes):
     from app import briefs
     monkeypatch.setattr(briefs,'utcnow',lambda:datetime.fromisoformat('2026-09-21T08:00:00+08:00'),raising=False)
     h,s,_=setup(client,monkeypatch)
-    assert create_event(client,h,s['id'],time={'precision':'exact','at':'2026-09-20T23:00:00+08:00'}).status_code==201
+    response=create_event(client,h,s['id'],time={'precision':'exact','at':start_at})
+    assert response.status_code==201
+    event=response.json()['event']
     response=brief(client,h,s);assert response.status_code==200,response.text
-    data=response.json();assert data['available_windows']==[] and data['uncertain_count']==1
-    assert not any(x['kind']=='free_window' for x in data['suggestions'])
+    data=response.json();assert data['uncertain_count']==1
+    assert len(data['available_windows'])==1 and data['available_windows'][0]['minutes']==expected_minutes
+    warning=next(w for w in data['uncertainty_warnings'] if w['id']=='event:'+event['id'])
+    assert warning['end_unknown'] and warning['exclusion_applied'] and '结束时间' in warning['message']
+    assert any(x['kind']=='missing_time' for x in data['suggestions'])
+    suggestion=next(x for x in data['suggestions'] if x['kind']=='free_window')
+    assert '待核对' in suggestion['detail']
+    assert client.get('/api/v1/events/'+event['id'],headers=h).json()['time']['end_at'] is None

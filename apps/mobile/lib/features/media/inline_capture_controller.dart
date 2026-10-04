@@ -180,6 +180,7 @@ class InlineCaptureController extends ChangeNotifier {
   /// Copies the caller-owned temporary file before this future completes.
   Future<void> capture(String path, String kind) async {
     if (!same || busy) return;
+    final previousLocal = _local;
     final stamp = ++_operation;
     _working = true;
     _error = null;
@@ -212,7 +213,10 @@ class InlineCaptureController extends ChangeNotifier {
       _referenceAt = DateTime.now().toUtc().toIso8601String();
       _phase = 'uploading';
       await _save();
-      if (_valid(stamp)) await _uploadAndRecognize(stamp);
+      if (_valid(stamp)) {
+        await CaptureDrafts.releaseFile(_owner, previousLocal);
+        if (_valid(stamp)) await _uploadAndRecognize(stamp);
+      }
     } catch (e) {
       if (_valid(stamp)) {
         _error = userError(e);
@@ -336,8 +340,12 @@ class InlineCaptureController extends ChangeNotifier {
         _accept(Map<String, dynamic>.from(value), transcript: false);
         await _save();
       } else {
-        _reset();
+        final local = _local;
         await _drafts.save(draftKey, null);
+        if (!_valid(stamp)) return;
+        _reset();
+        _changed();
+        await CaptureDrafts.releaseFile(_owner!, local);
       }
     } catch (e) {
       if (_valid(stamp)) _error = userError(e);
@@ -464,11 +472,15 @@ class InlineCaptureController extends ChangeNotifier {
   Future<void> detach() async {
     if (!same) return;
     final stamp = ++_operation;
-    _reset();
+    final local = _local;
     _working = true;
     _changed();
     try {
       await _drafts.save(draftKey, null);
+      if (!_valid(stamp)) return;
+      _reset();
+      _changed();
+      await CaptureDrafts.releaseFile(_owner!, local);
     } catch (e) {
       if (_valid(stamp)) _error = userError(e);
     } finally {

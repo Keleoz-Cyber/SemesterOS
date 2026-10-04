@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.capacity import analyze
 from app.capacity import merge, subtract, CapacityIndex
@@ -53,12 +53,21 @@ def test_only_future_time_counts_and_elapsed_time_never_reduces_work():
     assert item['remaining_minutes'] == 60
 
 
-def test_missing_preferences_estimate_or_confirmed_start_do_not_get_precise_slack():
+def test_missing_preferences_estimate_or_true_waiting_dependency_do_not_get_precise_slack():
     assert run([task()],{'configured':False,'weekly':[],'exclusions':[]})['items'][0]['task_slack_minutes'] is None
     assert run([task(minutes=None)])['items'][0]['task_slack_minutes'] is None
-    row=run([task(start_policy='unconfirmed')])['items'][0]
+    item=task(start_policy='unconfirmed',details={'conditions':['收到审批结果后开始']})
+    row=run([item])['items'][0]
     assert row['level']=='unknown' and row['task_slack_minutes'] is None
     assert 'needs_start' in row['reason_codes']
+
+
+def test_ordinary_unconfirmed_start_and_eligibility_are_available_now():
+    item=task(start_policy='unconfirmed',details={'conditions':['本科生','尚未申请']})
+    row=run([item])['items'][0]
+    assert row['level']=='low' and row['task_slack_minutes']==60
+    assert 'needs_start' not in row['reason_codes'] and row['release_at']==at('08:00').astimezone(timezone.utc).isoformat()
+    assert item['start_policy']=='unconfirmed' and item['earliest_start_at'] is None
 
 
 def test_release_deadline_subwindow_exposes_hidden_overload():
@@ -73,11 +82,32 @@ def test_release_deadline_subwindow_exposes_hidden_overload():
 def test_unknown_exam_end_masks_precise_capacity_and_tentative_unreserved_does_not_block():
     exam={'id':'exam','kind':'exam','lifecycle':'active','title':'待核对考试','certainty':'tentative',
           'reserve_time':True,'time':{'precision':'exact','at':at('10:00').isoformat()}}
-    row=run([task(),exam])['items'][0]
-    assert row['task_slack_minutes'] is None and 'needs_exam_time' in row['reason_codes']
+    result=run([task(),exam]);row=result['items'][0]
+    assert row['task_slack_minutes'] is None and 'uncertain_exam' in row['reason_codes']
+    assert row['capacity_after_fixed_minutes']==60 and row['uncertainty_excluded_minutes']==180
+    assert row['fixed_occupied_minutes']==0 and row['level']=='medium'
+    assert row['window_gap_minutes']==0 and row['data_complete']
+    assert result['uncertainty_warnings'][0]['exclusion_applied']
+    assert exam['time'].get('end_at') is None
     row=run([task(),{**exam,'reserve_time':False}])['items'][0]
     assert row['task_slack_minutes']==60
     assert row['level']=='medium' and 'uncertain_exam' in row['reason_codes']
+
+
+def test_unknown_end_stays_uncertain_later_but_known_shortage_and_fixed_conflict_remain_high():
+    exam={'id':'exam','kind':'exam','lifecycle':'active','title':'结束待核对考试','certainty':'formal',
+          'reserve_time':True,'time':{'precision':'exact','at':'2026-09-20T23:00:00+08:00'}}
+    row=run([task(minutes=60),exam])['items'][0]
+    assert row['task_slack_minutes'] is None and row['level']=='medium'
+    assert row['capacity_after_fixed_minutes']==240 and row['uncertainty_excluded_minutes']==0
+    assert row['capacity_is_upper_bound'] and 'uncertain_exam' in row['reason_codes']
+    shortage=run([task(minutes=300),exam])['items'][0]
+    assert shortage['level']=='high' and shortage['window_gap_minutes']==60
+    assert shortage['critical_window']['capacity_is_upper_bound']
+    course={'id':'course','title':'已知课程','weekday':1,'weeks':[1], 'sections':[1]}
+    exact={**exam,'id':'exact-exam','time':{'precision':'exact','at':at('09:00').isoformat(),'end_at':at('10:00').isoformat()}}
+    conflict=run([task(minutes=30),exam,exact],courses=[course])['items'][0]
+    assert conflict['level']=='high' and 'fixed_conflict' in conflict['reason_codes']
 
 
 def test_capacity_without_a_contiguous_slot_is_not_reported_as_safe():

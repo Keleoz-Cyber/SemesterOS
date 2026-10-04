@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/features/calendar/calendar_panel.dart';
 import 'package:semester_os/features/calendar/event_form.dart';
+import 'package:semester_os/features/calendar/event_overview.dart';
 import 'package:semester_os/features/timetable/shell_page.dart';
-import 'package:semester_os/features/items/capture_page.dart';
 import 'schedule_flow_test.dart' show ScheduleFixture;
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'controller_test.dart' show MemoryStore;
@@ -34,6 +34,46 @@ class ClockedCalendarApp extends AppController {
 }
 
 void main() {
+  testWidgets(
+    'start-only event shows its clock and keeps classification secondary',
+    (tester) async {
+      await mount(
+        tester,
+        Scaffold(
+          body: ListView(
+            children: [
+              EventOverview(
+                category: '校园事务',
+                row: {
+                  'title': '座谈会（同学）',
+                  'certainty': 'formal',
+                  'reserve_time': true,
+                  'location': '6108',
+                  'time': {
+                    'precision': 'exact_start',
+                    'at': '2026-09-29T14:00:00+08:00',
+                  },
+                  'tags': [
+                    {'name': '座谈会'},
+                    {'name': '线下'},
+                  ],
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+      expect(find.text('14:00'), findsOneWidget);
+      expect(find.text('9月29日 · 周二'), findsOneWidget);
+      expect(find.text('6108'), findsOneWidget);
+      expect(find.text('开始'), findsNothing);
+      expect(find.text('结束'), findsNothing);
+      expect(find.text('校园事务 · 线下'), findsOneWidget);
+      expect(find.text('座谈会'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
   testWidgets(
@@ -135,52 +175,11 @@ void main() {
       final before = reads;
       await ioTap(tester, find.text('今日').last);
       await ioTap(tester, find.text('日程').last);
-      expect(find.text('活动'), findsOneWidget);
+      expect(find.text('仅看活动'), findsOneWidget);
       expect(reads, before);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
       app.dispose();
-    },
-  );
-  testWidgets(
-    'AI fixed activity opens the event confirmation instead of a task deadline form',
-    (tester) async {
-      final f = ScheduleFixture();
-      final previous = f.api.dio.httpClientAdapter as ControlledTransport;
-      f.api.dio.httpClientAdapter = ControlledTransport((r) async {
-        if (r.path.endsWith('/semesters')) return body([semester()]);
-        if (r.path.endsWith('/capture/text')) {
-          return body({
-            'id': 'candidate',
-            'intent': 'create_event',
-            'questions': [],
-            'event': {
-              'title': '课题组组会',
-              'time': {
-                'precision': 'exact',
-                'at': '2026-09-30T09:00:00Z',
-                'end_at': '2026-09-30T10:00:00Z',
-              },
-              'certainty': 'formal',
-              'category_id': 'research',
-              'tags': ['组会'],
-              'location': '6412',
-              'source_text': '下周三17点到18点组会',
-            },
-          });
-        }
-        return previous.respond(r);
-      });
-      await tester.runAsync(() => f.c.bind('s'));
-      await mount(tester, CapturePage(controller: f.c, semester: semester()));
-      await tester.enterText(find.byType(TextField).first, '下周三17点到18点组会');
-      await tester.ensureVisible(find.text('让AI整理'));
-      await ioTap(tester, find.text('让AI整理'));
-      expect(find.byType(EventFormPage), findsOneWidget);
-      expect(find.textContaining('2026-09-30 17:00'), findsOneWidget);
-      expect(find.textContaining('2026-09-30 18:00'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      f.c.dispose();
     },
   );
   testWidgets(
@@ -251,6 +250,8 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 80)),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.text('日程列表'));
+      await tester.pumpAndSettle();
       expect(find.text('课题组组会'), findsOneWidget);
       expect(find.text('提交材料'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('calendar-day-2026-09-23')));
@@ -259,7 +260,7 @@ void main() {
       expect(find.textContaining('17:00').hitTestable(), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('calendar-day-2026-09-25')));
       await tester.pumpAndSettle();
-      expect(find.text('2026-09-25 · 时刻待定').hitTestable(), findsOneWidget);
+      expect(find.text('9月25日 · 周五').hitTestable(), findsOneWidget);
       expect(find.text('概率论').hitTestable(), findsNothing);
       await capture(tester, 'calendar-events-list');
       await tester.pumpWidget(const SizedBox());
@@ -314,8 +315,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(AppFormField).first, '课题组组会');
-      await tester.ensureVisible(find.text('其他时间写法'));
-      await tester.tap(find.text('其他时间写法'));
+      await tester.ensureVisible(find.text('时间方式'));
+      await tester.tap(find.text('时间方式'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('暂不填写时间'));
       await tester.pumpAndSettle();
@@ -327,7 +328,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(submitted?['title'], '课题组组会');
-      expect(submitted?['time'], {'precision': 'unknown'});
+      expect(submitted?['time'], {
+        'precision': 'unknown',
+        'meaning': 'unspecified',
+        'expression': '',
+      });
       expect(submitted?['expected_revision'], 1);
       expect(
         find.text('新建'),
@@ -425,7 +430,7 @@ void main() {
     await tester.enterText(find.byType(AppFormField).first, '原名称');
     await tester.ensureVisible(find.widgetWithText(FButton, '添加日程'));
     await ioTap(tester, find.widgetWithText(FButton, '添加日程'));
-    expect(find.textContaining('可以修改后重新保存'), findsOneWidget);
+    expect(find.text('请核对标签格式'), findsOneWidget);
     expect(find.text('重试保存'), findsNothing);
     await tester.ensureVisible(find.byType(AppFormField).first);
     await tester.enterText(find.byType(AppFormField).first, '更正名称');

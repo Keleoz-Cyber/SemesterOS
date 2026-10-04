@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/items/item_detail.dart';
+import 'package:semester_os/features/items/item_widgets.dart';
+import 'package:semester_os/features/items/reminder_editor.dart';
 import 'package:semester_os/features/planning/risk_widgets.dart';
 import 'package:semester_os/features/planning/progress_page.dart';
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'calendar_flow_test.dart' show semester;
-import 'inner_items_visual_test.dart' show fixture, settle;
+import 'inner_items_visual_test.dart' show fixture, itemRecord, settle;
 import 'ui_polish_test.dart' show mount, loadPreviewFonts;
 
 void main() {
@@ -49,8 +51,9 @@ void main() {
     expect(find.text('取消事项'), findsNothing);
     expect(find.text('修改历史'), findsNothing);
     expect(find.byTooltip('编辑事项'), findsOneWidget);
-    expect(find.text('2026-10-02 18:00'), findsOneWidget);
-    expect(find.text('2026-10-02 18:00 截止'), findsNothing);
+    final deadline = displayInstant(itemRecord()['time']['at']);
+    expect(find.text(deadline), findsOneWidget);
+    expect(find.text('$deadline 截止'), findsNothing);
     await tester.tap(find.byTooltip('更多操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('修改历史'));
@@ -70,7 +73,12 @@ void main() {
       ItemDetailPage(controller: f.c, semester: semester(), id: 't'),
     );
     await settle(tester);
-    await tester.tap(find.text('更新进度'));
+    final progress = find.text(
+      '还需 ${minutesLabel(itemRecord()['remaining_minutes'])}',
+    );
+    await tester.ensureVisible(progress);
+    await tester.pumpAndSettle();
+    await tester.tap(progress);
     await tester.pumpAndSettle();
     expect(find.byType(ProgressPage), findsOneWidget);
     Navigator.of(tester.element(find.byType(ProgressPage))).pop();
@@ -78,10 +86,19 @@ void main() {
     await tester.ensureVisible(find.text('提醒 · 2条'));
     await tester.tap(find.text('提醒 · 2条'));
     await tester.pumpAndSettle();
-    expect(find.text('提前1天 · 事项提醒'), findsOneWidget);
+    expect(find.text('提前1天'), findsOneWidget);
     expect(find.text('指定时刻 · 核实通知'), findsOneWidget);
-    expect(find.text('系统通知设置'), findsOneWidget);
+    expect(find.byTooltip('系统通知设置'), findsOneWidget);
     expect(find.text('添加提醒'), findsOneWidget);
+    await tester.tap(find.text('提前1天'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReminderEditor), findsOneWidget);
+    expect(find.text('修改提醒'), findsOneWidget);
+    final editor = tester.widget<ReminderEditor>(find.byType(ReminderEditor));
+    expect(editor.initial?['id'], 'r1');
+    expect(editor.initial?['mode'], 'relative');
+    expect(editor.initial?['lead_minutes'], 1440);
+    expect(editor.initial?['purpose'], 'item');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     f.c.dispose();

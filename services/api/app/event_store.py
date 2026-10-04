@@ -2,18 +2,25 @@
 from datetime import timedelta
 from sqlalchemy import select
 from .models import CalendarEvent, CalendarTag, CalendarTagAlias, User
-from .reminder_rules import utcnow, instant
+from .reminder_rules import utcnow
 
 CATEGORIES = [{'id': key, 'name': name} for key, name in (
     ('study', '学业'), ('research', '科研'), ('affairs', '校园事务'), ('life', '生活'))]
 
 
 def classification_request(body):
-    # Omission means default/preserve, while explicit null/[] means clear.
-    # Keep only these fields presence-sensitive; retain normalized defaults for
-    # every other field so existing equivalent retries still share a fingerprint.
-    omitted = {'category_id', 'tags'} - body.model_fields_set
-    return body.model_dump(mode='json', exclude=omitted)
+    # Edit omissions preserve stored choices; explicitly supplied empty values
+    # can clear them. The idempotency signature must retain that distinction.
+    editing = 'expected_version' in type(body).model_fields
+    sensitive = {'category_id', 'tags'} | ({'reserve_time', 'details'} if editing else set())
+    data = body.model_dump(mode='json', exclude=sensitive - body.model_fields_set)
+    if editing:
+        if 'details' in data:
+            data['details'] = body.details.model_dump(mode='json', exclude_unset=True)
+        for key in ('expression', 'meaning', 'candidate_dates', 'course_anchor', 'end_at'):
+            if key not in body.time.model_fields_set:
+                data['time'].pop(key, None)
+    return data
 
 
 def event_rows(db, user, sid=None, active=True):
@@ -71,7 +78,8 @@ def canonical_tag_ids(db, user_id, ids):
 
 
 def reminder_values(row):
-    anchor = instant(row.payload['time']['at']) if row.payload['time']['precision'] == 'exact' else None
+    from .reminder_rules import anchor_at
+    anchor = anchor_at({**row.payload, 'kind': 'exam'})
     result = []
     for lead in row.payload.get('reminder_minutes', []):
         trigger = anchor - timedelta(minutes=lead) if anchor else None
@@ -79,6 +87,9 @@ def reminder_values(row):
                   else 'expired' if trigger <= utcnow() else 'scheduled')
         result.append({'id': f'{row.id}:before:{lead}', 'item_id': 'event:' + row.id, 'resource_type': 'event',
                        'resource_id': row.id, 'version': row.version, 'item_version': row.version,
+                       'start_at': row.payload.get('time', {}).get('at'),
+                       'place': row.payload.get('location', row.payload.get('place', '')), 'can_complete': False,
+                       'time_meaning': row.payload.get('time', {}).get('meaning'),
                        'title': row.payload['title'], 'semester_id': row.semester_id, 'purpose': 'item',
                        'mode': 'relative', 'lead_minutes': lead, 'enabled': row.lifecycle == 'active',
                        'trigger_at': trigger.isoformat() if trigger else None, 'schedule_state': status})
@@ -95,7 +106,11 @@ def classification_value(db, row):
 
 
 def event_value(db, row):
+    from .reminder_rules import notice_arrival_at
+    arrival = notice_arrival_at(row.payload)
     return {**{k: v for k, v in row.payload.items() if k != 'tag_ids'}, 'id': row.id,
             'semester_id': row.semester_id, 'version': row.version, 'lifecycle': row.lifecycle,
             'control': 'fixed', **classification_value(db, row),
-            'reminders': reminder_values(row), 'created_at': row.created_at, 'updated_at': row.updated_at}
+            'reserve_time': row.payload.get('reserve_time', True),
+            'reminders': reminder_values(row), 'created_at': row.created_at, 'updated_at': row.updated_at,
+            'arrival_at': arrival.isoformat() if arrival else None}

@@ -158,6 +158,15 @@ Future<void> ioTap(WidgetTester tester, Finder finder) async {
     await tester.tap(finder);
     await Future<void>.delayed(const Duration(milliseconds: 80));
   });
+  // A press/pop transition can start the actual request on a subsequent frame.
+  // Dispatch that frame, then let mock stream I/O complete before expecting
+  // the visible waiting indicator to become idle.
+  for (var frame = 0; frame < 4; frame++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 35)),
+    );
+  }
   await tester.pumpAndSettle();
 }
 
@@ -225,11 +234,11 @@ void main() {
       await mount(tester, const SizedBox());
       await open();
       await tester.scrollUntilVisible(
-        find.text('结束时间改为待确认'),
+        find.text('移除结束时间'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(find.text('结束时间改为待确认'));
+      await tester.tap(find.text('移除结束时间'));
       await tester.pumpAndSettle();
       await save();
       expect((f.lastItem!['time'] as Map).containsKey('end_at'), isTrue);
@@ -280,6 +289,8 @@ void main() {
       expect(find.textContaining('单项余量 1小时30分钟'), findsNothing);
       await tester.tap(find.byType(RiskBadge));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('时间计算'));
+      await tester.pumpAndSettle();
       expect(find.text('单看每项任务，时间可能够用；放在一起时，它们会争用同一段空闲时间。'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await capture(tester, 'risk-details');
@@ -316,6 +327,63 @@ void main() {
       await ioTap(tester, find.text('确认保存学习时间'));
       expect(f.puts, 1);
       expect(find.text('打开页面'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+    },
+  );
+  testWidgets(
+    'progress history failure can retry in place without leaving a loading state',
+    (tester) async {
+      final f = PlanningFixture();
+      final previous = f.api.dio.httpClientAdapter as ControlledTransport;
+      var reads = 0;
+      f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.path.endsWith('/progress') && r.method == 'GET') {
+          reads++;
+          if (reads == 1) return body({'detail': '进度记录暂时无法读取'}, 503);
+          return body([
+            {
+              'remaining_minutes': 120,
+              'before_remaining_minutes': 150,
+              'actual_minutes': 30,
+              'created_at': '2026-10-03T18:00:00+08:00',
+            },
+          ]);
+        }
+        return previous.respond(r);
+      });
+      await bind(tester, f);
+      await route(tester, ProgressPage(controller: f.c, item: f.item));
+      await tester.scrollUntilVisible(
+        find.text('查看进度记录'),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await ioTap(tester, find.text('查看进度记录'));
+      expect(
+        find.byKey(const ValueKey('progress-history-error')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('progress-history-loading')),
+        findsNothing,
+      );
+      final retry = find.text('重试');
+      await Scrollable.ensureVisible(tester.element(retry), alignment: .3);
+      await tester.pumpAndSettle();
+      expect(retry.hitTestable(), findsOneWidget);
+      await capture(tester, 'progress-history-retry');
+      await ioTap(tester, retry.hitTestable());
+      expect(reads, 2);
+      expect(find.text('2小时30分钟 → 2小时'), findsOneWidget);
+      expect(find.text('本次用时 30分钟'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('progress-history-error')),
+        findsNothing,
+      );
+      expect(f.progressSaves, 0);
+      expect(tester.takeException(), isNull);
+      await capture(tester, 'progress-history-recovered');
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
     },
@@ -377,11 +445,11 @@ void main() {
         ),
       );
       await tester.scrollUntilVisible(
-        find.text('更多设置'),
+        find.text('安排学习时间'),
         400,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(find.text('更多设置'));
+      await tester.tap(find.text('安排学习时间'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const Key('task-start-policy')));
       await tester.pumpAndSettle();

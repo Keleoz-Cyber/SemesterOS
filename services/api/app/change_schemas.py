@@ -7,7 +7,7 @@ from .item_schemas import ItemTime
 
 class ChangeInput(Input):
     kind:Literal['move','cancel','suspend','add','block']
-    targets:list[str]=Field(default_factory=list,max_length=100)
+    targets:list[str]=Field(default_factory=list,max_length=1000)
     title:str=Field(min_length=1,max_length=160)
     source_text:str=Field(min_length=1,max_length=10000)
     source_id:str|None=Field(default=None,max_length=36)

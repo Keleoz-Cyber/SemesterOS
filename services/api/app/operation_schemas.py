@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Literal
-from pydantic import Field,field_validator,model_validator
+from pydantic import Field,field_validator
 from .schemas import Input
 from .capture import CaptureInput
 from .item_schemas import ItemTime,ReminderInput

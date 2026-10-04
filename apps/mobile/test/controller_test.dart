@@ -41,6 +41,105 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   test(
+    'late same-week failure cannot mark the latest result offline',
+    () async {
+      final api = SemesterApi()..session = account('a');
+      final store = MemoryStore();
+      final controller = AppController(
+        api,
+        store,
+        clearSchoolSession: () async {},
+      )..semesters = [semester(1)];
+      controller.semester = controller.semesters.single;
+      final requests = <Completer<ResponseBody>>[];
+      api.dio.httpClientAdapter = ControlledTransport((r) {
+        final pending = Completer<ResponseBody>();
+        requests.add(pending);
+        return pending.future;
+      });
+      Future<void> flushRequests(int count) async {
+        for (var round = 0; requests.length < count && round < 20; round++) {
+          await Future<void>.delayed(Duration.zero);
+        }
+        expect(requests, hasLength(count));
+      }
+
+      final lateFailure = controller.loadWeek(1);
+      await flushRequests(1);
+      final online = controller.loadWeek(1);
+      await flushRequests(2);
+      requests[1].complete(
+        body({
+          'revision': 1,
+          'events': [
+            {'title': 'online'},
+          ],
+        }),
+      );
+      await online;
+      requests[0].complete(body({'message': '暂时离线'}, 503));
+      await lateFailure;
+      expect(controller.events.single['title'], 'online');
+      expect(controller.offline, isFalse);
+      expect(controller.notice, isNull);
+      controller.dispose();
+    },
+  );
+  test('confirmed import retires an in-flight catalog loading state', () async {
+    final api = SemesterApi()..session = account('a');
+    final store = MemoryStore();
+    final pending = Completer<ResponseBody>(), started = Completer<void>();
+    final controller = AppController(
+      api,
+      store,
+      clearSchoolSession: () async {},
+    );
+    final s = semester(1);
+    store.data['a'] = {
+      'semesters': [s],
+      'weeks': {},
+    };
+    api.dio.httpClientAdapter = ControlledTransport((r) async {
+      if (r.path.endsWith('/semesters')) {
+        started.complete();
+        return pending.future;
+      }
+      return body({'id': 'a'});
+    });
+    final opening = controller.openSession();
+    await started.future;
+    expect(controller.sessionLoading, isTrue);
+    await controller.acknowledgeImport({'semester_id': s['id'], 'revision': 2});
+    pending.complete(body([semester(1)]));
+    await opening;
+    expect(controller.sessionLoading, isFalse);
+    expect(controller.semester!['revision'], 2);
+    expect(store.data['a']!['semesters'].single['revision'], 2);
+    controller.dispose();
+  });
+  test('an empty online catalog clears the temporary cache message', () async {
+    final api = SemesterApi();
+    final store = MemoryStore();
+    store.data['a'] = {
+      'semesters': [semester(1)],
+      'weeks': {},
+    };
+    api.dio.httpClientAdapter = ControlledTransport(
+      (r) async => body(r.path.endsWith('/semesters') ? [] : {'id': 'a'}),
+    );
+    await api.saveSession(account('a'));
+    final controller = AppController(
+      api,
+      store,
+      clearSchoolSession: () async {},
+    );
+    await controller.openSession();
+    expect(controller.semester, isNull);
+    expect(controller.offline, isFalse);
+    expect(controller.notice, isNull);
+    controller.dispose();
+  });
+  test(
     'startup exposes saved calendar before waiting for the network',
     () async {
       final api = SemesterApi();

@@ -1,5 +1,5 @@
 from .event_store import calendar_snapshot
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,7 @@ from .auth import current_user, error
 from .capacity import analyze
 from .database import get_db
 from .items import owned_item, check_version, audit, serialize_item, rules_for
-from .models import AvailabilityRevision, CourseMeeting, ProgressEntry, StudyAvailability, StudyItem, User
+from .models import AvailabilityRevision, ProgressEntry, StudyAvailability, StudyItem, User
 from .planning_schemas import AvailabilityApply, AvailabilityInput, ProgressApply, ProgressInput
 from .reminder_rules import utcnow
 from .capacity import calendar_context
@@ -16,6 +16,47 @@ from .plan_rules import classify
 from .plan_store import plan_rows,block_value,preview_blocks,cancel_for_change
 
 router=APIRouter()
+
+
+def schedule_setup_value(db,user,s,task_ids=None):
+    from .task_readiness import start_policy
+    rows=list(db.scalars(select(StudyItem).where(StudyItem.user_id==user.id,
+        StudyItem.semester_id==s.id,StudyItem.lifecycle=='active').order_by(StudyItem.created_at,StudyItem.id)))
+    rows=[r for r in rows if r.payload.get('kind') in ('task','assignment')]
+    if task_ids:
+        if not set(task_ids).issubset(r.id for r in rows):error(404,'NOT_FOUND','所选任务不属于当前学期或已完成')
+        rows=[r for r in rows if r.id in task_ids]
+    preferences=availability_value(availability_row(db,user,s.id),s.revision)
+    # A small starting template, never a claimed personal preference or saved value.
+    candidate={'weekly':[{'weekday':d,'start':'19:00','end':'21:00'} for d in range(1,6)]+
+        [{'weekday':d,'start':'10:00','end':'12:00'} for d in (6,7)],'exclusions':[]}
+    tasks=[];unresolved=[]
+    for row in rows[:100]:
+        payload=row.payload;policy=start_policy(payload);remaining=payload.get('remaining_minutes')
+        # Simple proposed starting effort. It is explicitly editable and never
+        # written to the task without the user's normal save confirmation.
+        title=payload.get('title','')
+        suggestion=120 if any(word in title for word in ('报告','论文','实验','项目')) else 45
+        tasks.append({'id':row.id,'version':row.version,'title':title,'remaining_minutes':remaining,
+            'start_policy':policy,'earliest_start_at':payload.get('earliest_start_at'),
+            'can_schedule':policy!='unconfirmed',
+            'waiting_reason':('；'.join((payload.get('details') or {}).get('conditions') or []) or
+                '任务仍有明确等待条件，请核对后再安排') if policy=='unconfirmed' else '',
+            'duration_suggestion_minutes':suggestion if remaining is None else None,
+            'duration_suggestion_label':'起步建议，可按实际修改；尚未计入任务耗时' if remaining is None else '',
+            'details':payload.get('details',{}),'time':payload.get('time',{})})
+        missing=(['remaining_minutes'] if remaining is None else [])+(['start_condition'] if policy=='unconfirmed' else [])
+        if missing:unresolved.append({'item_id':row.id,'fields':missing})
+    return {'semester_id':s.id,'revision':s.revision,'settings_version':preferences['version'],
+        'availability':{'current':preferences,'candidate':candidate,
+            'candidate_label':'候选学习时间，请按作息修改后确认','needs_confirmation':not preferences['configured']},
+        'tasks':tasks,'unresolved':unresolved}
+
+
+@router.get('/semesters/{sid}/schedule/setup')
+def get_schedule_setup(sid:str,task_ids:list[str]=Query(default=[]),user:User=Depends(current_user),db:Session=Depends(get_db)):
+    s=owned_semester(db,user,sid,lock=True)
+    return schedule_setup_value(db,user,s,task_ids)
 
 
 def availability_row(db,user,sid):

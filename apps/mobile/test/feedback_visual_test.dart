@@ -137,17 +137,42 @@ void main() {
       await settleIo(tester);
       expect(find.text(appName), findsOneWidget);
       if (scale == 1 && layout.height > 700) {
-        // The next-event focus may repeat the same course; verify its timeline row.
-        expect(tester.getRect(find.text('大学英语').last).bottom, lessThan(710));
+        // Active/next-event and clock rows vary by time of day. The isolated
+        // dashboard test covers fixed-density layout; this integration check
+        // verifies that the timeline stays accessible above the fixed composer.
+        final ended = find.textContaining('今天已结束 ·');
+        if (ended.evaluate().isNotEmpty) {
+          await tester.ensureVisible(ended);
+          await ioTap(tester, ended);
+        }
+        await tester.ensureVisible(find.text('大学英语').last);
+        await tester.pumpAndSettle();
+        expect(find.text('大学英语').last.hitTestable(), findsOneWidget);
       }
       await capture(tester, 'integrated-today-${layout.label}');
       for (final page in ['日程', '计划', '学期']) {
         await ioTap(tester, find.text(page).last);
         await settleIo(tester);
-        expect(tester.takeException(), isNull, reason: '$page at ${layout.label}');
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: '$page at ${layout.label}',
+        );
         await capture(tester, 'integrated-$page-${layout.label}');
       }
-      await tester.tap(find.text('输入通知或日程问题'));
+      if (layout.label == '1.0' || layout.label == '2.0-small') {
+        await ioTap(tester, find.byTooltip('账户'));
+        await capture(tester, 'integrated-account-${layout.label}');
+        await ioTap(tester, find.byTooltip('关闭'));
+        await ioTap(tester, find.text('今日').last);
+        await settleIo(tester);
+        await tester.ensureVisible(find.byTooltip('调整首页内容'));
+        await tester.pumpAndSettle();
+        await ioTap(tester, find.byTooltip('调整首页内容'));
+        await capture(tester, 'integrated-home-settings-${layout.label}');
+        await ioTap(tester, find.text('完成'));
+      }
+      await tester.tap(find.byKey(const Key('assistant-dock-input')));
       await settleIo(tester);
       await tester.enterText(
         find.byType(TextField).first,

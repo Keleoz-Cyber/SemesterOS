@@ -1,26 +1,41 @@
 import '../../ui/app_controls.dart';
+import '../../ui/app_loading.dart';
+import '../../ui/app_sheet.dart';
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import '../calendar/calendar_repository.dart';
+import '../calendar/time_track.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/assistant_scope.dart';
 import 'home_preferences.dart';
 import 'day_brief_controller.dart';
+import '../../ui/date_labels.dart';
+import 'today_view_enhanced.dart';
+import 'week_heatmap.dart';
+import 'semester_progress.dart';
+import 'time_stats_card.dart';
+import '../../ui/breathing_exercise_card.dart';
+import '../../ui/time_urgency.dart';
 
 class TodayDashboard extends StatefulWidget {
   final AppController app;
   final ItemsController items;
   final VoidCallback onCalendar;
+  final ValueChanged<DateTime>? onCalendarDay;
+  final ValueChanged<Map<String, dynamic>>? onTaskEdit;
+  final VoidCallback? onAllTasks;
   final DateTime Function()? now;
   const TodayDashboard({
     super.key,
     required this.app,
     required this.items,
     required this.onCalendar,
+    this.onCalendarDay,
+    this.onTaskEdit,
+    this.onAllTasks,
     this.now,
   });
   @override
@@ -30,35 +45,66 @@ class TodayDashboard extends StatefulWidget {
 class TodayDashboardState extends State<TodayDashboard>
     with WidgetsBindingObserver {
   late final DayBriefController brief;
+  late final CalendarRepository weekly;
   late final HomePreferences preferences;
-  Timer? clock;
+  MinuteClock? clock;
+  late final String semesterId;
+  late final String owner;
+  late final int generation;
   int? revision;
+  String? _weekRequestKey;
+  bool _weekRefreshQueued = false;
   bool active = true, foreground = true;
   int get expectedRevision {
-    final calendar = widget.app.semester!['revision'] as int;
+    final calendar = widget.app.semester?['revision'] as int? ?? 0;
     final items = widget.items.itemsRevision ?? 0;
     return calendar > items ? calendar : items;
   }
 
   DateTime get now => widget.now?.call() ?? schoolNow();
   DateTime get day => DateTime.utc(now.year, now.month, now.day);
-  String get sid => widget.app.semester!['id'];
+  DateTime get weekStart => day.subtract(Duration(days: day.weekday - 1));
+  bool get needsWeek =>
+      preferences.enabled.contains('week_heatmap') ||
+      preferences.enabled.contains('time_stats');
+  String get weekRequestKey => '${calendarDate(weekStart)}:$expectedRevision';
+  bool get completeWeek =>
+      weekly.data != null &&
+      weekly.data?['from_date'] == calendarDate(weekStart) &&
+      weekly.data?['to_date'] ==
+          calendarDate(weekStart.add(const Duration(days: 6))) &&
+      weekly.revision != null &&
+      weekly.revision! >= (revision ?? 0);
+  String get sid => semesterId;
+  bool get sameSemester =>
+      widget.app.semester?['id'] == semesterId &&
+      widget.items.semesterId == semesterId &&
+      widget.items.owner == owner &&
+      widget.items.api.session?['user']?['id'] == owner &&
+      widget.items.api.generation == generation;
   @override
   void initState() {
     super.initState();
+    semesterId = widget.app.semester!['id'];
+    owner = widget.items.owner!;
+    generation = widget.items.api.generation;
     WidgetsBinding.instance.addObserver(this);
-    final generation = widget.items.api.generation, semester = sid;
+    final semester = sid;
     preferences = HomePreferences(
       widget.items.cache,
-      widget.items.owner!,
+      owner,
       semester,
       () =>
           generation == widget.items.api.generation &&
+          owner == widget.items.owner &&
+          owner == widget.items.api.session?['user']?['id'] &&
           semester == widget.items.semesterId,
     );
     preferences.addListener(changed);
     preferences.restore().catchError((Object _) {});
     brief = DayBriefController(widget.app.api, widget.app.cache)
+      ..addListener(changed);
+    weekly = CalendarRepository(widget.app.api, widget.app.cache)
       ..addListener(changed);
     widget.items.addListener(changed);
     revision = expectedRevision;
@@ -67,14 +113,14 @@ class TodayDashboardState extends State<TodayDashboard>
   }
 
   void updateClock() {
-    if (!active || !foreground) {
+    if (!active || !foreground || !sameSemester) {
       clock?.cancel();
       clock = null;
       return;
     }
     if (clock != null) return;
-    clock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (!active || !foreground || !mounted) return;
+    clock = MinuteClock(() {
+      if (!active || !foreground || !mounted || !sameSemester) return;
       if (!brief.busy &&
           (brief.data?['date'] != calendarDate(day) ||
               !brief.fresh(revision ?? 0))) {
@@ -82,11 +128,16 @@ class TodayDashboardState extends State<TodayDashboard>
       } else {
         setState(() {});
       }
-    });
+    }, now: () => now);
   }
 
   void changed() {
     if (!mounted) return;
+    if (!sameSemester) {
+      updateClock();
+      if (active) setState(() {});
+      return;
+    }
     if (revision != expectedRevision) {
       revision = expectedRevision;
       if (active && foreground) {
@@ -95,7 +146,37 @@ class TodayDashboardState extends State<TodayDashboard>
         });
       }
     }
+    queueWeekIfNeeded();
     if (active) setState(() {});
+  }
+
+  void queueWeekIfNeeded() {
+    if (!needsWeek ||
+        !active ||
+        !foreground ||
+        !sameSemester ||
+        _weekRequestKey == weekRequestKey ||
+        _weekRefreshQueued) {
+      return;
+    }
+    _weekRefreshQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _weekRefreshQueued = false;
+      if (mounted) loadWeekIfNeeded();
+    });
+  }
+
+  Future<void> loadWeekIfNeeded({bool force = false}) async {
+    if (!mounted ||
+        !needsWeek ||
+        !active ||
+        !foreground ||
+        !sameSemester ||
+        (!force && _weekRequestKey == weekRequestKey)) {
+      return;
+    }
+    _weekRequestKey = weekRequestKey;
+    await weekly.load(sid, weekStart);
   }
 
   @override
@@ -104,6 +185,7 @@ class TodayDashboardState extends State<TodayDashboard>
     final was = active;
     active = TickerMode.valuesOf(context).enabled;
     updateClock();
+    queueWeekIfNeeded();
     if (active &&
         !was &&
         (brief.data?['date'] != calendarDate(day) ||
@@ -115,6 +197,10 @@ class TodayDashboardState extends State<TodayDashboard>
   @override
   void didUpdateWidget(covariant TodayDashboard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!sameSemester) {
+      updateClock();
+      return;
+    }
     if (revision != expectedRevision) {
       revision = expectedRevision;
       if (active) reload();
@@ -125,10 +211,18 @@ class TodayDashboardState extends State<TodayDashboard>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
     updateClock();
-    if (foreground && active) reload();
+    if (foreground && active) reload(forceWeek: weekly.offline);
   }
 
-  Future<void> reload() => brief.load(sid, day);
+  Future<void> reload({bool forceWeek = false}) async {
+    if (mounted && sameSemester) {
+      await Future.wait([
+        brief.load(sid, day),
+        loadWeekIfNeeded(force: forceWeek),
+      ]);
+    }
+  }
+
   @override
   void dispose() {
     clock?.cancel();
@@ -136,6 +230,7 @@ class TodayDashboardState extends State<TodayDashboard>
     widget.items.removeListener(changed);
     preferences.dispose();
     brief.dispose();
+    weekly.dispose();
     super.dispose();
   }
 
@@ -143,7 +238,11 @@ class TodayDashboardState extends State<TodayDashboard>
       ? DateTime.tryParse(value)?.toUtc().add(const Duration(hours: 8))
       : null;
   Future<void> open(Map<String, dynamic> row) async {
-    final id = row['resource_id'] ?? row['id'];
+    // Calendar plan entries expose resource_id as the associated StudyItem id.
+    // A raw plan block may instead provide item_id; its own id is never a task.
+    final id = row['resource_type'] == 'plan'
+        ? row['item_id'] ?? row['resource_id']
+        : row['resource_id'] ?? row['id'];
     if (id == null) return;
     await context.push(switch (row['resource_type']) {
       'course' => '/courses/$id',
@@ -156,9 +255,25 @@ class TodayDashboardState extends State<TodayDashboard>
 
   DateTime? deadline(Map<String, dynamic> item) {
     final t = Map<String, dynamic>.from(item['time'] ?? {});
-    return at(item['anchor_at'] ?? t['at']) ??
+    if (item['kind'] != 'exam' &&
+        {
+          'window',
+          'start',
+          'candidate',
+          'course_anchor',
+        }.contains(t['meaning'])) {
+      return null;
+    }
+    if (t['precision'] == 'date' && t['date'] is String) {
+      // Group an all-day deadline by its stated date, even when its confirmed
+      // reminder anchor is the following midnight.
+      return DateTime.tryParse('${t['date']}T00:00:00Z');
+    }
+    return (item['kind'] == 'exam'
+            ? at(item['anchor_at'] ?? t['at'])
+            : itemDeadline(item, schoolClock: true)) ??
         (t['precision'] == 'date' && t['date'] is String
-            ? DateTime.tryParse('${t['date']}T23:59:59Z')
+            ? DateTime.tryParse('${t['date']}T00:00:00Z')
             : null);
   }
 
@@ -202,125 +317,131 @@ class TodayDashboardState extends State<TodayDashboard>
   }
 
   Future<void> editModules() async {
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      showDragHandle: true,
+      heightFactor: .82,
       builder: (context) => AnimatedBuilder(
         animation: preferences,
-        builder: (context, _) => SizedBox(
-          height: MediaQuery.sizeOf(context).height * .8,
-          child: Column(
-            children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '调整首页内容',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      '课程和紧急事项始终显示。拖动排序，关闭不常用的内容。',
-                      style: TextStyle(color: CampusColors.muted, fontSize: 14),
-                    ),
-                  ],
-                ),
+        builder: (context, _) => Column(
+          children: [
+            AppSheetHeading(
+              title: '首页内容',
+              subtitle: '拖动排序，选择要显示的内容',
+              showClose: false,
+              trailing: AppTextButton(
+                guardAsync: false,
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('完成'),
               ),
-              Expanded(
-                child: ReorderableListView(
-                  buildDefaultDragHandles: false,
-                  onReorderItem: (oldIndex, newIndex) {
-                    final next = [...preferences.order];
-                    final id = next.removeAt(oldIndex);
-                    next.insert(newIndex, id);
-                    savePreferences(order: next);
-                  },
-                  children: [
-                    for (var i = 0; i < preferences.order.length; i++)
-                      AppTile(
-                        key: ValueKey(preferences.order[i]),
-                        leading: ReorderableDragStartListener(
+            ),
+            Expanded(
+              child: ReorderableListView(
+                buildDefaultDragHandles: false,
+                onReorderItem: (oldIndex, newIndex) {
+                  final next = [...preferences.order];
+                  final id = next.removeAt(oldIndex);
+                  next.insert(newIndex, id);
+                  savePreferences(order: next);
+                },
+                children: [
+                  for (var i = 0; i < preferences.order.length; i++)
+                    Row(
+                      key: ValueKey(preferences.order[i]),
+                      children: [
+                        ReorderableDragStartListener(
                           index: i,
                           child: const SizedBox(
                             width: 48,
                             height: 48,
                             child: Tooltip(
                               message: '拖动排序',
-                              child: Icon(Icons.drag_handle_rounded),
+                              child: Icon(
+                                Icons.drag_indicator_rounded,
+                                size: 20,
+                                color: CampusColors.muted,
+                              ),
                             ),
                           ),
                         ),
-                        title: Text(homeModules[preferences.order[i]]!),
-                        trailing: AppSwitch(
-                          value: preferences.enabled.contains(
-                            preferences.order[i],
+                        Expanded(
+                          child: AppSwitchRow(
+                            contentPadding: const EdgeInsets.fromLTRB(
+                              0,
+                              10,
+                              20,
+                              10,
+                            ),
+                            title: Text(homeModules[preferences.order[i]]!),
+                            value: preferences.enabled.contains(
+                              preferences.order[i],
+                            ),
+                            onChanged: (value) {
+                              final enabled = {...preferences.enabled};
+                              value
+                                  ? enabled.add(preferences.order[i])
+                                  : enabled.remove(preferences.order[i]);
+                              savePreferences(enabled: enabled);
+                            },
                           ),
-                          onChanged: (value) {
-                            final enabled = {...preferences.enabled};
-                            value
-                                ? enabled.add(preferences.order[i])
-                                : enabled.remove(preferences.order[i]);
-                            savePreferences(enabled: enabled);
-                          },
                         ),
-                      ),
-                  ],
+                      ],
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AppTextButton(
+                  onPressed: () => savePreferences(
+                    order: homeModules.keys.toList(),
+                    enabled: {...defaultHomeModules},
+                  ),
+                  child: const Text('恢复默认'),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    AppTextButton(
-                      onPressed: () => savePreferences(
-                        order: homeModules.keys.toList(),
-                        enabled: homeModules.keys.toSet(),
-                      ),
-                      child: const Text('恢复默认'),
-                    ),
-                    const Spacer(),
-                    AppButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('完成'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Duration get motionDuration => MediaQuery.disableAnimationsOf(context)
+  Duration get motionDuration =>
+      MediaQuery.disableAnimationsOf(context) ||
+          MediaQuery.accessibleNavigationOf(context) ||
+          !active ||
+          !foreground
       ? Duration.zero
       : const Duration(milliseconds: 220);
 
   @override
   Widget build(BuildContext context) {
+    if (!sameSemester) return const SizedBox.shrink();
     final entries = brief.entries;
     final timeline =
         entries
             .where(
-              (r) => const [
-                'course',
-                'event',
-                'exam',
-              ].contains(r['resource_type']),
+              (r) =>
+                  const [
+                    'course',
+                    'event',
+                    'exam',
+                    'plan',
+                  ].contains(r['resource_type']) &&
+                  r['start_at'] != null &&
+                  calendarMeaning(r) != 'window',
             )
             .toList()
           ..sort(
-            (a, b) => (at(a['start_at']) ?? DateTime.utc(9999)).compareTo(
-              at(b['start_at']) ?? DateTime.utc(9999),
-            ),
+            (a, b) =>
+                (at(a['occupancy_start_at'] ?? a['start_at']) ??
+                        DateTime.utc(9999))
+                    .compareTo(
+                      at(b['occupancy_start_at'] ?? b['start_at']) ??
+                          DateTime.utc(9999),
+                    ),
           );
     final tasks =
         widget.items.items
@@ -335,19 +456,60 @@ class TodayDashboardState extends State<TodayDashboard>
         .where(
           (t) =>
               t['priority'] == 'high' ||
-              (deadline(t) != null &&
-                  deadline(t)!.isBefore(day.add(const Duration(days: 1)))),
+              (itemDeadline(t, schoolClock: true) != null &&
+                  itemDeadline(
+                    t,
+                    schoolClock: true,
+                  )!.isBefore(now.add(const Duration(hours: 12)))),
         )
         .firstOrNull;
-    final next = entries
+    final nextRows =
+        entries
+            .where(
+              (r) =>
+                  r['start_at'] != null &&
+                  calendarReservesTime(r) &&
+                  calendarMeaning(r) != 'window' &&
+                  ((at(r['end_at'])?.isAfter(now) ?? false) ||
+                      !at(r['start_at'])!.isBefore(now)),
+            )
+            .toList()
+          ..sort(
+            (a, b) => at(
+              a['occupancy_start_at'] ?? a['start_at'],
+            )!.compareTo(at(b['occupancy_start_at'] ?? b['start_at'])!),
+          );
+    final next = nextRows.firstOrNull;
+    final dayFinished =
+        timeline.isNotEmpty &&
+        timeline.every(
+          (r) => at(r['end_at']) != null && !at(r['end_at'])!.isAfter(now),
+        );
+    final tomorrow = briefRows(
+      brief.data?['next_day']?['entries'],
+    ).map(calendarDisplayEntry).toList();
+    final nextDate = day.add(const Duration(days: 1));
+    final tomorrowTasks = tasks.where((t) {
+      final due = deadline(t);
+      return due != null && calendarDate(due) == calendarDate(nextDate);
+    }).toList();
+    final showTomorrow =
+        (now.hour >= 17 || next == null) &&
+        (tomorrow.isNotEmpty || tomorrowTasks.isNotEmpty);
+    final otherDay = entries
         .where(
           (r) =>
-              r['start_at'] != null &&
-              (at(r['end_at']) ??
-                      at(r['start_at'])!.add(const Duration(minutes: 1)))
-                  .isAfter(now),
+              const ['course', 'event', 'exam'].contains(r['resource_type']) &&
+                  (r['start_at'] == null || calendarMeaning(r) == 'window') ||
+              const [
+                    'deadline',
+                    'task',
+                    'item',
+                    'assignment',
+                  ].contains(r['resource_type']) &&
+                  const ['window', 'start'].contains(calendarMeaning(r)),
         )
-        .firstOrNull;
+        .toList();
     final start = DateTime.parse(
       '${widget.app.semester!['first_monday']}T00:00:00Z',
     );
@@ -357,6 +519,13 @@ class TodayDashboardState extends State<TodayDashboard>
         : week > widget.app.semester!['total_weeks']
         ? '学期已结束'
         : '第$week周';
+    final viewMode =
+        preferences.todayView ??
+        defaultTodayViewMode(
+          events: timeline.length + otherDay.length,
+          tasks: tasks.length,
+        );
+    final tomorrowVisible = showTomorrow && viewMode == TodayViewMode.schedule;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -367,51 +536,63 @@ class TodayDashboardState extends State<TodayDashboard>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${now.month}月${now.day}日 · 周${'一二三四五六日'[now.weekday - 1]}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: CampusColors.muted,
-                    ),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        studentDate(now),
+                        style: const TextStyle(
+                          fontSize: 23,
+                          fontWeight: FontWeight.w800,
+                          color: CampusColors.ink,
+                        ),
+                      ),
+                      Text(
+                        '周${'一二三四五六日'[now.weekday - 1]}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: CampusColors.muted,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    '今日',
-                    style: TextStyle(
-                      fontSize: 32,
-                      height: 1.15,
-                      fontWeight: FontWeight.w800,
-                      color: CampusColors.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    weekLabel,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: CampusColors.teal,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          weekLabel,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: CampusColors.teal,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      AppLoadingIndicator(
+                        visible: brief.busy,
+                        compact: true,
+                        label: '正在读取今日安排',
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            AppIconButton.outlined(
+            AppIconButton(
               tooltip: '调整首页内容',
+              guardAsync: false,
               onPressed: editModules,
+              color: CampusColors.muted,
               icon: const Icon(Icons.tune_rounded),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        if (brief.busy && brief.data == null)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: LinearProgressIndicator(
-              minHeight: 3,
-              semanticsLabel: '正在读取今日安排',
-            ),
-          ),
         if (brief.offline)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -439,395 +620,208 @@ class TodayDashboardState extends State<TodayDashboard>
               ],
             ),
           ),
-        if (brief.data != null)
-          AnimatedSwitcher(
-            duration: motionDuration,
-            child: next != null
-                ? nextPanel(next)
-                : emptyNextPanel(entries.isEmpty),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final title = viewMode == TodayViewMode.tasks ? '待办任务' : '全天安排';
+              const titleStyle = TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              );
+              const actionStyle = TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                height: 1.25,
+              );
+              double width(String value, TextStyle style) {
+                final text = TextPainter(
+                  text: TextSpan(text: value, style: style),
+                  textScaler: MediaQuery.textScalerOf(context),
+                  textDirection: Directionality.of(context),
+                )..layout();
+                final result = text.width;
+                text.dispose();
+                return result;
+              }
+
+              final compact =
+                  width(title, titleStyle) + width('查看全部', actionStyle) + 64 >
+                  box.maxWidth;
+              final onOpen = viewMode == TodayViewMode.tasks
+                  ? widget.onAllTasks
+                  : widget.onCalendar;
+              return Row(
+                children: [
+                  Expanded(child: Text(title, style: titleStyle)),
+                  const SizedBox(width: 12),
+                  if (compact)
+                    AppIconButton(
+                      key: const Key('today-secondary-action'),
+                      tooltip: '查看全部',
+                      onPressed: onOpen,
+                      color: CampusColors.muted,
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                    )
+                  else
+                    AppTextButton.icon(
+                      key: const Key('today-secondary-action'),
+                      onPressed: onOpen,
+                      iconAlignment: IconAlignment.end,
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                      style: AppTextButton.styleFrom(
+                        foregroundColor: CampusColors.muted,
+                        textStyle: actionStyle,
+                      ),
+                      label: const Text('查看全部'),
+                    ),
+                ],
+              );
+            },
           ),
-        if (urgent != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: urgentRow(urgent),
+        ),
+        const SizedBox(height: 8),
+        TodayViewSwitch(
+          timeline: timeline,
+          tasks: tasks,
+          otherEntries: otherDay,
+          now: now,
+          day: day,
+          preferences: preferences,
+          dayFinished: dayFinished,
+          scheduleAvailable: brief.data != null,
+          scheduleLoading: brief.busy,
+          scheduleLeading: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (urgent != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: urgentRow(urgent),
+                ),
+              if (showTomorrow) tomorrowPreview(tomorrow, tomorrowTasks),
+            ],
           ),
+          onEventTap: open,
+          onTaskTap: open,
+          onTaskEdit: widget.onTaskEdit,
+          onAllTasks: widget.onAllTasks,
+        ),
+        for (final id
+            in preferences.order
+                .where(preferences.enabled.contains)
+                .where(
+                  (id) => viewMode != TodayViewMode.tasks || id != 'deadlines',
+                ))
+          module(
+            id,
+            tomorrowVisible
+                ? tasks
+                      .where(
+                        (t) => !tomorrowTasks.any((v) => v['id'] == t['id']),
+                      )
+                      .toList()
+                : tasks,
+            urgent,
+          ),
+      ],
+    );
+  }
+
+  Widget tomorrowPreview(
+    List<Map<String, dynamic>> rows,
+    List<Map<String, dynamic>> tasks,
+  ) => Container(
+    margin: const EdgeInsets.only(top: 18, bottom: 12),
+    padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+    decoration: const BoxDecoration(
+      color: CampusColors.surface,
+      border: Border(left: BorderSide(color: CampusColors.teal, width: 3)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         Row(
           children: [
             const Expanded(
               child: Text(
-                '全天安排',
+                '明天',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
             ),
-            AppTextButton.icon(
-              onPressed: widget.onCalendar,
-              iconAlignment: IconAlignment.end,
-              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-              label: const Text('周日程'),
-            ),
+            if (tasks.isNotEmpty)
+              Text(
+                '${tasks.length}项截止',
+                style: const TextStyle(
+                  color: CampusColors.warning,
+                  fontSize: 13,
+                ),
+              ),
           ],
         ),
-        if (brief.data != null) ...[
-          if (timeline.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                '今天没有已记录的课程或活动',
-                style: TextStyle(fontSize: 16, color: CampusColors.muted),
-              ),
-            ),
-          for (var i = 0; i < timeline.length; i++)
-            timelineRow(timeline[i], last: i == timeline.length - 1),
-        ],
-        for (final id in preferences.order.where(preferences.enabled.contains))
-          module(id, tasks, urgent),
-      ],
-    );
-  }
-
-  Widget nextPanel(Map<String, dynamic> row) {
-    final begin = at(row['start_at'])!;
-    final running = !begin.isAfter(now);
-    final type = switch (row['resource_type']) {
-      'course' => '课程',
-      'exam' => '考试',
-      'plan' => '个人计划',
-      _ => '活动',
-    };
-    return Material(
-      key: ValueKey('next-${row['id']}-$running'),
-      color: CampusColors.blueSoft,
-      borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => open(row),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+        for (final row in rows.where((r) => r['start_at'] != null).take(2))
+          InkWell(
+            onTap: () => open(row),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: running ? CampusColors.teal : CampusColors.primary,
-                      shape: BoxShape.circle,
+                  SizedBox(
+                    width: 54,
+                    child: Text(
+                      hhmm(schoolTime(row['start_at'])),
+                      style: const TextStyle(
+                        color: CampusColors.teal,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      '${running ? '进行中' : '下一安排'} · $type',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: CampusColors.primary,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${row['title']}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        if ('${row['location'] ?? ''}'.trim().isNotEmpty)
+                          Text(
+                            '${row['location']}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: CampusColors.muted,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   const Icon(
-                    Icons.arrow_forward_rounded,
-                    color: CampusColors.primary,
-                    size: 20,
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: CampusColors.muted,
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
-              Text(
-                hhmm(begin),
-                style: const TextStyle(
-                  fontSize: 42,
-                  height: 1.05,
-                  fontWeight: FontWeight.w800,
-                  color: CampusColors.primary,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '${row['title']}',
-                style: const TextStyle(
-                  fontSize: 22,
-                  height: 1.35,
-                  color: CampusColors.ink,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if ('${row['location'] ?? ''}'.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.place_outlined,
-                      size: 18,
-                      color: CampusColors.muted,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        '${row['location']}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: CampusColors.muted,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget emptyNextPanel(bool empty) => Container(
-    key: ValueKey('next-empty-$empty'),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: CampusColors.surface,
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Row(
-      children: [
-        const Icon(
-          Icons.event_available_outlined,
-          color: CampusColors.muted,
-          size: 28,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                empty ? '今日暂无安排' : '暂无后续安排',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
+        if (tasks.isNotEmpty)
+          InkWell(
+            onTap: () => context.push('/items/${tasks.first['id']}'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                tasks.map((t) => '${t['title']}').take(2).join(' · '),
+                style: const TextStyle(fontSize: 14, color: CampusColors.muted),
               ),
-              const SizedBox(height: 4),
-              const Text(
-                '可在日程中添加或查看安排',
-                style: TextStyle(fontSize: 14, color: CampusColors.muted),
-              ),
-            ],
+            ),
           ),
-        ),
       ],
     ),
   );
 
-  Widget urgentRow(Map<String, dynamic> item) {
-    final due = deadline(item);
-    final label = due != null && due.isBefore(day)
-        ? '截止日期已过'
-        : due != null && due.isBefore(day.add(const Duration(days: 1)))
-        ? '今日截止'
-        : '优先处理';
-    return Material(
-      color: CampusColors.errorSoft,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => open(item),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 2),
-                child: Icon(
-                  Icons.priority_high_rounded,
-                  color: CampusColors.error,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: CampusColors.error,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${item['title']}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, size: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget timelineRow(Map<String, dynamic> row, {required bool last}) {
-    final begin = at(row['start_at']), end = at(row['end_at']);
-    final past = end != null && !end.isAfter(now);
-    final current =
-        begin != null && end != null && !begin.isAfter(now) && end.isAfter(now);
-    final palette = CoursePalette.forTitle('${row['title']}');
-    final type = switch (row['resource_type']) {
-      'course' => '课程',
-      'exam' => '考试',
-      _ => '活动',
-    };
-    return Semantics(
-      container: true,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: MediaQuery.textScalerOf(context).scale(52),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      begin == null ? '待定' : hhmm(begin),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: current
-                            ? CampusColors.primary
-                            : CampusColors.ink,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                    if (end != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        hhmm(end),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: CampusColors.muted,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 16,
-              child: Stack(
-                children: [
-                  Positioned(
-                    top: 0,
-                    bottom: last ? 30 : 0,
-                    left: 4,
-                    child: Container(width: 2, color: CampusColors.line),
-                  ),
-                  Positioned(
-                    top: 18,
-                    left: 0,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: current ? CampusColors.primary : palette.ink,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: AnimatedContainer(
-                  constraints: const BoxConstraints(minHeight: 72),
-                  duration: motionDuration,
-                  decoration: BoxDecoration(
-                    color: past ? CampusColors.background : palette.background,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: current ? palette.ink : Colors.transparent,
-                      width: current ? 1.5 : 1,
-                    ),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => open(row),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${row['title']}',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: past ? CampusColors.muted : palette.ink,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              [
-                                type,
-                                if ('${row['location'] ?? ''}'.isNotEmpty)
-                                  '${row['location']}',
-                                if (current) '进行中' else if (past) '已结束',
-                              ].join(' · '),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: past ? CampusColors.muted : palette.ink,
-                              ),
-                            ),
-                            if (begin == null)
-                              Text(
-                                calendarTimeLabel(row),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: CampusColors.muted,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
+  Widget urgentRow(Map<String, dynamic> item) =>
+      UrgentItemCard(item: item, now: now, onTap: () => open(item));
   Widget section(String title, {IconData? icon}) => Padding(
     padding: const EdgeInsets.only(top: 24, bottom: 12),
     child: Row(
@@ -858,13 +852,15 @@ class TodayDashboardState extends State<TodayDashboard>
           '${row['title']}',
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            calendarTimeLabel(row),
-            style: const TextStyle(fontSize: 14),
-          ),
-        ),
+        subtitle: calendarTimeLabel(row).isEmpty
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  calendarTimeLabel(row),
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
         trailing: const Icon(Icons.chevron_right_rounded, size: 20),
       ),
     ),
@@ -875,9 +871,75 @@ class TodayDashboardState extends State<TodayDashboard>
     List<Map<String, dynamic>> tasks,
     Map<String, dynamic>? urgent,
   ) {
+    if (id == 'week_heatmap') {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: WeekHeatmap(
+          items: completeWeek ? weekly.entries : [],
+          now: now,
+          available: completeWeek,
+          loading: weekly.busy || _weekRefreshQueued,
+          offline: weekly.offline,
+          onRetry: () => reload(forceWeek: true),
+          onDayTap: (date) {
+            if (widget.onCalendarDay != null) {
+              widget.onCalendarDay!(date);
+            } else {
+              widget.onCalendar();
+            }
+          },
+        ),
+      );
+    }
+
+    // 学期进度
+    if (id == 'semester_progress') {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: SemesterProgressCard(semester: widget.app.semester, now: now),
+      );
+    }
+
+    // 时间统计
+    if (id == 'time_stats') {
+      if (!completeWeek) {
+        return AppTile(
+          title: const Text('时间统计'),
+          subtitle: Text(
+            weekly.busy || _weekRefreshQueued ? '正在读取完整周日程…' : '暂时无法统计本周时长',
+          ),
+          trailing: weekly.busy || _weekRefreshQueued
+              ? null
+              : AppTextButton(
+                  onPressed: () => reload(forceWeek: true),
+                  child: const Text('重试'),
+                ),
+        );
+      }
+      final todayEntries = weekly.entries;
+      final weekEntries = weekly.entries;
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: TimeStatsCard(
+          todayItems: todayEntries,
+          weekItems: weekEntries,
+          now: now,
+        ),
+      );
+    }
+
+    // 呼吸练习
+    if (id == 'breathing_exercise') {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 16),
+        child: BreathingExerciseCard(),
+      );
+    }
+
     if (id == 'plans') {
       final rows = brief.entries
-          .where((r) => r['resource_type'] == 'plan')
+          .where((r) => r['resource_type'] == 'plan' && r['start_at'] == null)
           .toList();
       if (rows.isEmpty) return const SizedBox();
       return Column(
@@ -895,7 +957,7 @@ class TodayDashboardState extends State<TodayDashboard>
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          section('可以处理的事', icon: Icons.auto_awesome_outlined),
+          section('安排建议', icon: Icons.auto_awesome_outlined),
           for (final suggestion in suggestions.take(2))
             Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -933,7 +995,11 @@ class TodayDashboardState extends State<TodayDashboard>
                       initialText: suggestion['request'],
                       autoSubmit: true,
                     ),
-                    child: Text(suggestion['action_label']),
+                    child: Text(
+                      suggestion['action_label'] == '安排一下'
+                          ? '安排任务'
+                          : suggestion['action_label'],
+                    ),
                   ),
                 ],
               ),
@@ -947,7 +1013,16 @@ class TodayDashboardState extends State<TodayDashboard>
               .toList()
         : tasks;
     final list = values
-        .where((r) => r['id'] != urgent?['id'] && upcoming(r))
+        .where(
+          (r) =>
+              r['id'] != urgent?['id'] &&
+              upcoming(r) &&
+              !brief.entries.any(
+                (entry) =>
+                    entry['resource_id'] == r['id'] &&
+                    const ['window', 'start'].contains(calendarMeaning(entry)),
+              ),
+        )
         .take(3)
         .toList();
     if (list.isEmpty) return const SizedBox();
@@ -973,7 +1048,7 @@ class TodayDashboardState extends State<TodayDashboard>
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                itemTimeLabel(list[i]),
+                itemTimeLabel(list[i], includeMissing: false),
                 style: const TextStyle(fontSize: 14, color: CampusColors.muted),
               ),
             ),

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/api.dart';
 import '../items/items_controller.dart';
@@ -15,18 +17,37 @@ class AgentController extends ChangeNotifier {
   List<Map<String, dynamic>> runs = [], threads = [];
   String? threadId, error;
   bool busy = false, loading = true, _closed = false;
+  bool historyLoading = false, earlierLoading = false;
+  bool hasMoreThreads = false, hasMoreRuns = false;
+  String? threadCursor, runCursor;
+  final Set<String> loadingCards = {};
   int _epoch = 0;
+  int get contextVersion => _epoch;
   Timer? _poll;
   String? _pendingText, _pendingId;
   final Set<String> _syncedReceipts = {};
   Future<void>? _receiptSync;
+  Map<String, dynamic>? mediaRun;
   AgentController(this.items, this.semesterId);
   bool get active =>
       !_closed &&
       items.api.generation == generation &&
       items.semesterId == semesterId;
   bool get processing =>
-      runs.any((r) => r['status'] == 'queued' || r['status'] == 'running');
+      mediaProcessing ||
+      runs.any(
+        (r) => {'queued', 'running', 'recognizing'}.contains(r['status']),
+      );
+  bool get mediaProcessing =>
+      mediaRun != null &&
+      mediaRun!['run'] == null &&
+      {
+        'queued',
+        'running',
+        'uploaded',
+        'recognized',
+      }.contains(mediaRun!['status']);
+  String? get mediaStatus => mediaRun?['status'] as String?;
   Map<String, dynamic>? get activeSource {
     if (runs.isEmpty ||
         {'applied', 'cancelled'}.contains(runs.last['status'])) {
@@ -46,30 +67,67 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  Future<dynamic> request(String method, String path, {dynamic data}) =>
-      items.api.request(method, path, data: data);
+  Future<dynamic> request(
+    String method,
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? query,
+  }) => items.api.request(method, path, data: data, queryParameters: query);
   Future<void> open({String? id, bool fresh = false}) async {
     final stamp = ++_epoch;
     _poll?.cancel();
+    historyLoading = earlierLoading = false;
     loading = true;
     error = null;
+    mediaRun = null;
     emit();
+    if (fresh) {
+      mediaRun = null;
+      threadId = null;
+      runs = [];
+      hasMoreRuns = false;
+      runCursor = null;
+      _pendingId = _pendingText = null;
+      loading = false;
+      emit();
+      return;
+    }
     try {
-      final all = await request(
-        'GET',
-        '/agent/threads?semester_id=$semesterId',
-      );
-      check(stamp);
-      threads = rows(all);
-      threadId = fresh
-          ? null
-          : id ?? (threads.isEmpty ? null : threads.first['id'] as String);
+      if (id == null) {
+        final all = await request(
+          'GET',
+          '/agent/threads?semester_id=$semesterId',
+        );
+        check(stamp);
+        threads = rows(all);
+      }
+      threadId = id ?? (threads.isEmpty ? null : threads.first['id'] as String);
       runs = [];
       if (threadId != null) {
-        final value = await request('GET', '/agent/threads/$threadId');
+        final value = await request(
+          'GET',
+          '/agent/threads/$threadId',
+          query: {'limit': 20},
+        );
         check(stamp);
+        if (value['semester_id'] != null &&
+            value['semester_id'] != semesterId) {
+          threadId = null;
+          throw ApiFailure('这段对话属于其他学期，请先切换学期');
+        }
         runs = rows(value['runs']);
+        hasMoreRuns = value['has_more'] == true;
+        runCursor = value['next_cursor'] as String?;
         await reconcileReceipts(stamp);
+      }
+      final recent = runs.lastOrNull;
+      if (recent?['media_run_id'] is String &&
+          {'recognizing', 'failed', 'cancelled'}.contains(recent?['status'])) {
+        final value = Map<String, dynamic>.from(
+          await request('GET', '/agent/media-runs/${recent!['media_run_id']}'),
+        );
+        check(stamp);
+        _acceptMediaRun(value);
       }
       _pendingId = _pendingText = null;
     } catch (e) {
@@ -77,6 +135,217 @@ class AgentController extends ChangeNotifier {
     } finally {
       if (active && stamp == _epoch) {
         loading = false;
+        emit();
+        schedulePoll();
+      }
+    }
+  }
+
+  Future<void> loadHistory({bool reset = false}) async {
+    if (historyLoading || !active || (!reset && !hasMoreThreads)) return;
+    final stamp = _epoch;
+    historyLoading = true;
+    error = null;
+    emit();
+    try {
+      final value = await request(
+        'GET',
+        '/agent/history',
+        query: {
+          'semester_id': semesterId,
+          'limit': 20,
+          if (!reset && threadCursor != null) 'before_thread_id': threadCursor,
+        },
+      );
+      check(stamp);
+      final page = rows(value['threads']);
+      threads = reset
+          ? page
+          : [
+              ...threads,
+              ...page.where((r) => !threads.any((old) => old['id'] == r['id'])),
+            ];
+      hasMoreThreads = value['has_more'] == true;
+      threadCursor = value['next_cursor'] as String?;
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+    } finally {
+      if (active && stamp == _epoch) {
+        historyLoading = false;
+        emit();
+      }
+    }
+  }
+
+  Future<void> loadEarlier() async {
+    if (earlierLoading || !active || !hasMoreRuns || threadId == null) return;
+    final stamp = _epoch;
+    final target = threadId;
+    earlierLoading = true;
+    error = null;
+    emit();
+    try {
+      final value = await request(
+        'GET',
+        '/agent/threads/$target',
+        query: {'limit': 20, if (runCursor != null) 'before_run_id': runCursor},
+      );
+      check(stamp);
+      final page = rows(value['runs']);
+      runs = [
+        ...page.where((r) => !runs.any((old) => old['id'] == r['id'])),
+        ...runs,
+      ];
+      hasMoreRuns = value['has_more'] == true;
+      runCursor = value['next_cursor'] as String?;
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+    } finally {
+      if (active && stamp == _epoch) {
+        earlierLoading = false;
+        emit();
+      }
+    }
+  }
+
+  Future<void> loadCard(String runId, Map<String, dynamic> card) async {
+    final cardId = card['card_id'] as String?;
+    final key = '$runId:$cardId';
+    if (!active ||
+        cardId == null ||
+        loadingCards.contains(key) ||
+        card['has_more'] != true) {
+      return;
+    }
+    final stamp = _epoch;
+    loadingCards.add(key);
+    error = null;
+    emit();
+    try {
+      final value = await request(
+        'GET',
+        '/agent/runs/$runId/cards/$cardId',
+        query: {'offset': card['next_offset'] ?? 5, 'limit': 20},
+      );
+      check(stamp);
+      final next = Map<String, dynamic>.from(value['card']);
+      final oldData = Map<String, dynamic>.from(card['data'] ?? {});
+      final nextData = Map<String, dynamic>.from(next['data'] ?? {});
+      for (final field in [
+        'entries',
+        'undated',
+        'records',
+        'occurrences',
+        'windows',
+        'actions',
+        'tasks',
+        'blocks',
+      ]) {
+        if (!oldData.containsKey(field) && !nextData.containsKey(field)) {
+          continue;
+        }
+        final before = rows(oldData[field]);
+        String identity(Map<String, dynamic> row) => row['id'] != null
+            ? '${row['resource_type']}:${row['id']}:${row['start_at']}'
+            : jsonEncode(row);
+        final seen = before.map(identity).toSet();
+        nextData[field] = [
+          ...before,
+          ...rows(nextData[field]).where((row) => seen.add(identity(row))),
+        ];
+      }
+      final merged = {
+        ...card,
+        ...next,
+        'data': {...oldData, ...nextData},
+        'has_more': value['has_more'] == true,
+        'next_offset': value['next_offset'],
+      };
+      runs = runs
+          .map(
+            (run) => run['id'] != runId
+                ? run
+                : <String, dynamic>{
+                    ...run,
+                    'cards': rows(run['cards'])
+                        .map((old) => old['card_id'] == cardId ? merged : old)
+                        .toList(),
+                  },
+          )
+          .toList();
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+    } finally {
+      loadingCards.remove(key);
+      if (active && stamp == _epoch) emit();
+    }
+  }
+
+  Future<bool> revise(
+    Map<String, dynamic> run,
+    String text, {
+    String inputKind = 'message',
+    Map<String, dynamic>? source,
+    bool detachSource = false,
+  }) async {
+    if (busy || processing || !active || text.trim().isEmpty) return false;
+    final stamp = ++_epoch;
+    _poll?.cancel();
+    busy = true;
+    error = null;
+    emit();
+    try {
+      final signature =
+          'revise:${run['id']}:$text:${source?['id']}:${source?['version']}:$detachSource:$inputKind';
+      if (_pendingText != signature || _pendingId == null) {
+        _pendingText = signature;
+        _pendingId = List.generate(
+          16,
+          (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+        ).join();
+      }
+      final value = Map<String, dynamic>.from(
+        await request(
+          'POST',
+          '/agent/runs/${run['id']}/revise',
+          data: {
+            'text': text.trim(),
+            'request_id': _pendingId,
+            if (source != null) 'source_id': source['id'],
+            if (source != null) 'source_version': source['version'],
+            if (detachSource) 'detach_source': true,
+          },
+        ),
+      );
+      check(stamp);
+      threadId = value['thread_id'] as String;
+      runs = [value];
+      hasMoreRuns = false;
+      runCursor = null;
+      emit();
+      try {
+        final page = await request(
+          'GET',
+          '/agent/threads/$threadId',
+          query: {'limit': 20},
+        );
+        check(stamp);
+        runs = rows(page['runs']);
+        replace(value);
+        hasMoreRuns = page['has_more'] == true;
+        runCursor = page['next_cursor'] as String?;
+      } catch (e) {
+        check(stamp);
+        error = userError(e);
+      }
+      _pendingId = _pendingText = null;
+      return true;
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+      return false;
+    } finally {
+      if (active && stamp == _epoch) {
+        busy = false;
         emit();
         schedulePoll();
       }
@@ -91,9 +360,18 @@ class AgentController extends ChangeNotifier {
   Future<void> poll() async {
     final stamp = _epoch;
     final pending = runs
-        .where((r) => r['status'] == 'queued' || r['status'] == 'running')
+        .where(
+          (r) => {'queued', 'running', 'recognizing'}.contains(r['status']),
+        )
         .toList();
     try {
+      if (mediaProcessing) {
+        final value = Map<String, dynamic>.from(
+          await request('GET', '/agent/media-runs/${mediaRun!['id']}'),
+        );
+        check(stamp);
+        _acceptMediaRun(value);
+      }
       for (final row in pending) {
         final value = Map<String, dynamic>.from(
           await request('GET', '/agent/runs/${row['id']}'),
@@ -101,12 +379,190 @@ class AgentController extends ChangeNotifier {
         check(stamp);
         replace(value);
       }
-      error = null;
+      if (mediaRun?['status'] != 'failed') error = null;
       await reconcileReceipts(stamp);
     } catch (e) {
       if (active && stamp == _epoch) error = userError(e);
     } finally {
       if (active && stamp == _epoch) {
+        emit();
+        schedulePoll();
+      }
+    }
+  }
+
+  void _acceptMediaRun(Map<String, dynamic> value) {
+    mediaRun = value;
+    final thread = value['thread'];
+    if (thread is Map && thread['id'] is String) threadId = thread['id'];
+    final run = value['run'];
+    if (run is Map) {
+      final row = Map<String, dynamic>.from(run);
+      threadId = row['thread_id'] as String? ?? threadId;
+      runs = [
+        for (final old in runs)
+          if (old['status'] == 'needs_confirmation')
+            {...old, 'status': 'superseded'}
+          else
+            old,
+      ];
+      replace(row);
+      error = null;
+    } else if (value['status'] == 'failed') {
+      error = '图片识别未完成，请重新选择图片或粘贴通知文字。';
+    } else {
+      final source = value['source'];
+      final metadata = source is Map ? source['recognition'] : null;
+      final runId = metadata is Map ? metadata['agent_run_id'] : null;
+      final existing = runs.where((row) => row['id'] == runId).firstOrNull;
+      if (existing != null) {
+        replace({
+          ...existing,
+          'status': 'recognizing',
+          'stage': value['stage'],
+          'progress': value['progress'] ?? [],
+          'error': null,
+        });
+      }
+    }
+  }
+
+  Future<void> cancelMedia() async {
+    if (busy || !active || mediaRun == null) return;
+    final stamp = _epoch, id = mediaRun!['id'];
+    busy = true;
+    error = null;
+    emit();
+    try {
+      final value = Map<String, dynamic>.from(
+        await request('POST', '/agent/media-runs/$id/cancel'),
+      );
+      check(stamp);
+      _acceptMediaRun(value);
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+    } finally {
+      if (active && stamp == _epoch) {
+        busy = false;
+        emit();
+        schedulePoll();
+      }
+    }
+  }
+
+  Future<void> refreshMedia() async {
+    if (busy || !active || mediaRun == null) return;
+    final stamp = _epoch, id = mediaRun!['id'];
+    busy = true;
+    error = null;
+    emit();
+    try {
+      final value = Map<String, dynamic>.from(
+        await request('GET', '/agent/media-runs/$id'),
+      );
+      check(stamp);
+      _acceptMediaRun(value);
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+    } finally {
+      if (active && stamp == _epoch) {
+        busy = false;
+        emit();
+        schedulePoll();
+      }
+    }
+  }
+
+  Future<bool> retryMedia() async {
+    if (busy || !active || mediaRun == null || processing) return false;
+    final stamp = _epoch, id = mediaRun!['id'];
+    final source = mediaRun!['source'];
+    if (source is! Map) return false;
+    busy = true;
+    error = null;
+    emit();
+    try {
+      final value = Map<String, dynamic>.from(
+        await request(
+          'POST',
+          '/agent/media-runs/$id/retry',
+          data: {'expected_version': source['version']},
+        ),
+      );
+      check(stamp);
+      _acceptMediaRun(value);
+      return true;
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+      return false;
+    } finally {
+      if (active && stamp == _epoch) {
+        busy = false;
+        emit();
+        schedulePoll();
+      }
+    }
+  }
+
+  /// Called only by the composer's explicit send. All pages form one notice.
+  Future<bool> sendImages(
+    List<String> paths, {
+    String instruction = '',
+    String? clientRequestId,
+  }) async {
+    if (busy || processing || !active || paths.isEmpty) return false;
+    final stamp = _epoch;
+    busy = true;
+    error = null;
+    emit();
+    try {
+      final signature = 'images:${paths.join('\u0000')}:$instruction';
+      if (_pendingText != signature || _pendingId == null) {
+        _pendingText = signature;
+        _pendingId =
+            clientRequestId ??
+            List.generate(
+              16,
+              (_) => Random.secure()
+                  .nextInt(256)
+                  .toRadixString(16)
+                  .padLeft(2, '0'),
+            ).join();
+      }
+      final files = <MapEntry<String, MultipartFile>>[];
+      for (final path in paths) {
+        files.add(MapEntry('files', await MultipartFile.fromFile(path)));
+        check(stamp);
+      }
+      final payload = FormData();
+      payload.fields.addAll([
+        MapEntry('semester_id', semesterId),
+        const MapEntry('kind', 'image'),
+        MapEntry('client_request_id', _pendingId!),
+        if (threadId != null) MapEntry('thread_id', threadId!),
+        if (instruction.trim().isNotEmpty)
+          MapEntry('instruction', instruction.trim()),
+      ]);
+      payload.files.addAll(files);
+      final value = Map<String, dynamic>.from(
+        await items.api.request(
+          'POST',
+          '/agent/media-runs',
+          data: payload,
+          receiveTimeout: const Duration(seconds: 60),
+          idempotencyKey: _pendingId,
+        ),
+      );
+      check(stamp);
+      _acceptMediaRun(value);
+      _pendingText = _pendingId = null;
+      return true;
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+      return false;
+    } finally {
+      if (active && stamp == _epoch) {
+        busy = false;
         emit();
         schedulePoll();
       }
@@ -139,8 +595,10 @@ class AgentController extends ChangeNotifier {
 
   Future<bool> send(
     String text, {
+    String inputKind = 'message',
     Map<String, dynamic>? source,
     List<String> selectedRecordIds = const [],
+    List<String> contextRecordIds = const [],
     bool detachSource = false,
   }) async {
     if (busy || processing || !active || text.trim().isEmpty) return false;
@@ -159,7 +617,7 @@ class AgentController extends ChangeNotifier {
         threadId = t['id'];
       }
       final signature =
-          '$text\u0000${source?['id'] ?? ''}:${source?['version'] ?? ''}:${selectedRecordIds.join(',')}:$detachSource';
+          '$text\u0000${source?['id'] ?? ''}:${source?['version'] ?? ''}:${selectedRecordIds.join(',')}:${contextRecordIds.join(',')}:$detachSource:$inputKind';
       if (_pendingText != signature || _pendingId == null) {
         _pendingText = signature;
         _pendingId = List.generate(
@@ -174,10 +632,13 @@ class AgentController extends ChangeNotifier {
           data: {
             'text': text,
             'request_id': _pendingId,
+            'input_kind': inputKind,
             if (source != null) 'source_id': source['id'],
             if (source != null) 'source_version': source['version'],
             if (selectedRecordIds.isNotEmpty)
               'selected_record_ids': selectedRecordIds,
+            if (contextRecordIds.isNotEmpty)
+              'context_record_ids': contextRecordIds,
             if (detachSource) 'detach_source': true,
           },
         ),
@@ -327,6 +788,7 @@ class AgentController extends ChangeNotifier {
         .where(
           (r) =>
               r['status'] == 'applied' &&
+              r['context_only'] != true &&
               r['receipt'] is Map &&
               !_syncedReceipts.contains(r['id']),
         )

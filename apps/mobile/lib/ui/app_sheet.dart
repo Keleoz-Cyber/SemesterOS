@@ -4,6 +4,76 @@ import 'package:flutter/material.dart';
 import 'package:smooth_sheets/smooth_sheets.dart';
 
 import 'motion.dart';
+import 'app_controls.dart';
+
+/// A compact, consistent title and an explicit way to leave a chooser.
+class AppSheetHeading extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget? leading, trailing;
+  final String closeLabel;
+  final bool showClose;
+  final EdgeInsetsGeometry padding;
+  const AppSheetHeading({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.leading,
+    this.trailing,
+    this.closeLabel = '取消选择',
+    this.showClose = true,
+    this.padding = const EdgeInsets.fromLTRB(20, 0, 12, 12),
+  });
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: padding,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (leading != null) ...[
+          Padding(padding: const EdgeInsets.only(top: 12), child: leading!),
+          const SizedBox(width: 10),
+        ],
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 9),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    height: 1.25,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (subtitle?.trim().isNotEmpty == true) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        ?trailing,
+        if (showClose)
+          AppIconButton(
+            tooltip: closeLabel,
+            guardAsync: false,
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close_rounded, size: 21),
+          ),
+      ],
+    ),
+  );
+}
 
 /// A single draggable modal surface, with keyboard avoidance owned here.
 ///

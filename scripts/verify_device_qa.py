@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import httpx
-from verify_android_items import shell, nodes as raw_nodes, label, tap, ADB, DEVICE
+from android_qa import shell, nodes as raw_nodes, label, tap, ADB, DEVICE
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'output/verification/device-qa'
@@ -37,6 +37,18 @@ def wait_for(text, exact=False):
         if matches: return matches[-1]
         time.sleep(.5)
     raise AssertionError('Expected QA element missing: '+text)
+
+
+def wait_for_navigation(title):
+    # Bottom-navigation names include their tab index in native semantics.
+    # Match that role instead of accidentally selecting the Today mode tabs.
+    pattern = re.compile(re.escape(title) + r'[,，]\s*第[1-4]个标签，共4个')
+    for _ in range(12):
+        matches = [n for n in nodes() if pattern.fullmatch(label(n))]
+        if len(matches) == 1:
+            return matches[0]
+        time.sleep(.5)
+    raise AssertionError('Expected QA navigation missing: '+title)
 
 
 def screenshot(name):
@@ -116,15 +128,15 @@ def login_and_seed():
         tap(fields[i]); shell('input','text',value)
     shell('input','keyevent','4')
     tap(wait_for('登录',exact=True))
-    wait_for('今日课程'); screenshot('today-native')
-    print('QA synthetic account login and server calendar displayed')
+    wait_for_navigation('今日'); screenshot('today-native')
+    print('QA synthetic account login reached the today view')
 
 
 def navigation():
     metrics(reset=True)
     for _ in range(3):
         for title in ['日程','计划','学期','今日']:
-            tap(wait_for(title,exact=True)); time.sleep(.35)
+            tap(wait_for_navigation(title)); time.sleep(.35)
     result=metrics()
     (OUT/'navigation-frames.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
     print(json.dumps(result))

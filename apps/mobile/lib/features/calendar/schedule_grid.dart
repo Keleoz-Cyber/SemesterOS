@@ -1,24 +1,31 @@
-import '../../ui/app_controls.dart';
+import '../../ui/app_sheet.dart';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:calendar_view/calendar_view.dart' as cv;
 import '../../app/controller.dart';
+import '../../ui/app_controls.dart';
 import '../../ui/campus_theme.dart';
 import 'calendar_repository.dart';
+import 'time_track.dart';
+import 'timetable_scale.dart';
+import '../../ui/date_labels.dart';
 
 class ScheduleGrid extends StatefulWidget {
   final DateTime firstDay;
   final DateTime? minDay, maxDay, selectedDay;
   final List<Map<String, dynamic>> entries;
+  final List<Map<String, dynamic>> periods;
   final ValueChanged<Map<String, dynamic>> onOpen;
   final ValueChanged<DateTime>? onDay, onWeek;
   final bool loading, showHeader, visible;
   final String resourceFilter;
   final int? revision;
+  final DateTime Function()? now;
+  final bool refreshClock;
   const ScheduleGrid({
     super.key,
     required this.firstDay,
     required this.entries,
+    this.periods = const [],
     required this.onOpen,
     this.onDay,
     this.onWeek,
@@ -30,393 +37,686 @@ class ScheduleGrid extends StatefulWidget {
     this.visible = true,
     this.resourceFilter = 'all',
     this.revision,
+    this.now,
+    this.refreshClock = true,
   });
   @override
   State<ScheduleGrid> createState() => _ScheduleGridState();
 }
 
-class _Tile {
+class _GridPart {
   final String id;
+  final int day, start, end;
   final Map<String, dynamic> source;
-  _Tile(this.id, this.source);
+  const _GridPart(this.id, this.day, this.start, this.end, this.source);
+  bool get point => source['end_at'] == null || !calendarReservesTime(source);
 }
 
 class _ScheduleGridState extends State<ScheduleGrid>
     with WidgetsBindingObserver {
-  bool active = true, foreground = true;
-  double savedOffset = 0, initialOffset = 0;
-  final controller = cv.EventController<_Tile>();
-  final weekKey = GlobalKey<cv.WeekViewState<_Tile>>();
+  final scroll = ScrollController();
   final pages = <String, List<Map<String, dynamic>>>{};
-  int firstHour = 8, lastHour = 20;
-  DateTime wall(DateTime d) =>
-      DateTime(d.year, d.month, d.day, d.hour, d.minute, d.second);
+  MinuteClock? clock;
+  bool active = true, foreground = true;
+  DateTime get now => widget.now?.call() ?? schoolNow();
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    populate();
+    cachePage();
   }
 
-  void rememberOffset() {
-    initialOffset = savedOffset;
+  void cachePage() {
+    if (!widget.loading) pages[calendarDate(widget.firstDay)] = widget.entries;
+  }
+
+  void updateClock() {
+    if (!active || !foreground || !widget.visible || !widget.refreshClock) {
+      clock?.cancel();
+      clock = null;
+    } else {
+      clock ??= MinuteClock(() {
+        if (mounted && active && foreground && widget.visible) setState(() {});
+      }, now: () => now);
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final next = TickerMode.valuesOf(context).enabled;
-    if (active && !next) rememberOffset();
-    active = next;
+    active = TickerMode.valuesOf(context).enabled;
+    updateClock();
+  }
+
+  @override
+  void didUpdateWidget(covariant ScheduleGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) pages.clear();
+    cachePage();
+    updateClock();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) rememberOffset();
-    if (mounted) {
-      setState(() => foreground = state == AppLifecycleState.resumed);
-    }
+    if (!mounted) return;
+    setState(() => foreground = state == AppLifecycleState.resumed);
+    updateClock();
   }
 
-  void populate() {
-    if (!widget.loading) pages[calendarDate(widget.firstDay)] = widget.entries;
-    final events = <cv.CalendarEventData<_Tile>>[];
-    firstHour = 8;
-    lastHour = 20;
-    for (final page in pages.entries) {
-      final first = DateTime.parse('${page.key}T00:00:00Z');
-      for (final entry in page.value.where(
-        (r) =>
-            widget.resourceFilter == 'all' ||
-            r['resource_type'] == widget.resourceFilter,
-      )) {
-        if (entry['resource_type'] == 'deadline') continue;
-        for (final segment in calendarGridEntries([entry], first)) {
-          final a = wall(schoolTime(segment['start_at'])),
-              b = wall(schoolTime(segment['end_at']));
-          if (page.key == calendarDate(widget.firstDay)) {
-            firstHour = a.hour < firstHour ? a.hour : firstHour;
-            final end = b.day != a.day ? 24 : b.hour + (b.minute > 0 ? 1 : 0);
-            lastHour = end > lastHour ? end : lastHour;
+  @override
+  void dispose() {
+    clock?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    scroll.dispose();
+    super.dispose();
+  }
+
+  List<_GridPart> parts() {
+    final result = <_GridPart>[];
+    for (final row in pages[calendarDate(widget.firstDay)] ?? widget.entries) {
+      if (row['resource_type'] == 'deadline' ||
+          calendarMeaning(row) == 'window' ||
+          (widget.resourceFilter != 'all' &&
+              row['resource_type'] != widget.resourceFilter)) {
+        continue;
+      }
+      if (row['start_at'] == null) continue;
+      final begin = schoolTime(row['start_at']);
+      if (row['end_at'] == null || !calendarReservesTime(row)) {
+        for (var day = 0; day < 7; day++) {
+          final date = widget.firstDay.add(Duration(days: day));
+          if (calendarDate(date) == calendarDate(begin)) {
+            result.add(
+              _GridPart(
+                '${row['id']}/${calendarDate(date)}',
+                day,
+                begin.hour * 60 + begin.minute,
+                begin.hour * 60 + begin.minute,
+                row,
+              ),
+            );
           }
-          final date = DateTime(a.year, a.month, a.day);
-          events.add(
-            cv.CalendarEventData<_Tile>(
-              date: date,
-              endDate: date,
-              startTime: a,
-              endTime: b,
-              title: entry['title'] ?? '日程',
-              event: _Tile(segment['id'], entry),
+        }
+      } else {
+        for (final segment in calendarGridEntries([row], widget.firstDay)) {
+          final start = schoolTime(segment['start_at']),
+              end = schoolTime(segment['end_at']);
+          final date = DateTime.utc(start.year, start.month, start.day);
+          result.add(
+            _GridPart(
+              segment['id'],
+              (segment['weekday'] as int) - 1,
+              start.difference(date).inMinutes,
+              end.difference(date).inMinutes,
+              row,
             ),
           );
         }
       }
     }
-    controller.removeAll(controller.allEvents.toList());
-    controller.addAll(events);
+    result.sort((a, b) => a.start.compareTo(b.start));
+    return result;
   }
 
-  @override
-  void didUpdateWidget(covariant ScheduleGrid old) {
-    super.didUpdateWidget(old);
-    if (old.visible && !widget.visible) rememberOffset();
-    if (old.revision != widget.revision) pages.clear();
-    if (old.revision != widget.revision ||
-        old.firstDay != widget.firstDay ||
-        old.loading != widget.loading ||
-        old.resourceFilter != widget.resourceFilter ||
-        !listEquals(old.entries, widget.entries)) {
-      populate();
+  Color accent(_GridPart part) => switch (part.source['resource_type']) {
+    'event' => CampusColors.teal,
+    'plan' => CampusColors.primary,
+    'exam' => CampusColors.warning,
+    _ => CoursePalette.forTitle('${part.source['title']}').accent,
+  };
+  Color background(_GridPart part) => switch (part.source['resource_type']) {
+    'event' => CampusColors.tealSoft,
+    'plan' => CampusColors.blueSoft,
+    'exam' => CampusColors.warningSoft,
+    _ => CoursePalette.forTitle('${part.source['title']}').background,
+  };
+  Future<void> openGroup(List<_GridPart> group) async {
+    if (group.length == 1) {
+      widget.onOpen(group.first.source);
+      return;
     }
-    if (old.firstDay != widget.firstDay) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final state = weekKey.currentState, date = wall(widget.firstDay);
-        if (state != null &&
-            calendarDate(state.currentDate) != calendarDate(date)) {
-          if (MediaQuery.disableAnimationsOf(context) ||
-              !TickerMode.valuesOf(context).enabled) {
-            state.jumpToWeek(date);
-          } else {
-            state.animateToWeek(
-              date,
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-            );
-          }
-        }
-      });
-    }
+    await showAppSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '${group.length}项${overlaps(group) ? '时间重叠' : '安排'}',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              for (final part in group)
+                AppTile(
+                  title: Text('${part.source['title']}'),
+                  subtitle: Text(calendarTimeLabel(part.source)),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.pop(context);
+                    widget.onOpen(part.source);
+                  },
+                ),
+              if (widget.onDay != null)
+                AppTextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onDay!(
+                      widget.firstDay.add(Duration(days: group.first.day)),
+                    );
+                  },
+                  child: const Text('查看这一天'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    controller.dispose();
-    super.dispose();
+  Widget tile(List<_GridPart> group, bool compact, double scaled) {
+    final part = group.first;
+    final isShort = part.point || part.end - part.start < 25;
+    final label = group.length > 1
+        ? '${group.length}项${overlaps(group) ? '重叠' : ''}'
+        : '${part.source['title']}';
+    final ink = part.source['resource_type'] == 'course'
+        ? CoursePalette.forTitle('${part.source['title']}').ink
+        : CampusColors.ink;
+    return Semantics(
+      button: true,
+      label: group
+          .map(
+            (p) =>
+                '${p.source['title']}，${calendarTimeLabel(p.source)}${p.point ? '，开始' : ''}',
+          )
+          .join('；'),
+      child: Tooltip(
+        message: group
+            .map((p) => '${p.source['title']} ${calendarTimeLabel(p.source)}')
+            .join('\n'),
+        child: Material(
+          color: overlaps(group) ? CampusColors.errorSoft : background(part),
+          borderRadius: BorderRadius.circular(isShort ? 4 : 6),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: ValueKey(
+              '${part.point ? 'schedule-start' : 'schedule-tile'}-${part.id}',
+            ),
+            onTap: () => openGroup(group),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: accent(part),
+                    width: part.point ? 2 : 3,
+                  ),
+                ),
+              ),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 3 : 6,
+                vertical: isShort ? 2 : 6,
+              ),
+              child: LayoutBuilder(
+                builder: (context, bounds) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: isShort
+                            ? 2
+                            : compact
+                            ? 4
+                            : 3,
+                        overflow: isShort && scaled > 1.3
+                            ? TextOverflow.clip
+                            : TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: compact ? 11 : 14,
+                          fontWeight: FontWeight.w700,
+                          color: ink,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                    if (part.point && bounds.maxHeight > 32 * scaled)
+                      Text(
+                        calendarParticipationLabel(part.source).isNotEmpty
+                            ? calendarParticipationLabel(part.source)
+                            : hhmm(schoolTime(part.source['start_at'])),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: accent(part)),
+                      ),
+                    if (group.length == 1 &&
+                        bounds.maxHeight > 55 * scaled &&
+                        bounds.maxWidth > 35 &&
+                        '${part.source['location'] ?? ''}'.trim().isNotEmpty)
+                      Text(
+                        shortCampusLocation('${part.source['location']}'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: CampusColors.muted,
+                        ),
+                      ),
+                    if (group.length == 1 &&
+                        bounds.maxHeight > 120 * scaled &&
+                        bounds.maxWidth > 55 &&
+                        calendarArrivalLabel(part.source).isNotEmpty)
+                      Text(
+                        calendarArrivalLabel(part.source),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: CampusColors.muted,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool overlaps(List<_GridPart> group) {
+    if (group.length < 2 || group.any((part) => part.point)) return false;
+    return group.any(
+      (part) => group.any(
+        (other) =>
+            !identical(part, other) &&
+            part.start < other.end &&
+            part.end > other.start,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
-      if (!active || !foreground || !widget.visible) {
-        return const SizedBox.expand();
-      }
-      final compact = box.maxWidth < 540,
+      final entries = parts(),
           scaled = MediaQuery.textScalerOf(context).scale(1);
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: NotificationListener<ScrollNotification>(
-          onNotification: (n) {
-            if (n.metrics.axis == Axis.vertical) savedOffset = n.metrics.pixels;
-            return false;
-          },
-          child: cv.WeekView<_Tile>(
-            key: weekKey,
-            controller: controller,
-            scrollOffset: initialOffset,
-            initialDay: wall(widget.firstDay),
-            minDay: wall(widget.minDay ?? widget.firstDay),
-            maxDay: wall(
-              widget.maxDay ?? widget.firstDay.add(const Duration(days: 6)),
-            ),
-            width: box.maxWidth,
-            heightPerMinute: scaled > 1.3 ? 1.6 : 1.25,
-            startHour: firstHour,
-            endHour: lastHour,
-            onPageChange: (date, _) => widget.onWeek?.call(
-              DateTime.utc(date.year, date.month, date.day),
-            ),
-            pageViewPhysics: widget.onWeek == null
-                ? const NeverScrollableScrollPhysics()
-                : const PageScrollPhysics(),
-            pageTransitionDuration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : const Duration(milliseconds: 260),
-            backgroundColor: Colors.white,
-            weekPageHeaderBuilder: (_, _) => const SizedBox(),
-            weekTitleHeight: widget.showHeader ? 84 * scaled.clamp(1, 2) : 0,
-            timeLineWidth: compact ? 40 : 52,
-            keepScrollOffset: true,
-            weekTitleBackgroundColor: Colors.white,
-            weekNumberBuilder: (_) => widget.showHeader
-                ? const Center(
-                    child: Text(
-                      '时间',
-                      style: TextStyle(fontSize: 11, color: CampusColors.muted),
-                    ),
-                  )
-                : const SizedBox(),
-            weekDayBuilder: (d) {
-              if (!widget.showHeader) return const SizedBox();
-              final today = calendarDate(d) == calendarDate(schoolNow());
-              final selected =
-                  widget.selectedDay != null &&
-                  calendarDate(d) == calendarDate(widget.selectedDay!);
-              return Semantics(
-                button: true,
-                selected: selected,
-                label: '${d.month}月${d.day}日${today ? '，今天' : ''}',
-                child: InkWell(
-                  key: ValueKey('calendar-day-${calendarDate(d)}'),
-                  onTap: () => widget.onDay?.call(d),
-                  child: Center(
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 1),
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 6,
-                        horizontal: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? CampusColors.primary
-                            : today
-                            ? CampusColors.tealSoft
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '周${'一二三四五六日'[d.weekday - 1]}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: selected
-                                  ? Colors.white
-                                  : CampusColors.muted,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${d.day}',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: selected ? Colors.white : CampusColors.ink,
-                            ),
-                          ),
-                          if (today)
-                            Text(
-                              '今天',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: selected
-                                    ? Colors.white
-                                    : CampusColors.teal,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-            eventArranger: compact
-                ? const cv.MergeEventArranger<_Tile>(includeEdges: false)
-                : const cv.SideEventArranger<_Tile>(includeEdges: false),
-            hourIndicatorSettings: const cv.HourIndicatorSettings(
-              color: CampusColors.line,
-              height: .6,
-            ),
-            liveTimeIndicatorSettings: cv.LiveTimeIndicatorSettings(
-              color: CampusColors.teal,
-              height: 2,
-              bulletRadius: 4,
-              showTime: true,
-              showTimeBackgroundView: true,
-              timeBackgroundViewWidth: compact ? 40 : 52,
-              currentTimeProvider: () => wall(schoolNow()),
-              onlyShowToday: true,
-            ),
-            timeLineBuilder: (d) => Padding(
-              padding: const EdgeInsets.only(right: 3),
-              child: Text(
-                hhmm(d),
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  fontSize: compact ? 10 : 12,
-                  color: CampusColors.muted,
+      final compact = box.maxWidth < 540, timeWidth = compact ? 40.0 : 52.0;
+      final minuteHeight = scaled > 1.3 ? 1.4 : .95;
+      final markerHeight = scaled > 1.3 ? 72.0 : 44.0;
+      final current = now;
+      final today = List.generate(
+        7,
+        (i) => widget.firstDay.add(Duration(days: i)),
+      ).indexWhere((date) => calendarDate(date) == calendarDate(current));
+      final minute = current.hour * 60 + current.minute;
+      final firstEvent =
+          entries.fold<int>(
+            widget.periods.isEmpty
+                ? 8 * 60
+                : _clockMinute(widget.periods.first['start']),
+            (value, part) => math.min(value, part.start),
+          ) ~/
+          60 *
+          60;
+      final lastEvent =
+          ((entries.fold<int>(
+                        widget.periods.isEmpty
+                            ? 20 * 60
+                            : _clockMinute(widget.periods.last['end']),
+                        (value, part) => math.max(
+                          value,
+                          part.point ? part.start + 1 : part.end,
+                        ),
+                      ) +
+                      59) ~/
+                  60 *
+                  60)
+              .clamp(60, 1440);
+      final first = today >= 0
+          ? math.min(firstEvent, current.hour * 60)
+          : firstEvent;
+      final last = today >= 0
+          ? math.max(lastEvent, (current.hour + 1) * 60)
+          : lastEvent;
+      final scale = TimetableScale.build(
+        first,
+        last,
+        widget.periods,
+        minuteHeight,
+        scaled,
+        entries
+            .where((p) => p.source['resource_type'] != 'course' && !p.point)
+            .map((p) => (start: p.start, end: p.end))
+            .toList(),
+      );
+      final height = scale.at(last);
+      final weights = [
+        for (var i = 0; i < 7; i++)
+          compact && scaled <= 1.2 && i >= 5 && !entries.any((p) => p.day == i)
+              ? .65
+              : 1.0,
+      ];
+      final totalWeight = weights.reduce((a, b) => a + b);
+      final widths = weights
+          .map((w) => (box.maxWidth - timeWidth) * w / totalWeight)
+          .toList();
+      final offsets = <double>[0];
+      for (final w in widths) {
+        offsets.add(offsets.last + w);
+      }
+      final children = <Widget>[
+        for (var i = 0; i < 7; i++)
+          if (i == today || i >= 5)
+            Positioned(
+              top: 0,
+              left: timeWidth + offsets[i],
+              width: widths[i],
+              height: height,
+              child: IgnorePointer(
+                child: ColoredBox(
+                  color: i == today
+                      ? CampusColors.tealSoft.withValues(alpha: .42)
+                      : CampusColors.background.withValues(alpha: .45),
                 ),
               ),
             ),
-            onEventTap: (events, date) {
-              if (events.length > 1 && widget.onDay != null) {
-                widget.onDay!(date);
-              } else if (events.isNotEmpty) {
-                widget.onOpen(events.first.event!.source);
-              }
-            },
-            eventTileBuilder: (date, events, rect, start, end) {
-              final event = events.first,
-                  tile = event.event!,
-                  palette = CoursePalette.forTitle(event.title);
-              final type = tile.source['resource_type'];
-              final accent = type == 'event'
-                  ? CampusColors.teal
-                  : type == 'plan'
-                  ? CampusColors.primary
-                  : type == 'exam'
-                  ? CampusColors.warning
-                  : palette.accent;
-              final background = type == 'event'
-                  ? CampusColors.tealSoft
-                  : type == 'plan'
-                  ? CampusColors.blueSoft
-                  : type == 'exam'
-                  ? CampusColors.warningSoft
-                  : palette.background;
-              return Semantics(
-                button: true,
-                label: events
-                    .map(
-                      (e) => '${e.title}，${calendarTimeLabel(e.event!.source)}',
-                    )
-                    .join('；'),
-                child: Container(
-                  key: ValueKey('schedule-tile-${tile.id}'),
-                  margin: const EdgeInsets.fromLTRB(1, 1, 1, 2),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 3 : 6,
-                    vertical: 6,
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _GridLines(
+              timeWidth,
+              widths,
+              scale,
+              first,
+              last,
+              widget.periods,
+            ),
+          ),
+        ),
+        for (
+          var hour = first ~/ 60;
+          widget.periods.isEmpty && hour < last ~/ 60;
+          hour++
+        )
+          Positioned(
+            top: scale.at(hour * 60) + 2,
+            left: 0,
+            width: timeWidth - 4,
+            child: Text(
+              scaled > 1.3 ? '$hour时' : '${hour.toString().padLeft(2, '0')}:00',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: compact ? 10 : 12,
+                color: CampusColors.muted,
+              ),
+            ),
+          ),
+        for (final period in widget.periods)
+          if (period['start'] is String)
+            Positioned(
+              top: scale.at(_clockMinute(period['start'])) + 2,
+              left: 0,
+              width: timeWidth - 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${period['number']}节',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: CampusColors.muted,
+                    ),
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    color: events.length > 1
-                        ? const Color(0xFFFFE6DB)
-                        : background,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border(left: BorderSide(color: accent, width: 3)),
+                  Text(
+                    '${period['start']}',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: CampusColors.muted,
+                    ),
                   ),
-                  child: LayoutBuilder(
-                    builder: (context, bounds) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (events.length == 1 &&
-                            type != 'course' &&
-                            bounds.maxHeight > 74 * scaled)
-                          Text(
-                            type == 'event'
-                                ? '活动'
-                                : type == 'plan'
-                                ? '计划'
-                                : '考试',
-                            maxLines: 1,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: accent,
-                            ),
-                          ),
-                        Expanded(
-                          child: Text(
-                            events.length > 1
-                                ? '${events.length}项重叠'
-                                : event.title,
-                            maxLines: compact ? 4 : 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: compact ? 11 : 14,
-                              fontWeight: FontWeight.w700,
-                              color: type == 'course'
-                                  ? palette.ink
-                                  : CampusColors.ink,
-                              height: 1.25,
-                            ),
+                ],
+              ),
+            ),
+      ];
+      for (var day = 0; day < 7; day++) {
+        final width = widths[day];
+        final dayParts = entries.where((p) => p.day == day).toList();
+        final groups = <List<_GridPart>>[];
+        for (final part in dayParts) {
+          if (groups.isNotEmpty &&
+              groups.last.any(
+                (p) =>
+                    math.max(
+                      scale.at(p.end),
+                      scale.at(p.start) + markerHeight,
+                    ) >
+                    scale.at(part.start),
+              )) {
+            groups.last.add(part);
+          } else {
+            groups.add([part]);
+          }
+        }
+        for (final group in groups) {
+          final top = group.first.start;
+          final bottom = group.map((p) => p.end).reduce(math.max);
+          for (var lane = 0; lane < (compact ? 1 : group.length); lane++) {
+            final visible = compact ? group : [group[lane]];
+            final part = visible.first;
+            final lanes = compact ? 1 : group.length;
+            final y = compact ? top : part.start,
+                finish = compact ? bottom : part.end;
+            children.add(
+              Positioned(
+                top: scale.at(y) + 1,
+                left: timeWidth + offsets[day] + lane * width / lanes + 1,
+                width: width / lanes - 2,
+                height: math.max(
+                  part.point || part.end - part.start < 25
+                      ? markerHeight
+                      : 24.0,
+                  scale.at(finish) - scale.at(y) - 3,
+                ),
+                child: tile(visible, compact, scaled),
+              ),
+            );
+          }
+        }
+      }
+      if (today >= 0 && minute >= first && minute < last) {
+        children.add(
+          Positioned(
+            key: const ValueKey('schedule-current-time'),
+            top: scale.at(minute),
+            left: timeWidth + offsets[today],
+            width: widths[today],
+            height: 2,
+            child: IgnorePointer(
+              child: Semantics(
+                label: '现在 ${hhmm(current)}',
+                child: Container(color: CampusColors.teal),
+              ),
+            ),
+          ),
+        );
+      }
+      return Offstage(
+        offstage: !active || !foreground || !widget.visible,
+        child: Column(
+          children: [
+            if (widget.showHeader)
+              SizedBox(
+                height: 64 * scaled,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: timeWidth,
+                      child: const Center(
+                        child: Text(
+                          '时间',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: CampusColors.muted,
                           ),
                         ),
-                        if (events.length == 1 &&
-                            bounds.maxHeight > 90 * scaled &&
-                            bounds.maxWidth > 55)
-                          Text(
-                            '${tile.source['location'] ?? ''}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: CampusColors.muted,
-                            ),
-                          ),
-                      ],
+                      ),
+                    ),
+                    for (var i = 0; i < 7; i++)
+                      Expanded(
+                        flex: (weights[i] * 100).round(),
+                        child: Builder(
+                          builder: (context) {
+                            final date = widget.firstDay.add(Duration(days: i)),
+                                selected =
+                                    widget.selectedDay != null &&
+                                    calendarDate(date) ==
+                                        calendarDate(widget.selectedDay!);
+                            return Semantics(
+                              button: true,
+                              selected: selected,
+                              label:
+                                  '${date.month}月${date.day}日${i == today ? '，今天' : ''}',
+                              child: Material(
+                                color: selected
+                                    ? CampusColors.blueSoft
+                                    : Colors.transparent,
+                                child: InkWell(
+                                  key: ValueKey(
+                                    'calendar-day-${calendarDate(date)}',
+                                  ),
+                                  onTap: () => widget.onDay?.call(date),
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '周${'一二三四五六日'[i]}',
+                                          maxLines: 1,
+                                          softWrap: false,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: CampusColors.muted,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${date.day}',
+                                          maxLines: 1,
+                                          softWrap: false,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        if (i == today)
+                                          const Text(
+                                            '今天',
+                                            maxLines: 1,
+                                            softWrap: false,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: CampusColors.teal,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            Expanded(
+              child: GestureDetector(
+                onHorizontalDragEnd: widget.onWeek == null
+                    ? null
+                    : (details) {
+                        if ((details.primaryVelocity ?? 0).abs() < 150) return;
+                        final next = widget.firstDay.add(
+                          Duration(days: details.primaryVelocity! < 0 ? 7 : -7),
+                        );
+                        if ((widget.minDay == null ||
+                                !next.isBefore(widget.minDay!)) &&
+                            (widget.maxDay == null ||
+                                !next.isAfter(widget.maxDay!))) {
+                          widget.onWeek!(next);
+                        }
+                      },
+                child: SingleChildScrollView(
+                  key: const ValueKey('schedule-grid-scroll'),
+                  controller: scroll,
+                  child: SizedBox(
+                    width: box.maxWidth,
+                    height: height,
+                    child: Stack(
+                      clipBehavior: Clip.hardEdge,
+                      children: children,
                     ),
                   ),
                 ),
-              );
-            },
-            fullDayEventBuilder: (events, date) => Wrap(
-              children: [
-                for (final e in events)
-                  AppTextButton(
-                    onPressed: () => widget.onOpen(e.event!.source),
-                    child: Text(e.title),
-                  ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       );
     },
   );
+}
+
+class _GridLines extends CustomPainter {
+  final double timeWidth;
+  final List<double> dayWidths;
+  final TimetableScale scale;
+  final List<Map<String, dynamic>> periods;
+  final int first, last;
+  const _GridLines(
+    this.timeWidth,
+    this.dayWidths,
+    this.scale,
+    this.first,
+    this.last,
+    this.periods,
+  );
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = CampusColors.line
+      ..strokeWidth = .6;
+    for (var day = 0; day <= 7; day++) {
+      final x =
+          timeWidth + dayWidths.take(day).fold<double>(0, (a, b) => a + b);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (final minute
+        in periods.isEmpty
+            ? [for (var n = first; n <= last; n += 60) n]
+            : [for (final p in periods) _clockMinute(p['start']), last]) {
+      final y = scale.at(minute);
+      canvas.drawLine(Offset(timeWidth, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GridLines old) =>
+      old.timeWidth != timeWidth ||
+      old.dayWidths != dayWidths ||
+      old.scale != scale ||
+      old.first != first ||
+      old.last != last;
+}
+
+int _clockMinute(dynamic value) {
+  final parts = '$value'.split(':');
+  return parts.length < 2
+      ? 0
+      : (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/features/timetable/shell_page.dart';
 import 'package:semester_os/features/centers/semester_centers.dart';
@@ -13,6 +14,7 @@ import 'ui_polish_test.dart' show mount, capture, loadPreviewFonts;
 
 void main() {
   setUpAll(loadPreviewFonts);
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
     'Shell preserves scroll and selected week across tabs and input, resets semester state',
     (tester) async {
@@ -126,7 +128,7 @@ void main() {
         tester.state<ScrollableState>(scroll).position.pixels,
         closeTo(before, 1),
       );
-      await ioTap(tester, find.text('输入通知或日程问题'));
+      await ioTap(tester, find.byKey(const Key('assistant-dock-input')));
       await settleIo(tester);
       await tester.enterText(find.byType(TextField).first, '还没写完的通知');
       await ioTap(tester, find.byTooltip('收起输入'));
@@ -134,7 +136,7 @@ void main() {
         tester.state<ScrollableState>(scroll).position.pixels,
         closeTo(before, 1),
       );
-      await ioTap(tester, find.text('输入通知或日程问题'));
+      await ioTap(tester, find.byKey(const Key('assistant-dock-input')));
       await settleIo(tester);
       expect(
         tester.widget<TextField>(find.byType(TextField).first).controller!.text,

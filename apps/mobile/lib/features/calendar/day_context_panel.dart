@@ -98,7 +98,7 @@ class _DayContextPanelState extends State<DayContextPanel>
               alignment: Alignment.centerLeft,
               child: AppTextButton(
                 onPressed: c.busy ? null : reload,
-                child: const Text('重新查看安排提示'),
+                child: const Text('更新当天建议'),
               ),
             )
           : const SizedBox();
@@ -110,7 +110,7 @@ class _DayContextPanelState extends State<DayContextPanel>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${widget.day.month}月${widget.day.day}日 · 安排提示',
+            '${widget.day.month}月${widget.day.day}日 · 当天建议',
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
@@ -119,16 +119,12 @@ class _DayContextPanelState extends State<DayContextPanel>
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
               decoration: BoxDecoration(
-                color: r['kind'] == 'free_window'
-                    ? CampusColors.tealSoft
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(12),
                 border: Border(
-                  left: BorderSide(
+                  top: BorderSide(
                     color: r['kind'] == 'free_window'
                         ? CampusColors.teal
                         : CampusColors.primary,
-                    width: 3,
+                    width: 2,
                   ),
                 ),
               ),
@@ -159,7 +155,8 @@ class _DayContextPanelState extends State<DayContextPanel>
                       ),
                     ],
                   ),
-                  if ('${r['detail'] ?? ''}'.isNotEmpty)
+                  if ('${r['detail'] ?? ''}'.trim().isNotEmpty &&
+                      '${r['detail']}'.trim() != '${r['title']}'.trim())
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(

@@ -95,7 +95,16 @@ void main() {
       expect(find.byType(AppSegmentedControl<String>), findsOneWidget);
       await tester.tap(find.text('指定时刻'));
       await tester.pumpAndSettle();
-      expect(find.text('选择提醒日期和时间（北京时间）'), findsOneWidget);
+      expect(find.text('选择提醒日期和时间').hitTestable(), findsOneWidget);
+      expect(
+        tester
+            .widget<AppSegmentedControl<String>>(
+              find.byType(AppSegmentedControl<String>),
+            )
+            .value,
+        'absolute',
+      );
+      expect(find.byType(ReminderEditor), findsOneWidget);
       expect(find.text('确认这条提醒'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await capture(tester, 'unified-reminder-$scale');

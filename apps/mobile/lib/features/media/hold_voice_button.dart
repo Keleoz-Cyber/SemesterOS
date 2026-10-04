@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'media_input.dart';
 import '../../ui/motion.dart';
+import '../../ui/campus_theme.dart';
 
 /// Owns one recording at a time. The callback must copy the temporary file
 /// before completing; the file is released even when the callback fails.
@@ -251,20 +252,53 @@ class _HoldVoiceButtonState extends State<HoldVoiceButton>
                   ? colors.primaryContainer
                   : colors.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: cancelling
+                    ? colors.error
+                    : active
+                    ? CampusColors.primary
+                    : Colors.transparent,
+              ),
             ),
             child: ExcludeSemantics(
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: !widget.enabled
-                      ? colors.onSurface.withValues(alpha: .4)
-                      : cancelling
-                      ? colors.onErrorContainer
-                      : colors.onSurface,
-                ),
-              ),
+              child: recording
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: cancelling
+                                ? colors.onErrorContainer
+                                : CampusColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          cancelling ? '松开取消' : '松开完成',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: cancelling
+                                ? colors.onErrorContainer
+                                : colors.onSurface,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: !widget.enabled
+                            ? colors.onSurface.withValues(alpha: .4)
+                            : cancelling
+                            ? colors.onErrorContainer
+                            : colors.onSurface,
+                      ),
+                    ),
             ),
           ),
         ),

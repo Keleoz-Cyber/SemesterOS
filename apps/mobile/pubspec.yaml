@@ -1,16 +1,15 @@
 name: semester_os
 description: "学期OS：课程导入与学期事务管理"
 publish_to: 'none'
-version: 0.1.0+6
+version: 0.1.0+7
 
 environment:
   sdk: ^3.12.2
 
 dependencies:
   audio_session: 0.2.2
-  calendar_view: 2.0.0
   cupertino_icons: 1.0.9
-  cupertino_ui: 1.0.0
+  crypto: 3.0.7
   dio: ^5.11.1
   drift: 2.28.2
   fl_chart: 1.2.0
@@ -26,7 +25,6 @@ dependencies:
   image_picker: 1.2.0
   image_picker_android: 0.8.13+5
   just_audio: 0.10.5
-  material_ui: 1.0.0
   path_provider: ^2.1.6
   record: 6.1.2
   record_android: 1.4.5
@@ -35,9 +33,10 @@ dependencies:
   webview_flutter: ^4.14.1
   forui: 0.25.0
   smooth_sheets: 1.2.0
-  flutter_animate: 4.5.2
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   path_provider_platform_interface: ^2.1.2
   flutter_test:
     sdk: flutter
@@ -47,3 +46,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/haut_reader.js
+    - assets/hlju_reader.js

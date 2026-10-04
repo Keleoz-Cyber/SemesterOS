@@ -3,6 +3,7 @@ import 'package:semester_os/ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/core/api.dart';
@@ -12,6 +13,8 @@ import 'api_session_test.dart' show ControlledTransport, body, account;
 import 'controller_test.dart' show MemoryStore;
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
     'missing first Monday is explained inline without a network request',
     (tester) async {
@@ -36,16 +39,11 @@ void main() {
           home: SemesterPage(controller: controller),
         ),
       );
-      await tester.scrollUntilVisible(
-        find.byType(AppCheckRow),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
+      expect(find.byKey(const Key('semester-current-week')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('semester-monday-mode')));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byType(AppCheckRow));
+      await tester.tap(find.text('按校历选择'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(AppCheckRow));
-      await tester.pump();
       await tester.ensureVisible(find.text('确认创建学期'));
       await tester.tap(find.text('确认创建学期'));
       await tester.pumpAndSettle();
@@ -68,15 +66,30 @@ void main() {
           home: SemesterPage(controller: controller),
         ),
       );
+      await tester.tap(find.byType(TextField).first);
+      await tester.pump();
+      final previous = tester
+          .widget<EditableText>(find.byType(EditableText).first)
+          .focusNode;
+      expect(previous.hasFocus, isTrue);
       await tester.tap(find.byKey(const Key('first-monday')));
       await tester.pumpAndSettle();
       expect(find.byType(DatePickerDialog), findsOneWidget);
       final picker = tester.widget<DatePickerDialog>(
         find.byType(DatePickerDialog),
       );
-      expect(picker.initialDate, isNull);
+      expect(picker.initialDate!.weekday, DateTime.monday);
       expect(picker.selectableDayPredicate!(DateTime(2026, 8, 31)), true);
       expect(picker.selectableDayPredicate!(DateTime(2026, 9, 1)), false);
+      Navigator.pop(
+        tester.element(find.byType(DatePickerDialog)),
+        DateTime(2026, 8, 31),
+      );
+      await tester.pumpAndSettle();
+      expect(previous.hasFocus, isFalse);
+      expect(find.text('2026-08-31'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
     },
   );
 
@@ -154,8 +167,10 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('first-monday')));
     await tester.pumpAndSettle();
-    final now = schoolNow();
-    var firstMonday = DateTime(now.year, now.month, 1);
+    final initial = tester
+        .widget<DatePickerDialog>(find.byType(DatePickerDialog))
+        .initialDate!;
+    var firstMonday = DateTime(initial.year, initial.month, 1);
     firstMonday = firstMonday.add(
       Duration(days: (8 - firstMonday.weekday) % 7),
     );
@@ -163,16 +178,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byType(AppCheckRow),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byType(AppCheckRow));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(AppCheckRow));
-    await tester.pump();
+    expect(find.byType(AppCheckRow), findsNothing);
     await tester.ensureVisible(find.text('确认创建学期'));
     await tester.tap(find.text('确认创建学期'));
     await tester.pumpAndSettle();
@@ -246,14 +252,13 @@ void main() {
       await tester.tap(find.text('打开修改'));
       await tester.pumpAndSettle();
       expect(find.text('修改学期设置'), findsOneWidget);
-      expect(find.text('08:15'), findsAtLeastNWidgets(1));
       await tester.scrollUntilVisible(
-        find.byType(AppCheckRow),
+        find.byKey(const ValueKey('period-1-start')),
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(find.byType(AppCheckRow));
-      await tester.pump();
+      expect(find.text('08:15'), findsOneWidget);
+      expect(find.byType(AppCheckRow), findsNothing);
       await tester.tap(find.text('保存学期设置'));
       await tester.pumpAndSettle();
       expect(submitted?['expected_revision'], 3);

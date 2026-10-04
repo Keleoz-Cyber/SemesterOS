@@ -1,3 +1,4 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import '../../core/api.dart';
@@ -5,6 +6,7 @@ import '../../ui/detail_widgets.dart';
 import '../../ui/campus_widgets.dart';
 import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
+import '../items/task_surfaces.dart';
 
 class TagManagementController extends ChangeNotifier {
   final ItemsController items;
@@ -130,7 +132,7 @@ class TagManagementController extends ChangeNotifier {
         }
       }
       preview = null;
-      notice = '标签已更新，历史计划与进度按当前标签统计';
+      notice = '标签已更新';
       await items.refresh();
       if (active) await _fetchTags();
     } catch (e) {
@@ -185,16 +187,22 @@ class _TagManagementPageState extends State<TagManagementPage> {
 
   Future<void> rename(Map<String, dynamic> tag) async {
     var input = tag['name'] as String;
+    final form = GlobalKey<FormState>();
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AppDialog(
         title: const Text('重命名标签'),
-        content: AppFormField(
-          initialValue: input,
-          onChanged: (value) => input = value,
-          autofocus: true,
-          maxLength: 24,
-          decoration: const InputDecoration(labelText: '新名称'),
+        content: Form(
+          key: form,
+          child: AppFormField(
+            initialValue: input,
+            onChanged: (value) => input = value,
+            autofocus: true,
+            maxLength: 24,
+            decoration: const InputDecoration(labelText: '新名称'),
+            validator: (value) =>
+                value?.trim().isNotEmpty == true ? null : '请输入标签名称',
+          ),
         ),
         actions: [
           AppTextButton(
@@ -202,7 +210,11 @@ class _TagManagementPageState extends State<TagManagementPage> {
             child: const Text('取消'),
           ),
           AppButton(
-            onPressed: () => Navigator.pop(context, input.trim()),
+            onPressed: () {
+              if (validateAppForm(form)) {
+                Navigator.pop(context, input.trim());
+              }
+            },
             child: const Text('查看影响'),
           ),
         ],
@@ -256,10 +268,11 @@ class _TagManagementPageState extends State<TagManagementPage> {
       icon: merge ? Icons.merge_type_rounded : Icons.drive_file_rename_outline,
       accent: CampusColors.teal,
       children: [
-        RecordFact(
-          label: '名称变化',
-          value: '“${p['source']['name']}” → “${p['target']['name']}”',
-          icon: Icons.label_outline,
+        TaskChangeFacts(
+          beforeLabel: '原标签',
+          afterLabel: merge ? '合并到' : '新名称',
+          before: '${p['source']['name']}',
+          after: '${p['target']['name']}',
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -272,27 +285,28 @@ class _TagManagementPageState extends State<TagManagementPage> {
               'plans': '计划',
               'progress': '历史进度',
             }.entries)
-              Column(
-                key: ValueKey('tag-impact-${entry.key}'),
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${counts[entry.key] ?? '待确认'}',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: CampusColors.teal,
+              if (counts[entry.key] is num)
+                Column(
+                  key: ValueKey('tag-impact-${entry.key}'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${counts[entry.key]}',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: CampusColors.teal,
+                      ),
                     ),
-                  ),
-                  Text(
-                    entry.value,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: CampusColors.muted,
+                    Text(
+                      entry.value,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: CampusColors.muted,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
           ],
         ),
         const SizedBox(height: 16),
@@ -337,89 +351,97 @@ class _TagManagementPageState extends State<TagManagementPage> {
     ),
     body: !c.active
         ? const Center(child: Text('账号或学期已切换，请重新打开标签管理'))
-        : ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              RecordHeading(
-                title: '整理标签',
-                label: '所有学期共用 · ${c.tags.length}个标签',
-                icon: Icons.sell_outlined,
-              ),
-              if (c.busy)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: LinearProgressIndicator(),
-                ),
-              if (c.error != null)
+        : AppLoadingOverlay(
+            loading: c.busy,
+            label: '正在更新',
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: SoftNotice(c.error!, warning: true),
-                ),
-              if (c.notice != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: SoftNotice(c.notice!),
-                ),
-              if (c.preview != null) previewCard(c.preview!),
-              if (!c.busy && c.tags.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text('还没有标签。在事项或日程中添加标签后，即可在这里管理。'),
-                ),
-              if (c.tags.isNotEmpty) const SectionHeading('现有标签'),
-              for (final tag in c.tags)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: CampusColors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: CampusColors.line),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.label_outline,
-                              color: CampusColors.teal,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                tag['name'],
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            AppTextButton(
-                              onPressed: c.busy || c.preview != null
-                                  ? null
-                                  : () => rename(tag),
-                              child: const Text('重命名'),
-                            ),
-                            AppTextButton(
-                              onPressed:
-                                  c.busy ||
-                                      c.preview != null ||
-                                      c.tags.length < 2
-                                  ? null
-                                  : () => merge(tag),
-                              child: const Text('合并到'),
-                            ),
-                          ],
-                        ),
-                      ],
+                  padding: const EdgeInsets.only(top: 8, bottom: 20),
+                  child: Text(
+                    '所有学期共用 · ${c.tags.length}个标签',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: CampusColors.muted,
                     ),
                   ),
                 ),
-            ],
+                if (c.error != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: SoftNotice(c.error!, warning: true),
+                  ),
+                if (c.notice != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: SoftNotice(c.notice!),
+                  ),
+                if (c.preview != null) previewCard(c.preview!),
+                if (!c.busy && c.tags.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('还没有标签。在事项或日程中添加标签后，即可在这里管理。'),
+                  ),
+                if (c.tags.isNotEmpty) const SectionHeading('现有标签'),
+                for (final tag in c.tags) tagRow(tag),
+              ],
+            ),
           ),
+  );
+
+  Widget tagRow(Map<String, dynamic> tag) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: CampusColors.line)),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final name = Row(
+          children: [
+            const Icon(Icons.label_outline, size: 20, color: CampusColors.teal),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${tag['name']}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+        final actions = Wrap(
+          spacing: 4,
+          children: [
+            AppTextButton(
+              onPressed: c.busy || c.preview != null ? null : () => rename(tag),
+              child: const Text('重命名'),
+            ),
+            AppTextButton(
+              onPressed: c.busy || c.preview != null || c.tags.length < 2
+                  ? null
+                  : () => merge(tag),
+              child: const Text('合并到'),
+            ),
+          ],
+        );
+        if (constraints.maxWidth < 320 ||
+            MediaQuery.textScalerOf(context).scale(16) > 22) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [name, const SizedBox(height: 4), actions],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: name),
+            const SizedBox(width: 8),
+            actions,
+          ],
+        );
+      },
+    ),
   );
 }

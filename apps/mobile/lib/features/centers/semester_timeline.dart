@@ -1,4 +1,8 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/app_sheet.dart';
+import '../../ui/motion.dart';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
@@ -11,6 +15,7 @@ import '../changes/changes_page.dart';
 import 'hub_data.dart';
 import 'exam_pages.dart';
 import '../tags/tag_management_page.dart';
+import '../../ui/date_labels.dart';
 import 'semester_centers.dart' show CourseHubPage, openHubItem, changeCard;
 
 class SemesterHome extends StatefulWidget {
@@ -25,7 +30,8 @@ class SemesterHome extends StatefulWidget {
   SemesterHomeState createState() => SemesterHomeState();
 }
 
-class SemesterHomeState extends State<SemesterHome> {
+class SemesterHomeState extends State<SemesterHome>
+    with WidgetsBindingObserver {
   final _hub = GlobalKey<HubDataState>();
   final _weekStrip = ScrollController();
   late final CalendarRepository _calendar;
@@ -36,11 +42,14 @@ class SemesterHomeState extends State<SemesterHome> {
   int? _calendarRevision;
   DateTime? _calendarLoadedAt;
   int _calendarRequest = 0;
-  double get _weekWidth => MediaQuery.textScalerOf(context).scale(44) + 36;
+  int _weekDirection = 1;
+  bool _foreground = true;
+  double get _weekWidth => MediaQuery.textScalerOf(context).scale(44) + 28;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _calendar = CalendarRepository(
       widget.controller.api,
       widget.controller.cache,
@@ -52,7 +61,25 @@ class SemesterHomeState extends State<SemesterHome> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (mounted) {
+      setState(() => _foreground = state == AppLifecycleState.resumed);
+    }
+  }
+
+  void _selectWeek(int week, Map<String, dynamic> data) {
+    if (_selected != week) {
+      setState(() {
+        _weekDirection = week >= (_selected ?? week) ? 1 : -1;
+        _selected = week;
+      });
+    }
+    _loadActivities(data);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _calendar.removeListener(_calendarChanged);
     _calendar.dispose();
     _weekStrip.dispose();
@@ -148,47 +175,38 @@ class SemesterHomeState extends State<SemesterHome> {
   }
 
   Future<void> _courses(Map<String, dynamic> data) async {
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: .6,
-        builder: (_, scroll) => ListView(
-          controller: scroll,
-          padding: const EdgeInsets.all(20),
-          children: [
-            Text('课程事务', style: Theme.of(context).textTheme.titleLarge),
-            for (final course in widget.controller.rows(data['courses']))
-              AppTile(
-                title: Text('${course['title']}'),
-                subtitle: _courseSummary(course).isEmpty
-                    ? null
-                    : Text(_courseSummary(course)),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CourseHubPage(
-                        controller: widget.controller,
-                        courseId: course['id'],
-                      ),
+      heightFactor: .7,
+      builder: (sheetContext) => ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text('课程事务', style: Theme.of(context).textTheme.titleLarge),
+          for (final course in widget.controller.rows(data['courses']))
+            AppTile(
+              title: Text('${course['title']}'),
+              subtitle: _courseSummary(course).isEmpty
+                  ? null
+                  : Text(_courseSummary(course)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CourseHubPage(
+                      controller: widget.controller,
+                      courseId: course['id'],
                     ),
-                  ).then((_) {
-                    if (mounted) reload();
-                  });
-                },
-              ),
-            if (widget.controller.rows(data['courses']).isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('还没有导入课程'),
-              ),
-          ],
-        ),
+                  ),
+                ).then((_) {
+                  if (mounted) reload();
+                });
+              },
+            ),
+          if (widget.controller.rows(data['courses']).isEmpty)
+            const Padding(padding: EdgeInsets.all(20), child: Text('还没有导入课程')),
+        ],
       ),
     );
   }
@@ -219,7 +237,9 @@ class SemesterHomeState extends State<SemesterHome> {
                   child: Padding(
                     padding: const EdgeInsets.only(top: 13),
                     child: Text(
-                      at == null ? '待定' : _nodeDate(at),
+                      at == null
+                          ? (RegExp(r'第\d+周').firstMatch(time)?.group(0) ?? '')
+                          : _nodeDate(at),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 13,
@@ -253,7 +273,7 @@ class SemesterHomeState extends State<SemesterHome> {
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: warning
-                                  ? CampusColors.error
+                                  ? CampusColors.warning
                                   : CampusColors.teal,
                               width: 2,
                             ),
@@ -262,7 +282,7 @@ class SemesterHomeState extends State<SemesterHome> {
                             icon,
                             size: 10,
                             color: warning
-                                ? CampusColors.error
+                                ? CampusColors.warning
                                 : CampusColors.teal,
                           ),
                         ),
@@ -286,11 +306,15 @@ class SemesterHomeState extends State<SemesterHome> {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          '$label · $time',
+                          time.isEmpty ||
+                                  at == null &&
+                                      RegExp(r'^第\d+周$').hasMatch(time)
+                              ? label
+                              : '$label · $time',
                           style: TextStyle(
                             fontSize: 13,
                             color: warning
-                                ? CampusColors.error
+                                ? CampusColors.warning
                                 : CampusColors.muted,
                           ),
                         ),
@@ -314,6 +338,32 @@ class SemesterHomeState extends State<SemesterHome> {
     ),
   );
 
+  Widget _semesterCaption(String name) {
+    const style = TextStyle(
+      fontSize: 14,
+      color: CampusColors.primary,
+      fontWeight: FontWeight.w600,
+    );
+    final standard = RegExp(
+      r'^(.*?)(第[一二三四五六七八九十\d]+学期|[春秋夏冬]季?学期)$',
+    ).firstMatch(name.trim());
+    final prefix = standard?.group(1)?.trim() ?? '';
+    if (standard == null || prefix.isEmpty) return Text(name, style: style);
+    return Semantics(
+      label: name,
+      child: ExcludeSemantics(
+        child: Wrap(
+          spacing: 6,
+          runSpacing: 2,
+          children: [
+            Text(prefix, style: style),
+            Text(standard.group(2)!, softWrap: false, style: style),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _nodeDate(dynamic value) {
     final raw = '$value';
     final parsed = DateTime.tryParse(raw);
@@ -336,6 +386,7 @@ class SemesterHomeState extends State<SemesterHome> {
       final current = _currentWeek(semester);
       final total = semester['total_weeks'] as int;
       final selected = weeks.where((w) => w['week'] == _selected).firstOrNull;
+      final animate = _foreground && AppMotion.allowed(context);
       final undatedEvents = _calendar.undated
           .where((e) => e['resource_type'] == 'event')
           .toList();
@@ -348,8 +399,7 @@ class SemesterHomeState extends State<SemesterHome> {
                 'at':
                     item['anchor_at'] ??
                     item['time']?['at'] ??
-                    item['time']?['date'] ??
-                    '9999',
+                    item['time']?['date'],
               },
             if (_calendarWeek == selected?['start_date'])
               for (final event in _calendar.entries.where(
@@ -358,7 +408,7 @@ class SemesterHomeState extends State<SemesterHome> {
                 {
                   'type': 'event',
                   'row': event,
-                  'at': event['start_at'] ?? event['date'] ?? '9999',
+                  'at': event['start_at'] ?? event['date'],
                 },
           ]..sort(
             (a, b) =>
@@ -372,14 +422,7 @@ class SemesterHomeState extends State<SemesterHome> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${semester['name']}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: CampusColors.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                _semesterCaption('${semester['name']}'),
                 const SizedBox(height: 4),
                 Text(
                   current < 1
@@ -395,7 +438,7 @@ class SemesterHomeState extends State<SemesterHome> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '共 $total 周 · ${semester['first_monday']} 开始',
+                  '共 $total 周 · ${studentDate(DateTime.parse(semester['first_monday']))} 开始',
                   style: const TextStyle(
                     color: CampusColors.muted,
                     fontSize: 13,
@@ -420,136 +463,134 @@ class SemesterHomeState extends State<SemesterHome> {
           SingleChildScrollView(
             controller: _weekStrip,
             scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final week in weeks)
-                  SizedBox(
-                    width: _weekWidth,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _weekTile(
-                        context,
-                        key: ValueKey('semester-week-${week['week']}'),
-                        week: week['week'],
-                        date: _nodeDate(week['start_date']),
-                        current: week['week'] == current,
-                        selected: _selected == week['week'],
-                        onTap: () {
-                          setState(() => _selected = week['week']);
-                          _loadActivities(data);
-                        },
-                      ),
-                    ),
-                  ),
-              ],
+            child: _SemesterWeekStrip(
+              weeks: weeks,
+              selected: _selected,
+              current: current,
+              slotWidth: _weekWidth,
+              animate: animate,
+              dateLabel: _nodeDate,
+              onSelected: (week) => _selectWeek(week, data),
             ),
           ),
           const SizedBox(height: 12),
-          if (selected != null) ...[
-            Text(
-              '第${selected['week']}周的重要节点',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${selected['start_date']} — ${selected['end_date']} · 截止、考试与活动',
-            ),
-            const SizedBox(height: 12),
-            if (_calendar.busy) const LinearProgressIndicator(),
-            if (_calendar.error != null ||
-                (_calendar.revision != null &&
-                    widget.controller.revisionIsStale(
-                      widget.controller.semesterId,
-                      _calendar.revision!,
-                    ))) ...[
-              const SoftNotice('本周活动尚未更新，以下保留上次记录。', warning: true),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AppTextButton(
-                  onPressed: () => _loadActivities(data, force: true),
-                  child: const Text('重试活动'),
-                ),
-              ),
-            ],
-            AnimatedSwitcher(
-              duration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 180),
+          if (selected != null)
+            _SemesterWeekContent(
+              week: '${semester['id']}/${selected['week']}',
+              direction: _weekDirection,
+              animate: animate,
               child: Column(
-                key: ValueKey(_selected),
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final e in events)
-                    if (e['type'] == 'item')
-                      _node(
-                        at: e['at'],
-                        title: e['row']['title'],
-                        time: itemTimeLabel(e['row']),
-                        label:
-                            '${kindLabel(e['row']['kind'])}${e['row']['certainty'] == 'tentative' ? ' · 暂定' : ''}',
-                        icon: e['row']['kind'] == 'exam'
-                            ? Icons.school_outlined
-                            : Icons.flag_outlined,
-                        warning: e['row']['certainty'] == 'tentative',
-                        onTap: () async {
-                          await openHubItem(
-                            context,
-                            widget.controller,
-                            e['row'],
-                            semester,
-                          );
-                          if (mounted) await reload();
-                        },
-                      )
-                    else
-                      _node(
-                        at: e['at'],
-                        title: e['row']['title'],
-                        time: calendarTimeLabel(e['row']),
-                        label:
-                            '固定活动${e['row']['certainty'] == 'tentative' ? ' · 暂定' : ''}',
-                        warning: e['row']['certainty'] == 'tentative',
-                        icon: Icons.event_outlined,
-                        onTap: () async {
-                          await context.push(
-                            '/events/${e['row']['resource_id']}',
-                          );
-                          if (mounted) await reload();
-                        },
-                      ),
-                  for (final change in widget.controller.rows(
-                    selected['changes'],
-                  ))
-                    InkWell(
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ChangesPage(controller: widget.controller),
-                          ),
-                        );
-                        if (mounted) await reload();
-                      },
-                      child: changeCard(change),
+                  AppLoadingOverlay(
+                    loading: _calendar.busy,
+                    label: '正在更新',
+                    padding: const EdgeInsets.only(right: 2),
+                    child: Text(
+                      '第${selected['week']}周安排',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  if (events.isEmpty &&
-                      widget.controller.rows(selected['changes']).isEmpty)
-                    const CampusPanel(child: Text('这一周还没有记录截止事项、考试或活动')),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${studentDate(DateTime.parse(selected['start_date']))}—${studentDate(DateTime.parse(selected['end_date']))}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: CampusColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_calendar.error != null ||
+                      (_calendar.revision != null &&
+                          widget.controller.revisionIsStale(
+                            widget.controller.semesterId,
+                            _calendar.revision!,
+                          ))) ...[
+                    const SoftNotice('本周活动尚未更新，以下保留上次记录。', warning: true),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: AppTextButton(
+                        onPressed: () => _loadActivities(data, force: true),
+                        child: const Text('重试活动'),
+                      ),
+                    ),
+                  ],
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final e in events)
+                        if (e['type'] == 'item')
+                          _node(
+                            at: e['at'],
+                            title: e['row']['title'],
+                            time: itemTimeLabel(e['row']),
+                            label:
+                                '${kindLabel(e['row']['kind'])}${e['row']['certainty'] == 'tentative' ? ' · 暂定' : ''}',
+                            icon: e['row']['kind'] == 'exam'
+                                ? Icons.school_outlined
+                                : Icons.flag_outlined,
+                            warning: e['row']['certainty'] == 'tentative',
+                            onTap: () async {
+                              await openHubItem(
+                                context,
+                                widget.controller,
+                                e['row'],
+                                semester,
+                              );
+                              if (mounted) await reload();
+                            },
+                          )
+                        else
+                          _node(
+                            at: e['at'],
+                            title: e['row']['title'],
+                            time: calendarTimeLabel(e['row']),
+                            label:
+                                '${e['row']['reserve_time'] == false ? '仅作参考' : '固定活动'}${e['row']['certainty'] == 'tentative' ? ' · 暂定' : ''}',
+                            warning: e['row']['certainty'] == 'tentative',
+                            icon: Icons.event_outlined,
+                            onTap: () async {
+                              await context.push(
+                                '/events/${e['row']['resource_id']}',
+                              );
+                              if (mounted) await reload();
+                            },
+                          ),
+                      for (final change in widget.controller.rows(
+                        selected['changes'],
+                      ))
+                        changeCard(
+                          change,
+                          onOpen: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ChangesPage(controller: widget.controller),
+                              ),
+                            );
+                            if (mounted) await reload();
+                          },
+                        ),
+                      if (events.isEmpty &&
+                          widget.controller.rows(selected['changes']).isEmpty)
+                        const CampusPanel(child: Text('这一周还没有记录截止事项、考试或活动')),
+                    ],
+                  ),
                 ],
               ),
-            ),
-          ] else if (weeks.isEmpty)
+            )
+          else if (weeks.isEmpty)
             const CampusPanel(child: Text('还没有学期周次，请检查学期起止时间。')),
           if (widget.controller.rows(data['undated']).isNotEmpty ||
               undatedEvents.isNotEmpty) ...[
-            const SectionHeading('日期待确认'),
+            const SectionHeading('其他待办'),
             for (final event in undatedEvents)
               _node(
                 title: event['title'],
                 time: calendarTimeLabel(event),
                 label:
-                    '固定活动${event['certainty'] == 'tentative' ? ' · 暂定' : ''}',
+                    '${event['reserve_time'] == false ? '仅作参考' : '固定活动'}${event['certainty'] == 'tentative' ? ' · 暂定' : ''}',
                 warning: event['certainty'] == 'tentative',
                 icon: Icons.help_outline,
                 onTap: () async {
@@ -585,19 +626,18 @@ class SemesterHomeState extends State<SemesterHome> {
               ),
           ],
           const SizedBox(height: 8),
-          const SectionHeading('学期工具'),
+          const SizedBox(height: 20),
           Material(
             color: CampusColors.surface,
             borderRadius: BorderRadius.circular(20),
             clipBehavior: Clip.antiAlias,
-            child: Column(
+            child: Wrap(
+              alignment: WrapAlignment.spaceAround,
               children: [
                 _SemesterAction(
                   onPressed: () => _courses(data),
                   icon: const Icon(Icons.menu_book_outlined),
-                  label: Text(
-                    '课程事务（${widget.controller.rows(data['courses']).length}门）',
-                  ),
+                  label: Text('课程'),
                 ),
                 _SemesterAction(
                   onPressed: () async {
@@ -613,13 +653,13 @@ class SemesterHomeState extends State<SemesterHome> {
                     if (mounted) await reload();
                   },
                   icon: const Icon(Icons.school_outlined),
-                  label: const Text('考试中心'),
+                  label: const Text('考试'),
                 ),
                 _SemesterAction(
                   primary: true,
                   onPressed: () => context.push('/insights'),
                   icon: const Icon(Icons.bar_chart_rounded),
-                  label: const Text('统计分析'),
+                  label: const Text('统计'),
                 ),
                 _SemesterAction(
                   onPressed: () async {
@@ -633,12 +673,12 @@ class SemesterHomeState extends State<SemesterHome> {
                     if (mounted) await reload();
                   },
                   icon: const Icon(Icons.label_outline),
-                  label: const Text('管理标签'),
+                  label: const Text('标签'),
                 ),
                 _SemesterAction(
                   onPressed: widget.onManage,
                   icon: const Icon(Icons.settings_outlined),
-                  label: const Text('管理学期与课表'),
+                  label: const Text('管理'),
                 ),
               ],
             ),
@@ -649,76 +689,271 @@ class SemesterHomeState extends State<SemesterHome> {
   );
 }
 
-Widget _weekTile(
-  BuildContext context, {
-  required Key key,
-  required int week,
-  required String date,
-  required bool current,
-  required bool selected,
-  required VoidCallback onTap,
-}) => Semantics(
-  key: key,
-  button: true,
-  selected: selected,
-  label: '第$week周，$date开始${current ? '，本周' : ''}',
-  onTap: onTap,
-  child: ExcludeSemantics(
-    child: AnimatedContainer(
-      duration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 180),
-      constraints: const BoxConstraints(minHeight: 56, minWidth: 48),
-      decoration: BoxDecoration(
-        color: selected ? CampusColors.primary : CampusColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: selected ? CampusColors.primary : CampusColors.line,
-        ),
+class _SemesterWeekStrip extends StatelessWidget {
+  final List<Map<String, dynamic>> weeks;
+  final int? selected;
+  final int current;
+  final double slotWidth;
+  final bool animate;
+  final String Function(dynamic) dateLabel;
+  final ValueChanged<int> onSelected;
+
+  const _SemesterWeekStrip({
+    required this.weeks,
+    required this.selected,
+    required this.current,
+    required this.slotWidth,
+    required this.animate,
+    required this.dateLabel,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final base = DefaultTextStyle.of(context).style;
+    final labelStyle = base.merge(
+      const TextStyle(fontSize: 11, height: 1.2, fontWeight: FontWeight.w500),
+    );
+    final numberStyle = base.merge(
+      const TextStyle(
+        fontSize: 20,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        fontFeatures: [FontFeature.tabularFigures()],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    );
+    final dateStyle = base.merge(
+      const TextStyle(
+        fontSize: 12,
+        height: 1.2,
+        fontWeight: FontWeight.w500,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ),
+    );
+    Size measure(String text, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final size = painter.size;
+      painter.dispose();
+      return size;
+    }
+
+    final labelHeight = measure('本周', labelStyle).height;
+    final dateHeight = measure('11/30', dateStyle).height;
+    var diskSize = 44.0;
+    for (final week in weeks) {
+      final size = measure('${week['week']}', numberStyle);
+      diskSize = math.max(diskSize, math.max(size.width, size.height) + 18);
+    }
+    final selectedIndex = weeks.indexWhere((week) => week['week'] == selected);
+    final height = 4 + labelHeight + 4 + diskSize + 6 + dateHeight + 8;
+    final duration = animate
+        ? const Duration(milliseconds: 240)
+        : Duration.zero;
+    final feedback = animate ? motionQuick : Duration.zero;
+    return RepaintBoundary(
+      child: SizedBox(
+        width: weeks.length * slotWidth,
+        height: height,
+        child: Stack(
+          children: [
+            Row(
               children: [
-                Text(
-                  current ? '本周' : '周',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: selected ? Colors.white : CampusColors.muted,
+                for (final week in weeks)
+                  SizedBox(
+                    width: slotWidth,
+                    height: height,
+                    child: Semantics(
+                      key: ValueKey('semester-week-${week['week']}'),
+                      button: true,
+                      selected: selected == week['week'],
+                      label:
+                          '第${week['week']}周，${dateLabel(week['start_date'])}开始${week['week'] == current ? '，本周' : ''}',
+                      onTap: () => onSelected(week['week'] as int),
+                      child: ExcludeSemantics(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => onSelected(week['week'] as int),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 4, bottom: 8),
+                              child: Column(
+                                children: [
+                                  SizedBox(
+                                    height: labelHeight,
+                                    child: Text(
+                                      week['week'] == current ? '本周' : '周',
+                                      style: labelStyle.copyWith(
+                                        color: week['week'] == current
+                                            ? CampusColors.teal
+                                            : CampusColors.muted,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  SizedBox(
+                                    height: diskSize,
+                                    child: Center(
+                                      child: Text(
+                                        '${week['week']}',
+                                        style: numberStyle.copyWith(
+                                          color: CampusColors.ink,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  SizedBox(
+                                    height: dateHeight,
+                                    child: AnimatedDefaultTextStyle(
+                                      key: ValueKey(
+                                        'semester-week-date-$animate',
+                                      ),
+                                      duration: feedback,
+                                      style: dateStyle.copyWith(
+                                        color: selected == week['week']
+                                            ? CampusColors.primary
+                                            : CampusColors.muted,
+                                      ),
+                                      child: Text(
+                                        dateLabel(week['start_date']),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '$week',
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w700,
-                    color: selected ? Colors.white : CampusColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  date,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: selected ? Colors.white : CampusColors.muted,
-                  ),
-                ),
               ],
             ),
-          ),
+            if (selectedIndex >= 0)
+              TweenAnimationBuilder<double>(
+                key: ValueKey('semester-week-position-$animate'),
+                tween: Tween<double>(
+                  end: selectedIndex * slotWidth + (slotWidth - diskSize) / 2,
+                ),
+                duration: duration,
+                curve: Curves.easeOutCubic,
+                builder: (context, position, _) => PositionedDirectional(
+                  start: position,
+                  top: 8 + labelHeight,
+                  width: diskSize,
+                  height: diskSize,
+                  child: IgnorePointer(
+                    child: ExcludeSemantics(
+                      child: ClipOval(
+                        child: DecoratedBox(
+                          key: const Key('semester-week-indicator'),
+                          decoration: const BoxDecoration(
+                            color: CampusColors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          // Numerals stay in their slots. The white projection
+                          // is clipped by the moving disk, so contrast follows
+                          // its actual position even when a tap interrupts it.
+                          child: Stack(
+                            children: [
+                              PositionedDirectional(
+                                start: -position,
+                                top: 0,
+                                width: weeks.length * slotWidth,
+                                height: diskSize,
+                                child: Row(
+                                  children: [
+                                    for (final week in weeks)
+                                      SizedBox(
+                                        width: slotWidth,
+                                        height: diskSize,
+                                        child: Center(
+                                          child: Text(
+                                            '${week['week']}',
+                                            style: numberStyle.copyWith(
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
-    ),
-  ),
-);
+    );
+  }
+}
+
+/// The latest week is always readable. Incoming content settles into place while
+/// the surrounding layout follows its height without overlapping old text.
+class _SemesterWeekContent extends StatelessWidget {
+  final String week;
+  final int direction;
+  final bool animate;
+  final Widget child;
+  const _SemesterWeekContent({
+    required this.week,
+    required this.direction,
+    required this.animate,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currentKey = ValueKey('semester-week-content-$week');
+    if (!animate) {
+      return ClipRect(
+        child: KeyedSubtree(key: currentKey, child: child),
+      );
+    }
+    const duration = Duration(milliseconds: 230);
+    return AnimatedSize(
+      key: ValueKey('semester-week-size-$animate'),
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: ClipRect(
+        child: AnimatedSwitcher(
+          key: ValueKey('semester-week-switch-$animate'),
+          duration: duration,
+          reverseDuration: const Duration(milliseconds: 150),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: Tween<double>(begin: .65, end: 1).animate(animation),
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset(direction * .035, 0),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            );
+          },
+          layoutBuilder: (currentChild, previousChildren) =>
+              currentChild ?? const SizedBox.shrink(),
+          child: KeyedSubtree(key: currentKey, child: child),
+        ),
+      ),
+    );
+  }
+}
 
 class _SemesterAction extends StatelessWidget {
   final VoidCallback onPressed;
@@ -731,24 +966,34 @@ class _SemesterAction extends StatelessWidget {
     this.primary = false,
   });
   @override
-  Widget build(BuildContext context) => AppTile(
-    minVerticalPadding: 12,
-    leading: IconTheme(
-      data: IconThemeData(
-        color: primary ? CampusColors.primary : CampusColors.teal,
+  Widget build(BuildContext context) => SizedBox(
+    width: (MediaQuery.sizeOf(context).width - 40) / 5,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconTheme(
+                data: const IconThemeData(
+                  color: CampusColors.primary,
+                  size: 22,
+                ),
+                child: icon,
+              ),
+              const SizedBox(height: 8),
+              DefaultTextStyle.merge(
+                style: const TextStyle(fontSize: 12, color: CampusColors.ink),
+                child: label,
+              ),
+            ],
+          ),
+        ),
       ),
-      child: icon,
     ),
-    title: DefaultTextStyle.merge(
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
-      ),
-      child: label,
-    ),
-    trailing: const Icon(Icons.chevron_right_rounded),
-    tileColor: primary ? CampusColors.blueSoft : null,
-    onTap: onPressed,
   );
 }
 

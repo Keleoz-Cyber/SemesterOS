@@ -1,4 +1,7 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/app_time_range_picker.dart';
+import '../../ui/app_selection.dart';
 import '../../core/api.dart' show userError;
 import 'dart:convert';
 import 'dart:math';
@@ -21,6 +24,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
   List<Map<String, dynamic>> weekly = [], exclusions = [];
   int? version;
   bool busy = false;
+  int selectedDay = 1;
   String? error, lastBody, requestKey;
   late final String? openedSemester, openedOwner;
   late final int openedGeneration;
@@ -56,38 +60,27 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
     }
   }
 
-  String clock(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  int minuteOf(String value) {
+    final parts = value.split(':');
+    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+  }
+
   Future<void> editWindow(int day, [Map<String, dynamic>? original]) async {
-    TimeOfDay parse(String value) => TimeOfDay(
-      hour: int.parse(value.split(':')[0]) % 24,
-      minute: int.parse(value.split(':')[1]),
-    );
-    final start = await showTimePicker(
+    if (!sameContext) return;
+    final window = await showAppClockRangePicker(
       context: context,
-      initialTime: parse(original?['start'] ?? '19:00'),
-      helpText: '可学习时段开始',
+      title: '周${'一二三四五六日'[day - 1]}学习时段',
+      initialStartMinutes: minuteOf(original?['start'] ?? '19:00'),
+      initialEndMinutes: minuteOf(original?['end'] ?? '21:00'),
+      allowEndOfDay: true,
     );
-    if (start == null || !mounted) return;
-    final end = await showTimePicker(
-      context: context,
-      initialTime: parse(original?['end'] ?? '21:00'),
-      helpText: '可学习时段结束（00:00表示当天结束）',
-    );
-    if (end == null || !mounted) return;
-    final endMinutes = end.hour * 60 + end.minute == 0
-        ? 1440
-        : end.hour * 60 + end.minute;
-    if (endMinutes <= start.hour * 60 + start.minute) {
-      setState(() => error = '同日结束应晚于开始；跨天请分别设置两天。');
-      return;
-    }
+    if (window == null || !mounted || !sameContext) return;
     setState(() {
       if (original != null) weekly.remove(original);
       weekly.add({
         'weekday': day,
-        'start': clock(start),
-        'end': endMinutes == 1440 ? '24:00' : clock(end),
+        'start': window.startText,
+        'end': window.endText,
       });
       weekly.sort(
         (a, b) => '${a['weekday']}${a['start']}'.compareTo(
@@ -99,77 +92,73 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
   }
 
   Future<void> editExclusion([Map<String, dynamic>? original]) async {
-    final start = await pickSchoolDateTime(
+    if (!sameContext) return;
+    final selected = await pickSchoolDateTimeRange(
       context,
-      initial: original == null ? null : DateTime.parse(original['start_at']),
+      title: '不可用时段',
+      initialStart: original == null
+          ? null
+          : DateTime.parse(original['start_at']),
+      initialEnd: original == null ? null : DateTime.parse(original['end_at']),
+      initialLabel: original?['label'] ?? '',
+      showLabel: true,
     );
-    if (start == null || !mounted) return;
-    final end = await pickSchoolDateTime(
-      context,
-      initial: original == null ? start : DateTime.parse(original['end_at']),
-    );
-    if (end == null || !mounted) return;
-    if (!end.isAfter(start)) {
-      setState(() => error = '结束时间需要晚于开始时间');
-      return;
-    }
-    final label = TextEditingController(text: original?['label'] ?? '');
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AppDialog(
-        title: const Text('这段时间做什么（可留空）'),
-        content: AppField(
-          controller: label,
-          maxLength: 120,
-          decoration: const InputDecoration(hintText: '例如：社团活动、休息'),
-        ),
-        actions: [
-          AppTextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          AppButton(
-            onPressed: () => Navigator.pop(context, label.text.trim()),
-            child: const Text('添加'),
-          ),
-        ],
-      ),
-    );
-    if (mounted && name != null) {
-      setState(() {
-        if (original != null) exclusions.remove(original);
-        exclusions.add({
-          'start_at': start.toIso8601String(),
-          'end_at': end.toIso8601String(),
-          'label': name,
-        });
-        error = null;
+    if (selected == null || !mounted || !sameContext) return;
+    setState(() {
+      if (original != null) exclusions.remove(original);
+      exclusions.add({
+        'start_at': selected.start.toIso8601String(),
+        'end_at': selected.end.toIso8601String(),
+        'label': selected.label,
       });
-    }
-    // Keep the controller alive through the dialog's reverse transition.
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    label.dispose();
+      error = null;
+    });
   }
 
-  List<Widget> summary(Map<String, dynamic> data) => [
-    for (final row in data['weekly'])
-      Text(
-        '周${'一二三四五六日'[(row['weekday'] as int) - 1]}  ${row['start']}—${row['end']}',
-      ),
-    if ((data['weekly'] as List).isEmpty)
-      Text(
-        data['configured'] == false
-            ? '还没设置学习时间，暂时无法估算空闲时长'
-            : '没有设置任何学习时段，暂时无法安排任务',
-      ),
-    const SizedBox(height: 8),
-    Text('${(data['exclusions'] as List).length}条临时不可用时段'),
-    for (final row in data['exclusions'])
-      Text(
-        '${displayInstant(row['start_at'])} 至 ${displayInstant(row['end_at'])} ${row['label']}',
-        style: const TextStyle(fontSize: 12),
-      ),
-  ];
+  List<Widget> summary(Map<String, dynamic> data) {
+    final groups = <String, Set<int>>{};
+    for (final row in data['weekly']) {
+      groups
+          .putIfAbsent('${row['start']}—${row['end']}', () => <int>{})
+          .add(row['weekday'] as int);
+    }
+    String weekdays(Set<int> values) {
+      final days = values.toList()..sort();
+      if (days.length == 7) return '每天';
+      if (days.length == 5 && days.first == 1 && days.last == 5) {
+        return '周一至周五';
+      }
+      if (days.length == 2 && days.first == 6 && days.last == 7) return '周末';
+      return days.map((day) => '周${'一二三四五六日'[day - 1]}').join('、');
+    }
+
+    final excluded = List<Map<String, dynamic>>.from(data['exclusions']);
+    return [
+      for (final entry in groups.entries)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text('${weekdays(entry.value)}  ${entry.key}'),
+        ),
+      if (groups.isEmpty) const Text('未安排每周学习时段'),
+      if (excluded.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Text('临时不可用 · ${excluded.length}段'),
+        for (final row in excluded)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              [
+                if ('${row['label'] ?? ''}'.trim().isNotEmpty)
+                  '${row['label']}',
+                displayInterval(row['start_at'], row['end_at']),
+              ].join('\n'),
+              style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+            ),
+          ),
+      ],
+    ];
+  }
+
   Future<void> save() async {
     if (!sameContext) {
       setState(() => error = '账号或学期已切换，请返回后重新打开设置');
@@ -275,7 +264,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
     body: version == null
         ? Center(
             child: error == null
-                ? const CircularProgressIndicator()
+                ? const AppLoadingIndicator(label: '正在读取学习时间')
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -289,7 +278,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
             children: [
               const RecordHeading(
                 title: '每周学习时间',
-                label: '学习时间设置',
+                label: '',
                 icon: Icons.event_available_outlined,
                 subtitle: '选择每周可用于学习的时段，已排课程会自动避开。',
               ),
@@ -311,37 +300,28 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
               EditorSection(
                 title: '每周学习时段',
                 icon: Icons.view_week_outlined,
-                subtitle: '${weekly.length}段每周时段 · 点击时间可修改',
+                subtitle: '${weekly.length}段每周时段',
                 children: [
-                  for (var day = 1; day <= 7; day++) ...[
-                    if (day > 1) const Divider(height: 24),
+                  AppSegmentedControl<int>(
+                    value: selectedDay,
+                    enabled: !busy,
+                    options: {
+                      for (var day = 1; day <= 7; day++)
+                        day: '周${'一二三四五六日'[day - 1]}',
+                    },
+                    onChanged: (day) => setState(() => selectedDay = day),
+                  ),
+                  const Divider(height: 28),
+                  for (final day in [selectedDay]) ...[
                     Wrap(
                       alignment: WrapAlignment.spaceBetween,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 12,
                       runSpacing: 8,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: day > 5
-                                ? CampusColors.tealSoft
-                                : CampusColors.blueSoft,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '周${'一二三四五六日'[day - 1]}',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: day > 5
-                                  ? CampusColors.teal
-                                  : CampusColors.primary,
-                            ),
-                          ),
+                        Text(
+                          '${weekly.where((row) => row['weekday'] == day).length}段学习时间',
+                          style: const TextStyle(color: CampusColors.muted),
                         ),
                         AppTextButton.icon(
                           onPressed: busy ? null : () => editWindow(day),
@@ -350,17 +330,6 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                         ),
                       ],
                     ),
-                    if (!weekly.any((r) => r['weekday'] == day))
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4, bottom: 8),
-                        child: Text(
-                          '未设置学习时段',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: CampusColors.muted,
-                          ),
-                        ),
-                      ),
                     for (final row in weekly.where((r) => r['weekday'] == day))
                       Row(
                         children: [
@@ -396,6 +365,14 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                           ),
                         ],
                       ),
+                    if (!weekly.any((row) => row['weekday'] == day))
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          '这天还没有学习时段',
+                          style: TextStyle(color: CampusColors.muted),
+                        ),
+                      ),
                   ],
                 ],
               ),
@@ -419,9 +396,11 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                     padding: EdgeInsets.zero,
                     child: AppTile(
                       title: Text(
-                        '${displayInstant(row['start_at'])}\n至 ${displayInstant(row['end_at'])}',
+                        displayInterval(row['start_at'], row['end_at']),
                       ),
-                      subtitle: Text('${row['label']}'),
+                      subtitle: '${row['label'] ?? ''}'.trim().isEmpty
+                          ? null
+                          : Text('${row['label']}'),
                       onTap: busy ? null : () => editExclusion(row),
                       trailing: AppIconButton(
                         tooltip: '移除此不可用时段',

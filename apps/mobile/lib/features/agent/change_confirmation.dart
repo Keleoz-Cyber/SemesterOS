@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../ui/campus_theme.dart';
 import '../../core/api.dart';
 import '../items/item_widgets.dart';
+import '../changes/course_change_display.dart';
 import 'agent_controller.dart';
 
 /// Confirmation authority stays with the visible selection, never model prose.
@@ -72,15 +73,20 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
           ? (widget.run['receipt']?['impact'] ?? {})
           : (selectedImpact ?? p['impact'] ?? {}),
     );
-    final conflicts = rows(impact['fixed_conflicts']);
+    final conflicts = rows(
+      impact['new_fixed_conflicts'] ?? impact['fixed_conflicts'],
+    );
     final saved = rows(
       widget.run['receipt']?['groups'],
     ).map((g) => g['id']).toSet();
+    final selectedCount = rows(p['groups'])
+        .where((g) => selected.contains(g['id']))
+        .fold<int>(0, (n, g) => n + rows(g['operations']).length);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: CampusColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         border: Border(
           top: BorderSide(
             color: applied ? CampusColors.teal : CampusColors.primary,
@@ -93,15 +99,37 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              applied
-                  ? (undo ? '已撤销' : '已保存')
-                  : undo
-                  ? '核对撤销范围'
-                  : batch
-                  ? '选择要保存的安排'
-                  : '核对通知变化',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  applied
+                      ? Icons.check_circle_outline_rounded
+                      : undo
+                      ? Icons.undo_rounded
+                      : Icons.fact_check_outlined,
+                  size: 20,
+                  color: applied ? CampusColors.teal : CampusColors.primary,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    applied
+                        ? (undo ? '已撤销' : '已保存')
+                        : undo
+                        ? '核对撤销范围'
+                        : batch
+                        ? '选择要保存的安排'
+                        : p['action'] == 'restore'
+                        ? '恢复日程'
+                        : '修改预览',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             if (batch) ...[
@@ -109,7 +137,12 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                 AppCheckRow(
                   contentPadding: EdgeInsets.zero,
                   controlAffinity: ListTileControlAffinity.leading,
-                  title: Text(group['title']),
+                  title: Text(
+                    rows(group['operations']).length == 1 &&
+                            rows(group['operations']).first['after'] is Map
+                        ? '${rows(group['operations']).first['after']['title'] ?? group['title']}'
+                        : '${group['title']}',
+                  ),
                   subtitle: applied && !saved.contains(group['id'])
                       ? const Text('本次未保存')
                       : null,
@@ -131,16 +164,15 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                       : null,
                 ),
                 for (final child in rows(group['operations']))
-                  widget.details(child),
+                  widget.details({
+                    ...child,
+                    '_compact': true,
+                    if (rows(group['operations']).length == 1)
+                      '_hide_title': true,
+                  }),
               ],
             ] else if (p['kind'] == 'course_change') ...[
-              Text(
-                p['title'] ?? '课程变更',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              for (final e in rows(p['before'])) _occurrence('原安排', e),
-              for (final e in rows(p['after'])) _occurrence('新安排', e),
-              if (rows(p['after']).isEmpty) const Text('这些课次将标记为停课。'),
+              CourseChangeSummary(change: p, showSource: false),
             ] else if (undo) ...[
               for (final entry in rows(p['summary']))
                 Padding(
@@ -182,7 +214,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
               if (pending)
                 AppCheckRow(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('已核对，仍按通知记录这些安排'),
+                  title: const Text('保留这些重叠安排'),
                   value: conflictAcknowledged,
                   onChanged: c.busy
                       ? null
@@ -242,16 +274,23 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                       undo
                           ? '确认撤销'
                           : batch
-                          ? '保存所选 ${selected.length} 组'
+                          ? '保存 $selectedCount 项'
+                          : p['kind'] == 'item_state'
+                          ? {
+                                  'completed': '标记完成',
+                                  'cancelled': '确认取消',
+                                  'active': '恢复事项',
+                                }[p['action']] ??
+                                '确认修改'
+                          : p['kind'] == 'course_change' &&
+                                {'suspend', 'cancel'}.contains(p['action'])
+                          ? '确认停课'
+                          : p['action'] == 'restore'
+                          ? '确认恢复'
                           : '确认修改',
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                '需要修改时，可以继续输入补充说明。',
-                style: TextStyle(fontSize: 12, color: CampusColors.muted),
               ),
             ],
           ],
@@ -259,31 +298,4 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
       ),
     );
   }
-
-  Widget _occurrence(String label, Map<String, dynamic> e) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: CampusColors.muted),
-        ),
-        Text(
-          '${e['title']}',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '${displayInstant(e['start_at'])} — ${displayInstant(e['end_at'])}',
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: CampusColors.primary,
-          ),
-        ),
-        if ('${e['location'] ?? ''}'.isNotEmpty) Text(e['location']),
-      ],
-    ),
-  );
 }

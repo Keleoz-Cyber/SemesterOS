@@ -10,9 +10,9 @@ from .auth import current_user,error
 from .items import serialize_item
 from .schedule_api import snapshot
 from .occurrences import expand
-from .capacity import analyze,calendar_context,local_day,exam_window
-from .plan_rules import classify,occupied_seconds,future_minutes
-from .reminder_rules import utcnow,instant,anchor_at,SHANGHAI
+from .capacity import analyze,calendar_context,local_day
+from .plan_rules import classify,occupied_seconds
+from .reminder_rules import utcnow,instant,anchor_at
 
 router=APIRouter()
 

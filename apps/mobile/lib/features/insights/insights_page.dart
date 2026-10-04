@@ -1,4 +1,6 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/app_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -8,6 +10,8 @@ import '../../ui/app_selection.dart';
 import '../items/items_controller.dart';
 import '../calendar/calendar_repository.dart';
 import 'insights_controller.dart';
+import 'student_insight_summary.dart';
+import '../../ui/date_labels.dart';
 
 class InsightsPage extends StatefulWidget {
   final ItemsController controller;
@@ -157,9 +161,9 @@ class _InsightsPageState extends State<InsightsPage> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  child: Text(
-                    '筛选统计',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  child: const AppSheetHeading(
+                    title: '筛选统计',
+                    padding: EdgeInsets.zero,
                   ),
                 ),
                 Expanded(
@@ -276,10 +280,11 @@ class _InsightsPageState extends State<InsightsPage> {
     animation: c,
     builder: (context, _) => Scaffold(
       appBar: AppBar(
-        title: const Text('时间统计'),
+        title: const Text('统计分析'),
         actions: [
           AppTextButton.icon(
             key: const ValueKey('insights-filters'),
+            guardAsync: false,
             onPressed: chooseFilters,
             icon: const Icon(Icons.tune_rounded, size: 20),
             label: Text(
@@ -293,94 +298,97 @@ class _InsightsPageState extends State<InsightsPage> {
       ),
       body: RefreshIndicator(
         onRefresh: c.load,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 36),
-          children: [
-            Text(
-              widget.semester['name'],
-              style: const TextStyle(color: CampusColors.muted),
-            ),
-            const SizedBox(height: 12),
-            AppSegmentedControl<String>(
-              value: range,
-              options: const {
-                'week': '本周',
-                'month': '近4周',
-                'term': '本学期',
-                'custom': '自定义',
-              },
-              onChanged: chooseRange,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '${calendarDate(c.from)} — ${calendarDate(c.to)}',
-              style: const TextStyle(fontSize: 13, color: CampusColors.muted),
-            ),
-            const SizedBox(height: 16),
-            if (c.category != null || c.tags.isNotEmpty)
-              Wrap(
-                spacing: 8,
-                children: [
-                  if (c.category != null)
-                    AppInputChip(
-                      label: Text(names[c.category] ?? '分类'),
-                      onDeleted: () {
-                        selectedDate = null;
-                        visible = 30;
-                        c.filterCategory(null);
-                      },
-                    ),
-                  for (final tagId in c.tags)
-                    AppInputChip(
-                      label: Text(tagName(tagId)),
-                      onDeleted: () {
-                        selectedDate = null;
-                        visible = 30;
-                        c.toggleTag(tagId);
-                      },
-                    ),
-                ],
+        child: AppLoadingOverlay(
+          loading: c.busy,
+          label: '正在更新',
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 36),
+            children: [
+              Text(
+                widget.semester['name'],
+                style: const TextStyle(color: CampusColors.muted),
               ),
-            if (c.busy) const LinearProgressIndicator(minHeight: 2),
-            if (c.offline)
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: CampusColors.warningSoft,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  c.data == null
-                      ? (c.error ?? '暂时无法读取统计，请下拉重试。')
-                      : '当前显示缓存统计，下拉可重新同步。',
-                ),
+              const SizedBox(height: 12),
+              AppSegmentedControl<String>(
+                value: range,
+                options: const {
+                  'week': '本周',
+                  'month': '近4周',
+                  'term': '本学期',
+                  'custom': '自定义',
+                },
+                onChanged: chooseRange,
               ),
-            if (c.data != null)
-              ExcludeSemantics(
-                excluding: c.busy,
-                child: IgnorePointer(
-                  ignoring: c.busy,
-                  child: AnimatedOpacity(
-                    opacity: c.busy && !c.matchesCurrentQuery
-                        ? 0
-                        : c.busy
-                        ? 0.5
-                        : 1,
-                    duration: c.busy && !c.matchesCurrentQuery
-                        ? Duration.zero
-                        : animation,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: content(c.data!),
+              const SizedBox(height: 12),
+              Text(
+                '${studentDate(c.from)} — ${studentDate(c.to)}',
+                style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+              ),
+              const SizedBox(height: 16),
+              if (c.category != null || c.tags.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    if (c.category != null)
+                      AppInputChip(
+                        label: Text(names[c.category] ?? '分类'),
+                        onDeleted: () {
+                          selectedDate = null;
+                          visible = 30;
+                          c.filterCategory(null);
+                        },
+                      ),
+                    for (final tagId in c.tags)
+                      AppInputChip(
+                        label: Text(tagName(tagId)),
+                        onDeleted: () {
+                          selectedDate = null;
+                          visible = 30;
+                          c.toggleTag(tagId);
+                        },
+                      ),
+                  ],
+                ),
+              if (c.offline)
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: CampusColors.warningSoft,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    c.data == null
+                        ? (c.error ?? '暂时无法读取统计，请下拉重试。')
+                        : '当前显示缓存统计，下拉可重新同步。',
+                  ),
+                ),
+              if (c.data != null)
+                ExcludeSemantics(
+                  excluding: c.busy,
+                  child: IgnorePointer(
+                    ignoring: c.busy,
+                    child: AnimatedOpacity(
+                      opacity: c.busy && !c.matchesCurrentQuery
+                          ? 0
+                          : c.busy
+                          ? 0.5
+                          : 1,
+                      duration: c.busy && !c.matchesCurrentQuery
+                          ? Duration.zero
+                          : animation,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: content(c.data!),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            if (c.data == null && !c.busy)
-              AppTextButton(onPressed: c.load, child: const Text('重新加载')),
-          ],
+              if (c.data == null && !c.busy)
+                AppTextButton(onPressed: c.load, child: const Text('重新加载')),
+            ],
+          ),
         ),
       ),
     ),
@@ -397,10 +405,14 @@ class _InsightsPageState extends State<InsightsPage> {
         .toList();
     return [
       const SizedBox(height: 10),
+      StudentInsightSummary(
+        data: data,
+        onDate: (date) => setState(() => selectedDate = date),
+      ),
       overview(summary),
       const SizedBox(height: 12),
       Text(
-        '日历占用已扣除重叠时段 · ${summary['entry_count'] ?? 0}条记录',
+        '重叠时段只计一次 · ${summary['entry_count'] ?? 0}条记录',
         style: const TextStyle(fontSize: 12, color: CampusColors.muted),
       ),
       if ((summary['unknown_duration_count'] as num? ?? 0) > 0 ||
@@ -408,7 +420,12 @@ class _InsightsPageState extends State<InsightsPage> {
         Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(
-            '${summary['unknown_duration_count'] ?? 0}条安排缺少起止时间 · ${summary['undated_count'] ?? 0}条日期待确认',
+            [
+              if ((summary['unknown_duration_count'] as num? ?? 0) > 0)
+                '${summary['unknown_duration_count']}条时长未计入',
+              if ((summary['undated_count'] as num? ?? 0) > 0)
+                '${summary['undated_count']}条未定日期',
+            ].join(' · '),
             style: const TextStyle(color: CampusColors.warning, fontSize: 12),
           ),
         ),
@@ -443,7 +460,9 @@ class _InsightsPageState extends State<InsightsPage> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: AppInputChip(
-                  label: Text('$selectedDate 的记录'),
+                  label: Text(
+                    '${studentDate(DateTime.parse(selectedDate!))}的记录',
+                  ),
                   onDeleted: () => setState(() => selectedDate = null),
                 ),
               ),
@@ -462,28 +481,48 @@ class _InsightsPageState extends State<InsightsPage> {
             const SizedBox(height: 14),
             distribution(categories),
             if (MediaQuery.textScalerOf(context).scale(1) <= 1.4)
-              Wrap(
-                spacing: 18,
-                runSpacing: 10,
+              Column(
                 children: [
                   for (final category in categories)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: colors[category['id']],
-                            shape: BoxShape.circle,
-                          ),
+                    AppTile(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                      selected: c.category == category['id'],
+                      selectedTileColor: CampusColors.blueSoft,
+                      leading: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: colors[category['id']],
+                          shape: BoxShape.circle,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${category['name']}',
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ],
+                      ),
+                      title: Text(
+                        '${category['name']}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      trailing:
+                          category[mode == 'actual'
+                                  ? 'actual_minutes'
+                                  : 'scheduled_minutes']
+                              is! num
+                          ? null
+                          : Text(
+                              insightHours(
+                                category[mode == 'actual'
+                                    ? 'actual_minutes'
+                                    : 'scheduled_minutes'],
+                              ),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                      onTap: () {
+                        selectedDate = null;
+                        c.filterCategory(
+                          c.category == category['id'] ? null : category['id'],
+                        );
+                      },
                     ),
                 ],
               ),
@@ -492,7 +531,9 @@ class _InsightsPageState extends State<InsightsPage> {
       ),
       const SizedBox(height: 24),
       heading(
-        selectedDate == null ? '统计来源' : '$selectedDate 的来源',
+        selectedDate == null
+            ? '统计来源'
+            : '${studentDate(DateTime.parse(selectedDate!))}的来源',
         sub: '${shown.length}条',
       ),
       const SizedBox(height: 12),
@@ -573,7 +614,7 @@ class _InsightsPageState extends State<InsightsPage> {
             Icon(Icons.schedule_rounded, size: 20, color: CampusColors.primary),
             SizedBox(width: 8),
             Text(
-              '日历占用',
+              '已安排时间',
               style: TextStyle(
                 fontSize: 14,
                 color: CampusColors.muted,
@@ -620,33 +661,35 @@ class _InsightsPageState extends State<InsightsPage> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: CampusColors.tealSoft,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            spacing: 16,
-            runSpacing: 6,
-            children: [
-              const Text(
-                '实际记录',
-                style: TextStyle(fontSize: 14, color: CampusColors.teal),
-              ),
-              Text(
-                insightHours(summary['actual_minutes']),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: CampusColors.teal,
+        if (summary['actual_minutes'] != null) ...[
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: CampusColors.tealSoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 16,
+              runSpacing: 6,
+              children: [
+                const Text(
+                  '实际记录',
+                  style: TextStyle(fontSize: 14, color: CampusColors.teal),
                 ),
-              ),
-            ],
+                Text(
+                  insightHours(summary['actual_minutes']),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: CampusColors.teal,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ],
     ),
   );
@@ -685,116 +728,127 @@ class _InsightsPageState extends State<InsightsPage> {
           child: LayoutBuilder(
             builder: (context, size) => SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: daily.length > 14 ? daily.length * 25.0 : size.maxWidth,
-                child: BarChart(
-                  BarChartData(
-                    maxY: (maxValue * 1.15).ceilToDouble(),
-                    minY: 0,
-                    barGroups: [
-                      for (var i = 0; i < daily.length; i++)
-                        BarChartGroupData(
-                          x: i,
-                          barRods: [
-                            BarChartRodData(
-                              toY: amount(daily[i]),
-                              width: daily.length > 14 ? 12 : 18,
-                              borderRadius: BorderRadius.circular(5),
-                              color: selectedDate == daily[i]['date']
-                                  ? CampusColors.ink
-                                  : CampusColors.primary,
-                              rodStackItems: mode == 'actual'
-                                  ? null
-                                  : [
-                                      BarChartRodStackItem(
-                                        0,
-                                        (daily[i]['fixed_scheduled_minutes']
-                                                    as num? ??
-                                                0) /
-                                            60,
-                                        CampusColors.primary,
-                                      ),
-                                      BarChartRodStackItem(
-                                        (daily[i]['fixed_scheduled_minutes']
-                                                    as num? ??
-                                                0) /
-                                            60,
-                                        amount(daily[i]),
-                                        CampusColors.teal,
-                                      ),
-                                    ],
-                            ),
-                          ],
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: SizedBox(
+                  width: daily.length > 14
+                      ? daily.length * 30.0
+                      : size.maxWidth - 16,
+                  child: BarChart(
+                    BarChartData(
+                      maxY: (maxValue * 1.15).ceilToDouble(),
+                      minY: 0,
+                      barGroups: [
+                        for (var i = 0; i < daily.length; i++)
+                          BarChartGroupData(
+                            x: i,
+                            barRods: [
+                              BarChartRodData(
+                                toY: amount(daily[i]),
+                                width: daily.length > 14 ? 12 : 18,
+                                borderRadius: BorderRadius.circular(5),
+                                color: selectedDate == daily[i]['date']
+                                    ? CampusColors.ink
+                                    : CampusColors.primary,
+                                rodStackItems: mode == 'actual'
+                                    ? null
+                                    : [
+                                        BarChartRodStackItem(
+                                          0,
+                                          (daily[i]['fixed_scheduled_minutes']
+                                                      as num? ??
+                                                  0) /
+                                              60,
+                                          CampusColors.primary,
+                                        ),
+                                        BarChartRodStackItem(
+                                          (daily[i]['fixed_scheduled_minutes']
+                                                      as num? ??
+                                                  0) /
+                                              60,
+                                          amount(daily[i]),
+                                          CampusColors.teal,
+                                        ),
+                                      ],
+                              ),
+                            ],
+                          ),
+                      ],
+                      gridData: FlGridData(
+                        drawVerticalLine: false,
+                        getDrawingHorizontalLine: (_) => const FlLine(
+                          color: CampusColors.line,
+                          strokeWidth: 1,
                         ),
-                    ],
-                    gridData: FlGridData(
-                      drawVerticalLine: false,
-                      getDrawingHorizontalLine: (_) => const FlLine(
-                        color: CampusColors.line,
-                        strokeWidth: 1,
                       ),
-                    ),
-                    borderData: FlBorderData(show: false),
-                    titlesData: FlTitlesData(
-                      topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: MediaQuery.textScalerOf(
-                            context,
-                          ).scale(36),
-                          getTitlesWidget: (value, meta) => Text(
-                            '${value.toInt()}h',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: CampusColors.muted,
+                      borderData: FlBorderData(show: false),
+                      titlesData: FlTitlesData(
+                        topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: MediaQuery.textScalerOf(
+                              context,
+                            ).scale(36),
+                            interval: (maxValue / 4)
+                                .ceil()
+                                .clamp(1, 100000)
+                                .toDouble(),
+                            minIncluded: false,
+                            maxIncluded: false,
+                            getTitlesWidget: (value, meta) => Text(
+                              '${value.toInt()}h',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: CampusColors.muted,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize:
-                              MediaQuery.textScalerOf(context).scale(22) + 12,
-                          interval: 1,
-                          getTitlesWidget: (value, meta) {
-                            final i = value.toInt();
-                            if (i < 0 || i >= daily.length) {
-                              return const SizedBox();
-                            }
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                '${DateTime.parse(daily[i]['date']).day}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: CampusColors.muted,
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize:
+                                MediaQuery.textScalerOf(context).scale(22) + 12,
+                            interval: 1,
+                            getTitlesWidget: (value, meta) {
+                              final i = value.toInt();
+                              if (i < 0 || i >= daily.length) {
+                                return const SizedBox();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  '${DateTime.parse(daily[i]['date']).day}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: CampusColors.muted,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    barTouchData: BarTouchData(
-                      touchCallback: (event, response) {
-                        if (event is FlTapUpEvent && response?.spot != null) {
-                          final i = response!.spot!.touchedBarGroupIndex;
-                          if (i >= 0 && i < daily.length) {
-                            setState(() => selectedDate = daily[i]['date']);
+                      barTouchData: BarTouchData(
+                        touchCallback: (event, response) {
+                          if (event is FlTapUpEvent && response?.spot != null) {
+                            final i = response!.spot!.touchedBarGroupIndex;
+                            if (i >= 0 && i < daily.length) {
+                              setState(() => selectedDate = daily[i]['date']);
+                            }
                           }
-                        }
-                      },
+                        },
+                      ),
                     ),
+                    duration: animation,
+                    curve: Curves.easeOutCubic,
                   ),
-                  duration: animation,
-                  curve: Curves.easeOutCubic,
                 ),
               ),
             ),
@@ -906,24 +960,30 @@ class _InsightsPageState extends State<InsightsPage> {
             ),
           ),
           IgnorePointer(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  insightHours(sum),
-                  style: const TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.w800,
+            child: SizedBox(
+              width: 104,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      insightHours(sum),
+                      style: const TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                ),
-                Text(
-                  mode == 'actual' ? '实际记录' : '安排时长',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: CampusColors.muted,
+                  Text(
+                    mode == 'actual' ? '实际记录' : '安排时长',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: CampusColors.muted,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -970,9 +1030,10 @@ class _InsightsPageState extends State<InsightsPage> {
 
   Widget sourceTile(Map<String, dynamic> r) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+    child: Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: CampusColors.line)),
+      ),
       child: AppTile(
         leading: Container(
           width: 5,
@@ -988,15 +1049,20 @@ class _InsightsPageState extends State<InsightsPage> {
         ),
         subtitle: Text(
           r['resource_type'] == 'progress'
-              ? '${r['date']} · 进度记录'
+              ? '${studentDate(DateTime.parse(r['date']))} · 进度记录'
               : calendarTimeLabel(r),
         ),
-        trailing: Text(
-          insightHours(
-            mode == 'actual' ? r['actual_minutes'] : r['scheduled_minutes'],
-          ),
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+        trailing:
+            r[mode == 'actual' ? 'actual_minutes' : 'scheduled_minutes'] is! num
+            ? null
+            : Text(
+                insightHours(
+                  mode == 'actual'
+                      ? r['actual_minutes']
+                      : r['scheduled_minutes'],
+                ),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
         onTap: () async {
           final id = r['resource_id'];
           if (id == null) return;

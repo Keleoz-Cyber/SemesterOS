@@ -65,18 +65,30 @@ def test_existing_coverage_is_preserved_not_added_to_remaining_work():
     assert plan['start_at']==at('09:00').isoformat() and plan['locked']
 
 
-def test_unknown_deadline_needs_explicit_round_target():
+def test_unknown_deadline_uses_known_remaining_effort_and_accepts_explicit_round_target():
     item=task(time={'precision':'unknown'},certainty='unknown')
-    assert run([item])['status']=='INPUT_INVALID'
+    result=run([item])
+    assert result['status']=='FEASIBLE_COMPLETE'
+    assert sum(b['minutes'] for b in result['blocks'])==180
+    assert result['tasks'][0]['later_minutes']==0
+    assert item['time']=={'precision':'unknown'} and item['earliest_start_at'] is None
     result=run([item],request('a',targets={'a':60}))
     assert result['status']=='FEASIBLE_COMPLETE'
     assert result['tasks'][0]['later_minutes']==120
 
 
-def test_reserved_unknown_exam_and_overallocated_existing_plans_block_new_generation():
+def test_reserved_unknown_exam_excludes_known_day_and_overallocated_plans_remain_invalid():
     exam={'id':'exam','kind':'exam','lifecycle':'active','title':'待核对考试','certainty':'tentative',
           'reserve_time':True,'time':{'precision':'exact','at':at('10:00').isoformat()}}
-    assert run([task(),exam],request('a'))['status']=='INPUT_INVALID'
+    result=run([task(),exam],request('a'))
+    assert result['status']=='INFEASIBLE' and result['blocks']==[]
+    assert result['uncertainty_warnings'][0]['exclusion_applied']
+    later=task(time={'precision':'exact','at':'2026-09-28T13:00:00+08:00'},
+        start_policy='at',earliest_start_at=at('10:00').isoformat())
+    result=run([later,exam],{**request('a'),'days':14})
+    assert result['status']=='FEASIBLE_COMPLETE'
+    assert all(datetime.fromisoformat(b['start_at']).astimezone(at('08:00').tzinfo).date().isoformat()=='2026-09-28' for b in result['blocks'])
+    assert result['uncertainty_warnings'] and exam['time'].get('end_at') is None
     plan={'id':'p','item_id':'a','start_at':at('09:00').isoformat(),'end_at':at('11:00').isoformat(),
           'minutes':120,'status':'active','locked':False,'version':1}
     assert run([task(minutes=60)],plans=[plan])['status']=='INPUT_INVALID'

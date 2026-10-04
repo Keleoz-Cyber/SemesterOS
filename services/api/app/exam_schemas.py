@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from pydantic import Field,field_validator,model_validator
 from .schemas import Input
-from .item_schemas import ItemTime
+from .item_schemas import ItemTime, NoticeDetails
 
 
 class ReviewInput(Input):
@@ -38,6 +38,7 @@ class ExamChangeInput(Input):
     title:str|None=Field(default=None,min_length=1,max_length=120)
     course_id:str|None=Field(default=None,max_length=36)
     notes:str|None=Field(default=None,max_length=3000)
+    details:NoticeDetails|None=None
 
 
 class ExamChangeApply(ExamChangeInput):

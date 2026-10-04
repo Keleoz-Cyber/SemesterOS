@@ -3,8 +3,9 @@ from bisect import bisect_right
 from datetime import datetime, timedelta, timezone
 from math import floor
 
-from .reminder_rules import SHANGHAI, anchor_at, instant
+from .reminder_rules import SHANGHAI, anchor_at, instant, reservation_enabled
 from .plan_rules import classify, occupied_seconds, future_minutes
+from .task_readiness import start_policy
 
 
 def merge(spans):
@@ -71,9 +72,17 @@ def iso(stamp):
     return datetime.fromtimestamp(stamp, timezone.utc).isoformat()
 
 
+def uncertainty_affects_window(warning, start, end):
+    """Avoidance boundaries do not establish when an unfinished record ends."""
+    return start < end and (warning['unbounded'] or
+        instant(warning['start_at']).timestamp() < end and
+        (warning.get('end_unknown', False) or instant(warning['end_at']).timestamp() > start))
+
+
 def course_intervals(semester, courses):
     from .occurrences import expand
-    return [(instant(e['start_at']).timestamp(),instant(e['end_at']).timestamp(),e['id'],e['title']) for e in expand(semester,courses)]
+    return [(instant(e['start_at']).timestamp(),instant(e['end_at']).timestamp(),e['id'],e['title'])
+            for e in expand(semester,courses) if not e.get('attendance_exempt')]
 
 
 def exam_window(exam, semester_start, semester_end):
@@ -89,6 +98,7 @@ def exam_window(exam, semester_start, semester_end):
 
 
 def calendar_context(semester, availability, courses, items, now):
+    from .reminder_rules import notice_arrival_at
     current = now.timestamp()
     semester_start = local_day(semester['first_monday']).timestamp()
     semester_end = semester_start + semester['total_weeks'] * 7 * 86400
@@ -102,23 +112,55 @@ def calendar_context(semester, availability, courses, items, now):
     available = merge(available)
     school = course_intervals(semester, courses)
     exams = [i for i in items if i['kind'] == 'exam' and i['lifecycle'] == 'active']
-    uncertain = []
+    uncertain = [];uncertainty_exclusions=[];uncertainty_warnings=[]
+    def note_uncertainty(record,a,b,missing,eid):
+        t=record['time'];unbounded=t['precision']=='unknown'
+        end_unknown=missing and t['precision']=='exact' and not t.get('end_at')
+        # This is an avoidance policy for the solver, never an inferred record
+        # end. A stated start with no end affects the remainder of that local day.
+        if missing and t['precision']=='exact':
+            day=instant(t['at']).astimezone(SHANGHAI).date()
+            b=(local_day(str(day))+timedelta(days=1)).timestamp()
+        uncertain.append((a,b,missing,eid))
+        if missing and not unbounded:uncertainty_exclusions.append((a,b))
+        if unbounded:
+            message=f'「{record["title"]}」日期未说明，未据此封锁其他学习时段；具体时间明确后需核对已有计划。'
+        elif end_unknown:
+            message=f'「{record["title"]}」结束时间未知，仅避开开始当天剩余时段；后续日期仍需核对，不能视为已在午夜结束。'
+        elif missing:
+            message=f'「{record["title"]}」起止时间未完整说明，排程只避开其已知日期范围，其他日期仍可安排。'
+        else:message=f'「{record["title"]}」是参考或暂定安排，按已记录的预留选择计算。'
+        uncertainty_warnings.append({'id':eid,'title':record['title'],'message':message,
+            'scope':'undated' if unbounded else 'known_dates',
+            'start_at':None if unbounded else iso(a),'end_at':None if unbounded else iso(b),
+            'exclusion_applied':missing and not unbounded,'unbounded':unbounded,
+            'end_unknown':bool(end_unknown),'could_affect_occupancy':missing})
     for exam in exams:
+        if exam['time'].get('meaning') in ('window', 'candidate', 'course_anchor'):
+            continue
         a, b = exam_window(exam, semester_start, semester_end)
-        reserved = exam.get('reserve_time', True) or exam.get('certainty') == 'formal'
+        arrival = notice_arrival_at(exam)
+        if arrival: a = arrival.timestamp()
+        reserved = reservation_enabled(exam, 'exam')
         complete = exam['time']['precision'] == 'exact' and exam['time'].get('end_at') is not None
         if reserved and complete:
             school.append((a, b, exam['id'], exam['title'] + ('（暂定预留）' if exam.get('certainty') != 'formal' else '')))
         if not complete or exam.get('certainty') != 'formal':
-            uncertain.append((a, b, reserved and not complete, exam['id']))
+            note_uncertainty(exam,a,b,reserved and not complete,exam['id'])
     for event in semester.get('fixed_events', []):
+        if not reservation_enabled(event, 'event'):
+            continue
+        if event['time'].get('meaning') in ('window', 'candidate', 'course_anchor'):
+            continue
         a, b = exam_window(event, semester_start, semester_end)
+        arrival = notice_arrival_at(event)
+        if arrival: a = arrival.timestamp()
         complete = event['time']['precision'] == 'exact' and event['time'].get('end_at') is not None
         eid = 'event:' + event['id']
         if complete:
             school.append((a, b, eid, event['title']))
         if not complete or event.get('certainty') != 'formal':
-            uncertain.append((a, b, not complete, eid))
+            note_uncertainty(event,a,b,not complete,eid)
     school = sorted(r for r in school if r[1] > begin and r[0] < semester_end)
     conflicts, active = [], []
     for row in school:
@@ -131,9 +173,11 @@ def calendar_context(semester, availability, courses, items, now):
     blocked = [(a, b) for a, b, _, _ in school]
     blocked += [(instant(r['start_at']).timestamp(), instant(r['end_at']).timestamp()) for r in availability.get('exclusions', [])]
     total = CapacityIndex(available)
-    free = CapacityIndex(subtract(available, merge(blocked)))
+    known_free=CapacityIndex(subtract(available,merge(blocked)))
+    free = CapacityIndex(subtract(available, merge(blocked+uncertainty_exclusions)))
     return {'current':current,'begin':begin,'semester_end':semester_end,'total':total,'free':free,
-            'uncertain':uncertain,'conflicts':conflicts}
+            'uncertain':uncertain,'conflicts':conflicts,'known_free':known_free,
+            'uncertainty_warnings':uncertainty_warnings}
 
 
 def analyze(semester, availability, courses, items, now, plans=()):
@@ -148,7 +192,7 @@ def analyze(semester, availability, courses, items, now, plans=()):
         reasons = []
         due_value = anchor_at(item)
         due = due_value.timestamp() if due_value else None
-        policy = item.get('start_policy', 'unconfirmed')
+        policy = start_policy(item)
         release = max(begin, instant(item['earliest_start_at']).timestamp()) if policy == 'at' and item.get('earliest_start_at') else begin
         remaining = item.get('remaining_minutes')
         if not availability.get('configured'):
@@ -165,19 +209,21 @@ def analyze(semester, availability, courses, items, now, plans=()):
             reasons.append('outside_semester')
         if limit:
             reasons.append('analysis_limit')
-        unknown_exam = due is not None and any(a < due and b > release and missing for a, b, missing, _ in uncertain)
-        tentative_exam = due is not None and any(a < due and b > release for a, b, _, _ in uncertain)
-        if unknown_exam:
-            reasons.append('needs_fixed_time' if any(a < due and b > release and missing and id.startswith('event:') for a,b,missing,id in uncertain) else 'needs_exam_time')
+        affected=[w for w in context['uncertainty_warnings'] if due is not None and uncertainty_affects_window(w,release,due)]
+        occupancy_incomplete=any(w['could_affect_occupancy'] for w in affected)
+        tentative_exam = bool(affected)
         if tentative_exam:
-            reasons.append('uncertain_fixed' if any(a < due and b > release and id.startswith('event:') for a,b,_,id in uncertain) else 'uncertain_exam')
+            reasons.append('uncertain_fixed' if any(w['id'].startswith('event:') for w in affected) else 'uncertain_exam')
         missing = any(r.startswith('needs_') or r in ('outside_semester', 'analysis_limit') for r in reasons)
         can_count = availability.get('configured') and due is not None and due <= semester_end and policy != 'unconfirmed' and remaining is not None and item.get('certainty') == 'formal' and not limit
         before = total.minutes(release, due) if can_count else None
         calendar_capacity=free.minutes(release,due) if can_count else None
+        known_capacity=context['known_free'].minutes(release,due) if can_count else None
+        unbounded=any(w['could_affect_occupancy'] and (w['unbounded'] or
+            w.get('end_unknown') and instant(w['end_at']).timestamp() <= release) for w in affected)
         other_seconds=occupied_seconds(valid_plans,release,due,{item['id']}) if can_count and due>release else 0
         capacity=max(0,floor((free.before(due)-free.before(release)-other_seconds)/60)) if can_count and due>release else 0 if can_count else None
-        slack = capacity - remaining if can_count else None
+        slack = capacity - remaining if can_count and not occupancy_incomplete else None
         other_spans=merge([(instant(b['start_at']).timestamp(),instant(b['end_at']).timestamp()) for b in valid_plans if b['item_id']!=item['id']])
         longest = CapacityIndex(subtract(free.spans,other_spans)).longest(release,due) if can_count else None
         own_coverage=sum(future_minutes(b,current) for b in valid_plans if b['item_id']==item['id'])
@@ -193,17 +239,19 @@ def analyze(semester, availability, courses, items, now, plans=()):
         inverted = can_count and release >= due and not overdue
         if inverted:
             reasons.append('start_after_deadline')
-        no_slot = can_count and not item.get('splittable', True) and longest < remaining
+        proven_longest=CapacityIndex(subtract(context['known_free'].spans,other_spans)).longest(release,due) if can_count and occupancy_incomplete else longest
+        no_slot = can_count and not item.get('splittable', True) and proven_longest < remaining
         if no_slot:
             reasons.append('no_contiguous_slot')
         row = {'item_id':item['id'], 'item_version':item.get('version', 1), 'title':item['title'],
                'remaining_minutes':remaining, 'release_at':iso(release) if policy != 'unconfirmed' else None,
                'deadline_at':iso(due) if due is not None else None, 'reason_codes':reasons,
-               'capacity_before_fixed_minutes':None if unknown_exam else before,
-               'fixed_occupied_minutes':None if before is None or unknown_exam else before-calendar_capacity,
-               'capacity_after_fixed_minutes':None if unknown_exam else calendar_capacity, 'other_plan_minutes':None if unknown_exam or calendar_capacity is None else calendar_capacity-capacity,
+               'capacity_before_fixed_minutes':before,
+               'fixed_occupied_minutes':None if before is None else before-known_capacity,
+               'uncertainty_excluded_minutes':None if known_capacity is None else known_capacity-calendar_capacity,
+               'capacity_after_fixed_minutes':calendar_capacity, 'other_plan_minutes':None if calendar_capacity is None else calendar_capacity-capacity,
                'planned_minutes':own_coverage,'unplanned_minutes':max(0,remaining-own_coverage) if remaining is not None else None,
-               'task_slack_minutes':None if unknown_exam else slack, 'max_contiguous_minutes':None if unknown_exam else longest,
+               'task_slack_minutes':slack, 'max_contiguous_minutes':longest,'capacity_is_upper_bound':unbounded,
                'window_gap_minutes':0, 'critical_window':None, 'data_complete':not missing,
                'level':'high' if overdue or hard or no_slot or inverted or plan_problem else 'unknown' if missing else
                        'medium' if tentative_exam or slack < max(30, .2*remaining) else 'low'}
@@ -220,13 +268,17 @@ def analyze(semester, availability, courses, items, now, plans=()):
             subset = [r for r in ready if r[0] >= a and r[1] <= b]
             demand = sum(r[2] for r in subset)
             other_seconds=occupied_seconds(valid_plans,a,b,{r[3]['item_id'] for r in subset})
-            capacity = max(0,floor((free.before(b)-free.before(a)-other_seconds)/60))
+            occupancy_incomplete=any(w['could_affect_occupancy'] and uncertainty_affects_window(w,a,b) for w in context['uncertainty_warnings'])
+            # A conservative avoidance interval cannot prove an actual shortage.
+            window_free=context['known_free'] if occupancy_incomplete else free
+            capacity = max(0,floor((window_free.before(b)-window_free.before(a)-other_seconds)/60))
             gap = max(0, demand-capacity)
             if not gap:
                 continue
             window = {'start_at':iso(a), 'end_at':iso(b), 'demand_minutes':demand, 'capacity_minutes':capacity,
                       'gap_minutes':gap, 'item_ids':[r[3]['item_id'] for r in subset],
-                      'capacity_is_upper_bound':any(x < b and y > a and missing for x, y, missing, _ in uncertain)}
+                      'capacity_is_upper_bound':occupancy_incomplete,
+                      'uses_uncertainty_exclusions':False}
             if critical is None or gap > critical['gap_minutes']:
                 critical = window
             for _, _, _, row in subset:
@@ -251,4 +303,5 @@ def analyze(semester, availability, courses, items, now, plans=()):
         'plan_conflict_count':len(plan_issues),
         'analysis_limited':limit, 'is_schedule':False}, 'fixed_conflicts':conflicts[:30],
         'plan_issues':plan_issues[:30], 'scope_end':iso(semester_end), 'computed_at':now.astimezone(timezone.utc).isoformat(),
+        'uncertainty_warnings':context['uncertainty_warnings'],
         'valid_until':(now+timedelta(minutes=1)).astimezone(timezone.utc).isoformat(), 'rule_version':'risk-v1', 'time_resolution_minutes':1}

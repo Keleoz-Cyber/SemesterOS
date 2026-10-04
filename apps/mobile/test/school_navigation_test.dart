@@ -1,7 +1,63 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/import/school_navigation.dart';
+import 'package:semester_os/features/import/school_adapters.dart';
 
 void main() {
+  test('HLJU permits only its observed school origins and secures login', () {
+    for (final url in [
+      hljuSchool.loginUrl,
+      'https://authserver.hlju.edu.cn/authserver/login',
+      'http://xsxk.hlju.edu.cn/student/courseSelect/thisSemesterCurriculum/index',
+    ]) {
+      expect(
+        schoolNavigation(url, school: hljuSchool).action,
+        SchoolNavigationAction.allow,
+        reason: url,
+      );
+    }
+    expect(isSchoolCourseUrl(hljuSchool.loginUrl, school: hljuSchool), false);
+    expect(
+      isSchoolCourseUrl(
+        'http://xsxk.hlju.edu.cn/timetable',
+        school: hljuSchool,
+      ),
+      true,
+    );
+    final login = schoolNavigation(
+      'http://xsxk.hlju.edu.cn/authentication/require?continue=timetable',
+      school: hljuSchool,
+    );
+    expect(login.action, SchoolNavigationAction.redirectLogin);
+    expect(login.destination.toString(), hljuSchool.loginUrl);
+    expect(
+      isSchoolCourseUrl(
+        'http://xsxk.hlju.edu.cn/authentication/require',
+        school: hljuSchool,
+      ),
+      false,
+    );
+    for (final url in [
+      'http://xsxk.hlju.edu.cn:8080/',
+      'http://user:secret@xsxk.hlju.edu.cn/',
+      'http://xsxk.hlju.edu.cn.example.com/',
+      'https://jwglxt.haut.edu.cn/',
+      'https://sso.hlju.edu.cn:8443/',
+    ]) {
+      expect(
+        schoolNavigation(url, school: hljuSchool).action,
+        SchoolNavigationAction.block,
+        reason: url,
+      );
+    }
+    expect(
+      schoolNavigation(
+        'http://sso.hlju.edu.cn/cas/login',
+        school: hljuSchool,
+      ).action,
+      SchoolNavigationAction.upgradeHttps,
+    );
+  });
+
   test('official HTTPS pages and cleanup blank page remain navigable', () {
     expect(
       schoolNavigation(

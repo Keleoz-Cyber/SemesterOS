@@ -1,4 +1,6 @@
+import 'academic_visuals.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/app_date_time_picker.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -12,10 +14,16 @@ import '../../ui/app_picker_field.dart';
 import '../../ui/time_input_options.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
+import '../notices/notice_fields.dart' show noticeTime;
 import '../planning/date_time_picker.dart';
 import '../planning/risk_widgets.dart';
 import '../planning/plan_list.dart';
 import 'hub_data.dart';
+
+String _examLocation(Map<String, dynamic> exam) {
+  final value = '${exam['location'] ?? ''}'.trim();
+  return {'待通知', '待定', '待确认', '未确定', '暂无', '未填写'}.contains(value) ? '' : value;
+}
 
 class ExamCenterPage extends StatefulWidget {
   final ItemsController controller;
@@ -66,11 +74,6 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              RecordHeading(
-                label: '考试与复习',
-                title: widget.examId == null ? '考试安排' : '考试与复习',
-                icon: Icons.school_outlined,
-              ),
               if (widget.examId == null) ...[
                 AppSegmentedControl<bool>(
                   value: cancelled,
@@ -109,7 +112,7 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if ((row['reviews'] as List).isNotEmpty)
+                          if ((row['reviews'] as List).isNotEmpty) ...[
                             const Row(
                               children: [
                                 Icon(
@@ -128,14 +131,14 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
                                 ),
                               ],
                             ),
-                          const SizedBox(height: 12),
-                          if (row['review_remaining_minutes'] != null)
+                            const SizedBox(height: 8),
+                          ],
+                          if (row['review_remaining_minutes'] != null &&
+                              (row['reviews'] as List).isNotEmpty)
                             Text(
-                              (row['reviews'] as List).isEmpty
-                                  ? '复习目标尚未设置'
-                                  : '复习剩余：${row['review_remaining_minutes'] == null ? '耗时待确认' : minutesLabel(row['review_remaining_minutes'])}',
+                              '还需复习 ${minutesLabel(row['review_remaining_minutes'])}',
                               style: const TextStyle(
-                                fontSize: 18,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -144,6 +147,11 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
                               fresh
                                   ? '已安排复习 ${minutesLabel(row['review_planned_minutes'])} · 还需安排 ${row['review_unplanned_minutes'] == null ? '待确认' : minutesLabel(row['review_unplanned_minutes'])}'
                                   : '复习安排待更新',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: CampusColors.muted,
+                                height: 1.4,
+                              ),
                             ),
                           if (fresh &&
                               row['review_remaining_minutes'] is num &&
@@ -173,7 +181,8 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
                             ),
                           for (final issue in row['issues'] ?? [])
                             SoftNotice('$issue', warning: true),
-                          const SizedBox(height: 12),
+                          if ((row['reviews'] as List).isNotEmpty)
+                            const SizedBox(height: 8),
                           for (final task in widget.controller.rows(
                             row['reviews'],
                           ))
@@ -181,11 +190,15 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
                               contentPadding: EdgeInsets.zero,
                               title: Text(task['title']),
                               subtitle: Text(
-                                '${itemTimeLabel(task)} · ${task['lifecycle'] == 'completed'
-                                    ? '已完成'
-                                    : task['lifecycle'] == 'cancelled'
-                                    ? '已取消'
-                                    : '待完成'}',
+                                [
+                                  if (itemTimeLabel(task).isNotEmpty)
+                                    itemTimeLabel(task),
+                                  task['lifecycle'] == 'completed'
+                                      ? '已完成'
+                                      : task['lifecycle'] == 'cancelled'
+                                      ? '已取消'
+                                      : '待完成',
+                                ].join(' · '),
                               ),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () async {
@@ -365,59 +378,74 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          RecordHeading(
-            label: '复习目标',
+          AcademicRecordHeading(
+            label: '',
             title: widget.exam['title'],
             icon: Icons.checklist_rounded,
             subtitle: itemTimeLabel(widget.exam),
           ),
-          EditorSection(
-            title: '复习任务',
-            icon: Icons.link_rounded,
-            children: [
-              AppSwitchRow(
-                title: const Text('关联已有个人任务'),
-                subtitle: link ? const Text('保留原进度和截止时间') : null,
-                value: link,
-                onChanged: busy ? null : (v) => setState(() => link = v),
-              ),
-              if (link)
-                AppPickerField<String>(
-                  initialValue: taskId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: '选择任务'),
-                  items: candidates
-                      .map(
-                        (i) => DropdownMenuItem<String>(
-                          value: i['id'],
-                          child: Text(i['title']),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: busy ? null : (v) => setState(() => taskId = v),
+          if (candidates.isNotEmpty)
+            AcademicEditorSection(
+              title: '复习任务',
+              icon: Icons.link_rounded,
+              children: [
+                AppSwitchRow(
+                  title: const Text('关联已有个人任务'),
+                  subtitle: link ? const Text('保留原进度和截止时间') : null,
+                  value: link,
+                  onChanged: busy ? null : (v) => setState(() => link = v),
                 ),
-            ],
-          ),
+                if (link)
+                  AppPickerField<String>(
+                    initialValue: taskId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: '选择任务'),
+                    items: candidates
+                        .map(
+                          (i) => DropdownMenuItem<String>(
+                            value: i['id'],
+                            child: Text(i['title']),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: busy ? null : (v) => setState(() => taskId = v),
+                  ),
+              ],
+            ),
           if (!link) ...[
-            EditorSection(
+            AcademicEditorSection(
               title: '预计投入',
               icon: Icons.timer_outlined,
               accent: CampusColors.teal,
-              subtitle: '预计还需要多久？',
               children: [
                 Wrap(
                   spacing: 8,
                   children: [
                     for (final p in {
-                      '轻量 · 2h': 120,
-                      '标准 · 4h': 240,
-                      '充分 · 8h': 480,
+                      '2小时': 120,
+                      '4小时': 240,
+                      '8小时': 480,
                     }.entries)
-                      AppOutlineButton(
-                        onPressed: busy
-                            ? null
-                            : () => setState(() => minutes.text = '${p.value}'),
-                        child: Text(p.key),
+                      Semantics(
+                        selected: int.tryParse(minutes.text) == p.value,
+                        child: AppOutlineButton(
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor:
+                                int.tryParse(minutes.text) == p.value
+                                ? CampusColors.blueSoft
+                                : CampusColors.surface,
+                            side: BorderSide(
+                              color: int.tryParse(minutes.text) == p.value
+                                  ? CampusColors.primary
+                                  : CampusColors.line,
+                            ),
+                          ),
+                          onPressed: busy
+                              ? null
+                              : () =>
+                                    setState(() => minutes.text = '${p.value}'),
+                          child: Text(p.key),
+                        ),
                       ),
                   ],
                 ),
@@ -425,32 +453,33 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
                 AppField(
                   key: const Key('review-minutes'),
                   controller: minutes,
+                  onChanged: (_) => setState(() {}),
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: '预计还需复习多久（分钟）'),
                 ),
               ],
             ),
-            EditorSection(
-              title: '截止与开始条件',
+            AcademicEditorSection(
+              title: '复习时间',
               icon: Icons.event_available_outlined,
               children: [
                 AppPickerField<String>(
                   initialValue: mode,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: '复习截止依据'),
+                  decoration: const InputDecoration(labelText: '复习截止'),
                   items: [
                     const DropdownMenuItem(
                       value: 'unknown',
-                      child: Text('截止待确认'),
+                      child: Text('不设截止'),
                     ),
                     if (examKnown)
                       const DropdownMenuItem(
                         value: 'exam',
-                        child: Text('确认以考试开始时刻为截止'),
+                        child: Text('考试开始前'),
                       ),
                     const DropdownMenuItem(
                       value: 'custom',
-                      child: Text('指定自己的复习截止'),
+                      child: Text('选择截止时间'),
                     ),
                   ],
                   onChanged: busy ? null : (v) => setState(() => mode = v!),
@@ -471,8 +500,7 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
                     ),
                   ),
                 AppCheckRow(
-                  title: const Text('我确认从现在起即可安排复习'),
-                  subtitle: const Text('暂不勾选也能保存，生成计划前再确认开始时间'),
+                  title: const Text('现在即可安排复习'),
                   value: startNow,
                   onChanged: busy ? null : (v) => setState(() => startNow = v!),
                 ),
@@ -484,10 +512,7 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
       bottomNavigationBar: ActionFooter(
         secondary: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            if (error != null) SoftNotice(error!, warning: true),
-            if (busy) const LinearProgressIndicator(),
-          ],
+          children: [if (error != null) SoftNotice(error!, warning: true)],
         ),
         label: link ? '关联任务' : '创建复习任务',
         onPressed: busy ? null : save,
@@ -519,16 +544,42 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
     text: widget.exam['time']['week']?.toString() ?? '',
   );
   final reason = TextEditingController();
-  late DateTime? start = DateTime.tryParse(
-        widget.exam['time']['at'] ?? widget.exam['time']['date'] ?? '',
-      ),
-      end = DateTime.tryParse(
-        widget.exam['time']['end_at'] ?? widget.exam['time']['end_date'] ?? '',
-      );
+  late DateTime? start = originalWall('at', 'date'),
+      end = originalWall('end_at', 'end_date');
+  late bool startClockConfirmed = widget.exam['time']['at'] != null,
+      endClockConfirmed = widget.exam['time']['end_at'] != null;
   bool align = false, busy = false;
   late bool reserve = widget.exam['reserve_time'] ?? true;
   String? error;
   late final generation = widget.controller.api.generation;
+  bool get same =>
+      generation == widget.controller.api.generation &&
+      widget.exam['semester_id'] == widget.controller.semesterId;
+
+  DateTime? originalWall(String instantKey, String dateKey) {
+    final time = widget.exam['time'];
+    final instant = time[instantKey];
+    if (instant != null) {
+      final wall = schoolTime(instant);
+      return DateTime.utc(
+        wall.year,
+        wall.month,
+        wall.day,
+        wall.hour,
+        wall.minute,
+      );
+    }
+    final date = DateTime.tryParse(time[dateKey] ?? '');
+    return date == null ? null : DateTime.utc(date.year, date.month, date.day);
+  }
+
+  DateTime instant(DateTime wall) => DateTime.utc(
+    wall.year,
+    wall.month,
+    wall.day,
+    wall.hour,
+    wall.minute,
+  ).subtract(const Duration(hours: 8));
   @override
   void dispose() {
     location.dispose();
@@ -539,25 +590,75 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
 
   Future<void> pick(bool ending) async {
     DateTime? v;
+    final previous = ending ? (end ?? start) : start;
     if (precision == 'exact') {
-      v = await pickSchoolDateTime(context, initial: ending ? end : start);
-    } else {
-      v = await showDatePicker(
+      v = await showAppDateTimePicker(
         context: context,
-        initialDate: DateTime.now(),
+        initialDate: previous ?? schoolNow(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+        helpText: ending ? '考试结束时间' : '考试开始时间',
+        initialSection: AppDateTimeSection.time,
+      );
+    } else {
+      final initial = (ending ? (end ?? start) : start) ?? schoolNow();
+      final bounds = appDatePickerBounds(
+        initialDate: initial,
         firstDate: DateTime(2000),
         lastDate: DateTime(2100),
       );
+      v = await showDatePicker(
+        context: context,
+        currentDate: appSchoolToday(),
+        initialDate: initial,
+        firstDate: bounds.start,
+        lastDate: bounds.end,
+      );
     }
-    if (v != null && mounted) {
+    if (v != null && mounted && same) {
+      final chosen = precision == 'exact'
+          ? v
+          : DateTime.utc(
+              v.year,
+              v.month,
+              v.day,
+              previous?.hour ?? 0,
+              previous?.minute ?? 0,
+            );
       setState(() {
         if (ending) {
-          end = v;
+          end = chosen;
+          if (precision == 'exact') endClockConfirmed = true;
         } else {
-          start = v;
+          start = chosen;
+          if (precision == 'exact') startClockConfirmed = true;
         }
       });
     }
+  }
+
+  Future<void> selectPrecision(String value) async {
+    if (value == precision || busy || !same) return;
+    DateTime? chosen;
+    if (value == 'exact') {
+      chosen = await showAppDateTimePicker(
+        context: context,
+        initialDate: start ?? schoolNow(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+        helpText: '考试开始时间',
+        initialSection: AppDateTimeSection.time,
+      );
+      if (chosen == null || !mounted || !same) return;
+    }
+    setState(() {
+      precision = value;
+      if (chosen != null) {
+        start = chosen;
+        startClockConfirmed = true;
+      }
+      align = false;
+    });
   }
 
   String day(DateTime d) =>
@@ -568,11 +669,8 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
       setState(() => error = '账号或学期已切换，请返回');
       return;
     }
-    if (reason.text.trim().isEmpty) {
-      setState(() => error = '请填写改期原因');
-      return;
-    }
-    if (['date', 'range', 'exact'].contains(precision) && start == null) {
+    if (['date', 'range', 'exact'].contains(precision) &&
+        (start == null || (precision == 'exact' && !startClockConfirmed))) {
       setState(() => error = '请明确新的时间');
       return;
     }
@@ -587,8 +685,10 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
     final time = <String, dynamic>{
       'precision': precision,
       if (precision == 'exact') ...{
-        'at': start!.toUtc().toIso8601String(),
-        'end_at': end?.toUtc().toIso8601String(),
+        'at': instant(start!).toIso8601String(),
+        'end_at': end != null && endClockConfirmed
+            ? instant(end!).toIso8601String()
+            : null,
       },
       if (precision == 'date' || precision == 'range') 'date': day(start!),
       if (precision == 'range') 'end_date': day(end!),
@@ -599,8 +699,8 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
       'time': time,
       'certainty': certainty,
       'location': location.text.trim(),
-      'reserve_time': certainty == 'formal' || reserve,
-      'reason': reason.text.trim(),
+      'reserve_time': reserve,
+      'reason': reason.text.trim().isEmpty ? '用户修改考试安排' : reason.text.trim(),
       'align_review_deadlines': align,
     };
     setState(() {
@@ -638,7 +738,7 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        RecordHeading(
+        AcademicRecordHeading(
           label: '考试安排变更',
           title: widget.exam['title'],
           icon: Icons.edit_calendar_outlined,
@@ -657,61 +757,51 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
             icon: Icons.history_rounded,
           ),
         ),
-        EditorSection(
-          title: '通知与依据',
-          icon: Icons.description_outlined,
+        AppDisclosure(
+          title: const Text('补充说明'),
           children: [
             AppField(
               controller: reason,
               minLines: 2,
               maxLines: 5,
-              decoration: const InputDecoration(labelText: '改期原因'),
+              decoration: const InputDecoration(labelText: '说明（选填）'),
             ),
           ],
         ),
-        EditorSection(
+        AcademicEditorSection(
           title: '新的时间与地点',
           icon: Icons.event_outlined,
           children: [
             if (['date', 'range', 'exact'].contains(precision))
-              AppOutlineButton.icon(
-                onPressed: busy ? null : () => pick(false),
-                icon: const Icon(Icons.schedule_rounded),
-                label: Text(
-                  start == null
-                      ? '选择新开始'
-                      : precision == 'exact'
-                      ? displayInstant(start!.toIso8601String())
-                      : day(start!),
-                ),
+              AcademicMomentControl(
+                label: '新开始',
+                onTap: busy ? null : () => pick(false),
+                value: start == null
+                    ? '选择新开始'
+                    : precision == 'exact'
+                    ? displayInstant(instant(start!).toIso8601String())
+                    : day(start!),
               ),
             if (precision == 'exact' || precision == 'range')
-              AppOutlineButton.icon(
-                onPressed: busy ? null : () => pick(true),
-                icon: const Icon(Icons.schedule_rounded),
-                label: Text(
-                  end == null
-                      ? '选择新结束（具体考试结束可待确认）'
-                      : precision == 'exact'
-                      ? displayInstant(end!.toIso8601String())
-                      : day(end!),
-                ),
+              AcademicMomentControl(
+                label: '新结束',
+                ending: true,
+                onTap: busy ? null : () => pick(true),
+                value:
+                    end == null || (precision == 'exact' && !endClockConfirmed)
+                    ? '添加结束时间'
+                    : precision == 'exact'
+                    ? displayInstant(instant(end!).toIso8601String())
+                    : day(end!),
               ),
-            if (precision == 'exact' && end != null)
+            if (precision == 'exact' && end != null && endClockConfirmed)
               AppTextButton(
-                onPressed: () => setState(() => end = null),
+                onPressed: () => setState(() => endClockConfirmed = false),
                 child: const Text('结束时刻待确认'),
               ),
             TimeInputOptions(
               precision: precision,
-              onChanged: busy
-                  ? null
-                  : (value) => setState(() {
-                      precision = value;
-                      start = null;
-                      end = null;
-                      align = false;
-                    }),
+              onChanged: busy ? null : selectPrecision,
             ),
             if (precision == 'week') const SizedBox(height: 12),
             if (precision == 'week')
@@ -727,7 +817,7 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
             ),
           ],
         ),
-        EditorSection(
+        AcademicEditorSection(
           title: '确认状态与复习',
           icon: Icons.verified_outlined,
           accent: CampusColors.teal,
@@ -741,12 +831,11 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
                       if (certainty != 'formal') align = false;
                     }),
             ),
-            if (certainty != 'formal')
-              AppSwitchRow(
-                title: const Text('为暂定考试预留时间'),
-                value: reserve,
-                onChanged: (v) => setState(() => reserve = v),
-              ),
+            AppSwitchRow(
+              title: const Text('为这场考试预留时间'),
+              value: reserve,
+              onChanged: busy ? null : (v) => setState(() => reserve = v),
+            ),
             if (certainty == 'formal' && precision == 'exact')
               AppCheckRow(
                 title: const Text('将相关复习任务的截止时间一起改到考试开始前'),
@@ -761,10 +850,7 @@ class _ExamReschedulePageState extends State<ExamReschedulePage> {
     bottomNavigationBar: ActionFooter(
       secondary: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          if (error != null) SoftNotice(error!, warning: true),
-          if (busy) const LinearProgressIndicator(),
-        ],
+        children: [if (error != null) SoftNotice(error!, warning: true)],
       ),
       label: '查看改期影响',
       onPressed: busy ? null : preview,
@@ -823,7 +909,15 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
         },
         apply: true,
       );
-      if (mounted) setState(() => applied = true);
+      if (mounted) {
+        setState(() => applied = true);
+        if (Navigator.canPop(context)) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('考试安排已更新')));
+          Navigator.pop(context, true);
+        }
+      }
     } catch (e) {
       if (mounted) setState(() => error = userError(e));
     } finally {
@@ -840,13 +934,27 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
           p['before']['semester_id'],
           p['base_revision'],
         );
-    final conflict = (p['fixed_conflict_count'] ?? 0) > 0;
+    final conflicts = p['new_fixed_conflicts'] ?? p['fixed_conflicts'] ?? [];
+    final conflict = conflicts.isNotEmpty;
+    final timeChanged =
+        itemTimeLabel(p['before'], includeMissing: false) !=
+        itemTimeLabel(p['after'], includeMissing: false);
+    final reviews = widget.controller
+        .rows(p['reviews'])
+        .where((r) => timeChanged || r['will_align'] == true)
+        .toList();
+    final riskChanges = widget.controller
+        .rows(p['risk_changes'])
+        .where((r) => r['before_slack'] != r['after_slack'])
+        .toList();
+    final reviewReminders = widget.controller.rows(p['review_reminders_after']);
+    final affectedBlocks = widget.controller.rows(p['affected_blocks']);
     return Scaffold(
       appBar: AppBar(title: const Text('考试改期确认')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          RecordHeading(
+          AcademicRecordHeading(
             label: applied ? '已保存' : '核对后保存',
             title: p['before']['title'],
             icon: applied
@@ -867,75 +975,81 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
           if (p['before']['notes'] != p['after']['notes'])
             Text('新备注：${p['after']['notes']}'),
           const SizedBox(height: 20),
-          DocumentPanel(title: '变更依据', text: '${widget.request['reason']}'),
-          EditorSection(
-            title: '复习截止',
-            icon: Icons.checklist_rounded,
-            accent: CampusColors.teal,
-            children: [
-              if ((p['reviews'] as List).isEmpty) const Text('没有关联的未完成复习任务'),
-              for (final r in p['reviews'])
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    '${r['title']}\n${r['will_align'] == true ? '将同步截止' : '保持原截止，需自行核对'}：${itemTimeLabel({'kind': 'task', 'time': r['after_time']})}',
+          if (widget.request['reason'] != null &&
+              widget.request['reason'] != '用户修改考试安排')
+            DocumentPanel(title: '补充说明', text: '${widget.request['reason']}'),
+          if (reviews.isNotEmpty)
+            AcademicEditorSection(
+              title: '复习截止',
+              icon: Icons.checklist_rounded,
+              accent: CampusColors.teal,
+              children: [
+                for (final r in reviews)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      '${r['title']}\n${r['will_align'] == true ? '将同步截止' : '保持原截止，需自行核对'}：${itemTimeLabel({'kind': 'task', 'time': r['after_time']})}',
+                    ),
                   ),
-                ),
-            ],
-          ),
-          EditorSection(
-            title: '更新后的提醒',
-            icon: Icons.notifications_outlined,
-            children: [
-              if ((p['reminders_after'] as List).isEmpty) const Text('未设置考试提醒'),
-              for (final r in p['reminders_after'])
-                Text(
-                  '${reminderLabel(Map<String, dynamic>.from(r))} · ${displayInstant(r['trigger_at'])} · ${reminderState(r['schedule_state'])}',
-                ),
-            ],
-          ),
-          EditorSection(
-            title: '个人计划影响',
-            icon: Icons.event_note_outlined,
-            children: [
-              for (final r in p['review_reminders_after'] ?? [])
-                Text(
-                  '复习提醒 ${r['title']}：${displayInstant(r['trigger_at'])} · ${reminderState(r['schedule_state'])}',
-                ),
-              for (final b in p['affected_blocks'])
-                RecordFact(
-                  label: b['locked'] == true ? '已锁定的个人计划' : '个人计划',
-                  value: '${b['title']} · ${displayInstant(b['start_at'])}',
-                  icon: b['locked'] == true
-                      ? Icons.lock_outline_rounded
-                      : Icons.event_note_outlined,
-                ),
-              if ((p['affected_blocks'] as List).isEmpty)
-                const Text('现有个人计划没有与新考试时间冲突'),
-              for (final r in p['risk_changes'])
-                Text(
-                  '${r['title']}：余量 ${r['before_slack'] ?? '待确认'} → ${r['after_slack'] ?? '待确认'} 分钟',
-                ),
-            ],
-          ),
-          for (final r in p['fixed_conflicts'])
-            SoftNotice(
-              '${(r['titles'] as List).join(' 与 ')}\n${displayInstant(r['start_at'])} — ${displayInstant(r['end_at'])}',
-              warning: true,
+              ],
+            ),
+          if (timeChanged && (p['reminders_after'] as List).isNotEmpty)
+            AcademicEditorSection(
+              title: '更新后的提醒',
+              icon: Icons.notifications_outlined,
+              children: [
+                for (final r in p['reminders_after'])
+                  Text(
+                    '${reminderLabel(Map<String, dynamic>.from(r))} · ${displayInstant(r['trigger_at'])} · ${reminderState(r['schedule_state'])}',
+                  ),
+              ],
+            ),
+          if (affectedBlocks.isNotEmpty ||
+              reviewReminders.isNotEmpty ||
+              riskChanges.isNotEmpty)
+            AcademicEditorSection(
+              title: '个人计划影响',
+              icon: Icons.event_note_outlined,
+              children: [
+                for (final r in reviewReminders)
+                  Text(
+                    '复习提醒 ${r['title']}：${displayInstant(r['trigger_at'])} · ${reminderState(r['schedule_state'])}',
+                  ),
+                for (final b in affectedBlocks)
+                  RecordFact(
+                    label: b['locked'] == true ? '已锁定的个人计划' : '个人计划',
+                    value: '${b['title']} · ${displayInstant(b['start_at'])}',
+                    icon: b['locked'] == true
+                        ? Icons.lock_outline_rounded
+                        : Icons.event_note_outlined,
+                  ),
+                for (final r in riskChanges)
+                  Text(
+                    '${r['title']}：余量 ${r['before_slack'] ?? '待确认'} → ${r['after_slack'] ?? '待确认'} 分钟',
+                  ),
+              ],
+            ),
+          for (final r in conflicts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SoftNotice(
+                '${(r['titles'] as List).join(' 与 ')}时间重叠\n${noticeTime({'at': r['start_at'], 'end_at': r['end_at']})}',
+                warning: true,
+              ),
             ),
           if (conflict && !applied)
             AppCheckRow(
-              title: const Text('我已核实新考试时间，确认保存并保留冲突提示'),
+              title: const Text('保留这些重叠安排'),
               value: confirmConflict,
               onChanged: busy
                   ? null
                   : (v) => setState(() => confirmConflict = v!),
             ),
-          const SoftNotice('确认后保存考试和所选复习任务的新时间。已有计划暂不移动，你可以接着查看并调整。'),
+          if (affectedBlocks.isNotEmpty) const SoftNotice('已有计划会保留，可按需调整时间。'),
           if (stale && !applied)
             const SoftNotice('账号、学期或安排已变化，请重新预览', warning: true),
           if (error != null) SoftNotice(error!, warning: true),
-          if (busy) const LinearProgressIndicator(),
+
           if (!applied)
             AppButton(
               onPressed: busy || stale || (conflict && !confirmConflict)
@@ -979,6 +1093,8 @@ class _ExamRecord extends StatelessWidget {
         ? '已完成'
         : exam['lifecycle'] == 'cancelled'
         ? '已取消'
+        : exam['reserve_time'] == false
+        ? '仅作参考'
         : switch (exam['certainty']) {
             'formal' => '正式',
             'tentative' => '暂定',
@@ -994,7 +1110,7 @@ class _ExamRecord extends StatelessWidget {
         onTap: onOpen,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1004,10 +1120,11 @@ class _ExamRecord extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      status,
-                      style: TextStyle(
-                        color: accent,
-                        fontWeight: FontWeight.w600,
+                      '${exam['title']}',
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
                       ),
                     ),
                   ),
@@ -1017,15 +1134,17 @@ class _ExamRecord extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
-                '${exam['title']}',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
+                status,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: accent,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              if ('${exam['course_title'] ?? ''}'.isNotEmpty)
+              if ('${exam['course_title'] ?? ''}'.trim().isNotEmpty &&
+                  !'${exam['title']}'.contains('${exam['course_title']}'))
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
@@ -1050,19 +1169,13 @@ class _ExamRecord extends StatelessWidget {
                 ),
               if (exam['time']?['precision'] != null &&
                   exam['time']?['precision'] != 'unknown')
-                RecordFact(
-                  label: '考试时间',
-                  value: itemTimeLabel(
-                    exam,
-                  ).replaceFirst(RegExp(r' 开始(?= ·|$)'), ''),
+                _ExamInlineFact(
+                  value: noticeTime(exam['time']),
                   icon: Icons.schedule_rounded,
                 ),
-              if ('${exam['location'] ?? ''}'.trim().isNotEmpty)
-                RecordFact(
-                  label: '考试地点',
-                  value: '${exam['location'] ?? ''}'.isEmpty
-                      ? '地点待确认'
-                      : '${exam['location']}',
+              if (_examLocation(exam).isNotEmpty)
+                _ExamInlineFact(
+                  value: _examLocation(exam),
                   icon: Icons.location_on_outlined,
                 ),
             ],
@@ -1073,6 +1186,30 @@ class _ExamRecord extends StatelessWidget {
   }
 }
 
+class _ExamInlineFact extends StatelessWidget {
+  final String value;
+  final IconData icon;
+  const _ExamInlineFact({required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 10),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: CampusColors.muted),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 14, color: CampusColors.ink),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _ExamComparison extends StatelessWidget {
   final Map<String, dynamic> before, after;
   const _ExamComparison({required this.before, required this.after});
@@ -1080,12 +1217,11 @@ class _ExamComparison extends StatelessWidget {
       Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: changed ? CampusColors.tealSoft : CampusColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: changed
-                ? CampusColors.teal.withValues(alpha: .3)
-                : CampusColors.line,
+          border: Border(
+            left: BorderSide(
+              color: changed ? CampusColors.teal : CampusColors.line,
+              width: 3,
+            ),
           ),
         ),
         child: Column(
@@ -1104,13 +1240,12 @@ class _ExamComparison extends StatelessWidget {
               value: itemTimeLabel(item),
               icon: Icons.schedule_rounded,
             ),
-            RecordFact(
-              label: '地点',
-              value: '${item['location'] ?? ''}'.isEmpty
-                  ? '地点待确认'
-                  : '${item['location']}',
-              icon: Icons.location_on_outlined,
-            ),
+            if (_examLocation(item).isNotEmpty)
+              RecordFact(
+                label: '地点',
+                value: _examLocation(item),
+                icon: Icons.location_on_outlined,
+              ),
             Text(switch (item['certainty']) {
               'formal' => '正式安排',
               'tentative' => '暂定安排',
@@ -1122,6 +1257,24 @@ class _ExamComparison extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
+      if (itemTimeLabel(before, includeMissing: false) ==
+              itemTimeLabel(after, includeMissing: false) &&
+          before['certainty'] == after['certainty'] &&
+          before['reserve_time'] == after['reserve_time'] &&
+          before['location'] != after['location']) {
+        final from = '${before['location'] ?? ''}',
+            to = '${after['location'] ?? ''}';
+        return RecordFact(
+          label: '地点',
+          value: from.isEmpty
+              ? to
+              : to.isEmpty
+              ? '移除 $from'
+              : '$from → $to',
+          icon: Icons.location_on_outlined,
+          color: CampusColors.teal,
+        );
+      }
       final old = facts('变更前', before, false), next = facts('变更后', after, true);
       if (box.maxWidth < 600 ||
           MediaQuery.textScalerOf(context).scale(1) > 1.3) {

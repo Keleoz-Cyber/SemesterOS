@@ -1,11 +1,11 @@
 """Educational notices use the same reality and exam rules as manual editing."""
 from copy import deepcopy
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Literal
 from collections import Counter
 from pydantic import Field, field_validator, model_validator
 from .schemas import Input
-from .item_schemas import ItemTime
+from .item_schemas import ItemTime, NoticeDetails
 from .change_schemas import ChangeInput, ChangeApply
 from .exam_schemas import ExamChangeInput, ExamChangeApply
 from .auth import error
@@ -23,14 +23,16 @@ class OccurrenceQuery(Input):
 
     @model_validator(mode='after')
     def bounded(self):
-        if not 0 <= (self.to_date-self.from_date).days <= 31:
-            raise ValueError('请把课次查询缩小到32天内')
+        if not 0 <= (self.to_date-self.from_date).days < 210:
+            raise ValueError('请检查日期范围，每次可查询最多30周')
         return self
 
 
 class CourseChange(Input):
     kind: Literal['move', 'cancel', 'suspend', 'add']
-    targets: list[str] = Field(default_factory=list, max_length=100)
+    targets: list[str] = Field(default_factory=list, max_length=1000)
+    scope: OccurrenceQuery | None = Field(default=None,
+        description='范围停课可直接传已查询的from_date/to_date/query/course_id，包含该查询的全部课次，不必列出targets。')
     title: str | None = Field(default=None, min_length=1, max_length=120)
     start_at: datetime | None = None
     end_at: datetime | None = None
@@ -41,6 +43,12 @@ class CourseChange(Input):
     def aware(cls, value):
         return ItemTime.aware(value)
 
+    @model_validator(mode='after')
+    def range_scope(self):
+        if self.scope is not None and (self.kind == 'add' or self.targets):
+            raise ValueError('课次修改使用scope或targets其中一种，补课不指定原课次范围')
+        return self
+
 
 class ExamChange(Input):
     exam_id: str = Field(min_length=1, max_length=36)
@@ -49,6 +57,7 @@ class ExamChange(Input):
     location: str | None = Field(default=None, max_length=120)
     reserve_time: bool | None = None
     align_review_deadlines: bool = False
+    details: NoticeDetails | None = None
 
 
 def query_occurrences(db,user,s,state,args):
@@ -57,34 +66,55 @@ def query_occurrences(db,user,s,state,args):
     found=[e for e in courses if e.get('reality_kind')=='course' and
            args.from_date <= instant(e['start_at']).astimezone(SHANGHAI).date() <= args.to_date and
            (not args.course_id or e.get('course_id')==args.course_id) and q in ''.join(e['title'].casefold().split())]
-    if len(found)>100:error(422,'TOO_MANY_RESULTS','课次较多，请缩小日期范围或补充课程名称')
+    if len(found)>1000:error(422,'TOO_MANY_RESULTS','课次超过1000条，请缩小日期范围或补充课程名称')
     records=[{**e,'resource_type':'course_occurrence','resource_id':e['id'],'queried_revision':s.revision} for e in found]
     known={**state.get('occurrence_records',{}),**{e['id']:e for e in records}}
     state['occurrence_records']=known
     state['occurrence_queries']=[*state.get('occurrence_queries',[]),[e['id'] for e in records]][-8:]
+    scopes = dict(state.get('occurrence_query_scopes', {}))
+    scopes[fingerprint(args.model_dump(mode='json'))] = {'ids': [e['id'] for e in records], 'revision': s.revision}
+    state['occurrence_query_scopes'] = dict(list(scopes.items())[-8:])
     counts=Counter(e['title'].casefold() for e in records)
     ambiguous=set(state.get('ambiguous_ids',[]))
     for e in records:
         if counts[e['title'].casefold()]>1 and e['id'] not in state.get('selected_record_ids',[]):ambiguous.add(e['id'])
     state['ambiguous_ids']=sorted(ambiguous)
     value={'occurrences':records,'revision':s.revision,'from_date':str(args.from_date),'to_date':str(args.to_date)}
-    state['cards'].append({'kind':'course_occurrences','data':value})
-    return value
+    from .agent_cards import append_card
+    append_card(state, 'course_occurrences', {**value, 'total_count':len(records),
+        'navigation_query':{'semester_id':s.id, **args.model_dump(mode='json')}})
+    return {**value, 'occurrences': records[:100], 'total_count': len(records),
+            'truncated': len(records) > 100, 'query_scope': args.model_dump(mode='json'),
+            'next_step': '用户肯定陈述这个范围没课/停课时，直接准备scope范围停课预览，不再问是否生成；用户只是提问有无课程时只回答结论。'}
 
 
 def prepare_course(db,user,s,state,args,source):
     known=state.get('occurrence_records',{})
-    if not set(args.targets).issubset(known):error(422,'READ_FIRST','请先查询并核对具体日期的课次')
-    if any(known[id].get('queried_revision')!=s.revision for id in args.targets):
+    targets = args.targets
+    if args.scope is not None:
+        query = state.get('occurrence_query_scopes', {}).get(fingerprint(args.scope.model_dump(mode='json')))
+        if query is None: error(422, 'READ_FIRST', '请先查询这个范围的课程')
+        if query['revision'] != s.revision: error(409, 'COURSE_QUERY_STALE', '课表已更新，请重新查询这个范围')
+        targets = query['ids']
+        if not targets: error(422, 'NO_OCCURRENCES', '这个范围已经没有课次，无需停课')
+        if args.kind in ('move', 'cancel') and len(targets) != 1:
+            error(422, 'AMBIGUOUS_TARGET', '这个范围有多次课，请补充原上课日期，或使用范围停课')
+    if not set(targets).issubset(known):error(422,'READ_FIRST','请先查询并核对具体日期的课次')
+    if any(known[id].get('queried_revision')!=s.revision for id in targets):
         error(409,'COURSE_QUERY_STALE','查询后安排已有变化，请重新查询原课次再准备修改')
-    if set(args.targets)&set(state.get('ambiguous_ids',[])):
+    whole_group = args.kind == 'suspend' and len(targets) > 1 and any(
+        set(targets) == set(group) for group in state.get('occurrence_queries', []))
+    if args.scope is None and not whole_group and set(targets)&set(state.get('ambiguous_ids',[])):
         error(422,'AMBIGUOUS_TARGET','同名课程有多个课次，请让用户选择单次课或核对整组课次')
-    old=[known[id] for id in args.targets]
-    title=old[0]['title'] if len(old)==1 else args.title or ('停课通知' if args.kind=='suspend' else '')
+    old=[known[id] for id in targets]
+    title=old[0]['title'] if len(old)==1 else args.title or ('课程停课' if args.kind=='suspend' else '')
     if not title:error(422,'TITLE_REQUIRED','新增课程需要明确课程名称')
     location=args.location if args.location is not None else (old[0].get('location','') if len(old)==1 else '')
-    body=ChangeInput(kind=args.kind,targets=args.targets,title=title,source_text=source,
-        source_id=(state.get('source') or {}).get('id'),start_at=args.start_at,end_at=args.end_at,location=location)
+    end_at = args.end_at
+    if args.kind == 'move' and args.start_at is not None and end_at is None and len(old) == 1:
+        end_at = args.start_at + (instant(old[0]['end_at']) - instant(old[0]['start_at']))
+    body=ChangeInput(kind=args.kind,targets=targets,title=title,source_text=source,
+        source_id=(state.get('source') or {}).get('id'),start_at=args.start_at,end_at=end_at,location=location)
     value=changes.preview_change_command(db,user,s.id,body,agent_run_id=state['run_id'])
     patch=value['patch']
     return {'kind':'course_change','action':args.kind,'change_id':value['id'],'target_id':None,
@@ -98,6 +128,7 @@ def prepare_exam(db,user,s,state,args,source):
     exam=exam_planning.owned_exam(db,user,args.exam_id)
     if exam.semester_id!=s.id:error(404,'NOT_FOUND','找不到本学期的考试')
     body=ExamChangeInput(expected_version=exam.version,time=args.time,certainty=args.certainty,
+        details=args.details,
         location=exam.payload.get('location','') if args.location is None else args.location,
         reserve_time=exam.payload.get('reserve_time',True) if args.reserve_time is None else args.reserve_time,
         align_review_deadlines=args.align_review_deadlines,reason=source[:500])

@@ -68,6 +68,28 @@ class CaptureDrafts {
     return operation;
   }
 
+  /// Only durable app-owned copies may be released after retiring their draft.
+  static Future<void> releaseFile(String owner, String? path) async {
+    if (path == null) return;
+    try {
+      final directory = await folder(owner);
+      if (!await directory.exists()) return;
+      final base = await directory.resolveSymbolicLinks();
+      final file = File(path);
+      if (!await file.exists()) return;
+      final parent = await file.parent.resolveSymbolicLinks();
+      final resolved = await file.resolveSymbolicLinks();
+      final ownedParent =
+          parent == base || parent.startsWith('$base${Platform.pathSeparator}');
+      if (ownedParent &&
+          resolved.startsWith('$base${Platform.pathSeparator}')) {
+        await file.delete();
+      }
+    } on FileSystemException {
+      // Cleanup must not invalidate a saved or explicitly retired attachment.
+    }
+  }
+
   static Future<void> clearSemester(
     CalendarStore cache,
     String owner,
@@ -99,21 +121,8 @@ class CaptureDrafts {
             }
           }
           await cache.write('capture:$owner', data);
-          if (files.isEmpty) return;
-          final directory = await folder(owner);
-          if (!await directory.exists()) return;
-          final base = await directory.resolveSymbolicLinks();
           for (final path in files) {
-            try {
-              final file = File(path);
-              if (!await file.exists()) continue;
-              final resolved = await file.resolveSymbolicLinks();
-              if (resolved.startsWith('$base${Platform.pathSeparator}')) {
-                await file.delete();
-              }
-            } on FileSystemException {
-              // A vanished temporary attachment cannot be reopened later.
-            }
+            await releaseFile(owner, path);
           }
         });
     _queues[cache] = operation;

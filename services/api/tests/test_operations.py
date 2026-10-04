@@ -118,6 +118,20 @@ def test_planning_handoff_does_not_generate_or_apply_any_blocks(client):
     assert client.get(f"/api/v1/semesters/{s['id']}/plans",headers=h).json()['blocks']==[]
 
 
+def test_planning_handoff_uses_ordinary_start_readiness_and_preserves_waiting_conditions(client):
+    _,h=register(client);s=semester(client,h)
+    cases=[('整理笔记',{},200),('等审批后整理材料',{'conditions':['收到审批结果后开始']},422)]
+    for title,details,expected in cases:
+        item=client.post('/api/v1/items',headers=h,json={'semester_id':s['id'],'kind':'task',
+            'title':title,'remaining_minutes':45,'details':details}).json()
+        p=parse(client,h,s,{'intent':'request_plan','target_query':title},'安排'+title).json()
+        response=client.post(f"/api/v1/operations/{p['id']}/resolve",headers=h,
+            json={'expected_version':p['version'],'tasks':[{'item_id':item['id']}]})
+        assert response.status_code==expected,response.text
+        current=client.get('/api/v1/items/'+item['id'],headers=h).json()
+        assert current['start_policy']=='unconfirmed' and current['earliest_start_at'] is None
+
+
 def test_image_instruction_requires_explicit_user_intent_confirmation(client,tmp_path):
     from test_media import png
     client.app.state.media_root=tmp_path/'media'

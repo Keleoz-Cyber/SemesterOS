@@ -13,13 +13,17 @@ class AgentAnswer extends StatelessWidget {
     selectable: true,
     imageBuilder: (_, _, alt) => Text(alt?.isNotEmpty == true ? alt! : '图片'),
     styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-      p: const TextStyle(fontSize: 15, height: 1.65, color: CampusColors.ink),
+      p: const TextStyle(fontSize: 16, height: 1.5, color: CampusColors.ink),
+      strong: const TextStyle(
+        fontWeight: FontWeight.w800,
+        color: CampusColors.primary,
+      ),
       a: const TextStyle(color: CampusColors.primary),
-      h1: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+      h1: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
       h2: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
       h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-      blockSpacing: 10,
-      listIndent: 20,
+      blockSpacing: 8,
+      listIndent: 18,
     ),
   );
 }

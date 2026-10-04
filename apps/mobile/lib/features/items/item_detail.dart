@@ -1,4 +1,7 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/app_sheet.dart';
+import '../../ui/empty_states.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -10,10 +13,14 @@ import '../../ui/campus_widgets.dart';
 import 'items_controller.dart';
 import 'item_form.dart';
 import 'item_widgets.dart';
+import 'task_surfaces.dart';
+import '../notices/notice_fields.dart';
 import 'reminder_editor.dart';
+import 'reminder_settings.dart';
 import '../planning/risk_widgets.dart';
 import '../planning/progress_page.dart';
-import '../planning/plan_change_confirmation.dart';
+import 'item_actions.dart';
+import '../agent/assistant_sheet.dart';
 
 class ItemDetailPage extends StatefulWidget {
   final ItemsController controller;
@@ -93,63 +100,26 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
   Future<void> changeState(String state) async {
     final target = currentItem;
     if (target == null || busy) return;
-    Map<String, dynamic> preview;
+    var changed = false;
     try {
-      preview = await widget.controller.previewLifecycle(target, state);
+      changed = await changeItemLifecycle(
+        context,
+        widget.controller,
+        target,
+        state,
+        commit: run,
+      );
     } catch (e) {
       if (mounted) setState(() => error = userError(e));
-      return;
     }
-    if (!mounted || !sameSession) return;
-    final blocks = List<Map<String, dynamic>>.from(
-      preview['affected_blocks'] ?? [],
-    );
-    final label = {
-      'completed': '确认已完成',
-      'cancelled': '确认取消事项',
-      'active': '恢复这条事项',
-    }[state]!;
-    final selection = blocks.isEmpty
-        ? null
-        : await confirmPlanChange(
-            context,
-            title: label,
-            message: '相关未触发提醒和以下未来个人计划将取消，任务进度只按本次确认更新。',
-            confirmLabel: '确认',
-            blocks: blocks,
-            cancelAll: true,
-          );
-    if (!mounted) return;
-    final yes = blocks.isNotEmpty
-        ? selection != null
-        : await showDialog<bool>(
-            context: context,
-            builder: (context) => AppDialog(
-              title: Text(label),
-              content: Text(
-                state == 'active' ? '恢复事项后，已停用的提醒需要重新开启。' : '相关未触发提醒将一并停用。',
-              ),
-              actions: [
-                AppTextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('返回'),
-                ),
-                AppButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('确认'),
-                ),
-              ],
-            ),
-          );
-    if (yes == true && mounted && sameSession) {
-      await run(
-        () => widget.controller.lifecycle(
-          target,
-          state,
-          confirmation: {
-            'expected_revision': preview['base_revision'],
-            ...?selection,
-          },
+    if (changed && mounted && error == null && state == 'completed') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('已完成'),
+          action: SnackBarAction(
+            label: '撤销',
+            onPressed: () => changeState('active'),
+          ),
         ),
       );
     }
@@ -162,6 +132,10 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
       context,
       kind: target['kind'],
       initial: initial,
+      hasReferenceTime: reminderHasReferenceTime(
+        target['kind'],
+        Map<String, dynamic>.from(target['time'] ?? {}),
+      ),
     );
     if (result != null && mounted && sameSession) {
       await run(
@@ -199,7 +173,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
 
   Future<void> showHistory() async {
     final generation = widget.controller.api.generation;
-    final future = widget.controller.api.request(
+    var future = widget.controller.api.request(
       'GET',
       '/items/${widget.id}/history',
     );
@@ -207,50 +181,74 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) => FractionallySizedBox(
-        heightFactor: .72,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('修改历史', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              Expanded(
-                child: FutureBuilder<dynamic>(
-                  future: future,
-                  builder: (context, snapshot) {
-                    if (generation != widget.controller.api.generation) {
-                      return const Center(child: Text('账号已切换，请重新打开'));
-                    }
-                    if (snapshot.hasError) {
-                      return Center(child: Text(userError(snapshot.error!)));
-                    }
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final rows = List<Map<String, dynamic>>.from(
-                      snapshot.data as List,
-                    );
-                    if (rows.isEmpty) {
-                      return const Center(child: Text('还没有修改记录'));
-                    }
-                    return ListView(
-                      children: [
-                        for (final h in rows)
-                          AppTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(h['reason']),
-                            subtitle: Text(
-                              '${displayInstant(h['created_at'])}\n${itemTimeLabel(Map<String, dynamic>.from(h['snapshot']))}',
-                            ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => FractionallySizedBox(
+          heightFactor: .72,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const AppSheetHeading(title: '修改历史', padding: EdgeInsets.zero),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: FutureBuilder<dynamic>(
+                    future: future,
+                    builder: (context, snapshot) {
+                      if (generation != widget.controller.api.generation) {
+                        return const Center(child: Text('账号已切换，请重新打开'));
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                userError(snapshot.error!),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              AppTextButton(
+                                onPressed: () => setSheetState(() {
+                                  future = widget.controller.api.request(
+                                    'GET',
+                                    '/items/${widget.id}/history',
+                                  );
+                                }),
+                                child: const Text('重试'),
+                              ),
+                            ],
                           ),
-                      ],
-                    );
-                  },
+                        );
+                      }
+                      if (!snapshot.hasData) {
+                        return const Center(
+                          child: AppLoadingIndicator(label: '正在读取记录'),
+                        );
+                      }
+                      final rows = List<Map<String, dynamic>>.from(
+                        snapshot.data as List,
+                      );
+                      if (rows.isEmpty) {
+                        return const Center(child: Text('还没有修改记录'));
+                      }
+                      return ListView(
+                        children: [
+                          for (final h in rows)
+                            AppTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(h['reason']),
+                              subtitle: Text(
+                                '${displayInstant(h['created_at'])}\n${itemTimeLabel(Map<String, dynamic>.from(h['snapshot']))}',
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -276,7 +274,25 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('提醒', style: Theme.of(context).textTheme.titleLarge),
+                  AppSheetHeading(
+                    title: '提醒',
+                    padding: EdgeInsets.zero,
+                    trailing: AppIconButton(
+                      tooltip: '系统通知设置',
+                      icon: const Icon(Icons.settings_outlined),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          this.context,
+                          MaterialPageRoute(
+                            builder: (_) => ReminderSettingsPage(
+                              controller: widget.controller,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   Expanded(
                     child: ListView(
@@ -284,7 +300,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                         for (final r in reminders)
                           RecordActionTile(
                             title:
-                                '${reminderLabel(r)} · ${{'item': '事项提醒', 'start_review': '开始复习', 'check_notice': '核实通知'}[r['purpose']] ?? '提醒'}',
+                                '${reminderLabel(r)}${r['purpose'] == null || r['purpose'] == 'item' ? '' : ' · ${{'start_review': '开始复习', 'check_notice': '核实通知'}[r['purpose']] ?? '提醒'}'}',
                             subtitle: [
                               if (r['trigger_at'] != null)
                                 displayInstant(r['trigger_at']),
@@ -308,13 +324,6 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                               fontSize: 12,
                             ),
                           ),
-                        RecordActionTile(
-                          title: '系统通知设置',
-                          icon: Icons.notifications_active_outlined,
-                          onTap: () => widget.controller.syncNotifications(
-                            requestPermission: true,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -443,145 +452,186 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                 child: !sameSession
                     ? const Text('账号已切换，请重新打开')
                     : error == null
-                    ? const CircularProgressIndicator()
+                    ? const AppLoadingIndicator(label: '正在读取事项')
                     : Text(error!),
               )
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                children: [
-                  RecordHeading(
-                    title: '${data['title']}',
-                    label:
-                        '${kindLabel(data['kind'])} · ${data['lifecycle'] == 'completed'
-                            ? '已完成'
-                            : data['lifecycle'] == 'cancelled'
-                            ? '已取消'
-                            : data['certainty'] != 'formal'
-                            ? '暂定'
-                            : '待完成'}',
-                    icon: exam ? Icons.school_outlined : Icons.task_alt_rounded,
-                    subtitle: data['course_title'],
-                  ),
-                  if (time['precision'] != null &&
-                      time['precision'] != 'unknown')
-                    RecordFact(
-                      label: exam ? '考试时间' : '截止时间',
-                      value: itemTimeLabel(
-                        data,
-                        includeMissing: false,
-                      ).replaceFirst(RegExp(r' (截止|开始)(?= ·|$)'), ''),
-                      icon: Icons.schedule_rounded,
-                      color: overdue
-                          ? CampusColors.error
-                          : CampusColors.primary,
+            : AppLoadingOverlay(
+                loading: busy,
+                label: '正在更新',
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  children: [
+                    RecordHeading(
+                      title: '${data['title']}',
+                      label:
+                          '${kindLabel(data['kind'])} · ${data['lifecycle'] == 'completed'
+                              ? '已完成'
+                              : data['lifecycle'] == 'cancelled'
+                              ? '已取消'
+                              : data['certainty'] == 'tentative'
+                              ? '暂定'
+                              : '待完成'}',
+                      icon: exam
+                          ? Icons.school_outlined
+                          : active
+                          ? Icons.pending_actions_rounded
+                          : data['lifecycle'] == 'completed'
+                          ? Icons.task_alt_rounded
+                          : Icons.block_rounded,
+                      subtitle: data['course_title'],
                     ),
-                  if (overdue)
-                    Text(
-                      exam ? '开始时间已过' : '已过截止时间',
-                      style: const TextStyle(color: CampusColors.error),
-                    ),
-                  if ('${data['location'] ?? ''}'.trim().isNotEmpty)
-                    RecordFact(
-                      label: '地点',
-                      value: data['location'],
-                      icon: Icons.place_outlined,
-                    ),
-                  if (active && !exam) ...[
-                    if (data['remaining_minutes'] != null ||
-                        data['review_exam_id'] != null)
-                      RecordActionTile(
-                        title: data['remaining_minutes'] == null
-                            ? '更新任务进度'
-                            : '还需 ${minutesLabel(data['remaining_minutes'])}',
-                        subtitle: data['remaining_minutes'] == null
-                            ? null
-                            : '更新进度',
-                        icon: Icons.timelapse_rounded,
-                        onTap: busy ? null : () => progress(data),
+                    if (noticeTimePresent(time))
+                      TaskFactStrip(
+                        label: exam
+                            ? '考试时间'
+                            : time['meaning'] == 'window'
+                            ? '办理时间'
+                            : time['meaning'] == 'start'
+                            ? '开始时间'
+                            : time['precision'] == 'unknown'
+                            ? '时间说明'
+                            : '截止时间',
+                        value: itemTimeLabel(
+                          data,
+                          includeMissing: false,
+                        ).replaceFirst(RegExp(r' (截止|开始)(?= ·|$)'), ''),
+                        icon: Icons.schedule_rounded,
+                        accent: overdue
+                            ? CampusColors.error
+                            : CampusColors.primary,
                       ),
-                    if (data['remaining_minutes'] != null ||
-                        data['review_exam_id'] != null ||
-                        const [
-                          'high',
-                          'medium',
-                        ].contains(widget.controller.riskFor(data)?['level']))
-                      RiskBadge(
-                        risk: widget.controller.riskFor(data),
-                        onTap: () =>
-                            showRiskDetails(context, widget.controller, data),
+                    if (overdue)
+                      Text(
+                        exam ? '开始时间已过' : '已过截止时间',
+                        style: const TextStyle(color: CampusColors.error),
                       ),
-                  ],
-                  if (error != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: SoftNotice(error!, warning: true),
+                    NoticeDetails(
+                      data['details'],
+                      location: data['location'],
+                      title: data['title'],
                     ),
-                  if (busy) const LinearProgressIndicator(),
-                  const SizedBox(height: 16),
-                  const Divider(height: 1),
-                  if (active || reminders.isNotEmpty)
-                    RecordActionTile(
-                      title: reminders.isEmpty
-                          ? '添加提醒'
-                          : '提醒 · ${reminders.length}条',
-                      subtitle: reminders.length == 1
-                          ? '${reminderLabel(reminders.first)} · ${reminderState(reminders.first['schedule_state'])}'
-                          : null,
-                      icon: Icons.notifications_outlined,
-                      onTap: busy
-                          ? null
-                          : () => reminders.isEmpty
-                                ? reminder()
-                                : showReminders(data),
-                    ),
-                  if (active)
-                    RecordActionTile(
-                      title: '智能修改',
-                      icon: Icons.auto_awesome_outlined,
-                      onTap: busy
-                          ? null
-                          : () =>
-                                context.push('/operations?item=${data['id']}'),
-                    ),
-                  if (data['review_exam_id'] != null)
-                    RecordActionTile(
-                      title: '关联考试',
-                      icon: Icons.school_outlined,
-                      onTap: () =>
-                          context.push('/exams/${data['review_exam_id']}'),
-                    ),
-                  if (data['course_id'] != null)
-                    RecordActionTile(
-                      title: '课程事务',
-                      icon: Icons.menu_book_outlined,
-                      onTap: () =>
-                          context.push('/courses/${data['course_id']}'),
-                    ),
-                  if ('${data['notes'] ?? ''}'.trim().isNotEmpty) ...[
+                    if ('${data['location'] ?? ''}'.trim().isNotEmpty)
+                      TaskFactStrip(
+                        label: '地点',
+                        value: data['location'],
+                        icon: Icons.place_outlined,
+                      ),
+                    if (active && !exam) ...[
+                      if (data['remaining_minutes'] != null ||
+                          data['review_exam_id'] != null)
+                        TaskActionRail(
+                          actions: [
+                            TaskQuickAction(
+                              data['remaining_minutes'] == null
+                                  ? '更新任务进度'
+                                  : '还需 ${minutesLabel(data['remaining_minutes'])}',
+                              Icons.timelapse_rounded,
+                              busy ? null : () => progress(data),
+                            ),
+                            TaskQuickAction(
+                              reminders.isEmpty
+                                  ? '添加提醒'
+                                  : '提醒 · ${reminders.length}条',
+                              Icons.notifications_outlined,
+                              busy
+                                  ? null
+                                  : () => reminders.isEmpty
+                                        ? reminder()
+                                        : showReminders(data),
+                            ),
+                          ],
+                        ),
+                      if (data['remaining_minutes'] != null ||
+                          data['review_exam_id'] != null ||
+                          const [
+                            'high',
+                            'medium',
+                          ].contains(widget.controller.riskFor(data)?['level']))
+                        RiskBadge(
+                          risk: widget.controller.riskFor(data),
+                          onTap: () =>
+                              showRiskDetails(context, widget.controller, data),
+                        ),
+                    ],
+                    if (error != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: OperationFailed(operation: '操作', reason: error!),
+                      ),
                     const SizedBox(height: 16),
-                    DocumentPanel(title: '备注', text: data['notes']),
-                  ],
-                  if ('${data['source_text'] ?? ''}'.trim().isNotEmpty)
-                    AppDisclosure(
-                      tilePadding: EdgeInsets.zero,
-                      title: const Text('通知原文'),
-                      children: [
-                        DocumentPanel(
-                          title: data['candidate_id'] == null
-                              ? '手工录入'
-                              : '已核对的识别内容',
-                          text: data['source_text'],
-                          footer: Text(
-                            '创建于 ${displayInstant(data['created_at'])}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: CampusColors.muted,
+                    if ((active || reminders.isNotEmpty) &&
+                        !(active &&
+                            !exam &&
+                            (data['remaining_minutes'] != null ||
+                                data['review_exam_id'] != null)))
+                      RecordActionTile(
+                        title: reminders.isEmpty
+                            ? '添加提醒'
+                            : '提醒 · ${reminders.length}条',
+                        subtitle: reminders.length == 1
+                            ? '${reminderLabel(reminders.first)} · ${reminderState(reminders.first['schedule_state'])}'
+                            : null,
+                        icon: Icons.notifications_outlined,
+                        onTap: busy
+                            ? null
+                            : () => reminders.isEmpty
+                                  ? reminder()
+                                  : showReminders(data),
+                      ),
+                    if (active)
+                      RecordActionTile(
+                        title: '询问或修改',
+                        icon: Icons.auto_awesome_outlined,
+                        onTap: busy
+                            ? null
+                            : () => openAssistantSheet(
+                                context,
+                                controller: widget.controller,
+                                semester: widget.semester,
+                                initialText: '关于“${data['title']}”：',
+                                selectedRecordIds: [data['id']],
+                              ),
+                      ),
+                    if (data['review_exam_id'] != null)
+                      RecordActionTile(
+                        title: '关联考试',
+                        icon: Icons.school_outlined,
+                        onTap: () =>
+                            context.push('/exams/${data['review_exam_id']}'),
+                      ),
+                    if (data['course_id'] != null)
+                      RecordActionTile(
+                        title: '课程事务',
+                        icon: Icons.menu_book_outlined,
+                        onTap: () =>
+                            context.push('/courses/${data['course_id']}'),
+                      ),
+                    if ('${data['notes'] ?? ''}'.trim().isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      DocumentPanel(title: '备注', text: data['notes']),
+                    ],
+                    if ('${data['source_text'] ?? ''}'.trim().isNotEmpty)
+                      AppDisclosure(
+                        tilePadding: EdgeInsets.zero,
+                        title: const Text('通知原文'),
+                        children: [
+                          DocumentPanel(
+                            title: data['candidate_id'] == null
+                                ? '手工录入'
+                                : '已核对的识别内容',
+                            text: data['source_text'],
+                            footer: Text(
+                              '创建于 ${displayInstant(data['created_at'])}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: CampusColors.muted,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                ],
+                        ],
+                      ),
+                  ],
+                ),
               ),
       );
     },

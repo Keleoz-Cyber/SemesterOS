@@ -66,8 +66,10 @@ def test_reschedule_recomputes_reminder_and_keeps_review_deadline_by_default(cli
     hub=client.get(f"/api/v1/semesters/{s['id']}/hub",headers=h).json()
     assert hub['exams'][0]['issues']
     assert r.json()['item']['reminders'][0]['version']==reminder['version']+1
-    bad={**body,'expected_version':2,'reserve_time':False}
-    assert client.post(path+'/preview',headers=h,json=bad).status_code==422
+    reference={**body,'expected_version':2,'reserve_time':False}
+    preview=client.post(path+'/preview',headers=h,json=reference)
+    assert preview.status_code==200,preview.text
+    assert preview.json()['after']['reserve_time'] is False
 
 
 def test_link_existing_task_preserves_its_effort_and_deadline(client):

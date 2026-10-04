@@ -1,4 +1,5 @@
 import 'package:semester_os/ui/app_controls.dart';
+import 'package:semester_os/features/planning/schedule_page.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:semester_os/app/controller.dart';
@@ -7,7 +8,7 @@ import 'package:semester_os/features/items/items_view.dart';
 import 'package:semester_os/features/centers/semester_centers.dart';
 import 'package:semester_os/features/centers/hub_data.dart';
 import 'package:semester_os/ui/assistant_scope.dart';
-import 'planning_flow_test.dart' show PlanningFixture, bind;
+import 'planning_flow_test.dart' show PlanningFixture, bind, ioTap;
 import 'centers_flow_test.dart' show fixture, hub, settleIo;
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'ui_polish_test.dart' show mount, loadPreviewFonts, capture;
@@ -242,9 +243,28 @@ void main() {
     'plan has one learning settings entry and one contextual request',
     (tester) async {
       final f = PlanningFixture();
+      final previous = f.api.dio.httpClientAdapter as ControlledTransport;
+      var generated = 0;
+      f.api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.path.endsWith('/schedule/setup')) {
+          return body({
+            'revision': f.revision,
+            'tasks': [
+              {...f.item, 'can_schedule': true},
+            ],
+            'availability': {
+              'needs_confirmation': false,
+              'current': {'version': 1, 'weekly': [], 'exclusions': []},
+            },
+          });
+        }
+        if (request.path.endsWith('/plan-proposals')) generated++;
+        return previous.respond(request);
+      });
       await bind(tester, f);
       String? request;
       bool submitted = false;
+      var assistantRequests = 0;
       await mount(
         tester,
         Builder(
@@ -259,6 +279,7 @@ void main() {
                     mediaKind,
                     autoSubmit = false,
                   }) async {
+                    assistantRequests++;
                     request = initialText;
                     submitted = autoSubmit;
                   },
@@ -279,25 +300,35 @@ void main() {
       );
       expect(find.text('重新计算'), findsNothing);
       expect(find.text('生成计划'), findsNothing);
-      expect(find.text('学习时间设置'), findsOneWidget);
-      await tester.tap(find.text('安排任务'));
+      expect(find.text('学习时间'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('learning-plan-action')));
       await tester.pumpAndSettle();
       expect(request, contains('任务'));
       expect(submitted, isTrue);
+      expect(assistantRequests, 1);
       await capture(tester, 'plan-actionable');
       f.c.analysis!['summary']['configured'] = false;
       f.c.changed();
       await tester.pumpAndSettle();
-      expect(find.text('学习时间设置'), findsNothing);
-      expect(find.text('设置可学习时间'), findsOneWidget);
+      expect(find.text('学习时间'), findsOneWidget);
+      expect(find.text('设置可学习时间'), findsNothing);
       request = null;
-      await tester.tap(find.text('安排记录'));
+      await tester.tap(find.text('全部安排'));
       await settleIo(tester);
       expect(find.text('生成新的计划方案'), findsNothing);
       expect(find.text('尽量少改动，重排已有计划'), findsNothing);
-      await tester.tap(find.text('安排任务'));
-      await tester.pumpAndSettle();
-      expect(request, contains('任务'));
+      await ioTap(tester, find.text('安排任务'));
+      await settleIo(tester);
+      expect(find.byType(SchedulePage), findsOneWidget);
+      expect(find.text('生成安排'), findsOneWidget);
+      expect(find.text(f.item['title']), findsOneWidget);
+      expect(request, isNull);
+      expect(assistantRequests, 1);
+      expect(
+        generated,
+        0,
+        reason: 'opening setup does not generate an arrangement',
+      );
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
     },

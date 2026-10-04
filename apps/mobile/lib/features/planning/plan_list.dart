@@ -1,16 +1,20 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_widgets.dart';
-import '../../ui/detail_widgets.dart';
 import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
+import '../items/task_surfaces.dart';
 import 'risk_widgets.dart';
 import '../../ui/assistant_scope.dart';
 import 'proposal_page.dart';
+import 'plan_block_sheet.dart';
+import 'schedule_page.dart';
+import '../../ui/date_labels.dart';
 
 class PlanningEntry extends StatelessWidget {
   final ItemsController controller;
@@ -23,6 +27,9 @@ class PlanningEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = schoolNow();
+    final hasPendingTask = controller.items.any(
+      (item) => item['lifecycle'] == 'active',
+    );
     final blocks = controller.hasCurrentPlans
         ? controller.rows(controller.planFeed?['blocks']).where((b) {
             final d = schoolTime(b['start_at']);
@@ -43,40 +50,60 @@ class PlanningEntry extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          key: const ValueKey('learning-plan-header'),
-          children: [
-            const Icon(
-              Icons.timeline_rounded,
-              size: 20,
-              color: CampusColors.teal,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                today ? '今日学习安排' : '学习安排',
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: CampusColors.ink,
+        LayoutBuilder(
+          builder: (context, box) {
+            final scaler = MediaQuery.textScalerOf(context);
+            final title = today ? '今日学习安排' : '学习安排';
+            final compact =
+                box.maxWidth <
+                scaler.scale(17) * title.length + scaler.scale(13) * 4 + 72;
+            void openAll() => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PlanListPage(controller: controller),
+              ),
+            );
+            return Row(
+              key: const ValueKey('learning-plan-header'),
+              children: [
+                const Icon(
+                  Icons.timeline_rounded,
+                  size: 20,
+                  color: CampusColors.teal,
                 ),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => PlanListPage(controller: controller),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: CampusColors.ink,
+                    ),
+                  ),
                 ),
-              ),
-              style: TextButton.styleFrom(
-                foregroundColor: CampusColors.primary,
-                minimumSize: const Size(48, 48),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
-              child: const Text('安排记录'),
-            ),
-          ],
+                const SizedBox(width: 8),
+                if (compact)
+                  AppIconButton(
+                    onPressed: openAll,
+                    guardAsync: false,
+                    tooltip: '查看全部安排',
+                    icon: const Icon(Icons.view_agenda_outlined, size: 21),
+                  )
+                else
+                  AppTextButton.icon(
+                    onPressed: openAll,
+                    guardAsync: false,
+                    style: AppTextButton.styleFrom(
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                    iconAlignment: IconAlignment.end,
+                    label: const Text('全部安排'),
+                  ),
+              ],
+            );
+          },
         ),
         if (blocks.isNotEmpty)
           for (final b in blocks.take(3))
@@ -85,7 +112,7 @@ class PlanningEntry extends StatelessWidget {
               today: today,
               onTap: () => context.push('/items/${b['item_id']}'),
             )
-        else
+        else if (!controller.hasCurrentPlans || hasPendingTask)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
@@ -95,26 +122,23 @@ class PlanningEntry extends StatelessWidget {
               style: const TextStyle(fontSize: 14, color: CampusColors.muted),
             ),
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            key: const ValueKey('learning-plan-action'),
-            onPressed: () => AssistantScope.open(
-              context,
-              initialText: today
-                  ? '请结合今天的日程和任务，帮我安排今天的学习时间。'
-                  : '请结合现有日程和任务，帮我安排接下来的学习时间；有冲突的安排请一起调整，先给我方案。',
-              autoSubmit: true,
+        if (hasPendingTask || blocks.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppTextButton.icon(
+              key: const ValueKey('learning-plan-action'),
+              onPressed: () => AssistantScope.open(
+                context,
+                initialText: today
+                    ? '请结合今天的日程和任务，帮我安排今天的学习时间。'
+                    : '请结合现有日程和任务，帮我安排接下来的学习时间；有冲突的安排请一起调整，先给我方案。',
+                autoSubmit: true,
+              ),
+              guardAsync: false,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('安排任务'),
             ),
-            style: TextButton.styleFrom(
-              foregroundColor: CampusColors.primary,
-              minimumSize: const Size(48, 48),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-            ),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('安排任务'),
           ),
-        ),
       ],
     );
   }
@@ -123,10 +147,12 @@ class PlanningEntry extends StatelessWidget {
 class _CompactPlanBlock extends StatelessWidget {
   final Map<String, dynamic> block;
   final bool today;
+  final bool grouped;
   final VoidCallback onTap;
   const _CompactPlanBlock({
     required this.block,
     required this.today,
+    this.grouped = false,
     required this.onTap,
   });
 
@@ -161,7 +187,9 @@ class _CompactPlanBlock extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        today
+                        grouped
+                            ? hhmm(schoolTime(block['end_at']))
+                            : today
                             ? minutesLabel(block['minutes'])
                             : '${start.month}/${start.day}',
                         style: const TextStyle(
@@ -248,9 +276,26 @@ class _PlanListPageState extends State<PlanListPage> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AppDialog(
-        title: Text(b['locked'] == true ? '解锁并取消这段计划？' : '取消这段计划？'),
-        content: Text(
-          '${b['title']}\n${displayInstant(b['start_at'])}\n取消安排不会改变任务进度，你可以之后重新安排。',
+        title: Text(b['locked'] == true ? '取消这段固定安排？' : '取消这段安排？'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${b['title']}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            TaskFactStrip(
+              label: '取消的时间段',
+              value: displayInterval(b['start_at'], b['end_at']),
+              icon: Icons.event_busy_outlined,
+              accent: CampusColors.teal,
+            ),
+            const Text(
+              '任务进度保留，可以重新安排。',
+              style: TextStyle(fontSize: 14, color: CampusColors.muted),
+            ),
+          ],
         ),
         actions: [
           AppTextButton(
@@ -259,7 +304,7 @@ class _PlanListPageState extends State<PlanListPage> {
           ),
           AppButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(b['locked'] == true ? '确认解锁并取消' : '确认取消'),
+            child: Text(b['locked'] == true ? '确认取消' : '确认取消'),
           ),
         ],
       ),
@@ -279,10 +324,8 @@ class _PlanListPageState extends State<PlanListPage> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AppDialog(
-        title: const Text('撤销最近一轮计划？'),
-        content: const Text(
-          '撤销新增计划会删除本次新增的安排；撤销调整会尝试恢复原时间。只有尚未开始、之后没有修改且仍无冲突的计划才能撤销。课程、考试和任务进度不会改变。',
-        ),
+        title: const Text('撤销最近一次安排？'),
+        content: const Text('撤销本次新增或调整的学习安排。已开始或后来修改过的安排会保留。'),
         actions: [
           AppTextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -300,218 +343,183 @@ class _PlanListPageState extends State<PlanListPage> {
     }
   }
 
+  Future<void> openBlock(Map<String, dynamic> block, bool conflict) async {
+    final choice = await showPlanBlock(context, block, conflict: conflict);
+    if (!mounted) return;
+    if (choice == 'cancel') await cancel(block);
+    if (choice == 'lock') {
+      await act(
+        () => widget.controller.changePlanBlock(
+          block,
+          locked: block['locked'] != true,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('安排记录')),
+    appBar: AppBar(title: const Text('学习安排')),
     body: ListenableBuilder(
       listenable: widget.controller,
       builder: (context, _) {
-        final c = widget.controller;
-        final current = c.hasCurrentPlans;
-        final feed = current ? c.planFeed : null;
-        final blocks = c.rows(feed?['blocks']);
-        final now = DateTime.now();
+        final c = widget.controller,
+            feed = c.hasCurrentPlans ? c.planFeed : null;
+        final blocks = c.rows(feed?['blocks'])
+          ..sort((a, b) => '${a['start_at']}'.compareTo('${b['start_at']}'));
         final invalid = c
             .rows(feed?['invalid_blocks'])
             .map((r) => r['block_id'])
             .toSet();
         return RefreshIndicator(
-          onRefresh: widget.controller.refresh,
+          onRefresh: c.refresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             children: [
-              const RecordHeading(
-                title: '已安排的学习时间',
-                label: '安排记录',
-                icon: Icons.event_note_outlined,
-              ),
-              AppButton.icon(
-                onPressed: busy
-                    ? null
-                    : () => AssistantScope.open(
-                        context,
-                        initialText:
-                            '请检查现有任务和学习安排，帮我安排接下来的学习时间，有冲突的安排一起调整，先给我方案。',
-                        autoSubmit: true,
+              LayoutBuilder(
+                builder: (context, box) {
+                  final scaler = MediaQuery.textScalerOf(context);
+                  final compact =
+                      box.maxWidth <
+                      scaler.scale(18) * 4 + scaler.scale(14) * 4 + 96;
+                  Future<void> arrange() async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SchedulePage(controller: c),
                       ),
-                icon: const Icon(Icons.add_task_rounded),
-                label: const Text('安排任务'),
-              ),
-              const SizedBox(height: 16),
-              if (!current) SoftNotice(c.planNotice ?? '正在更新计划，请稍候'),
-              if (feed?['latest_proposal'] != null ||
-                  feed?['latest_applied'] != null)
-                EditorSection(
-                  title: '最近一轮方案',
-                  icon: Icons.history_rounded,
-                  children: [
-                    if (feed?['latest_proposal'] != null)
-                      AppTextButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ProposalPage(
-                              controller: c,
-                              proposal: Map<String, dynamic>.from(
-                                feed!['latest_proposal'],
-                              ),
-                            ),
+                    );
+                    if (mounted) await c.refresh();
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${blocks.length}段安排',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        child: const Text('查看上次的计划方案'),
                       ),
-                    if (feed?['latest_applied'] != null)
-                      AppTextButton(
-                        onPressed: busy
-                            ? null
-                            : () => undo(
-                                Map<String, dynamic>.from(
-                                  feed!['latest_applied'],
-                                ),
-                                feed['revision'],
-                              ),
-                        child: const Text('撤销最近一轮'),
+                      AppLoadingIndicator(
+                        compact: true,
+                        visible: busy,
+                        label: '正在更新安排',
                       ),
-                  ],
-                ),
+                      const SizedBox(width: 8),
+                      if (compact)
+                        AppIconButton.filled(
+                          onPressed: busy ? null : arrange,
+                          tooltip: '安排任务',
+                          icon: const Icon(Icons.add_rounded, size: 20),
+                        )
+                      else
+                        AppButton.icon(
+                          onPressed: busy ? null : arrange,
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('安排任务'),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              if (!c.hasCurrentPlans) Text(c.planNotice ?? '正在读取安排'),
               if (error != null) SoftNotice(error!, warning: true),
-              if (busy) const LinearProgressIndicator(),
-              for (final upcoming in [true, false]) ...[
-                if (blocks.any(
-                  (b) => DateTime.parse(b['end_at']).isAfter(now) == upcoming,
-                ))
-                  SectionHeading(upcoming ? '接下来的安排' : '近7天已结束的安排'),
-                for (final b in blocks.where(
-                  (b) => DateTime.parse(b['end_at']).isAfter(now) == upcoming,
-                ))
-                  _PlanTimelineRecord(
-                    startAt: b['start_at'],
-                    child: CampusPanel(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (b['locked'] == true) ...[
-                            const Align(
-                              alignment: Alignment.centerLeft,
-                              child: StatusPill('已锁定'),
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                          Text(
-                            '${b['title']}',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          Text(
-                            '至 ${displayInstant(b['end_at'])} · ${minutesLabel(b['minutes'])}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: CampusColors.muted,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          if (invalid.contains(b['id']))
-                            const SoftNotice(
-                              '这段计划与当前安排冲突，可以取消后重新安排。',
-                              warning: true,
-                            ),
-                          if (!DateTime.parse(b['end_at']).isAfter(now))
-                            const Text('时间已过，尚未据此确认工作完成'),
-                          if (DateTime.parse(b['end_at']).isAfter(now))
-                            Wrap(
-                              spacing: 8,
-                              children: [
-                                AppTextButton.icon(
-                                  onPressed: busy
-                                      ? null
-                                      : () => act(
-                                          () => c.changePlanBlock(
-                                            b,
-                                            locked: b['locked'] != true,
-                                          ),
-                                        ),
-                                  icon: Icon(
-                                    b['locked'] == true
-                                        ? Icons.lock
-                                        : Icons.lock_open,
-                                  ),
-                                  label: Text(
-                                    b['locked'] == true ? '解锁' : '锁定',
-                                  ),
-                                ),
-                                AppTextButton(
-                                  onPressed: busy ? null : () => cancel(b),
-                                  child: const Text('取消此段'),
-                                ),
-                              ],
-                            ),
-                          AppTextButton(
-                            onPressed: () =>
-                                context.push('/items/${b['item_id']}'),
-                            child: const Text('查看关联任务'),
-                          ),
-                        ],
+              for (var i = 0; i < blocks.length; i++) ...[
+                if (i == 0 ||
+                    '${blocks[i]['start_at']}'.substring(0, 10) !=
+                        '${blocks[i - 1]['start_at']}'.substring(0, 10))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16, bottom: 8),
+                    child: Text(
+                      studentDate(
+                        schoolTime(blocks[i]['start_at']),
+                        weekday: true,
+                      ),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: CampusColors.muted,
                       ),
                     ),
                   ),
+                _CompactPlanBlock(
+                  block: blocks[i],
+                  today: false,
+                  grouped: true,
+                  onTap: busy
+                      ? () => {}
+                      : () => openBlock(
+                          blocks[i],
+                          invalid.contains(blocks[i]['id']),
+                        ),
+                ),
+                if (invalid.contains(blocks[i]['id']))
+                  const Padding(
+                    padding: EdgeInsets.only(left: 68, bottom: 6),
+                    child: Text(
+                      '时间重叠',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: CampusColors.warning,
+                      ),
+                    ),
+                  ),
+                const Divider(height: 1, color: CampusColors.line),
               ],
-              if (current && blocks.isEmpty)
-                const CampusPanel(child: Text('还没有个人计划，点击“安排任务”选择学习时间。')),
+              if (c.hasCurrentPlans && blocks.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 36),
+                  child: Text(
+                    '暂无学习安排',
+                    style: TextStyle(color: CampusColors.muted),
+                  ),
+                ),
+              if (feed?['latest_proposal'] != null ||
+                  feed?['latest_applied'] != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 24),
+                  child: AppDisclosure(
+                    title: const Text('最近一次安排'),
+                    children: [
+                      if (feed?['latest_proposal'] != null)
+                        AppTextButton(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProposalPage(
+                                controller: c,
+                                proposal: Map<String, dynamic>.from(
+                                  feed!['latest_proposal'],
+                                ),
+                              ),
+                            ),
+                          ),
+                          child: const Text('查看方案'),
+                        ),
+                      if (feed?['latest_applied'] != null)
+                        AppTextButton(
+                          onPressed: busy
+                              ? null
+                              : () => undo(
+                                  Map<String, dynamic>.from(
+                                    feed!['latest_applied'],
+                                  ),
+                                  feed['revision'],
+                                ),
+                          child: const Text('撤销这次安排'),
+                        ),
+                    ],
+                  ),
+                ),
             ],
           ),
         );
       },
     ),
   );
-}
-
-class _PlanTimelineRecord extends StatelessWidget {
-  final String startAt;
-  final Widget child;
-  const _PlanTimelineRecord({required this.startAt, required this.child});
-  @override
-  Widget build(BuildContext context) {
-    final at = schoolTime(startAt);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: MediaQuery.textScalerOf(context).scale(17) > 22 ? 92 : 76,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16, right: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${at.month}/${at.day}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: CampusColors.muted,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    hhmm(at),
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: CampusColors.teal,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(width: 24, height: 2, color: CampusColors.teal),
-                ],
-              ),
-            ),
-          ),
-          Expanded(child: child),
-        ],
-      ),
-    );
-  }
 }

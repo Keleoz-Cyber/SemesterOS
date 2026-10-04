@@ -1,8 +1,8 @@
 from datetime import datetime
 from hashlib import sha256
 from typing import Literal
-from fastapi import APIRouter,Depends,Header,Request
-from fastapi.responses import FileResponse
+from fastapi import APIRouter,Depends,Header,Request,Query
+from fastapi.responses import FileResponse,Response
 from pydantic import Field,field_validator
 from sqlalchemy import select,func
 from sqlalchemy.orm import Session
@@ -32,13 +32,15 @@ class SourceEdit(SourceVersion):
 
 def owned_source(db,user,id,lock=False):
     q=select(MediaSource).where(MediaSource.id==id,MediaSource.user_id==user.id)
-    row=db.scalar(q.with_for_update() if lock else q)
+    row=db.scalar(q.with_for_update().execution_options(populate_existing=True) if lock else q)
     if row is None:error(404,'NOT_FOUND','找不到这份来源')
     return row
 
 
 def value(row):
-    return {k:getattr(row,k) for k in ('id','semester_id','kind','mime','size','file_deleted','version','status','text','original_text','reference_at','error_code','created_at')}|{'recognition':row.metadata_json}
+    return {k:getattr(row,k) for k in ('id','semester_id','kind','mime','size','file_deleted','version','status','text','original_text','reference_at','error_code','created_at')}|{
+        'recognition':row.metadata_json,'image_count':row.metadata_json.get('image_count',1 if row.kind=='image' else 0),
+        'is_image_batch':row.mime=='application/zip'}
 
 
 def version(row,expected):
@@ -90,6 +92,25 @@ def content(id:str,request:Request,user:User=Depends(current_user),db:Session=De
     row=owned_source(db,user,id);path=path_for(request.app.state.media_root,row.storage_key)
     if row.file_deleted or not path.exists():error(410,'SOURCE_DELETED','原文件已删除，文本和历史仍保留')
     return FileResponse(path,media_type=row.mime,headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+
+
+@router.get('/sources/{id}/images/{index}')
+def source_image(id:str,index:int,request:Request,expected_version:int|None=Query(default=None,ge=1),
+                 user:User=Depends(current_user),db:Session=Depends(get_db)):
+    row=owned_source(db,user,id)
+    if expected_version is not None:version(row,expected_version)
+    if row.kind!='image' or index<0 or index>=row.metadata_json.get('image_count',1):
+        error(404,'NOT_FOUND','找不到这张来源图片')
+    path=path_for(request.app.state.media_root,row.storage_key)
+    if row.file_deleted or not path.exists():error(410,'SOURCE_DELETED','原图片已删除，文本和历史仍保留')
+    headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Source-Version':str(row.version)}
+    if row.mime!='application/zip':return FileResponse(path,media_type=row.mime,headers=headers)
+    from zipfile import ZipFile,BadZipFile
+    try:
+        with ZipFile(path) as archive:image=archive.read(f'image-{index+1}.png')
+    except FileNotFoundError:error(410,'SOURCE_DELETED','原图片已删除，文本和历史仍保留')
+    except (KeyError,BadZipFile):error(404,'NOT_FOUND','这张来源图片暂时无法读取')
+    return Response(image,media_type='image/png',headers=headers)
 
 
 @router.patch('/sources/{id}')

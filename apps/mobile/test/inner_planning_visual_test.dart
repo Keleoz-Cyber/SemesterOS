@@ -10,6 +10,8 @@ import 'package:semester_os/features/planning/plan_list.dart';
 import 'package:semester_os/features/planning/plan_change_confirmation.dart';
 import 'package:semester_os/features/planning/risk_widgets.dart';
 import 'package:semester_os/features/tags/tag_management_page.dart';
+import 'package:semester_os/ui/app_time_range_picker.dart';
+import 'package:semester_os/ui/clock_controls.dart';
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'planning_flow_test.dart' show PlanningFixture, bind, ioTap;
 import 'schedule_flow_test.dart' show ScheduleFixture;
@@ -41,7 +43,7 @@ Future<void> _open(WidgetTester tester, Widget page, double scale) async {
         ),
       ),
     ),
-    width: 390,
+    width: scale > 1 ? 320 : 390,
     textScale: scale,
   );
   await ioTap(tester, find.text('打开页面'));
@@ -116,6 +118,32 @@ void main() {
       await bind(tester, f);
       await _open(tester, AvailabilityPage(controller: f.c), scale);
       await _shot(tester, 'availability-top', size);
+      await _to(tester, find.text('添加时段'));
+      await ioTap(tester, find.text('添加时段'));
+      expect(find.byType(AppClockRangePicker), findsOneWidget);
+      expect(
+        find.byKey(const Key('clock-range-confirm')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<AppMinuteWheel>(
+              find.byKey(const ValueKey('range-clock-start')),
+            )
+            .value,
+        19 * 60,
+      );
+      expect(
+        tester
+            .widget<AppMinuteWheel>(
+              find.byKey(const ValueKey('range-clock-end')),
+            )
+            .value,
+        21 * 60,
+      );
+      await _shot(tester, 'availability-time-window', size);
+      await ioTap(tester, find.byTooltip('取消选择'));
+      expect(f.puts, 0);
       await _bottom(tester);
       await _shot(tester, 'availability-save', size);
       await _to(tester, find.text('核对并保存学习时间'));
@@ -149,15 +177,45 @@ void main() {
           'start_policy': 'unconfirmed',
         },
       ];
+      final previous = f.api.dio.httpClientAdapter as ControlledTransport;
+      f.api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.path.endsWith('/schedule/setup')) {
+          return body({
+            'revision': f.revision,
+            'tasks': [
+              for (final task in f.c.items) {...task, 'can_schedule': true},
+            ],
+            'availability': {
+              'needs_confirmation': true,
+              'current': {'version': 1, 'weekly': [], 'exclusions': []},
+              'candidate': {
+                'weekly': [
+                  {'weekday': 1, 'start': '19:00', 'end': '21:00'},
+                ],
+                'exclusions': [],
+              },
+            },
+          });
+        }
+        return previous.respond(request);
+      });
       await _open(tester, SchedulePage(controller: f.c), scale);
       await _shot(tester, 'schedule-top', size);
-      await _to(tester, find.text('开始时间与分段设置'));
-      await tester.tap(find.text('开始时间与分段设置'));
+      expect(find.text('可以学习的时间'), findsOneWidget);
+      await _to(tester, find.text('英语阅读笔记'));
+      final estimates = find.byType(AppField);
+      expect(tester.widget<AppField>(estimates.last).controller!.text, '45');
+      await tester.enterText(estimates.last, '60');
+      expect(tester.widget<AppField>(estimates.last).controller!.text, '60');
+      FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
-      await _to(tester, find.text('每次想学习多久'));
+      await _to(tester, find.text('每次学习时长'));
+      await tester.tap(find.text('每次学习时长'));
+      await tester.pumpAndSettle();
+      await _to(tester, find.text('45分钟'));
       await _shot(tester, 'schedule-options', size);
       await _bottom(tester);
-      expect(find.text('生成计划方案'), findsOneWidget);
+      expect(find.text('确认时段并生成安排'), findsOneWidget);
       await _shot(tester, 'schedule-generate', size);
       expect(f.generated, 0);
       await tester.pumpWidget(const SizedBox());
@@ -179,7 +237,7 @@ void main() {
       await _to(tester, find.text('新增安排（2段）'));
       await _shot(tester, 'proposal-timeline', size);
       await _bottom(tester);
-      final save = find.widgetWithText(FButton, '保存已安排部分（仍有45分钟未安排）');
+      final save = find.widgetWithText(FButton, '保存已安排部分');
       expect(tester.widget<FButton>(save).onPress, isNull);
       await _shot(tester, 'proposal-confirm-disabled', size);
       await _to(tester, find.byType(AppCheckRow));
@@ -198,6 +256,28 @@ void main() {
     ) async {
       final f = PlanningFixture();
       f.item = {...f.item, 'title': '数据结构实验报告：复杂度分析与测试结果'};
+      final previous = f.api.dio.httpClientAdapter as ControlledTransport;
+      f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.method == 'GET' && r.path.endsWith('/items/a/progress')) {
+          return body([
+            {
+              'before_remaining_minutes': null,
+              'remaining_minutes': 90,
+              'actual_minutes': null,
+              'note': null,
+              'created_at': '2026-10-03T08:00:00+08:00',
+            },
+            {
+              'before_remaining_minutes': 90,
+              'remaining_minutes': 60,
+              'actual_minutes': 60,
+              'note': '完成误差分析',
+              'created_at': '2026-10-03T09:30:00+08:00',
+            },
+          ]);
+        }
+        return previous.respond(r);
+      });
       await bind(tester, f);
       await _open(tester, ProgressPage(controller: f.c, item: f.item), scale);
       await _shot(tester, 'progress-top', size);
@@ -214,78 +294,117 @@ void main() {
       expect(f.progressSaves, 0);
       expect(find.text('确认更新进度'), findsOneWidget);
       await _shot(tester, 'progress-confirm', size);
+      await ioTap(tester, find.text('返回修改'));
+      await _to(tester, find.text('查看进度记录'));
+      await ioTap(tester, find.text('查看进度记录'));
+      await _settleIo(tester);
+      await _to(tester, find.text('完成误差分析'));
+      expect(find.textContaining('未记录'), findsNothing);
+      expect(find.textContaining('待补齐'), findsNothing);
+      expect(find.text('null'), findsNothing);
+      await _shot(tester, 'progress-history', size);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
     });
 
-    testWidgets('inner plan list future history and locked cancellation $size', (
-      tester,
-    ) async {
-      final f = ScheduleFixture();
-      f.blocks = [
-        ...List<Map<String, dynamic>>.from(f.proposal()['blocks']).indexed.map(
-          (row) => {
-            ...row.$2,
-            'id': 'b${row.$1}',
+    testWidgets(
+      'inner plan list future history and locked cancellation $size',
+      (tester) async {
+        final f = ScheduleFixture();
+        f.blocks = [
+          ...List<Map<String, dynamic>>.from(
+            f.proposal()['blocks'],
+          ).indexed.map(
+            (row) => {
+              ...row.$2,
+              'id': 'b${row.$1}',
+              'version': 1,
+              'locked': row.$1 == 0,
+              'status': 'active',
+            },
+          ),
+          {
+            'id': 'past',
+            'item_id': 't',
+            'title': '已结束的文献整理计划',
+            'start_at': DateTime.now()
+                .toUtc()
+                .subtract(const Duration(days: 1, hours: 1))
+                .toIso8601String(),
+            'end_at': DateTime.now()
+                .toUtc()
+                .subtract(const Duration(days: 1))
+                .toIso8601String(),
+            'minutes': 60,
             'version': 1,
-            'locked': row.$1 == 0,
+            'locked': false,
             'status': 'active',
           },
-        ),
-        {
-          'id': 'past',
-          'item_id': 't',
-          'title': '已结束的文献整理计划',
-          'start_at': DateTime.now()
-              .toUtc()
-              .subtract(const Duration(days: 1, hours: 1))
-              .toIso8601String(),
-          'end_at': DateTime.now()
-              .toUtc()
-              .subtract(const Duration(days: 1))
-              .toIso8601String(),
-          'minutes': 60,
-          'version': 1,
-          'locked': false,
-          'status': 'active',
-        },
-      ];
-      final previous = f.api.dio.httpClientAdapter as ControlledTransport;
-      f.api.dio.httpClientAdapter = ControlledTransport((request) async {
-        if (request.path.endsWith('/plans')) {
-          return body({
-            'semester_id': 's',
-            'revision': f.revision,
-            'blocks': f.blocks,
-            'invalid_blocks': [],
-            'latest_proposal': f.proposal(),
-            'latest_applied': f.proposal(),
-          });
-        }
-        return previous.respond(request);
-      });
-      await tester.runAsync(() => f.c.bind('s'));
-      await _open(tester, PlanListPage(controller: f.c), scale);
-      await _shot(tester, 'records-top', size);
-      await _to(tester, find.text('解锁').first);
-      await _shot(tester, 'records-lock-controls', size);
-      await _bottom(tester);
-      expect(find.text('时间已过，尚未据此确认工作完成'), findsOneWidget);
-      await _shot(tester, 'records-history', size);
-      // Return to the first record through its lazy list, then show the real dialog.
-      final position = tester
-          .state<ScrollableState>(find.byType(Scrollable).first)
-          .position;
-      position.jumpTo(0);
-      await tester.pumpAndSettle();
-      await _to(tester, find.text('取消此段').first);
-      await tester.tap(find.text('取消此段').first);
-      await tester.pumpAndSettle();
-      expect(find.text('确认解锁并取消'), findsOneWidget);
-      await _shot(tester, 'records-cancel-confirm', size);
-      await tester.pumpWidget(const SizedBox());
-      f.c.dispose();
-    });
+        ];
+        final previous = f.api.dio.httpClientAdapter as ControlledTransport;
+        f.api.dio.httpClientAdapter = ControlledTransport((request) async {
+          if (request.path.endsWith('/plans')) {
+            return body({
+              'semester_id': 's',
+              'revision': f.revision,
+              'blocks': f.blocks,
+              'invalid_blocks': [],
+              'latest_proposal': f.proposal(),
+              'latest_applied': f.proposal(),
+            });
+          }
+          return previous.respond(request);
+        });
+        await tester.runAsync(() => f.c.bind('s'));
+        await _open(tester, PlanListPage(controller: f.c), scale);
+        await _shot(tester, 'records-top', size);
+        final firstBlock = find.byKey(const ValueKey('learning-plan-b0'));
+        await _to(tester, firstBlock);
+        expect(find.text('锁定'), findsNothing);
+        expect(find.text('解锁'), findsNothing);
+        expect(find.text('取消此段'), findsNothing);
+        await _shot(tester, 'records-lock-controls', size);
+        // The past record precedes b0. Return to the beginning before asking
+        // the forward-scrolling helper to reveal that lazy list child.
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position
+            .jumpTo(0);
+        await tester.pumpAndSettle();
+        await _to(tester, find.byKey(const ValueKey('learning-plan-past')));
+        await tester.tap(find.byKey(const ValueKey('learning-plan-past')));
+        await tester.pumpAndSettle();
+        expect(find.text('查看任务'), findsOneWidget);
+        expect(find.text('固定这段时间'), findsNothing);
+        expect(find.text('取消这段安排'), findsNothing);
+        Navigator.pop(tester.element(find.text('查看任务')));
+        await tester.pumpAndSettle();
+        await _bottom(tester);
+        await _to(tester, find.text('最近一次安排'));
+        await tester.tap(find.text('最近一次安排'));
+        await tester.pumpAndSettle();
+        await _bottom(tester);
+        expect(find.text('查看方案'), findsOneWidget);
+        expect(find.text('撤销这次安排'), findsOneWidget);
+        await _shot(tester, 'records-history', size);
+        final position = tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position;
+        position.jumpTo(0);
+        await tester.pumpAndSettle();
+        await _to(tester, firstBlock);
+        await tester.tap(firstBlock);
+        await tester.pumpAndSettle();
+        expect(find.text('允许调整时间'), findsOneWidget);
+        await tester.tap(find.text('取消这段安排'));
+        await tester.pumpAndSettle();
+        expect(find.text('取消这段固定安排？'), findsOneWidget);
+        expect(find.text('确认取消'), findsOneWidget);
+        await _shot(tester, 'records-cancel-confirm', size);
+        await tester.pumpWidget(const SizedBox());
+        f.c.dispose();
+      },
+    );
 
     testWidgets('inner tag management rename and merge impact $size', (
       tester,
@@ -356,6 +475,9 @@ void main() {
       await tester.tap(find.text('查看余量依据'));
       await tester.pumpAndSettle();
       await _shot(tester, 'risk-top', size);
+      await _to(tester, find.text('时间计算'));
+      await tester.tap(find.text('时间计算'));
+      await tester.pumpAndSettle();
       await _to(tester, find.text('可用时间如何扣除'));
       await _shot(tester, 'risk-capacity', size);
       await _bottom(tester);
@@ -405,8 +527,8 @@ void main() {
       expect(tester.widget<AppButton>(confirm).onPressed, isNull);
       await _bottom(tester, within: find.byType(AppDialog));
       await _shot(tester, 'plan-change-confirm-disabled', size);
-      await _to(tester, find.text('我确认解锁并取消所选锁定计划'));
-      await tester.tap(find.text('我确认解锁并取消所选锁定计划'));
+      await _to(tester, find.text('取消所选固定安排'));
+      await tester.tap(find.text('取消所选固定安排'));
       await tester.pumpAndSettle();
       expect(tester.widget<AppButton>(confirm).onPressed, isNotNull);
       await _shot(tester, 'plan-change-confirm-ready', size);

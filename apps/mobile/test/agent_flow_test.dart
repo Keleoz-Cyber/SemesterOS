@@ -72,7 +72,11 @@ void main() {
     await tester.runAsync(() => f.c.bind('s'));
     await mount(
       tester,
-      AgentPage(controller: f.c, semester: {'id': 's', 'name': '学期'}),
+      AgentPage(
+        controller: f.c,
+        semester: {'id': 's', 'name': '学期'},
+        initialThreadId: 't',
+      ),
     );
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 80)),
@@ -145,13 +149,19 @@ void main() {
       await tester.runAsync(() => f.c.bind('s'));
       await mount(
         tester,
-        AgentPage(controller: f.c, semester: {'id': 's', 'name': '学期'}),
+        AgentPage(
+          controller: f.c,
+          semester: {'id': 's', 'name': '学期'},
+          initialThreadId: 't',
+        ),
+        width: 320,
+        textScale: 1.6,
       );
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 80)),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('30分钟没有排入日程'), findsOneWidget);
+      expect(find.text('还有 30 分钟未安排'), findsOneWidget);
       await capture(tester, 'agent-plan-preview');
       expect(
         tester
@@ -319,14 +329,18 @@ void main() {
     await tester.runAsync(() => f.c.bind('s'));
     await mount(
       tester,
-      AgentPage(controller: f.c, semester: {'id': 's', 'name': '测试学期'}),
+      AgentPage(
+        controller: f.c,
+        semester: {'id': 's', 'name': '测试学期'},
+        initialThreadId: 't',
+      ),
     );
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 80)),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('2026-10-03'), findsOneWidget);
-    expect(find.textContaining('2026-10-05'), findsOneWidget);
+    expect(find.textContaining('10月3日'), findsOneWidget);
+    expect(find.textContaining('10月5日'), findsOneWidget);
     expect(find.text('暂定'), findsOneWidget);
     expect(find.text('已确定'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
@@ -414,7 +428,11 @@ void main() {
       await tester.runAsync(() => f.c.bind('s'));
       await mount(
         tester,
-        AgentPage(controller: f.c, semester: {'id': 's', 'name': '测试学期'}),
+        AgentPage(
+          controller: f.c,
+          semester: {'id': 's', 'name': '测试学期'},
+          initialThreadId: 'thread',
+        ),
       );
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 80)),
@@ -424,15 +442,25 @@ void main() {
       expect(find.textContaining('6412'), findsWidgets);
       expect(find.textContaining('6302'), findsWidgets);
       expect(applied, 0);
-      expect(find.text('历史消息 · 1'), findsOneWidget);
-      expect(find.text('历史答复' * 80), findsNothing);
+      expect(find.text('历史消息 · 1'), findsNothing);
+      await tester.drag(
+        find.byKey(const Key('agent-messages')),
+        const Offset(0, 1000),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('之前的问题'), findsOneWidget);
+      await tester.drag(
+        find.byKey(const Key('agent-messages')),
+        const Offset(0, -1500),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('参考课程0'), findsNothing);
       expect(find.text('确认修改').hitTestable(), findsOneWidget);
       await capture(tester, 'agent-change-preview');
       await tester.ensureVisible(find.text('确认修改'));
       await ioTap(tester, find.text('确认修改'));
       expect(applied, 1);
-      expect(find.text('已保存'), findsOneWidget);
+      expect(find.textContaining('已更新 课题组组会'), findsOneWidget);
       expect(find.text('确认修改'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();

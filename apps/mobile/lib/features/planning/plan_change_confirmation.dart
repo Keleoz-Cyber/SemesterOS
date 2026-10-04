@@ -1,8 +1,8 @@
 import '../../ui/app_controls.dart';
 import 'package:flutter/material.dart';
-import '../../ui/detail_widgets.dart';
 import '../../ui/campus_theme.dart';
 import '../items/item_widgets.dart';
+import '../items/task_surfaces.dart';
 import 'risk_widgets.dart';
 
 Future<Map<String, dynamic>?> confirmPlanChange(
@@ -53,7 +53,7 @@ Future<Map<String, dynamic>?> confirmPlanChange(
                       color: CampusColors.blueSoft,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: RecordFact(
+                    child: TaskFactStrip(
                       label: '修改后保留的安排',
                       value: '$keptCount段 · ${minutesLabel(kept)}',
                       icon: Icons.event_available_outlined,
@@ -71,7 +71,7 @@ Future<Map<String, dynamic>?> confirmPlanChange(
                         style: const TextStyle(color: CampusColors.ink),
                       ),
                       subtitle: Text(
-                        '${minutesLabel(block['minutes'])}${block['locked'] == true ? ' · 已锁定，需要单独确认解锁' : ''}',
+                        '${minutesLabel(block['minutes'])}${block['locked'] == true ? ' · 已固定，调整前需要确认' : ''}',
                         style: const TextStyle(color: CampusColors.muted),
                       ),
                       activeColor: CampusColors.teal,
@@ -98,7 +98,7 @@ Future<Map<String, dynamic>?> confirmPlanChange(
                   if (locked)
                     AppCheckRow(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('我确认解锁并取消所选锁定计划'),
+                      title: const Text('取消所选固定安排'),
                       value: unlock,
                       onChanged: (v) => setState(() => unlock = v!),
                     ),

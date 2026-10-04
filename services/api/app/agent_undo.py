@@ -137,11 +137,6 @@ def validate(db, user, s, data, current):
         error(409, 'UNDO_DEPENDENCY_CHANGED', '相关提醒、进度、复习、课次或计划已有后续变化，不能整批撤销')
     now = utcnow()
     for entry in data['entries']:
-        if entry['table'] == 'reality':
-            # A past official occurrence is a historical fact, not an editable slot.
-            patch = entry['after']['payload']['patch']
-            if any(instant(e['start_at']) <= now for e in patch['before'] + patch['after']):
-                error(409, 'UNDO_PAST_OCCURRENCE', '相关课次已开始，不能通过撤销改写历史')
         if entry['table'] == 'plans':
             if entry['after']['locked'] or any(instant(v['start_at']) <= now for v in
                     (entry['before'], entry['after']) if v and v['status'] == 'active'):
@@ -329,6 +324,7 @@ def apply_undo(db, user, preview):
                         'request': {'kind': 'undo', 'title': '撤销：' + after['payload']['request'].get('title', '课次调整'),
                             'source_text': '用户确认撤销这次操作', 'targets': [e['id'] for e in patch['after']]},
                         'patch': reverse_patch,
+                        'base_calendar': {'first_monday': s.first_monday},
                         'undo_source_change_id': target.id, 'undo_source_run_id': row.id,
                         'impact': reverse_impact}, receipt={'undone': True, 'source_change_id': target.id,
                             'semester_id': s.id, 'revision': s.revision + 1})

@@ -1,10 +1,11 @@
 import 'app_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'campus_theme.dart';
 import 'assistant_scope.dart';
 import 'package:forui/forui.dart';
 import 'forui_theme.dart';
+import 'accessibility.dart';
+import 'motion.dart';
 
 class AppNavigation extends StatelessWidget {
   final int selected;
@@ -30,9 +31,11 @@ class AppNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ShiriForuiTheme(
     child: DecoratedBox(
-      decoration: const BoxDecoration(
-        color: CampusColors.surface,
-        border: Border(top: BorderSide(color: CampusColors.line)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
       ),
       child: SafeArea(
         top: false,
@@ -50,16 +53,24 @@ class AppNavigation extends StatelessWidget {
               },
               children: [
                 for (var i = 0; i < labels.length; i++)
-                  Semantics(
-                    excludeSemantics: true,
-                    button: true,
+                  SemanticTab(
+                    index: i,
+                    total: labels.length,
+                    childHandlesInput: true,
+                    // Replace this one native tab's duplicate label/count only.
+                    // Its keyboard and pointer handlers remain in the F item.
+                    replaceNativeSemantics: true,
                     selected: selected == i,
                     label: labels[i],
                     onTap: () {
                       if (selected != i) onSelected(i);
                     },
                     child: FBottomNavigationBarItem(
-                      icon: Icon(selected == i ? filled[i] : outlined[i]),
+                      icon: _NavigationGlyph(
+                        selected: selected == i,
+                        outlined: outlined[i],
+                        filled: filled[i],
+                      ),
                       label: Text(labels[i]),
                     ),
                   ),
@@ -72,44 +83,109 @@ class AppNavigation extends StatelessWidget {
   );
 }
 
+class _NavigationGlyph extends StatelessWidget {
+  final bool selected;
+  final IconData outlined, filled;
+  const _NavigationGlyph({
+    required this.selected,
+    required this.outlined,
+    required this.filled,
+  });
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: 24,
+    child: AnimatedSwitcher(
+      key: ValueKey(AppMotion.reduced(context)),
+      duration: AppMotion.feedback(context),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeOutCubic,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: animation.drive(
+            Tween(begin: const Offset(0, .08), end: Offset.zero),
+          ),
+          child: child,
+        ),
+      ),
+      child: Icon(
+        selected ? filled : outlined,
+        key: ValueKey(selected),
+        size: 24,
+      ),
+    ),
+  );
+}
+
 class AssistantDock extends StatelessWidget {
   const AssistantDock({super.key});
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
     child: Material(
-      color: CampusColors.blueSoft,
+      color: Theme.of(context).colorScheme.primaryContainer,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       clipBehavior: Clip.antiAlias,
       child: Row(
         children: [
           Expanded(
-            child: InkWell(
-              onTap: () => AssistantScope.open(context),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 48),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.edit_note_rounded,
-                        size: 24,
-                        color: CampusColors.primary,
-                      ),
-                      SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          '输入通知或日程问题',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: CampusColors.muted,
+            child: SemanticButton(
+              key: const Key('assistant-dock-input'),
+              label: '输入通知或日程问题',
+              onPressed: () => AssistantScope.open(context),
+              childHandlesInput: true,
+              child: InkWell(
+                onTap: () => AssistantScope.open(context),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.edit_note_rounded,
+                          size: 24,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final style = TextStyle(
+                                fontSize: 14,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              );
+                              String caption = '记录';
+                              for (final value in const [
+                                '输入通知或日程问题',
+                                '输入通知',
+                                '记录',
+                              ]) {
+                                final text = TextPainter(
+                                  text: TextSpan(text: value, style: style),
+                                  textDirection: Directionality.of(context),
+                                  textScaler: MediaQuery.textScalerOf(context),
+                                )..layout();
+                                final fits = text.width <= constraints.maxWidth;
+                                text.dispose();
+                                if (fits) {
+                                  caption = value;
+                                  break;
+                                }
+                              }
+                              return ExcludeSemantics(
+                                child: Text(caption, style: style, maxLines: 1),
+                              );
+                            },
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -118,18 +194,18 @@ class AssistantDock extends StatelessWidget {
           AppIconButton(
             tooltip: '图片通知',
             onPressed: () => AssistantScope.open(context, mediaKind: 'image'),
-            icon: const Icon(
+            icon: Icon(
               Icons.add_photo_alternate_outlined,
               size: 22,
-              color: CampusColors.muted,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 3),
             child: AppIconButton.filled(
               style: IconButton.styleFrom(
-                backgroundColor: CampusColors.teal,
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                foregroundColor: Theme.of(context).colorScheme.onSecondary,
               ),
               tooltip: '语音输入',
               onPressed: () => AssistantScope.open(context, mediaKind: 'audio'),

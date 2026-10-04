@@ -1,7 +1,6 @@
 from datetime import date, datetime, time, timedelta
 from hashlib import sha256
 import json
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy import delete, select
@@ -9,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from .auth import current_user, error
 from .database import get_db
-from .models import CourseMeeting, IdempotencyRecord, ImportBatch, RealityChange, Semester, StudyItem, User
+from .models import CourseMeeting, IdempotencyRecord, ImportBatch, Semester, StudyItem, User
 from .schemas import ApplyInput, ImportInput, SemesterInput
 
 router = APIRouter()
@@ -21,6 +20,17 @@ def fingerprint(value):
 
 def identity(course):
     return fingerprint([course.get("source_id") or course["title"], course["weekday"], course["weeks"], course["sections"]])
+
+
+def course_payload(course):
+    # Additive fields should not turn every existing HAUT import into a change.
+    value = course.model_dump(mode='json', exclude={'expected_revision'})
+    for key in ('start_time', 'end_time'):
+        if value.get(key) is None:
+            value.pop(key, None)
+    if not value.get('attendance_exempt'):
+        value.pop('attendance_exempt', None)
+    return value
 
 
 def owned_semester(db, user, sid, lock=False):
@@ -79,6 +89,8 @@ def create_semester(body: SemesterInput, user: User = Depends(current_user), db:
 def classify_import(db, batch):
     existing = list(db.scalars(select(CourseMeeting).where(
         CourseMeeting.user_id == batch.user_id, CourseMeeting.semester_id == batch.semester_id)))
+    source_batches = {row.id: row for row in db.scalars(select(ImportBatch).where(
+        ImportBatch.user_id == batch.user_id, ImportBatch.semester_id == batch.semester_id))}
     by_key = {row.identity_key: row for row in existing}
     reserved_exact = {by_key[identity(course)].id for course in batch.courses
                       if identity(course) in by_key}
@@ -102,6 +114,15 @@ def classify_import(db, batch):
             row.payload['source_id'] == course['source_id'] or
             (not row.payload.get('source_id') or not course.get('source_id')) and
             row.payload['title'] == course['title'])]
+        if batch.source == 'hlju_webview':
+            matches = [row for row in matches if row.source_batch_id in source_batches and
+                       source_batches[row.source_batch_id].source == batch.source and
+                       source_batches[row.source_batch_id].source_term == batch.source_term]
+            if len(matches) > 1 and course.get('source_id'):
+                same_slot = [row for row in matches if row.payload['weekday'] == course['weekday']
+                             and row.payload['sections'] == course['sections']]
+                same_day = [row for row in matches if row.payload['weekday'] == course['weekday']]
+                matches = same_slot or same_day or matches
         if len(matches) > 1:
             error(422, 'AMBIGUOUS_COURSE',
                   f"“{course['title']}”对应多条已有课程，暂不能自动替换，请先核对旧课表")
@@ -112,26 +133,29 @@ def classify_import(db, batch):
         else:
             new_count += 1
     missing_school = []
-    if batch.source == 'haut_webview' and batch.source_term:
-        source_batches = {row.id: row for row in db.scalars(select(ImportBatch).where(
-            ImportBatch.user_id == batch.user_id,
-            ImportBatch.semester_id == batch.semester_id))}
+    if batch.source in ('haut_webview', 'hlju_webview') and batch.source_term:
         missing_school = [
             {'course_id': row.id, 'before': row.payload}
             for row in existing
             if row.id not in used and not row.manually_edited and
             row.source_batch_id in source_batches and
-            source_batches[row.source_batch_id].source == 'haut_webview' and
+            source_batches[row.source_batch_id].source == batch.source and
             source_batches[row.source_batch_id].source_term == batch.source_term
         ]
     return changes, new_count, unchanged, missing_school
 
 
 def summarize(db, batch):
+    from .import_extras import classify_extras
     changes, new_count, unchanged, missing_school = classify_import(db, batch)
+    extra_changes, extra_new, extra_unchanged, protected = classify_extras(db, batch)
     return {"id": batch.id, "semester_id": batch.semester_id, "base_revision": batch.base_revision,
             "source": batch.source, "source_term": batch.source_term, "courses": batch.courses, "new_count": new_count,
-            "unchanged_count": unchanged, "changed_count": len(changes), "changed_courses": changes,
+            "unchanged_count": unchanged, "changed_count": len(changes) + len(extra_changes), "changed_courses": changes,
+            "extras": batch.extras or [], "new_extra_count": len(extra_new),
+            "unchanged_extra_count": extra_unchanged, "changed_extras": extra_changes,
+            "protected_extras": protected, "protected_extra_count": len(protected),
+            "source_first_monday": batch.source_first_monday,
             "missing_count": len(missing_school), "missing_courses": missing_school,
             "applied": batch.receipt is not None}
 
@@ -141,6 +165,11 @@ def preview_import(body: ImportInput, user: User = Depends(current_user), db: Se
                    idempotency_key: str | None = Header(default=None)):
     s = owned_semester(db, user, body.semester_id, lock=True)
     request = body.model_dump(mode="json")
+    request['courses'] = [course_payload(c) for c in body.courses]
+    if not body.extras and 'extras' not in body.model_fields_set:
+        request.pop('extras', None)
+    if body.source_first_monday is None and 'source_first_monday' not in body.model_fields_set:
+        request.pop('source_first_monday', None)
     cached = replay(db, user, "preview-import", idempotency_key, request)
     if cached is not None:
         return cached
@@ -152,17 +181,28 @@ def preview_import(body: ImportInput, user: User = Depends(current_user), db: Se
             error(422, "CALENDAR_MISMATCH",
                   f"教务课表包含第{maximum}周，当前学期只设了{s.total_weeks}周。请修改学期周数后重试")
         missing = set(c.sections) - known
-        if missing:
+        if missing and c.start_time is None:
             section = min(missing)
             error(422, "CALENDAR_MISMATCH",
                   f"教务课表使用第{section}节，当前学期没有这节的时间。请补充节次后重试")
-        data = c.model_dump()
+        data = course_payload(c)
         key = identity(data)
         if key in courses and courses[key] != data:
             error(422, "AMBIGUOUS_COURSE", "同一课次有不同信息，请先核对")
         courses[key] = data
+    extras = {}
+    for extra in body.extras:
+        if extra.weeks and max(extra.weeks) > s.total_weeks:
+            error(422, 'CALENDAR_MISMATCH', '课程周次超出当前学期，请先核对学期周数')
+        data = extra.model_dump(mode='json')
+        key = (extra.kind, extra.source_id)
+        if key in extras and extras[key] != data:
+            error(422, 'AMBIGUOUS_COURSE', '同一来源记录有不同信息，请先核对')
+        extras[key] = data
     batch = ImportBatch(user_id=user.id, semester_id=s.id, source=body.source, source_term=body.source_term,
-                        courses=list(courses.values()), base_revision=s.revision)
+                        courses=list(courses.values()), extras=list(extras.values()),
+                        source_first_monday=body.source_first_monday.isoformat() if body.source_first_monday else None,
+                        base_revision=s.revision)
     db.add(batch)
     db.flush()
     response = summarize(db, batch)
@@ -191,16 +231,14 @@ def apply_import(batch_id: str, body: ApplyInput, user: User = Depends(current_u
     if s.revision != batch.base_revision:
         error(409, "SNAPSHOT_STALE", "课表已有更新，请重新核对导入内容")
     changes, _, _, missing_school = classify_import(db, batch)
-    if changes and not body.replace_changed:
+    from .import_extras import classify_extras, apply_extras
+    extra_changes, extra_new, _, protected_extras = classify_extras(db, batch)
+    if (changes or extra_changes) and not body.replace_changed:
         error(409, "CHANGE_REQUIRES_REVIEW", "存在与已保存课次不同的信息，本批请先核对，不能直接覆盖")
-    if body.remove_missing and batch.source != 'haut_webview':
+    if body.remove_missing and batch.source not in ('haut_webview', 'hlju_webview'):
         error(422, 'INVALID_IMPORT', '只有完整的教务课表可移除未出现的旧教务课程')
     removed_count = 0
     if body.remove_missing and missing_school:
-        if db.scalar(select(RealityChange.id).where(
-                RealityChange.user_id == user.id, RealityChange.semester_id == s.id,
-                RealityChange.applied_revision.is_not(None)).limit(1)) is not None:
-            error(409, 'APPLIED_CHANGE', '已有确认的调课或停课，请先核对变化，暂不能移除原课程')
         from .items import audit
         from .reminder_rules import utcnow
         missing_ids = {row['course_id'] for row in missing_school}
@@ -222,14 +260,15 @@ def apply_import(batch_id: str, body: ApplyInput, user: User = Depends(current_u
         new_key = identity(change['after'])
         if new_key in occupied_keys and occupied_keys[new_key] != course_id:
             error(422, 'AMBIGUOUS_COURSE', '两条课程会变成相同课次，请返回学校课表核对')
-        if db.scalar(select(RealityChange.id).where(
-                RealityChange.user_id == user.id, RealityChange.semester_id == s.id,
-                RealityChange.applied_revision.is_not(None)).limit(1)) is not None:
-            error(409, 'APPLIED_CHANGE', '已有确认的调课或停课，请先核对变化，暂不能替换原课程')
-        linked = any(item.payload.get('course_id') == course_id for item in db.scalars(
-            select(StudyItem).where(StudyItem.user_id == user.id, StudyItem.semester_id == s.id)))
-        if change['before']['title'] != change['after']['title'] and linked:
-            error(409, 'LINKED_ITEM', '课程名称变化且本学期有事项，请先核对关联事项')
+        if change['before']['title'] != change['after']['title']:
+            from .items import audit
+            from .reminder_rules import utcnow
+            for item in db.scalars(select(StudyItem).where(StudyItem.user_id == user.id, StudyItem.semester_id == s.id)):
+                if item.payload.get('course_id') == course_id:
+                    item.payload = {**item.payload, 'course_title': change['after']['title']}
+                    item.version += 1
+                    item.updated_at = utcnow().isoformat()
+                    audit(db, item, '重新导入后关联课程名称已更新')
         old = db.scalar(select(CourseMeeting).where(CourseMeeting.id == course_id,
             CourseMeeting.user_id == user.id, CourseMeeting.semester_id == s.id))
         old.identity_key = new_key
@@ -245,10 +284,13 @@ def apply_import(batch_id: str, body: ApplyInput, user: User = Depends(current_u
             db.add(CourseMeeting(user_id=user.id, semester_id=s.id, identity_key=key, payload=c, source_batch_id=batch.id))
             existing.add(key)
             count += 1
-    if count or changes or removed_count:
+    extra_count, extra_replaced = apply_extras(db, user, s, batch, extra_changes, extra_new)
+    if count or changes or removed_count or extra_count or extra_replaced:
         s.revision += 1
     response = {"semester_id": s.id, "revision": s.revision, "imported_count": count,
                 "replaced_count": len(changes), "removed_count": removed_count,
+                "imported_extra_count": extra_count, "replaced_extra_count": extra_replaced,
+                "protected_extra_count": len(protected_extras),
                 "batch_id": batch.id}
     batch.receipt = response
     remember(db, user, operation, idempotency_key, request, response)
@@ -270,5 +312,7 @@ def timetable(sid: str, week: int = Query(ge=1, le=30), user: User = Depends(cur
         if instant(e['start_at'])<finish and instant(e['end_at'])>begin]
     events.sort(key=lambda e: (e["start_at"], e["title"], e["id"]))
     for e in events:
-        e["conflict"] = any(o["id"] != e["id"] and o["start_at"] < e["end_at"] and e["start_at"] < o["end_at"] for o in events)
+        e["conflict"] = not e.get('attendance_exempt') and any(
+            o["id"] != e["id"] and not o.get('attendance_exempt') and
+            o["start_at"] < e["end_at"] and e["start_at"] < o["end_at"] for o in events)
     return {"semester_id": sid, "week": week, "revision": s.revision, "events": events}

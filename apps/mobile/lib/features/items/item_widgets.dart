@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/breathing_card.dart';
+import '../../ui/accessibility.dart';
+import '../notices/notice_fields.dart';
+import '../../ui/date_labels.dart';
+import 'task_state_glyph.dart';
 
 String kindLabel(String? kind) => switch (kind) {
   'exam' => '考试',
@@ -9,6 +14,10 @@ String kindLabel(String? kind) => switch (kind) {
 };
 String itemTimeLabel(Map<String, dynamic> item, {bool includeMissing = true}) {
   final t = Map<String, dynamic>.from(item['time'] ?? {});
+  if (t['meaning'] != null && t['meaning'] != 'unspecified' ||
+      '${t['expression'] ?? ''}'.trim().isNotEmpty) {
+    return noticeTime(t, task: item['kind'] != 'exam');
+  }
   final suffix = item['kind'] == 'exam' ? '开始' : '截止';
   return switch (t['precision']) {
     'exact' =>
@@ -16,18 +25,27 @@ String itemTimeLabel(Map<String, dynamic> item, {bool includeMissing = true}) {
           ? '${displayInstant(t['at'])} 至 ${displayInstant(t['end_at'])}'
           : '${displayInstant(t['at'])} $suffix',
     'date' =>
-      '${t['date']} $suffix${t['day_end_confirmed'] == true ? ' · 已确认当天结束前' : (includeMissing ? ' · 时刻待确认' : '')}',
-    'week' => '第${t['week']}周${includeMissing ? ' · 具体日期待确认' : ''}',
-    'range' =>
-      '${t['date']} 至 ${t['end_date']}${includeMissing ? ' · 具体时间待确认' : ''}',
-    _ => '时间待确认',
+      '${noticeDate(t['date'])} $suffix${t['day_end_confirmed'] == true ? ' · 当天结束前' : ''}',
+    'week' => '第${t['week']}周',
+    'range' => '${noticeDate(t['date'])} 至 ${noticeDate(t['end_date'])}',
+    _ => '',
   };
 }
 
 String displayInstant(String? value) {
-  if (value == null) return '时间待确认';
+  if (value == null) return '';
   final t = schoolTime(value);
-  return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')} ${hhmm(t)}';
+  return '${studentDate(t, weekday: true)} ${hhmm(t)}';
+}
+
+String displayInterval(String? start, String? end) {
+  if (start == null) return '';
+  if (end == null) return displayInstant(start);
+  final a = schoolTime(start), b = schoolTime(end);
+  if (a.year == b.year && a.month == b.month && a.day == b.day) {
+    return '${studentDate(a, weekday: true)} ${hhmm(a)}–${hhmm(b)}';
+  }
+  return '${displayInstant(start)} 至 ${displayInstant(end)}';
 }
 
 String _shortDate(DateTime date) {
@@ -37,6 +55,10 @@ String _shortDate(DateTime date) {
 
 String _compactTimeLabel(Map<String, dynamic> item) {
   final time = Map<String, dynamic>.from(item['time'] ?? {});
+  if (time['meaning'] != null && time['meaning'] != 'unspecified' ||
+      '${time['expression'] ?? ''}'.trim().isNotEmpty) {
+    return noticeTime(time, task: item['kind'] != 'exam');
+  }
   final suffix = item['kind'] == 'exam' ? '开始' : '截止';
   final at = DateTime.tryParse('${time['at']}');
   final end = DateTime.tryParse('${time['end_at']}');
@@ -94,28 +116,54 @@ List<Map<String, dynamic>> orderedItems(List<Map<String, dynamic>> input) {
 class ItemCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onTap;
+  final VoidCallback? onDoubleTap, onLongPress;
   final Widget? riskFooter;
+  final bool animateUrgency;
   const ItemCard({
     super.key,
     required this.item,
     required this.onTap,
+    this.onDoubleTap,
+    this.onLongPress,
     this.riskFooter,
+    this.animateUrgency = false,
   });
   @override
   Widget build(BuildContext context) {
     final active = item['lifecycle'] == 'active';
     final exam = item['kind'] == 'exam';
-    final overdue =
-        active &&
-        DateTime.tryParse(
-              '${item['anchor_at'] ?? item['time']?['at']}',
-            )?.isBefore(DateTime.now()) ==
-            true;
-    final course = '${item['course_title'] ?? ''}'.trim();
+    final deadline = itemDeadline(item);
+    final minutesToDeadline = deadline?.difference(DateTime.now()).inMinutes;
+    final overdue = active && deadline?.isBefore(DateTime.now()) == true;
     final timeLabel = _compactTimeLabel(item);
-    final remaining = item['remaining_minutes'];
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    final course = '${item['course_title'] ?? ''}'.trim();
+    final remainingWork = item['remaining_minutes'] as num?;
+    final stateLabel = !active
+        ? item['lifecycle'] == 'completed'
+              ? '已完成'
+              : '已取消'
+        : '';
+    final color = !active
+        ? CampusColors.muted
+        : overdue
+        ? CampusColors.error
+        : TimeUrgency.getColor(minutesToDeadline);
+    final timing = [
+      if (active &&
+          minutesToDeadline != null &&
+          minutesToDeadline.abs() <= 4320)
+        TimeUrgency.getLabel(minutesToDeadline),
+      if (timeLabel.isNotEmpty) timeLabel,
+    ].join(' · ');
+    final card = SemanticCard(
+      label: '${item['title']}，${kindLabel(item['kind'])}',
+      value: [
+        if (timing.isNotEmpty) timing,
+        if (stateLabel.isNotEmpty) stateLabel,
+      ].join('，'),
+      hint: onLongPress == null ? null : '长按查看快捷操作',
+      onTap: onTap,
+      childHandlesInput: true,
       child: Container(
         decoration: BoxDecoration(
           color: CampusColors.surface,
@@ -130,117 +178,134 @@ class ItemCard extends StatelessWidget {
               color: Colors.transparent,
               child: InkWell(
                 onTap: onTap,
+                onDoubleTap: onDoubleTap,
+                onLongPress: onLongPress,
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
                     12,
-                    7,
+                    8,
                     12,
-                    riskFooter == null ? 8 : 4,
+                    riskFooter == null ? 10 : 6,
                   ),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 48),
                     child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 30,
-                        height: 30,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: exam
-                              ? CampusColors.teal.withValues(alpha: .1)
-                              : CampusColors.blueSoft,
-                          borderRadius: BorderRadius.circular(8),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: exam
+                                    ? CampusColors.tealSoft
+                                    : CampusColors.blueSoft,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: exam
+                                  ? const Icon(
+                                      Icons.school_outlined,
+                                      size: 18,
+                                      color: CampusColors.teal,
+                                    )
+                                  : TaskStateGlyph(
+                                      state: '${item['lifecycle']}',
+                                      color: active
+                                          ? CampusColors.primary
+                                          : CampusColors.muted,
+                                    ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                '${item['title']}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: CampusColors.ink,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              size: 18,
+                              color: CampusColors.muted,
+                            ),
+                          ],
                         ),
-                        child: Icon(
-                          exam ? Icons.school_outlined : Icons.task_alt_rounded,
-                          color: exam ? CampusColors.teal : CampusColors.primary,
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '${item['title']}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: CampusColors.ink,
-                            height: 1.3,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3, left: 40),
+                          child: Text(
+                            [
+                              kindLabel(item['kind']),
+                              if (course.isNotEmpty) course,
+                              if (item['certainty'] == 'tentative') '暂定',
+                              if (stateLabel.isNotEmpty) stateLabel,
+                              if (overdue && minutesToDeadline!.abs() > 4320)
+                                '已逾期',
+                              if (active && item['priority'] == 'high') '优先',
+                              if (active && !exam && remainingWork != null)
+                                '还需 ${remainingWork.toInt()} 分钟',
+                            ].join(' · '),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: CampusColors.muted,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        size: 18,
-                        color: CampusColors.muted,
-                      ),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2, left: 40),
-                    child: Text(
-                      [
-                        kindLabel(item['kind']),
-                        if (course.isNotEmpty) course,
-                        if (item['certainty'] == 'tentative') '暂定',
-                        if (!active)
-                          item['lifecycle'] == 'completed' ? '已完成' : '已取消',
-                        if (active && item['priority'] == 'high') '优先',
-                      ].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: CampusColors.muted,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                  if (timeLabel.isNotEmpty || (!exam && active && remaining != null))
-                    Padding(
-                      padding: const EdgeInsets.only(top: 5),
-                      child: Wrap(
-                        spacing: 10,
-                        runSpacing: 2,
-                        children: [
-                          if (timeLabel.isNotEmpty)
-                            Text(
-                              '$timeLabel${overdue ? ' · 已过期' : ''}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: overdue
-                                    ? Theme.of(context).colorScheme.error
-                                    : CampusColors.primary,
-                              ),
+                        if (timing.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  overdue
+                                      ? Icons.warning_rounded
+                                      : Icons.access_time_rounded,
+                                  size: 16,
+                                  color: color,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    timing,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          if (!exam && active && remaining != null)
-                            Text(
-                              '还需 $remaining 分钟',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: CampusColors.muted,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
-            if (riskFooter != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                child: riskFooter!,
-              ),
+            ?riskFooter,
           ],
         ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: BreathingCard(
+        enabled:
+            animateUrgency &&
+            active &&
+            minutesToDeadline != null &&
+            minutesToDeadline > 0 &&
+            minutesToDeadline < 4320,
+        remainingMinutes: minutesToDeadline,
+        child: card,
       ),
     );
   }

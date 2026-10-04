@@ -2,7 +2,7 @@
 import os,time
 from .database import make_engine
 from .media_files import root,path_for
-from .media_jobs import claim,publish
+from .media_jobs import claim,publish,progress
 from .media_recognition import recognize
 
 
@@ -37,7 +37,8 @@ def main():
             if job is None:
                 if not agent_work:time.sleep(.5)
                 continue
-            try:publish(engine,job,recognize(path_for(root(),job['storage_key']),job['kind']))
+            try:publish(engine,job,recognize(path_for(root(),job['storage_key']),job['kind'],
+                on_progress=lambda message:progress(engine,job,message)))
             except FileNotFoundError:publish(engine,job,error='MODEL_OR_FILE_MISSING')
             except Exception:publish(engine,job,error='RECOGNITION_FAILED')
     finally:engine.dispose()

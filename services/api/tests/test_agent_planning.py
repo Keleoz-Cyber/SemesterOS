@@ -53,7 +53,7 @@ def test_agent_plan_preview_and_apply_stay_in_caller_transaction(client, monkeyp
     assert sum(b['minutes'] for b in client.get(f"/api/v1/semesters/{s['id']}/plans", headers=h).json()['blocks']) == 120
 
 
-@pytest.mark.parametrize('missing', ['remaining_minutes', 'start_policy', 'availability'])
+@pytest.mark.parametrize('missing', ['remaining_minutes', 'waiting_dependency', 'availability'])
 def test_missing_facts_return_clarification_without_proposal(client, monkeypatch, missing):
     from app.models import StudyItem, PlanProposal
     h, s, item = setup(client, monkeypatch)
@@ -63,14 +63,34 @@ def test_missing_facts_return_clarification_without_proposal(client, monkeypatch
             from app.planning import availability_row
             user, _ = context(db, item, s['id'])
             db.delete(availability_row(db, user, s['id']))
+        elif missing == 'waiting_dependency':
+            row.payload = {**row.payload, 'start_policy':'unconfirmed',
+                'details':{**row.payload.get('details', {}), 'conditions':['收到审批结果后开始']}}
         else:
-            row.payload = {**row.payload, missing: None if missing == 'remaining_minutes' else 'unconfirmed'}
+            row.payload = {**row.payload, 'remaining_minutes':None}
         db.flush()
         result = prepare(db, item, s['id'])
         assert result['status'] == 'needs_input'
         assert result['messages']
         assert result.get('kind') != 'plan'
         assert db.scalar(select(func.count()).select_from(PlanProposal)) == 0
+
+
+def test_ordinary_unconfirmed_start_creates_preview_without_inventing_record_facts(client, monkeypatch):
+    from app.models import StudyItem, PlanProposal, PlanBlock
+    h, s, item = setup(client, monkeypatch)
+    with Session(client.app.state.engine) as db:
+        row = db.get(StudyItem, item['id'])
+        row.payload = {**row.payload, 'start_policy':'unconfirmed',
+            'details':{**row.payload.get('details', {}), 'conditions':['本科生', '尚未申请']}}
+        original = dict(row.payload)
+        db.flush()
+        result = prepare(db, item, s['id'])
+        assert result['kind']=='plan' and result['after']['status']=='FEASIBLE_COMPLETE'
+        assert sum(b['minutes'] for b in result['after']['blocks'])==120
+        assert row.payload==original and row.payload.get('earliest_start_at') is None
+        assert db.scalar(select(func.count()).select_from(PlanProposal))==1
+        assert db.scalar(select(func.count()).select_from(PlanBlock))==0
 
 
 def test_target_provenance_active_owner_and_ambiguity_are_checked(client, monkeypatch):

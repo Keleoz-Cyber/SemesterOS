@@ -4,9 +4,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:semester_os/features/media/drafts.dart';
 import 'package:semester_os/features/media/inline_capture_controller.dart';
+import 'package:semester_os/features/items/items_controller.dart';
+import 'controller_test.dart' show MemoryStore;
 import 'api_session_test.dart' show ControlledTransport, account, body;
 import 'media_flow_test.dart' show MediaTestPaths, source;
 import 'schedule_flow_test.dart' show ScheduleFixture;
+
+class _FailingDraftStore extends MemoryStore {
+  bool failWrites = false;
+  @override
+  Future<void> write(String owner, Map<String, dynamic> value) async {
+    if (failWrites && owner.startsWith('capture:')) {
+      throw const FileSystemException('draft storage unavailable');
+    }
+    await super.write(owner, value);
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +45,60 @@ void main() {
     PathProviderPlatform.instance = previousPaths;
     await temp.delete(recursive: true);
   });
+
+  test('durable detach removes only its owned local copy', () async {
+    final folder = await CaptureDrafts.folder('preview');
+    await folder.create(recursive: true);
+    final file = await File('${folder.path}/owned.wav').writeAsBytes([1, 2, 3]);
+    await drafts.save('inline:s', {'local': file.path, 'source': source('a')});
+    f.api.dio.httpClientAdapter = ControlledTransport(
+      (r) async => body(source('a')),
+    );
+    await capture.restore();
+    await capture.detach();
+    expect(await drafts.read('inline:s'), isNull);
+    expect(await file.exists(), isFalse);
+    final external = await File('${temp.path}/caller.wav').writeAsBytes([9]);
+    await drafts.save('inline:s', {
+      'local': external.path,
+      'source': source('a'),
+    });
+    await capture.restore();
+    await capture.detach();
+    expect(await external.exists(), isTrue);
+  });
+
+  test(
+    'failed detach preserves the attachment and its retryable file',
+    () async {
+      final store = _FailingDraftStore();
+      final items = ItemsController(f.api, store, f.c.reminders)
+        ..semesterId = 's';
+      final localDrafts = CaptureDrafts(store, 'preview', () => true);
+      capture.dispose();
+      capture = InlineCaptureController(controller: items, semesterId: 's');
+      final folder = await CaptureDrafts.folder('preview');
+      await folder.create(recursive: true);
+      final file = await File('${folder.path}/retained.wav').writeAsBytes([1]);
+      await localDrafts.save('inline:s', {
+        'local': file.path,
+        'source': source('a'),
+      });
+      f.api.dio.httpClientAdapter = ControlledTransport(
+        (r) async => body(source('a')),
+      );
+      await capture.restore();
+      store.failWrites = true;
+      await capture.detach();
+      expect(capture.local, file.path);
+      expect(capture.source?['id'], 'a');
+      expect(capture.error, isNotNull);
+      expect(await file.exists(), isTrue);
+      expect((await localDrafts.read('inline:s'))!['local'], file.path);
+      capture.dispose();
+      items.dispose();
+    },
+  );
 
   test(
     'copies temporary audio and retries upload with the persisted key',

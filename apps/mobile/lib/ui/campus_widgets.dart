@@ -76,6 +76,8 @@ class SectionHeading extends StatelessWidget {
     child: OverflowBar(
       alignment: MainAxisAlignment.spaceBetween,
       overflowAlignment: OverflowBarAlignment.end,
+      spacing: 12,
+      overflowSpacing: 8,
       children: [
         Text(
           title,
@@ -84,7 +86,14 @@ class SectionHeading extends StatelessWidget {
         if (action != null)
           AppTextButton(
             onPressed: onAction,
-            child: Text(action!, style: const TextStyle(fontSize: 13)),
+            style: AppTextButton.styleFrom(
+              foregroundColor: CampusColors.muted,
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            child: Text(action!),
           ),
       ],
     ),
@@ -120,54 +129,6 @@ class SoftNotice extends StatelessWidget {
             ),
           ),
         ),
-      ],
-    ),
-  );
-}
-
-class CampusHero extends StatelessWidget {
-  final String eyebrow, title, subtitle;
-  final bool illustrated;
-  const CampusHero({
-    super.key,
-    required this.eyebrow,
-    required this.title,
-    required this.subtitle,
-    this.illustrated = false,
-  });
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (eyebrow.isNotEmpty) ...[
-          Text(
-            eyebrow,
-            style: const TextStyle(fontSize: 13, color: CampusColors.muted),
-          ),
-          const SizedBox(height: 6),
-        ],
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            height: 1.25,
-            color: CampusColors.ink,
-          ),
-        ),
-        if (subtitle.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.5,
-              color: CampusColors.muted,
-            ),
-          ),
-        ],
       ],
     ),
   );

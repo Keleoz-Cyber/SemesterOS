@@ -1,6 +1,4 @@
-from collections import defaultdict, deque
-from datetime import datetime, timezone
-from threading import Lock
+from datetime import datetime
 import time
 from typing import Literal
 
@@ -17,6 +15,7 @@ from .models import CourseMeeting, TextCandidate, User
 from .reminder_rules import utcnow
 from .schemas import Input
 from .text_model import deepseek_text
+from .model_context import model_reference
 
 router = APIRouter()
 
@@ -59,7 +58,7 @@ def capture_text(body: CaptureInput, request: Request, user: User = Depends(curr
         for c in db.scalars(select(CourseMeeting).where(CourseMeeting.user_id == user.id,
             CourseMeeting.semester_id == s.id))]
     model = getattr(request.app.state, 'text_model', deepseek_text)
-    raw, metadata = model(body.text, body.reference_at.isoformat(), courses)
+    raw, metadata = model(body.text, model_reference(body.reference_at)['reference_at'], courses)
     try:
         parsed = Parsed.model_validate(raw)
         if any(quote not in body.text for quote in parsed.evidence.values()):

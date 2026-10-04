@@ -1,35 +1,33 @@
+import 'dart:io';
 import 'package:forui/forui.dart';
 import 'package:semester_os/ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:semester_os/ui/app_time_range_picker.dart';
 import 'package:semester_os/features/accounts/auth_page.dart';
 import 'package:semester_os/features/semester/semester_page.dart';
 import 'package:semester_os/features/import/manual_page.dart';
 import 'package:semester_os/features/import/school_picker.dart';
 import 'package:semester_os/features/import/preview.dart';
-import 'package:semester_os/features/items/capture_page.dart';
-import 'package:semester_os/features/media/media_capture_page.dart';
 import 'package:semester_os/features/media/source_view.dart';
-import 'package:semester_os/features/media/drafts.dart';
 import 'package:semester_os/features/operations/operation_page.dart';
 import 'package:semester_os/features/timetable/semester_view.dart';
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'planning_flow_test.dart' show ioTap;
 import 'schedule_flow_test.dart' show ScheduleFixture;
-import 'media_flow_test.dart' show FakeMedia, setup, source;
+import 'media_flow_test.dart' show source;
 import 'operation_flow_test.dart' show operation;
 import 'ui_polish_test.dart'
     show sampleController, mount, capture, loadPreviewFonts;
 
 // ImportPage is intentionally absent: its real school WebView requires a native
 // platform view/session. We capture the real picker and real import confirmation,
-// never a simulated school login page. MediaInput is FakeMedia; no microphone runs.
+// never a simulated school login page.
 const _notice =
     '关于课程实验报告提交的通知\n'
     '请于9月25日23:59前提交Java实验报告。报告包含实验目的、实现过程、测试结果和问题分析。\n'
     '请以“学号_姓名_实验三”命名文件，并提交至课程平台。预计需要3小时，提交前请检查附件。\n'
     '本周五下午的答疑地点调整为教学楼B204，其他安排不变。';
-const _semester = {'id': 's', 'name': '2026—2027学年第一学期', 'total_weeks': 20};
 
 Future<void> _settle(WidgetTester tester) async {
   for (var i = 0; i < 4; i++) {
@@ -65,8 +63,11 @@ Future<void> _launcher(
         ),
       ),
     ),
-    textScale: scale,
-    width: 390,
+    textScale:
+        double.tryParse(Platform.environment['UI_PREVIEW_SCALE'] ?? '') ??
+        scale,
+    width:
+        double.tryParse(Platform.environment['UI_PREVIEW_WIDTH'] ?? '') ?? 390,
   );
   await ioTap(tester, find.text('打开内部页'));
   await _settle(tester);
@@ -136,8 +137,8 @@ void main() {
       await _shot(tester, 'auth-register-top', size);
       await _edge(tester);
       await _shot(tester, 'auth-register-submit', size);
-      await _to(tester, find.text('使用恢复码找回密码'));
-      await tester.tap(find.text('使用恢复码找回密码'));
+      await _to(tester, find.text('忘记密码'));
+      await tester.tap(find.text('忘记密码'));
       await tester.pumpAndSettle();
       await _edge(tester, bottom: false);
       await _shot(tester, 'auth-recovery-top', size);
@@ -152,34 +153,82 @@ void main() {
       tester,
     ) async {
       final c = sampleController();
+      var writes = 0;
+      final previous = c.api.dio.httpClientAdapter as ControlledTransport;
+      c.api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.method != 'GET') writes++;
+        return previous.respond(request);
+      });
       await _open(tester, SemesterPage(controller: c), scale);
+      final mode = find.byKey(const Key('semester-monday-mode'));
+      expect(tester.state<FormFieldState<bool>>(mode).value, isTrue);
+      await tester.tap(find.widgetWithText(FButton, '按当前周推算'));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'semester-calendar-method', size);
+      await tester.tap(find.text('按校历选择'));
+      await tester.pumpAndSettle();
+      expect(tester.state<FormFieldState<bool>>(mode).value, isFalse);
+      expect(find.byKey(const Key('semester-current-week')), findsNothing);
       await _shot(tester, 'semester-calendar', size);
       await _to(tester, find.text('08:00'));
       await _shot(tester, 'semester-periods', size);
       await tester.tap(find.text('08:00'));
       await tester.pumpAndSettle();
-      expect(find.byType(TimePickerDialog), findsOneWidget);
+      expect(find.byType(AppClockRangePicker), findsOneWidget);
       await _shot(tester, 'semester-time-picker', size);
-      await tester.tap(find.text('取消'));
+      await tester.tap(find.byTooltip('取消选择'));
       await tester.pumpAndSettle();
       await _to(tester, find.text('查看全部 10 节'));
       await tester.tap(find.text('查看全部 10 节'));
       await tester.pumpAndSettle();
       await _to(tester, find.text('收起节次'));
       await _shot(tester, 'semester-periods-expanded', size);
-      await _to(tester, find.text('批量编辑节次'));
-      await tester.tap(find.text('批量编辑节次'));
-      await tester.pumpAndSettle();
-      await _to(tester, _field('节次与时间（示例，可修改）'));
-      await _shot(tester, 'semester-periods-batch', size);
+      await _to(tester, find.byTooltip('添加一节'));
+      await _shot(tester, 'semester-periods-controls', size);
       await _edge(tester);
       expect(
-        tester
-            .widget<FButton>(find.widgetWithText(FButton, '确认创建学期'))
-            .onPress,
-        isNull,
+        tester.widget<FButton>(find.widgetWithText(FButton, '确认创建学期')).onPress,
+        isNotNull,
       );
+      await tester.tap(find.text('确认创建学期'));
+      await tester.pumpAndSettle();
+      expect(
+        writes,
+        0,
+        reason: 'missing calendar date cannot submit a semester',
+      );
+      expect(find.text('请选择学校校历第1周的周一').hitTestable(), findsAtLeastNWidgets(1));
+      expect(find.byType(AppCheckRow), findsNothing);
       await _shot(tester, 'semester-confirm', size);
+      await _close(tester);
+      await _open(
+        tester,
+        SemesterPage(controller: c, existing: c.semester),
+        scale,
+      );
+      final totalWeeks = find.byWidgetPredicate(
+        (widget) =>
+            widget is AppFormField && widget.decoration.labelText == '学期总周数',
+      );
+      await _to(tester, totalWeeks);
+      await tester.enterText(totalWeeks, '19');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('保存学期设置'));
+      await tester.pumpAndSettle();
+      expect(find.text('确认修改校历？'), findsOneWidget);
+      expect(writes, 0);
+      await _shot(tester, 'semester-change-confirm', size);
+      await tester.tap(find.text('返回核对'));
+      await tester.pumpAndSettle();
+      await _edge(tester, bottom: false);
+      await _to(tester, find.byKey(const Key('first-monday')));
+      await tester.tap(find.byKey(const Key('first-monday')));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'semester-date-picker', size);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(writes, 0);
       await _close(tester);
       c.dispose();
     });
@@ -193,18 +242,30 @@ void main() {
         find.byKey(const Key('course-title')),
         '计算机网络课程设计与实验',
       );
-      await _to(tester, _field('教师（可留空）'));
-      await tester.enterText(_field('教师（可留空）'), '王老师');
-      await _to(tester, _field('上课地点（可留空）'));
-      await tester.enterText(_field('上课地点（可留空）'), '教学楼B204计算机实验室');
+      await _to(tester, _field('教师'));
+      await tester.enterText(_field('教师'), '王老师');
+      await _to(tester, _field('上课地点'));
+      await tester.enterText(_field('上课地点'), '教学楼B204计算机实验室');
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
       await _edge(tester, bottom: false);
       await _shot(tester, 'manual-identity', size);
-      await _to(tester, _field('周次'));
-      await tester.enterText(_field('周次'), '1-16周(单)');
-      await _to(tester, _field('节次'));
-      await tester.enterText(_field('节次'), '1-2');
+      await _to(tester, find.byKey(const Key('course-weeks')));
+      await tester.tap(find.bySemanticsLabel('选择周次'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('单周'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('确定'));
+      await tester.pumpAndSettle();
+      await _to(tester, find.byKey(const Key('course-sections')));
+      await tester.tap(find.bySemanticsLabel('选择节次'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('第1节'));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'manual-section-choice', size);
+      await tester.tap(find.text('确定'));
+      await tester.pumpAndSettle();
+      expect(find.text('选择节次'), findsNothing);
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
       await _edge(tester);
@@ -219,7 +280,7 @@ void main() {
     ) async {
       await _open(
         tester,
-        SchoolPickerPage(onSelect: () {}, onManual: () {}),
+        SchoolPickerPage(onSelect: (_) {}, onManual: () {}),
         scale,
       );
       await _shot(tester, 'schools-list', size);
@@ -255,9 +316,29 @@ void main() {
           if (request.path.endsWith('/imports')) {
             return body({
               'id': 'preview',
-              'new_count': 4,
+              'new_count': 3,
               'unchanged_count': 0,
-              'changed_count': 0,
+              'changed_count': 1,
+              'changed_courses': [
+                {
+                  'before': {
+                    ...courses[1],
+                    'location': '教学楼A305',
+                    'sections': [5, 6],
+                  },
+                  'after': courses[1],
+                },
+              ],
+              'missing_count': 1,
+              'missing_courses': [
+                {
+                  'before': {
+                    ...courses[3],
+                    'title': '工程数学',
+                    'sections': [7, 8],
+                  },
+                },
+              ],
               'base_revision': 1,
             }, 201);
           }
@@ -274,6 +355,10 @@ void main() {
           );
         });
         await _shot(tester, 'import-preview-top', size);
+        await _to(tester, find.text('需要核对的变化'));
+        await _shot(tester, 'import-preview-change', size);
+        await _to(tester, find.text('本次未出现的旧教务课程'));
+        await _shot(tester, 'import-preview-missing', size);
         await _edge(tester);
         expect(find.text('确认保存课表'), findsOneWidget);
         expect(saves, 0);
@@ -282,85 +367,6 @@ void main() {
         c.dispose();
       },
     );
-
-    testWidgets('inner text capture restored notice and reference $size', (
-      tester,
-    ) async {
-      final f = ScheduleFixture();
-      await tester.runAsync(() => f.c.bind('s'));
-      await tester.runAsync(
-        () => CaptureDrafts(f.c.cache, 'preview', () => true).save('text:s', {
-          'text': _notice,
-          'reference_at': '2026-09-20T00:00:00Z',
-        }),
-      );
-      await _open(
-        tester,
-        CapturePage(controller: f.c, semester: _semester),
-        scale,
-      );
-      await _shot(tester, 'capture-notice', size);
-      await _edge(tester);
-      expect(find.text('让AI整理'), findsOneWidget);
-      await _shot(tester, 'capture-reference-actions', size);
-      await _close(tester);
-      f.c.dispose();
-    });
-
-    for (final kind in ['image', 'audio']) {
-      for (final compact in [false, true]) {
-        final variant = compact ? 'assistant' : 'full';
-        testWidgets('inner media $kind $variant transcript and actions $size', (
-          tester,
-        ) async {
-          final f = await setup(tester);
-          final s = {
-            ...source('a'),
-            'kind': kind,
-            'text': _notice,
-            'original_text': _notice,
-          };
-          final previous = f.api.dio.httpClientAdapter as ControlledTransport;
-          f.api.dio.httpClientAdapter = ControlledTransport((request) async {
-            if (request.path.endsWith('/sources/a')) return body(s);
-            if (request.path.endsWith('/sources')) return body([s]);
-            return previous.respond(request);
-          });
-          await tester.runAsync(
-            () => CaptureDrafts(f.c.cache, 'preview', () => true)
-                .save('media:s:$kind', {
-                  'kind': kind,
-                  'local': null,
-                  'source': s,
-                  'text': _notice,
-                  'key': 'inner-media-preview',
-                  'reference_at': s['reference_at'],
-                  'dirty': true,
-                }),
-          );
-          await _open(
-            tester,
-            MediaCapturePage(
-              controller: f.c,
-              semester: _semester,
-              kind: kind,
-              input: FakeMedia(),
-              returnSource: compact,
-            ),
-            scale,
-          );
-          await _shot(tester, 'media-$kind-$variant-top', size);
-          await _to(tester, find.byType(TextField));
-          await _shot(tester, 'media-$kind-$variant-transcript', size);
-          expect(find.text(compact ? '发送' : '整理日程'), findsOneWidget);
-          await tester.tap(find.byTooltip('更多操作'));
-          await tester.pumpAndSettle();
-          await _shot(tester, 'media-$kind-$variant-actions', size);
-          await _close(tester);
-          f.c.dispose();
-        });
-      }
-    }
 
     testWidgets('inner source retained document with deleted file $size', (
       tester,
@@ -382,8 +388,10 @@ void main() {
         return previous.respond(request);
       });
       await _open(tester, SourceViewPage(controller: f.c, id: 'a'), scale);
-      expect(find.text('原文件已删除，以下识别文字与历史仍保留'), findsOneWidget);
+      expect(find.text('原文件已删除，文字已保留'), findsOneWidget);
       await _shot(tester, 'source-deleted-file-top', size);
+      await _to(tester, find.text('最初识别文字'));
+      await ioTap(tester, find.text('最初识别文字'));
       await _edge(tester);
       expect(contentRequests, 0);
       await _shot(tester, 'source-original-transcript', size);

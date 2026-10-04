@@ -2,9 +2,58 @@ import 'package:flutter/foundation.dart';
 import '../../core/api.dart';
 import '../../core/cache.dart';
 import '../../app/controller.dart';
+import '../../ui/date_labels.dart';
 
 String calendarDate(DateTime date) =>
     '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+Map<String, dynamic> calendarTime(Map<String, dynamic> row) =>
+    row['time'] is Map ? Map<String, dynamic>.from(row['time']) : const {};
+
+String? calendarMeaning(Map<String, dynamic> row) =>
+    row['meaning'] ?? calendarTime(row)['meaning'];
+
+bool calendarReservesTime(Map<String, dynamic> row) =>
+    row['attendance_exempt'] != true &&
+    row['reserve_time'] != false &&
+    calendarMeaning(row) != 'window';
+
+Map<String, dynamic> calendarDisplayEntry(Map<String, dynamic> row) {
+  final time = calendarTime(row);
+  return {
+    ...row,
+    if (row['attendance_exempt'] == true &&
+        !'${row['title'] ?? ''}'.contains('免听'))
+      'title': '免听 · ${row['title'] ?? ''}',
+    if (row['start_at'] == null &&
+        calendarMeaning(row) == 'start' &&
+        time['at'] != null)
+      'start_at': time['at'],
+    if (row['time_precision'] == null && time['precision'] != null)
+      'time_precision': time['precision'],
+    if (row['date'] == null && time['date'] != null) 'date': time['date'],
+    if (row['end_date'] == null && time['end_date'] != null)
+      'end_date': time['end_date'],
+    if (row['week'] == null && time['week'] != null) 'week': time['week'],
+  };
+}
+
+String calendarParticipationLabel(Map<String, dynamic> row) {
+  if (row['attendance_exempt'] == true) {
+    return '${row['title'] ?? ''}'.contains('免听') ? '' : '免听';
+  }
+  if (row['reserve_time'] != false) return '';
+  final details = row['details'];
+  return details is Map && details['participation_status'] == 'optional'
+      ? '可选'
+      : '参考';
+}
+
+String calendarArrivalLabel(Map<String, dynamic> row) {
+  if (row['arrival_at'] == null) return '';
+  final arrival = schoolTime(row['arrival_at']);
+  return '${hhmm(arrival)}到场';
+}
 
 /// Split only the visual projection; the original interval stays on the server.
 List<Map<String, dynamic>> calendarGridEntries(
@@ -13,8 +62,15 @@ List<Map<String, dynamic>> calendarGridEntries(
 ) {
   final result = <Map<String, dynamic>>[];
   for (final entry in entries) {
-    if (entry['start_at'] == null || entry['end_at'] == null) continue;
-    final start = DateTime.parse(entry['start_at']).toUtc();
+    if (entry['start_at'] == null ||
+        entry['end_at'] == null ||
+        calendarMeaning(entry) == 'window' ||
+        !calendarReservesTime(entry)) {
+      continue;
+    }
+    final start = DateTime.parse(
+      entry['occupancy_start_at'] ?? entry['start_at'],
+    ).toUtc();
     final end = DateTime.parse(entry['end_at']).toUtc();
     for (var day = 0; day < 7; day++) {
       final local = firstDay.add(Duration(days: day));
@@ -44,11 +100,21 @@ List<Map<String, dynamic>> calendarGridEntries(
 
 String calendarTimeLabel(
   Map<String, dynamic> row, {
-  bool includeMissing = true,
+  bool includeMissing = false,
 }) {
   String at(dynamic value) {
     final t = schoolTime('$value');
     return '${t.month}/${t.day} ${hhmm(t)}';
+  }
+
+  final time = calendarTime(row);
+  if (row['start_at'] == null &&
+      calendarMeaning(row) == 'start' &&
+      time['at'] != null) {
+    return at(time['at']);
+  }
+  if (calendarMeaning(row) == 'window' && time['at'] != null) {
+    return '办理窗口：${at(time['at'])}${time['end_at'] == null ? '' : '—${at(time['end_at'])}'}';
   }
 
   if (row['start_at'] != null) {
@@ -58,12 +124,18 @@ String calendarTimeLabel(
   }
   if (row['due_at'] != null) return '${at(row['due_at'])} 截止';
   if (row['date'] != null) {
-    return '${row['date']}${row['end_date'] == null ? '' : ' 至 ${row['end_date']}'}${includeMissing ? ' · 时刻待定' : ''}';
+    return '${studentDate(DateTime.parse(row['date']))}${row['end_date'] == null ? '' : ' 至 ${studentDate(DateTime.parse(row['end_date']))}'}${includeMissing ? ' · 时刻待定' : ''}';
   }
   if (row['week'] != null) {
     return '第${row['week']}周${includeMissing ? ' · 日期待定' : ''}';
   }
-  return '时间待确认';
+  final expression = '${row['expression'] ?? time['expression'] ?? ''}'.trim();
+  if (expression.isNotEmpty) return expression;
+  if (time['candidate_dates'] is List &&
+      (time['candidate_dates'] as List).isNotEmpty) {
+    return '候选日期：${(time['candidate_dates'] as List).map((date) => studentDate(DateTime.parse(date))).join(' / ')}';
+  }
+  return '';
 }
 
 class CalendarRepository extends ChangeNotifier {
@@ -74,8 +146,9 @@ class CalendarRepository extends ChangeNotifier {
   bool busy = false, offline = false, _disposed = false;
   String? error, _key;
   int _request = 0;
-  List<Map<String, dynamic>> get entries =>
-      List<Map<String, dynamic>>.from(data?['entries'] ?? []);
+  List<Map<String, dynamic>> get entries => List<Map<String, dynamic>>.from(
+    data?['entries'] ?? [],
+  ).map(calendarDisplayEntry).toList();
   List<Map<String, dynamic>> get undated =>
       List<Map<String, dynamic>>.from(data?['undated'] ?? []);
   int? get revision => data?['revision'] as int?;

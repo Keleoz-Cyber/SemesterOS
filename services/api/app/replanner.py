@@ -4,7 +4,7 @@ from copy import deepcopy
 import time
 from ortools.sat.python import cp_model
 from ortools import __version__
-from .capacity import calendar_context,merge
+from .capacity import calendar_context,merge,uncertainty_affects_window
 from .plan_rules import classify,future_minutes
 from .reminder_rules import instant,anchor_at
 from .scheduler import stamp
@@ -16,13 +16,12 @@ def prepare(calendar,preferences,courses,items,plans,request,now):
     base={'mode':'replan','status':'INPUT_INVALID','can_apply':False,'blocks':[],'tasks':[],'messages':[],
         'window_start':stamp(ceil(now.timestamp()/60)),'window_end':stamp(end),'optimal':False,'unarranged_minutes':0,
         'existing_conflict_count':len(context['conflicts']),'solver_version':__version__}
+    base['uncertainty_warnings']=[w for w in context['uncertainty_warnings'] if uncertainty_affects_window(w,now.timestamp(),end*60)]
     future=[deepcopy(b) for b in plans if b['status']=='active' and instant(b['end_at'])>now]
     if not preferences.get('configured') or not future:
         base['messages']=['先确认学习时间并建立个人计划，再进行重排'];return base,None
     if len(future)>300 or len({b['item_id'] for b in future})>100:
         base.update(status='INPUT_LIMIT',messages=['一次最多调整100项任务、300段计划，请减少任务数量']);return base,None
-    if any(missing and a<end*60 and b>now.timestamp() for a,b,missing,_ in context['uncertain']):
-        base['messages']=['需预留的固定安排缺少完整时间，请先核对'];return base,None
     tasks={i['id']:i for i in items}
     _,issues=classify(future,items,context['free'].spans,context['begin'])
     bad={i['block_id']:i for i in issues}
@@ -101,6 +100,7 @@ def generate(calendar,preferences,courses,items,plans,request,now):
     base.update(status='FEASIBLE_COMPLETE',can_apply=bool(moved),blocks=blocks,moved_tasks=len({b['item_id'] for b in moved}),
         moved_blocks=len(moved),shift_minutes=sum(abs(a-s['original']) for a,s in zip(values,specs)),optimal=optimal,
         phases=phases,solver_status=phases[-1]['status'],elapsed_ms=round((time.monotonic()-started)*1000),
-        messages=['已检查本学期的后续个人计划，只调整允许移动的部分。'])
+        messages=['已检查本学期的后续个人计划，只调整允许移动的部分。']+
+        [w['message'] for w in base['uncertainty_warnings']])
     base['valid_until']=stamp(min([floor(instant(base['valid_until']).timestamp()/60)]+[a for a,s in zip(values,specs) if not s['fixed']]))
     return base

@@ -103,6 +103,7 @@ void main() {
       String? value = '2';
       var calls = 0;
       final formKey = GlobalKey<FormState>();
+      const longCourse = '习近平新时代中国特色社会主义思想概论 · 周三 · 刘燕';
       await _mount(
         tester,
         StatefulBuilder(
@@ -117,6 +118,14 @@ void main() {
                   value: 'disabled',
                   enabled: false,
                   child: Text('不可选择课程'),
+                ),
+                const DropdownMenuItem(
+                  value: 'long-course',
+                  child: Text(
+                    longCourse,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 for (var i = 0; i < 12; i++)
                   DropdownMenuItem(value: '$i', child: Text('课程$i')),
@@ -135,6 +144,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(FTextField), findsOneWidget);
       expect(find.byType(FItem), findsWidgets);
+      final fullCourse = tester.widget<Text>(find.text(longCourse));
+      expect(fullCourse.maxLines, isNull);
+      expect(fullCourse.overflow, TextOverflow.visible);
       await tester.tap(find.text('不可选择课程'));
       expect(value, '2');
       expect(calls, 0);

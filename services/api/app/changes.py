@@ -24,14 +24,11 @@ def make_patch(source,data,now):
     calendar=source[0];events=expand(calendar,source[2]);by_id={e['id']:e for e in events}
     if not set(data['targets']).issubset(by_id):error(409,'TARGET_STALE','课次已改变或不属于本学期，请重新选择')
     before=[deepcopy(by_id[id]) for id in data['targets']]
-    if any(instant(e['start_at'])<=now for e in before):error(422,'PAST_OCCURRENCE','仅支持尚未开始的课次，请核对原日期')
     after=[]
     if data['kind'] in ('move','add','block'):
         a,b=instant(data['start_at']),instant(data['end_at'])
         begin=local_day(calendar['first_monday']);end=begin+timedelta(weeks=calendar['total_weeks'])
-        if a<=now or a<begin or b>end:error(422,'OUTSIDE_SEMESTER','新安排必须在本学期未来时间内')
-        if a.astimezone(SHANGHAI).date()!=(b-timedelta(microseconds=1)).astimezone(SHANGHAI).date():
-            error(422,'CROSS_DAY_EVENT','跨天固定安排请按日期分条记录，放假停课请明确选择受影响课次')
+        if a<begin or b>end:error(422,'OUTSIDE_SEMESTER','新安排的日期需在当前学期内')
         e=deepcopy(before[0]) if before else {'id':'extra:'+new_id(),'course_id':None,'teacher':'','sections':[],'weeks':[],
             'weekday':a.isoweekday(),'source_batch_id':None,'reality_kind':'activity' if data['kind']=='block' else 'course'}
         e.update(title=data['title'],start_at=a.astimezone(SHANGHAI).isoformat(),end_at=b.astimezone(SHANGHAI).isoformat(),
@@ -53,9 +50,12 @@ def impact(source,patch,now):
     from .capacity import calendar_context
     from .plan_rules import classify
     c=calendar_context(source[0],source[1],changed,source[3],now)
+    old_context=calendar_context(*source[:4],now)
+    from .conflict_changes import introduced_conflicts
     _,issues=classify(source[4],source[3],c['free'].spans,c['begin']);bad={i['block_id'] for i in issues}
     return {'affected_blocks':[b for b in source[4] if b['id'] in bad],'risk_changes':deltas,
-        'before_summary':before['summary'],'after_summary':after['summary'],'fixed_conflicts':after['fixed_conflicts']}
+        'before_summary':before['summary'],'after_summary':after['summary'],'fixed_conflicts':c['conflicts'],
+        'new_fixed_conflicts':introduced_conflicts(old_context['conflicts'],c['conflicts'])}
 
 
 def value(row,s):
@@ -69,7 +69,7 @@ def list_changes(sid:str,user:User=Depends(current_user),db:Session=Depends(get_
     s=owned_semester(db,user,sid,lock=True)
     return {'revision':s.revision,'changes':[value(r,s) for r in db.scalars(select(RealityChange).where(
         RealityChange.user_id==user.id,RealityChange.semester_id==sid).order_by(RealityChange.created_at.desc()).limit(50))],
-        'occurrences':[e for e in expand({'first_monday':s.first_monday,'periods':s.periods},effective_courses(db,user,s)) if instant(e['start_at'])>utcnow()]}
+        'occurrences':expand({'first_monday':s.first_monday,'periods':s.periods},effective_courses(db,user,s))}
 
 
 @router.post('/semesters/{sid}/changes',status_code=201)
@@ -87,7 +87,9 @@ def preview_change_command(db,user,sid,body,idempotency_key=None,*,agent_run_id=
     if cached is not None:return cached
     now=utcnow();source=source_snapshot(db,user,s);patch=make_patch(source,data,now)
     row=RealityChange(user_id=user.id,semester_id=sid,base_revision=s.revision,
-        payload={'request':data,'patch':patch,'impact':impact(source,patch,now),**({'agent_run_id':agent_run_id} if agent_run_id else {})},created_at=now.isoformat())
+        payload={'request':data,'patch':patch,'impact':impact(source,patch,now),
+            'base_calendar':{'first_monday':s.first_monday},
+            **({'agent_run_id':agent_run_id} if agent_run_id else {})},created_at=now.isoformat())
     db.add(row);db.flush();result=value(row,s);remember(db,user,op,idempotency_key,data,result);return result
 
 
@@ -109,8 +111,8 @@ def apply_change_command(db,user,id,body,*,agent_run_id=None,prepared_base_revis
     source=source_snapshot(db,user,s);now=utcnow()
     make_patch(source,row.payload['request'],now)
     current=impact(source,row.payload['patch'],now)
-    if current['after_summary']['fixed_conflict_count'] and not body.confirm_fixed_conflicts:
-        error(422,'CONFIRM_FIXED_CONFLICTS','学校固定安排存在冲突，需明确确认记录现实情况')
+    if current['new_fixed_conflicts'] and not body.confirm_fixed_conflicts:
+        error(422,'CONFIRM_FIXED_CONFLICTS','修改后新增了时间冲突，请核对后保存')
     s.revision+=1;row.applied_revision=s.revision
     row.receipt={'change_id':row.id,'semester_id':s.id,'revision':s.revision,'impact':current}
     return row.receipt

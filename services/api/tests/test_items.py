@@ -88,7 +88,7 @@ def test_reminders_follow_relative_anchor_but_absolute_needs_review_and_completi
     assert client.get('/api/v1/reminders', headers=h).json()['reminders'] == []
 
 
-def test_tentative_exam_week_is_not_an_exact_exam_or_a_completed_task(client):
+def test_exam_can_be_marked_completed_without_inventing_its_date_or_effort(client):
     h, s = setup(client)
     item = create(client, h, s, kind='exam', certainty='tentative',
                   time={'precision': 'week', 'week': 14}, reminders=[
@@ -96,8 +96,11 @@ def test_tentative_exam_week_is_not_an_exact_exam_or_a_completed_task(client):
     assert item['anchor_at'] is None
     assert item['certainty'] == 'tentative'
     assert item['control'] == 'authoritative'
-    assert client.post(f"/api/v1/items/{item['id']}/lifecycle", headers=h,
-                       json={'expected_version': 1, 'lifecycle': 'completed'}).status_code == 422
+    completed=client.post(f"/api/v1/items/{item['id']}/lifecycle", headers=h,
+                       json={'expected_version': 1, 'lifecycle': 'completed'})
+    assert completed.status_code == 200,completed.text
+    assert completed.json()['kind']=='exam' and completed.json()['lifecycle']=='completed'
+    assert completed.json()['time']['precision']=='week' and completed.json()['remaining_minutes'] is None
 
 
 def test_relative_reminder_becomes_expired_after_earlier_deadline_without_catchup(client):
@@ -112,11 +115,13 @@ def test_relative_reminder_becomes_expired_after_earlier_deadline_without_catchu
     assert updated.json()['reminders'][0]['schedule_state'] == 'expired'
 
 
-def test_unknown_exam_only_allows_check_notice_but_unknown_task_allows_absolute(client):
+def test_explicit_reminder_time_is_independent_of_unknown_exam_or_task_date(client):
     h, s = setup(client)
     rule = {'mode': 'absolute', 'trigger_at': '2099-01-01T12:00:00+08:00'}
-    assert client.post('/api/v1/items', headers=h, json=payload(s, kind='exam', certainty='tentative',
-        time={'precision': 'week', 'week': 14}, reminders=[rule])).status_code == 422
+    exam=client.post('/api/v1/items', headers=h, json=payload(s, kind='exam', certainty='tentative',
+        time={'precision': 'week', 'week': 14}, reminders=[rule]))
+    assert exam.status_code == 201,exam.text
+    assert exam.json()['reminders'][0]['schedule_state']=='scheduled'
     task = create(client, h, s, time={'precision': 'unknown'}, reminders=[rule])
     assert task['reminders'][0]['schedule_state'] == 'scheduled'
 

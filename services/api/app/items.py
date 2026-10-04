@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .academics import owned_semester, replay, remember
 from .auth import current_user, error
 from .database import get_db
-from .item_schemas import ItemCreate, ItemEdit, LifecycleInput, ReminderCreate, ReminderEdit, ReminderInput
+from .item_schemas import ItemCreate, ItemEdit, LifecycleInput, ReminderCreate, ReminderEdit
 from .models import CourseMeeting, ItemRevision, ReminderRule, StudyItem, TextCandidate, User
 from .reminder_rules import anchor_at, evaluate, utcnow
 from .plan_store import preview_blocks,cancel_for_change
@@ -47,18 +47,28 @@ def serialize_rule(rule, item, peers=()):
                 break
     return {**rule.payload, 'id': rule.id, 'item_id': item.id, 'version': rule.version,
             'item_version': item.version, 'title': item.payload['title'], 'semester_id': item.semester_id,
+            'resource_type': 'exam' if item.payload['kind'] == 'exam' else 'item',
+            'resource_id': item.id,
+            'start_at': item.payload.get('time', {}).get('at') or
+                        (anchor_at(item.payload).isoformat() if anchor_at(item.payload) else None),
+            'place': item.payload.get('location', item.payload.get('place', '')),
+            'time_meaning': item.payload.get('time', {}).get('meaning'),
+            'can_complete': item.payload['kind'] in ('task', 'assignment') and item.lifecycle == 'active',
             **calculated}
 
 
 def serialize_item(db, item):
     anchor = anchor_at(item.payload)
+    from .reminder_rules import notice_arrival_at
+    arrival = notice_arrival_at(item.payload)
     rules = rules_for(db, item)
     return {**{k: v for k, v in item.payload.items() if k != 'tag_ids'},
             **classification_value(db, item), 'id': item.id, 'semester_id': item.semester_id, 'version': item.version,
             'lifecycle': item.lifecycle, 'review_state': 'confirmed',
             'control': 'authoritative' if item.payload['kind'] == 'exam' else 'plannable',
             'anchor_at': anchor.isoformat() if anchor else None, 'created_at': item.created_at,
-            'updated_at': item.updated_at, 'reminders': [serialize_rule(r, item, rules) for r in rules]}
+            'updated_at': item.updated_at, 'reminders': [serialize_rule(r, item, rules) for r in rules],
+            'arrival_at': arrival.isoformat() if arrival else None}
 
 
 def audit(db, item, reason):
@@ -192,6 +202,12 @@ def create_item_command(db, user, body, idempotency_key=None):
 @router.patch('/items/{item_id}')
 def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), db: Session = Depends(get_db),
               idempotency_key: str | None = Header(default=None)):
+    result = edit_item_command(db, user, item_id, body, idempotency_key)
+    db.commit()
+    return result
+
+
+def edit_item_command(db, user, item_id, body, idempotency_key=None):
     item = owned_item(db, user, item_id, lock=True)
     if item.semester_id != body.semester_id or item.payload['kind'] != body.kind:
         error(422, 'IMMUTABLE_KIND', '不能通过编辑改变事项所属学期或类型')
@@ -204,14 +220,20 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
     data, s = checked_payload(db, user, body)
     # Older clients do not know the new optional planning fields. Preserve those
     # unless this request explicitly changed them, rather than erasing user choices.
-    for field, stored in (('category_id', 'category_id'), ('tags', 'tag_ids')):
+    for field, stored in (('category_id', 'category_id'), ('tags', 'tag_ids'), ('details', 'details')):
         if field not in body.model_fields_set and stored in item.payload:
             data[stored] = item.payload[stored]
+    if 'details' in body.model_fields_set:
+        data['details'] = {**item.payload.get('details', {}),
+                           **body.details.model_dump(mode='json', exclude_unset=True)}
+    preserve_notice_time(item.payload['time'], body.time, data['time'])
+    if body.kind != 'exam' and data['time'].get('end_at') and data['time'].get('meaning') != 'window':
+        error(422, 'INVALID_TIME', '任务只有办理窗口允许结束时刻，请核对时间含义')
     if not {'start_policy', 'earliest_start_at'} & body.model_fields_set:
         for key in ('start_policy', 'earliest_start_at'):
             if key in item.payload:
                 data[key] = item.payload[key]
-    if 'reserve_time' not in body.model_fields_set and body.certainty != 'formal' and 'reserve_time' in item.payload:
+    if 'reserve_time' not in body.model_fields_set and 'reserve_time' in item.payload:
         data['reserve_time'] = item.payload['reserve_time']
     if ('end_at' not in body.time.model_fields_set and body.kind == 'exam'
             and item.payload['time'].get('at') == data['time'].get('at')
@@ -221,7 +243,7 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
     if coverage and (data.get('remaining_minutes') is None or data['remaining_minutes']<coverage):
         error(409,'PLAN_CONFIRMATION_REQUIRED','已有计划的时长超过了任务还需要的时间，请在“更新进度”中选择要取消的安排')
     # Original source/candidate evidence is immutable; corrections have their own audit reason.
-    for key in ('source_text', 'candidate_id', 'parse_evidence', 'review_exam_id','source_id'):
+    for key in ('source_text', 'candidate_id', 'parse_evidence', 'review_exam_id','source_id', 'import_origin'):
         if key in item.payload:
             data[key] = item.payload[key]
     changed_anchor = item.payload['time'] != data['time']
@@ -236,13 +258,33 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
     audit(db, item, body.change_reason)
     result = serialize_item(db, item)
     remember(db, user, operation, idempotency_key, request, result)
-    db.commit()
     return result
+
+
+def preserve_notice_time(before, incoming, after):
+    # Old clients cannot round-trip these fields. An unchanged time retains them;
+    # a changed time must not accidentally keep old candidate/window semantics.
+    core = ('precision', 'at', 'end_at', 'date', 'week', 'end_date', 'day_end_confirmed')
+    if (before.get('meaning') == 'window' and 'meaning' not in incoming.model_fields_set
+            and after.get('precision') == 'exact'):
+        after['meaning'] = 'window'
+        if 'end_at' not in incoming.model_fields_set and before.get('at') == after.get('at'):
+            after['end_at'] = before.get('end_at')
+    if all(before.get(k) == after.get(k) for k in core):
+        for key in ('expression', 'meaning', 'candidate_dates', 'course_anchor'):
+            if key not in incoming.model_fields_set and key in before:
+                after[key] = before[key]
 
 
 @router.post('/items/{item_id}/lifecycle')
 def set_lifecycle(item_id: str, body: LifecycleInput, user: User = Depends(current_user),
                   db: Session = Depends(get_db), idempotency_key: str | None = Header(default=None)):
+    result = set_lifecycle_command(db, user, item_id, body, idempotency_key)
+    db.commit()
+    return result
+
+
+def set_lifecycle_command(db, user, item_id, body, idempotency_key=None):
     item = owned_item(db, user, item_id, lock=True)
     request = body.model_dump()
     operation = 'item-state/' + item_id
@@ -250,8 +292,6 @@ def set_lifecycle(item_id: str, body: LifecycleInput, user: User = Depends(curre
     if cached is not None:
         return cached
     check_version(item, body.expected_version)
-    if body.lifecycle == 'completed' and item.payload['kind'] == 'exam':
-        error(422, 'INVALID_LIFECYCLE', '考试不是可完成的个人任务')
     current=owned_semester(db,user,item.semester_id)
     future=preview_blocks(db,item,utcnow())
     if body.lifecycle!='active' and future:
@@ -272,7 +312,6 @@ def set_lifecycle(item_id: str, body: LifecycleInput, user: User = Depends(curre
     audit(db, item, {'active': '用户恢复事项', 'completed': '用户确认完成', 'cancelled': '用户确认取消'}[body.lifecycle])
     result = serialize_item(db, item)
     remember(db, user, operation, idempotency_key, request, result)
-    db.commit()
     return result
 
 
@@ -333,7 +372,8 @@ def edit_reminder(rule_id: str, body: ReminderEdit, user: User = Depends(current
 
 
 @router.get('/reminders')
-def list_reminders(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def list_reminders(course_lead_minutes: int | None = Query(default=None, ge=0, le=120),
+                   user: User = Depends(current_user), db: Session = Depends(get_db)):
     from .event_store import event_rows, reminder_values
     event_reminders = [reminder for event in event_rows(db, user) for reminder in reminder_values(event)]
     rows = list(db.execute(select(ReminderRule, StudyItem).join(StudyItem, ReminderRule.item_id == StudyItem.id).where(
@@ -341,5 +381,7 @@ def list_reminders(user: User = Depends(current_user), db: Session = Depends(get
     peers = {}
     for rule, item in rows:
         peers.setdefault(item.id, []).append(rule)
+    from .course_reminders import course_reminders
+    classes = course_reminders(db, user, course_lead_minutes) if course_lead_minutes is not None else []
     return {'owner_id': user.id, 'synced_at': utcnow().isoformat(),
-            'reminders': [serialize_rule(r, item, peers[item.id]) for r, item in rows if r.payload['enabled']] + event_reminders}
+            'reminders': [serialize_rule(r, item, peers[item.id]) for r, item in rows if r.payload['enabled']] + event_reminders + classes}

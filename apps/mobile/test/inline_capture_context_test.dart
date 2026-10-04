@@ -47,6 +47,7 @@ Future<void> open(
   ScheduleFixture f, {
   MediaInput? images,
   String? kind,
+  String? threadId,
 }) async {
   await mount(
     tester,
@@ -60,6 +61,7 @@ Future<void> open(
                 semester: const {'id': 's'},
                 imageInput: images,
                 initialMediaKind: kind,
+                initialThreadId: threadId,
               ),
             ),
           ),
@@ -207,35 +209,48 @@ void main() {
         ),
       );
       final old = f.api.dio.httpClientAdapter as ControlledTransport;
+      var sourceRequests = 0;
       f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.path.contains('/sources')) sourceRequests++;
         if (r.path.contains('/agent/threads?')) return body([]);
-        if (r.path.contains('/semesters/s/sources')) {
-          return body({...source('a'), 'status': 'uploaded'});
-        }
-        if (r.path.endsWith('/recognize')) {
-          return body({...source('a'), 'version': 2});
-        }
         return old.respond(r);
       });
       await open(tester, f, images: images, kind: 'image');
-      for (var i = 0; i < 20 && composer(tester).isEmpty; i++) {
+      for (
+        var i = 0;
+        i < 20 && find.byTooltip('移除第1张图片').evaluate().isEmpty;
+        i++
+      ) {
         await flush(tester, rounds: 2);
       }
       expect(images.recovered, 1);
       expect(images.picked, 0);
-      expect(composer(tester), source('a')['text']);
-      final inline = await tester.runAsync(
-        () => drafts.read('inline:s:$scope'),
+      expect(composer(tester), isEmpty);
+      expect(find.byTooltip('移除第1张图片'), findsOneWidget);
+      expect(
+        sourceRequests,
+        0,
+        reason: 'recovery only restores editable images',
       );
-      expect(inline?['source']['id'], 'a');
-      // Let the native FileImage buffer finish opening/decoding before its
-      // Windows temporary directory is removed.
       await flush(tester, rounds: 16);
       await tester.pumpWidget(const SizedBox());
       await flush(tester, rounds: 2);
       final saved = await tester.runAsync(() => drafts.read(scope));
       expect(saved?['picking_image'], isFalse);
-      expect(saved?['pending_media'], isTrue);
+      expect(saved?['pending_media'], isFalse);
+      final retained = (saved!['image_paths'] as List).cast<String>();
+      expect(retained, hasLength(1));
+      expect(
+        await tester.runAsync(() => File(retained.single).exists()),
+        isTrue,
+      );
+      await open(tester, f, images: images);
+      expect(find.byTooltip('移除第1张图片'), findsOneWidget);
+      expect(images.recovered, 1);
+      expect(images.picked, 0);
+      expect(composer(tester), isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      await flush(tester, rounds: 2);
       expect(tester.takeException(), isNull);
       f.c.dispose();
     },
@@ -298,7 +313,7 @@ void main() {
         }
         return old.respond(r);
       });
-      await open(tester, f);
+      await open(tester, f, threadId: 't');
       expect(toolbarButton(tester, '最近对话').onPressed, isNull);
       expect(toolbarButton(tester, '新对话').onPressed, isNull);
       final selection = find.widgetWithText(AppTextButton, '选这条');

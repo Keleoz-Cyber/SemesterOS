@@ -2,7 +2,6 @@ from datetime import timezone
 from sqlalchemy import select
 from .models import PlanBlock, PlanRevision
 from .auth import error
-from .reminder_rules import instant
 from .plan_rules import future_minutes
 
 

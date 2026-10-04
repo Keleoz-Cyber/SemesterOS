@@ -1,19 +1,46 @@
 from datetime import date as CalendarDate, datetime, timezone
-from typing import Literal
+from typing import Literal, Annotated, ClassVar
 
 from pydantic import Field, field_validator, model_validator
 
 from .schemas import Input
 
 
+class CourseAnchor(Input):
+    course_id: str | None = Field(default=None, max_length=36)
+    title: str = Field(default='', max_length=120)
+    week: int | None = Field(default=None, ge=1, le=30)
+    weekday: int | None = Field(default=None, ge=1, le=7)
+    sections: list[Annotated[int, Field(ge=1, le=30)]] = Field(default_factory=list, max_length=30)
+
+
+class NoticeDetails(Input):
+    recipient: str = Field(default='', max_length=200,
+        description='材料或办理结果实际提交给谁；通知面向的人群请用applicability，没有提交接收方时留空。')
+    materials: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(default_factory=list, max_length=30)
+    submission_channel: str = Field(default='', max_length=300)
+    participation: str = Field(default='', max_length=500)
+    participation_status: Literal['unspecified', 'confirmed', 'optional', 'conditional', 'other'] = 'unspecified'
+    conditions: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(default_factory=list, max_length=30)
+    early_arrival_minutes: int | None = Field(default=None, ge=0, le=1440)
+    applicability: str = Field(default='', max_length=500)
+    responsibility: str = Field(default='', max_length=500)
+
+
 class ItemTime(Input):
-    precision: Literal['exact', 'date', 'week', 'range', 'unknown'] = 'unknown'
+    precision: Literal['exact', 'date', 'week', 'range', 'unknown'] = Field(default='unknown',
+        description='exact表示已知含时区的时刻；即使是办理窗口，只要小时起止明确也用exact与at/end_at。range仅用于日期范围，不承载小时。没有钟点不补造。')
     at: datetime | None = None
     end_at: datetime | None = None
     date: CalendarDate | None = None
     week: int | None = Field(default=None, ge=1, le=30)
     end_date: CalendarDate | None = None
     day_end_confirmed: bool = False
+    expression: str = Field(default='', max_length=500)
+    meaning: Literal['unspecified', 'deadline', 'start', 'window', 'candidate', 'course_anchor'] = Field(default='unspecified',
+        description='时间用途；未说明用途时省略或unspecified。unknown仅属于precision，不能填写为meaning。')
+    candidate_dates: list[CalendarDate] = Field(default_factory=list, max_length=12)
+    course_anchor: CourseAnchor | None = None
 
     @field_validator('at', 'end_at')
     @classmethod
@@ -43,6 +70,14 @@ class ItemTime(Input):
             raise ValueError('只有日期范围允许结束日期')
         if self.day_end_confirmed and self.precision != 'date':
             raise ValueError('日末口径仅用于只有日期的截止')
+        if self.candidate_dates and self.meaning != 'candidate':
+            raise ValueError('候选日期需要保留候选口径')
+        if self.course_anchor is not None and self.meaning != 'course_anchor':
+            raise ValueError('课程节点需要保留课节口径')
+        if self.meaning in ('candidate', 'course_anchor') and self.precision != 'unknown':
+            raise ValueError('候选日期或课节节点不能同时作为已经确定的时间')
+        if self.day_end_confirmed and self.meaning not in ('unspecified', 'deadline'):
+            raise ValueError('只有明确截止可以使用日末口径')
         return self
 
 
@@ -70,6 +105,7 @@ class ReminderInput(Input):
 
 
 class ItemFields(Input):
+    _allow_legacy_window_end: ClassVar[bool] = False
     semester_id: str = Field(min_length=1, max_length=36)
     kind: Literal['assignment', 'task', 'exam']
     title: str = Field(min_length=1, max_length=120)
@@ -85,6 +121,7 @@ class ItemFields(Input):
     location: str = Field(default='', max_length=120)
     notes: str = Field(default='', max_length=3000)
     source_text: str = Field(default='', max_length=10000)
+    details: NoticeDetails = Field(default_factory=NoticeDetails)
     candidate_id: str | None = Field(default=None, max_length=36)
     source_id:str|None=Field(default=None,max_length=36)
     category_id: Literal['study', 'research', 'affairs', 'life'] | None = None
@@ -106,7 +143,8 @@ class ItemFields(Input):
     def exam_fields(self):
         if self.kind == 'exam' and (self.remaining_minutes is not None or self.time.day_end_confirmed):
             raise ValueError('考试开始时间不能使用任务截止口径，复习耗时应单独建任务')
-        if self.kind != 'exam' and self.time.end_at is not None:
+        if (self.kind != 'exam' and self.time.end_at is not None and self.time.meaning != 'window'
+                and not (self._allow_legacy_window_end and self.time.meaning == 'unspecified')):
             raise ValueError('任务截止不需要考试结束时刻')
         if self.start_policy == 'at' and self.earliest_start_at is None:
             raise ValueError('请明确任务最早开始时间')
@@ -114,8 +152,6 @@ class ItemFields(Input):
             raise ValueError('指定最早开始时间时请使用对应口径')
         if self.kind == 'exam' and (self.start_policy != 'unconfirmed' or self.earliest_start_at is not None):
             raise ValueError('考试使用固定开始时间，不使用任务最早开始口径')
-        if self.kind == 'exam' and self.certainty == 'formal' and not self.reserve_time:
-            raise ValueError('正式考试占用不能关闭，请按现实通知修改或取消考试')
         return self
 
 
@@ -124,6 +160,9 @@ class ItemCreate(ItemFields):
 
 
 class ItemEdit(ItemFields):
+    # Old clients can send back a window end without knowing its new meaning.
+    # Persistence verifies the merged meaning against the actual stored record.
+    _allow_legacy_window_end: ClassVar[bool] = True
     expected_version: int = Field(ge=1)
     change_reason: str = Field(min_length=1, max_length=500)
 

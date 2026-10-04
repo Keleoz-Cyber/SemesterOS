@@ -1,8 +1,120 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
-import 'campus_theme.dart';
 import 'motion.dart';
+import 'accessibility.dart';
+import 'performance_widgets.dart';
+import 'campus_theme.dart';
+
+/// A list row owns its spacing. Forui still supplies focus and pressed states.
+FItemStyleDelta appRowStyle({
+  Color? background,
+  Color? selectedBackground,
+  ShapeBorder? shape,
+}) {
+  final fill = background ?? Colors.transparent;
+  final selected = selectedBackground ?? CampusColors.blueSoft;
+  final border =
+      shape ??
+      const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+      );
+  return FItemStyleDelta.delta(
+    shape: border,
+    padding: const EdgeInsetsGeometryDelta.value(EdgeInsets.zero),
+    rawContentStyle: const FRawItemContentStyleDelta.delta(
+      padding: EdgeInsetsGeometryDelta.value(EdgeInsets.zero),
+    ),
+    backgroundColor: FVariantsValueDelta.delta([
+      FVariantValueDeltaOperation.all(fill),
+    ]),
+    contentDecoration: FVariantsDelta.delta([
+      FVariantOperation.all(
+        DecorationDelta.shapeDelta(shape: border, color: fill),
+      ),
+      FVariantOperation.exact({
+        FTappableVariant.pressed,
+        FTappableVariant.hovered,
+        FTappableVariant.selected,
+      }, DecorationDelta.shapeDelta(color: selected)),
+    ]),
+  );
+}
+
+FButtonStyleDelta _buttonVisualStyle(BuildContext context, ButtonStyle? style) {
+  final touch = FTappableStyleDelta.delta(
+    motion: AppMotion.allowed(context)
+        ? const FTappableMotion(
+            bounceDownDuration: Duration(milliseconds: 85),
+            bounceUpDuration: Duration(milliseconds: 170),
+            bounceUpCurve: Curves.easeOutCubic,
+            bounceFloor: 1.5,
+          )
+        : FTappableMotion.none,
+  );
+  final background = style?.backgroundColor?.resolve({});
+  final padding = style?.padding?.resolve({});
+  final shape = style?.shape?.resolve({});
+  final side = style?.side?.resolve({});
+  final content = padding == null
+      ? null
+      : FButtonContentStyleDelta.delta(
+          padding: EdgeInsetsGeometryDelta.value(padding),
+        );
+  if (background == null) {
+    return FButtonStyleDelta.delta(
+      tappableStyle: touch,
+      contentStyle: content,
+      decoration: shape == null
+          ? null
+          : FVariantsDelta.delta([
+              FVariantOperation.base(
+                DecorationDelta.shapeDelta(shape: shape.copyWith(side: side)),
+              ),
+            ]),
+    );
+  }
+  final pressed = Color.alphaBlend(
+    Theme.of(context).colorScheme.onSurface.withValues(alpha: .08),
+    background,
+  );
+  return FButtonStyleDelta.delta(
+    tappableStyle: touch,
+    contentStyle: content,
+    decoration: FVariantsDelta.delta([
+      FVariantOperation.base(
+        shape == null
+            ? DecorationDelta.boxDelta(color: background)
+            : DecorationDelta.shapeDelta(
+                color: background,
+                shape: shape.copyWith(side: side),
+              ),
+      ),
+      FVariantOperation.exact({
+        FTappableVariant.pressed,
+        FTappableVariant.hovered,
+      }, DecorationDelta.boxDelta(color: pressed)),
+      FVariantOperation.exact(
+        {FTappableVariant.selected},
+        DecorationDelta.boxDelta(
+          color:
+              style?.backgroundColor?.resolve({WidgetState.selected}) ??
+              background,
+        ),
+      ),
+      FVariantOperation.exact(
+        {FTappableVariant.disabled},
+        DecorationDelta.boxDelta(
+          color:
+              style?.backgroundColor?.resolve({WidgetState.disabled}) ??
+              background.withValues(alpha: .5),
+        ),
+      ),
+    ]),
+  );
+}
 
 // Public app controls deliberately keep simple Flutter-style callbacks. Their
 // rendering, interaction, focus and disabled states share the Forui system.
@@ -26,17 +138,19 @@ class AppButton extends StatelessWidget {
     shape: shape,
     side: side,
   );
-  final VoidCallback? onPressed;
+  final FutureOr<void> Function()? onPressed;
   final Widget child;
   final Widget? icon;
   final ButtonStyle? style;
   final FButtonVariant variant;
   final IconAlignment iconAlignment;
+  final bool guardAsync;
   const AppButton({
     super.key,
     required this.onPressed,
     required this.child,
     this.style,
+    this.guardAsync = true,
   }) : icon = null,
        variant = FButtonVariant.primary,
        iconAlignment = IconAlignment.start;
@@ -47,6 +161,7 @@ class AppButton extends StatelessWidget {
     required Widget label,
     this.style,
     this.iconAlignment = IconAlignment.start,
+    this.guardAsync = true,
   }) : child = label,
        variant = FButtonVariant.primary;
   const AppButton.tonal({
@@ -54,6 +169,7 @@ class AppButton extends StatelessWidget {
     required this.onPressed,
     required this.child,
     this.style,
+    this.guardAsync = true,
   }) : icon = null,
        variant = FButtonVariant.secondary,
        iconAlignment = IconAlignment.start;
@@ -65,6 +181,7 @@ class AppButton extends StatelessWidget {
     this.icon,
     this.style,
     this.iconAlignment = IconAlignment.start,
+    this.guardAsync = true,
   });
   @override
   Widget build(BuildContext context) {
@@ -72,25 +189,53 @@ class AppButton extends StatelessWidget {
     final foreground = style?.foregroundColor?.resolve(states);
     final textStyle = style?.textStyle?.resolve(states);
     final minimum = style?.minimumSize?.resolve(states);
+    final styledIcon = icon == null
+        ? null
+        : IconTheme.merge(
+            data: IconThemeData(color: foreground),
+            child: icon!,
+          );
     final content = DefaultTextStyle.merge(
       style: (textStyle ?? const TextStyle()).copyWith(color: foreground),
       child: child,
     );
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        minHeight: minimum?.height.clamp(48, 120) ?? 48,
-      ),
-      child: FButton(
-        onPress: onPressed,
-        variant: variant,
-        size: FButtonSizeVariant.lg,
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: style?.alignment == Alignment.centerLeft
-            ? MainAxisAlignment.start
-            : MainAxisAlignment.center,
-        prefix: iconAlignment == IconAlignment.start ? icon : null,
-        suffix: iconAlignment == IconAlignment.end ? icon : null,
-        child: Flexible(child: content),
+    return DebouncedButton(
+      onPressed: onPressed,
+      guardAsync: guardAsync,
+      child: content,
+      builder: (context, onPress, processing) => SemanticButton(
+        label: '',
+        hint: processing ? '正在处理，请稍候' : null,
+        enabled: onPress != null,
+        onPressed: onPress,
+        childHandlesInput: true,
+        child: TouchTargetExpander(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth:
+                  minimum?.width
+                      .clamp(0, MediaQuery.sizeOf(context).width)
+                      .toDouble() ??
+                  0,
+              minHeight: minimum?.height.clamp(48, 120).toDouble() ?? 48,
+            ),
+            child: FButton(
+              style: _buttonVisualStyle(context, style),
+              onPress: onPress,
+              variant: variant,
+              size: FButtonSizeVariant.lg,
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: style?.alignment == Alignment.centerLeft
+                  ? MainAxisAlignment.start
+                  : MainAxisAlignment.center,
+              prefix: iconAlignment == IconAlignment.start ? styledIcon : null,
+              suffix: iconAlignment == IconAlignment.end ? styledIcon : null,
+              child: Flexible(
+                child: _AsyncButtonFace(processing: processing, child: content),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -102,6 +247,7 @@ class AppOutlineButton extends AppButton {
     required super.onPressed,
     required super.child,
     super.style,
+    super.guardAsync,
   }) : super.base(variant: FButtonVariant.outline);
   const AppOutlineButton.icon({
     super.key,
@@ -110,12 +256,8 @@ class AppOutlineButton extends AppButton {
     required Widget label,
     super.style,
     super.iconAlignment,
+    super.guardAsync,
   }) : super.base(variant: FButtonVariant.outline, child: label, icon: icon);
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: super.build(context),
-  );
 }
 
 class AppTextButton extends AppButton {
@@ -141,6 +283,7 @@ class AppTextButton extends AppButton {
     required super.onPressed,
     required super.child,
     super.style,
+    super.guardAsync,
   }) : super.base(variant: FButtonVariant.ghost);
   const AppTextButton.icon({
     super.key,
@@ -149,17 +292,56 @@ class AppTextButton extends AppButton {
     required Widget label,
     super.style,
     super.iconAlignment,
+    super.guardAsync,
   }) : super.base(variant: FButtonVariant.ghost, child: label, icon: icon);
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final quiet = ButtonStyle(
+      foregroundColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.disabled)
+            ? scheme.onSurfaceVariant.withValues(alpha: .5)
+            : scheme.onSurface,
+      ),
+      backgroundColor: WidgetStateProperty.resolveWith(
+        (states) => Colors.transparent,
+      ),
+      minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      ),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.25),
+      ),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide.none,
+        ),
+      ),
+    ).merge(style);
+    return AppButton.base(
+      onPressed: onPressed,
+      icon: icon,
+      iconAlignment: iconAlignment,
+      guardAsync: guardAsync,
+      variant: FButtonVariant.ghost,
+      style: quiet,
+      child: child,
+    );
+  }
 }
 
 class AppIconButton extends StatelessWidget {
-  final VoidCallback? onPressed;
+  final FutureOr<void> Function()? onPressed;
   final Widget icon;
   final String? tooltip;
   final ButtonStyle? style;
   final FButtonVariant variant;
   final double? iconSize;
   final Color? color;
+  final bool guardAsync;
   const AppIconButton({
     super.key,
     required this.onPressed,
@@ -168,6 +350,7 @@ class AppIconButton extends StatelessWidget {
     this.style,
     this.iconSize,
     this.color,
+    this.guardAsync = true,
   }) : variant = FButtonVariant.ghost;
   const AppIconButton.filled({
     super.key,
@@ -177,6 +360,7 @@ class AppIconButton extends StatelessWidget {
     this.style,
     this.iconSize,
     this.color,
+    this.guardAsync = true,
   }) : variant = FButtonVariant.primary;
   const AppIconButton.filledTonal({
     super.key,
@@ -186,6 +370,7 @@ class AppIconButton extends StatelessWidget {
     this.style,
     this.iconSize,
     this.color,
+    this.guardAsync = true,
   }) : variant = FButtonVariant.secondary;
   const AppIconButton.outlined({
     super.key,
@@ -195,21 +380,91 @@ class AppIconButton extends StatelessWidget {
     this.style,
     this.iconSize,
     this.color,
+    this.guardAsync = true,
   }) : variant = FButtonVariant.outline;
   @override
   Widget build(BuildContext context) {
-    final button = FButton.icon(
-      onPress: onPressed,
-      variant: variant,
-      size: FButtonSizeVariant.lg,
-      semanticsLabel: tooltip,
-      child: IconTheme.merge(
-        data: IconThemeData(size: iconSize ?? 22, color: color),
-        child: icon,
+    final button = DebouncedButton(
+      onPressed: onPressed,
+      guardAsync: guardAsync,
+      child: icon,
+      builder: (context, onPress, processing) => SemanticButton(
+        label: '',
+        hint: processing ? '正在处理，请稍候' : null,
+        onPressed: onPress,
+        enabled: onPress != null,
+        childHandlesInput: true,
+        child: TouchTargetExpander(
+          child: FButton.icon(
+            style: _buttonVisualStyle(context, style),
+            onPress: onPress,
+            variant: variant,
+            size: FButtonSizeVariant.lg,
+            semanticsLabel: tooltip,
+            child: IconTheme.merge(
+              data: IconThemeData(
+                size: iconSize ?? 22,
+                color:
+                    color ??
+                    style?.foregroundColor?.resolve({
+                      if (onPress == null) WidgetState.disabled,
+                    }) ??
+                    (variant == FButtonVariant.ghost
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
+                        : null),
+              ),
+              child: _AsyncButtonFace(processing: processing, child: icon),
+            ),
+          ),
+        ),
       ),
     );
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+    return tooltip == null
+        ? button
+        : Tooltip(message: tooltip!, excludeFromSemantics: true, child: button);
   }
+}
+
+class _AsyncButtonFace extends StatelessWidget {
+  final bool processing;
+  final Widget child;
+  const _AsyncButtonFace({required this.processing, required this.child});
+  @override
+  Widget build(BuildContext context) => Stack(
+    alignment: Alignment.center,
+    clipBehavior: Clip.none,
+    children: [
+      AnimatedOpacity(
+        opacity: processing && ModalRoute.isCurrentOf(context) != false ? 0 : 1,
+        duration: AppMotion.feedback(context),
+        alwaysIncludeSemantics: true,
+        child: child,
+      ),
+      if (processing && ModalRoute.isCurrentOf(context) != false)
+        Positioned.fill(
+          child: Center(
+            child: ExcludeSemantics(
+              child:
+                  !AppMotion.allowed(context) ||
+                      ModalRoute.isCurrentOf(context) == false
+                  ? Icon(
+                      Icons.hourglass_top_rounded,
+                      size: 18,
+                      color: DefaultTextStyle.of(context).style.color,
+                    )
+                  : SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: DefaultTextStyle.of(context).style.color,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+    ],
+  );
 }
 
 class AppField extends StatelessWidget {
@@ -219,6 +474,7 @@ class AppField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final VoidCallback? onTap;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
   final int? minLines, maxLines, maxLength;
   final bool enabled, readOnly, obscureText, autocorrect, autofocus;
   final Iterable<String>? autofillHints;
@@ -232,6 +488,7 @@ class AppField extends StatelessWidget {
     this.onSubmitted,
     this.onTap,
     this.keyboardType,
+    this.textInputAction,
     this.minLines,
     this.maxLines = 1,
     this.maxLength,
@@ -271,35 +528,119 @@ class AppField extends StatelessWidget {
       autofillHints: autofillHints,
       focusNode: focusNode,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
       inputFormatters: inputFormatters,
       onTap: onTap,
       onSubmit: onSubmitted,
       counterBuilder: (_, _, _, _) => null,
       prefixBuilder: decoration.prefixIcon == null
           ? null
-          : (_, _, _) => decoration.prefixIcon!,
+          : (context, style, variants) => _fieldAdornment(
+              context,
+              decoration.prefixIcon!,
+              contentPadding: style.contentPadding,
+              iconTheme: style.iconStyle.resolve(variants).copyWith(size: 20),
+              leading: true,
+            ),
       suffixBuilder: decoration.suffixIcon != null
-          ? (_, _, _) =>
-                readOnly &&
-                    onTap != null &&
-                    decoration.suffixIcon is AppIconButton
-                ? ExcludeSemantics(
-                    child: IgnorePointer(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: (decoration.suffixIcon as AppIconButton).icon,
-                      ),
-                    ),
-                  )
-                : decoration.suffixIcon!
+          ? (context, style, variants) {
+              final passive =
+                  readOnly &&
+                  onTap != null &&
+                  decoration.suffixIcon is AppIconButton;
+              return _fieldAdornment(
+                context,
+                passive
+                    ? (decoration.suffixIcon as AppIconButton).icon
+                    : decoration.suffixIcon!,
+                contentPadding: style.contentPadding,
+                iconTheme: style.iconStyle.resolve(variants).copyWith(size: 20),
+                leading: false,
+                passive: passive,
+              );
+            }
           : decoration.suffixText != null
-          ? (_, _, _) => Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Text(decoration.suffixText!),
+          ? (context, style, variants) => Padding(
+              padding: EdgeInsetsDirectional.only(
+                start: 4,
+                end: Directionality.of(context) == TextDirection.ltr
+                    ? style.contentPadding.resolve(TextDirection.ltr).right
+                    : style.contentPadding.resolve(TextDirection.rtl).left,
+              ),
+              child: Text(
+                decoration.suffixText!,
+                style: style.contentTextStyle.resolve(variants),
+              ),
             )
           : null,
     ),
   );
+}
+
+/// InputDecorator supplies the final 4dp gap to the editable text. Static
+/// adornments restore the field's outer inset; action icons keep their hit area.
+Widget _fieldAdornment(
+  BuildContext context,
+  Widget child, {
+  required EdgeInsetsGeometry contentPadding,
+  required IconThemeData iconTheme,
+  required bool leading,
+  bool passive = false,
+}) {
+  if (child is AppIconButton && !passive) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.symmetric(horizontal: 4),
+      child: child,
+    );
+  }
+  final padding = contentPadding.resolve(Directionality.of(context));
+  final direction = Directionality.of(context);
+  final start = direction == TextDirection.ltr ? padding.left : padding.right;
+  final end = direction == TextDirection.ltr ? padding.right : padding.left;
+  final adornment = IconTheme.merge(data: iconTheme, child: child);
+  return Padding(
+    padding: EdgeInsetsDirectional.only(
+      start: leading ? start : 4,
+      end: leading ? 4 : end,
+    ),
+    child: child is Icon || passive
+        ? ExcludeSemantics(child: IgnorePointer(child: adornment))
+        : adornment,
+  );
+}
+
+/// Keep validation beside its field and bring the first problem into view.
+/// This does not focus a different field or open the keyboard unexpectedly.
+bool validateAppForm(GlobalKey<FormState> key) {
+  final form = key.currentState;
+  if (form == null || form.validate()) return form != null;
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final root = key.currentContext;
+    if (root == null || !root.mounted || key.currentState != form) return;
+    Element? first;
+    void inspect(Element node) {
+      if (first != null) return;
+      if (node case StatefulElement(:final state)) {
+        if (state is FormFieldState && state.hasError) {
+          first = node;
+          return;
+        }
+      }
+      node.visitChildElements(inspect);
+    }
+
+    root.visitChildElements(inspect);
+    final target = first;
+    if (target != null && target.mounted) {
+      Scrollable.ensureVisible(
+        target,
+        alignment: .16,
+        duration: AppMotion.feedback(target),
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+      );
+    }
+  });
+  return false;
 }
 
 class AppFormField extends FormField<String> {
@@ -308,6 +649,8 @@ class AppFormField extends FormField<String> {
   final ValueChanged<String>? onChanged;
   final VoidCallback? onTap;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
   final int? minLines, maxLines, maxLength;
   final bool readOnly, obscureText, autocorrect, autofocus;
   final Iterable<String>? autofillHints;
@@ -321,6 +664,8 @@ class AppFormField extends FormField<String> {
     this.onChanged,
     this.onTap,
     this.keyboardType,
+    this.textInputAction,
+    this.onSubmitted,
     this.minLines,
     this.maxLines = 1,
     this.maxLength,
@@ -350,6 +695,8 @@ class AppFormField extends FormField<String> {
              autofocus: widget.autofocus,
              autofillHints: widget.autofillHints,
              keyboardType: widget.keyboardType,
+             textInputAction: widget.textInputAction,
+             onSubmitted: widget.onSubmitted,
              focusNode: widget.focusNode,
              inputFormatters: widget.inputFormatters,
              minLines: widget.minLines,
@@ -406,7 +753,7 @@ class _AppFormFieldState extends FormFieldState<String> {
   }
 }
 
-Widget? _rowLabel(Widget? title, Widget? subtitle) {
+Widget? _rowLabel(BuildContext context, Widget? title, Widget? subtitle) {
   if (title == null && subtitle == null) return null;
   return Column(
     mainAxisSize: MainAxisSize.min,
@@ -417,7 +764,10 @@ Widget? _rowLabel(Widget? title, Widget? subtitle) {
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: DefaultTextStyle.merge(
-            style: const TextStyle(fontSize: 14, color: CampusColors.muted),
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             child: subtitle,
           ),
         ),
@@ -449,6 +799,7 @@ class AppCheckRow extends StatelessWidget {
       child: Semantics(
         checked: value ?? false,
         enabled: onChanged != null,
+        onTap: onChanged == null ? null : () => onChanged!(!(value ?? false)),
         child: FTappable.static(
           onPress: onChanged == null
               ? null
@@ -469,7 +820,10 @@ class AppCheckRow extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                 ],
-                Expanded(child: _rowLabel(title, subtitle) ?? const SizedBox()),
+                Expanded(
+                  child:
+                      _rowLabel(context, title, subtitle) ?? const SizedBox(),
+                ),
                 if (controlAffinity == ListTileControlAffinity.trailing) ...[
                   const SizedBox(width: 12),
                   ExcludeSemantics(
@@ -491,15 +845,6 @@ class AppCheckRow extends StatelessWidget {
   );
 }
 
-class AppSwitch extends StatelessWidget {
-  final bool value;
-  final ValueChanged<bool>? onChanged;
-  const AppSwitch({super.key, required this.value, required this.onChanged});
-  @override
-  Widget build(BuildContext context) =>
-      FSwitch(value: value, onChange: onChanged, enabled: onChanged != null);
-}
-
 class AppSwitchRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
@@ -516,29 +861,31 @@ class AppSwitchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: contentPadding ?? const EdgeInsets.symmetric(vertical: 8),
-    child: MergeSemantics(
-      child: Semantics(
-        toggled: value,
-        enabled: onChanged != null,
-        child: FTappable.static(
-          onPress: onChanged == null ? null : () => onChanged!(!value),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Row(
-              children: [
-                Expanded(child: _rowLabel(title, subtitle) ?? const SizedBox()),
-                const SizedBox(width: 12),
-                ExcludeSemantics(
-                  child: IgnorePointer(
-                    child: FSwitch(
-                      value: value,
-                      enabled: onChanged != null,
-                      onChange: onChanged,
-                    ),
+    child: SemanticSwitch(
+      label: '',
+      value: value,
+      onChanged: onChanged,
+      childHandlesInput: true,
+      child: FTappable.static(
+        onPress: onChanged == null ? null : () => onChanged!(!value),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              Expanded(
+                child: _rowLabel(context, title, subtitle) ?? const SizedBox(),
+              ),
+              const SizedBox(width: 12),
+              ExcludeSemantics(
+                child: IgnorePointer(
+                  child: FSwitch(
+                    value: value,
+                    enabled: onChanged != null,
+                    onChange: onChanged,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -571,69 +918,75 @@ class AppTile extends StatelessWidget {
     this.shape,
   });
   @override
-  Widget build(BuildContext context) => FItem.raw(
-    selected: selected,
-    enabled: enabled,
-    onPress: enabled ? onTap : null,
-    style: const FItemStyleDelta.delta(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(14)),
+  Widget build(BuildContext context) => SemanticCard(
+    label: '',
+    onTap: enabled ? onTap : null,
+    childHandlesInput: true,
+    child: FItem.raw(
+      selected: selected,
+      enabled: enabled,
+      onPress: enabled ? onTap : null,
+      style: appRowStyle(
+        background: tileColor,
+        selectedBackground:
+            selectedTileColor ?? Theme.of(context).colorScheme.primaryContainer,
+        shape: shape,
       ),
-    ),
-    child: Padding(
-      padding:
-          contentPadding ??
-          EdgeInsets.symmetric(
-            vertical: minVerticalPadding ?? (dense ? 4 : 8),
-            horizontal: 2,
-          ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 40),
-        child: Row(
-          children: [
-            if (leading != null) ...[
-              IconTheme.merge(
-                data: const IconThemeData(
-                  size: 22,
-                  color: CampusColors.primary,
-                ),
-                child: leading!,
-              ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (title != null)
-                    DefaultTextStyle.merge(
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: CampusColors.ink,
-                      ),
-                      overflow: TextOverflow.visible,
-                      softWrap: true,
-                      child: title!,
-                    ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 4),
-                    DefaultTextStyle.merge(
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: CampusColors.muted,
-                      ),
-                      overflow: TextOverflow.visible,
-                      softWrap: true,
-                      child: subtitle!,
-                    ),
-                  ],
-                ],
-              ),
+      child: Padding(
+        padding:
+            contentPadding ??
+            EdgeInsets.symmetric(
+              vertical: minVerticalPadding ?? (dense ? 4 : 8),
+              horizontal: 2,
             ),
-            if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              if (leading != null) ...[
+                IconTheme.merge(
+                  data: IconThemeData(
+                    size: 22,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  child: leading!,
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (title != null)
+                      DefaultTextStyle.merge(
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        overflow: TextOverflow.visible,
+                        softWrap: true,
+                        child: title!,
+                      ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 4),
+                      DefaultTextStyle.merge(
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.visible,
+                        softWrap: true,
+                        child: subtitle!,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+            ],
+          ),
         ),
       ),
     ),
@@ -687,20 +1040,18 @@ class _AppDisclosureState extends State<AppDisclosure> {
               }
             : null,
       ),
-      Builder(
-        builder: (context) => open
-            ? Padding(
-                padding:
-                    widget.childrenPadding ??
-                    const EdgeInsets.only(top: 8, bottom: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: widget.children,
-                ),
-              )
-            : widget.maintainState
-            ? Offstage(child: Column(children: widget.children))
-            : const SizedBox.shrink(),
+      AppExpandRegion(
+        visible: open,
+        maintainState: widget.maintainState,
+        child: Padding(
+          padding:
+              widget.childrenPadding ??
+              const EdgeInsets.only(top: 8, bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: widget.children,
+          ),
+        ),
       ),
     ],
   );
@@ -726,32 +1077,90 @@ class AppDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (icon != null)
-            Padding(padding: const EdgeInsets.only(bottom: 12), child: icon!),
-          if (title != null)
-            DefaultTextStyle.merge(
-              style: const TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.w700,
-                color: CampusColors.ink,
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (title != null || icon != null)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (icon != null) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: IconTheme.merge(
+                              data: IconThemeData(
+                                size: 25,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              child: icon!,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        if (title != null)
+                          Expanded(
+                            child: DefaultTextStyle.merge(
+                              style: TextStyle(
+                                fontSize: 21,
+                                fontWeight: FontWeight.w700,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                              child: title!,
+                            ),
+                          ),
+                        if (actions == null)
+                          AppIconButton(
+                            tooltip: '关闭',
+                            guardAsync: false,
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                          ),
+                      ],
+                    ),
+                  if (content != null)
+                    Padding(
+                      padding:
+                          contentPadding ??
+                          const EdgeInsets.symmetric(vertical: 20),
+                      child: content!,
+                    ),
+                ],
               ),
-              child: title!,
             ),
-          if (content != null)
-            Flexible(
-              child: Padding(
-                padding:
-                    contentPadding ?? const EdgeInsets.symmetric(vertical: 20),
-                child: content!,
+          ),
+          if (actions != null) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Divider(
+                height: 1,
+                color: Theme.of(context).colorScheme.outlineVariant,
               ),
             ),
-          if (actions != null)
-            OverflowBar(
-              spacing: 8,
-              overflowSpacing: 8,
-              alignment: MainAxisAlignment.end,
-              children: actions!,
+            LayoutBuilder(
+              builder: (context, box) =>
+                  box.maxWidth < 280 ||
+                      MediaQuery.textScalerOf(context).scale(14) > 21
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < actions!.length; i++)
+                          Padding(
+                            padding: EdgeInsets.only(top: i == 0 ? 0 : 8),
+                            child: actions![i],
+                          ),
+                      ],
+                    )
+                  : OverflowBar(
+                      spacing: 12,
+                      overflowSpacing: 8,
+                      alignment: MainAxisAlignment.end,
+                      children: actions!,
+                    ),
             ),
+          ],
         ],
       ),
     ),

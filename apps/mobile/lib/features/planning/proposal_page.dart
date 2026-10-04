@@ -7,6 +7,7 @@ import '../../ui/detail_widgets.dart';
 import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
+import '../items/task_surfaces.dart';
 import 'risk_widgets.dart';
 
 String proposalStatus(String? status) => switch (status) {
@@ -136,7 +137,7 @@ class _ProposalPageState extends State<ProposalPage> {
       bottomNavigationBar: canApply
           ? ActionFooter(
               label: partial
-                  ? '保存已安排部分（仍有${minutesLabel(missing)}未安排）'
+                  ? '保存已安排部分'
                   : replan
                   ? '确认调整计划'
                   : '确认保存计划',
@@ -187,7 +188,7 @@ class _ProposalPageState extends State<ProposalPage> {
             ),
             for (final b in p['locked_conflicts'] ?? [])
               SoftNotice(
-                '${b['title'] ?? '个人计划'} · ${displayInstant(b['start_at'])}\n这段计划目前不能移动：可能已锁定、即将开始，或不在本次选择范围内。请到计划详情处理。',
+                '${b['title'] ?? '个人计划'} · ${displayInstant(b['start_at'])}\n这段计划目前不能移动：可能已固定、即将开始，或不在本次选择范围内。请到计划详情处理。',
                 warning: true,
               ),
           ] else
@@ -195,7 +196,11 @@ class _ProposalPageState extends State<ProposalPage> {
           for (final task in p['tasks'] ?? [])
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: CampusPanel(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: CampusColors.line)),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -207,20 +212,11 @@ class _ProposalPageState extends State<ProposalPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 24,
-                      runSpacing: 12,
-                      children: [
-                        _proposalMetric('目标时长', task['target_minutes']),
-                        _proposalMetric('原有安排', task['existing_minutes']),
-                        _proposalMetric('本次新增', task['new_minutes']),
-                        _proposalMetric(
-                          '未安排',
-                          task['unarranged_minutes'],
-                          attention:
-                              (task['unarranged_minutes'] as num? ?? 0) > 0,
-                        ),
-                      ],
+                    TaskDurationBalance(
+                      target: task['target_minutes'] as num?,
+                      existing: task['existing_minutes'] as num? ?? 0,
+                      added: task['new_minutes'] as num? ?? 0,
+                      unarranged: task['unarranged_minutes'] as num? ?? 0,
                     ),
                     const SizedBox(height: 8),
                     if ((task['outside_minutes'] ?? 0) > 0)
@@ -233,83 +229,81 @@ class _ProposalPageState extends State<ProposalPage> {
             ),
           SectionHeading('${replan ? '调整前后' : '新增安排'}（${blocks.length}段）'),
           for (final b in blocks)
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    width: 24,
+            Stack(
+              children: [
+                const Positioned(
+                  top: 28,
+                  bottom: 20,
+                  left: 11,
+                  width: 2,
+                  child: ColoredBox(color: CampusColors.line),
+                ),
+                const Positioned(
+                  top: 0,
+                  left: 2,
+                  child: Icon(
+                    Icons.schedule_rounded,
+                    size: 20,
+                    color: CampusColors.teal,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(36, 0, 0, 20),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: CampusColors.line),
+                      ),
+                    ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Icon(
-                          Icons.schedule_rounded,
-                          size: 20,
-                          color: CampusColors.teal,
+                        Text(
+                          displayInterval(b['start_at'], b['end_at']),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: CampusColors.teal,
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: Container(width: 2, color: CampusColors.line),
+                        const SizedBox(height: 6),
+                        Text(
+                          b['title'],
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
+                        const SizedBox(height: 6),
+                        Text(
+                          minutesLabel(b['minutes']),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: CampusColors.muted,
+                          ),
+                        ),
+                        if (replan) ...[
+                          const Divider(height: 24),
+                          TaskChangeFacts(
+                            beforeLabel: '原安排',
+                            afterLabel: '本次安排',
+                            before:
+                                DateTime.parse(b['start_at']) ==
+                                    DateTime.parse(b['before_start_at'])
+                                ? '保持原位${b['locked'] == true ? ' · 已固定' : ''}'
+                                : displayInterval(
+                                    b['before_start_at'],
+                                    b['before_end_at'],
+                                  ),
+                            after: displayInterval(b['start_at'], b['end_at']),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: CampusColors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              displayInstant(b['start_at']),
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: CampusColors.teal,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              b['title'],
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '至 ${displayInstant(b['end_at'])} · ${minutesLabel(b['minutes'])}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: CampusColors.muted,
-                              ),
-                            ),
-                            if (replan) ...[
-                              const Divider(height: 24),
-                              Text(
-                                DateTime.parse(b['start_at']) ==
-                                        DateTime.parse(b['before_start_at'])
-                                    ? '保持原位${b['locked'] == true ? ' · 已锁定' : ''}'
-                                    : '原安排：${displayInstant(b['before_start_at'])} — ${displayInstant(b['before_end_at'])}',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: CampusColors.muted,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           if (blocks.isEmpty)
             CampusPanel(
@@ -332,7 +326,7 @@ class _ProposalPageState extends State<ProposalPage> {
             SoftNotice(error!, warning: true),
             const SizedBox(height: 12),
           ],
-          if (busy) const LinearProgressIndicator(),
+
           if (!replan &&
               [
                 'INFEASIBLE',
@@ -360,23 +354,3 @@ class _ProposalPageState extends State<ProposalPage> {
     );
   }
 }
-
-Widget _proposalMetric(String label, dynamic value, {bool attention = false}) =>
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: CampusColors.muted),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          minutesLabel(value),
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: attention ? CampusColors.warning : CampusColors.ink,
-          ),
-        ),
-      ],
-    );

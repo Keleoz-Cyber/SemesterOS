@@ -1,4 +1,5 @@
 import '../../ui/app_controls.dart';
+import '../../ui/app_date_time_picker.dart' show appDatePickerBounds;
 import 'dart:convert';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
@@ -8,11 +9,30 @@ import 'semester_validation.dart';
 import 'period_editor.dart';
 import '../../ui/detail_widgets.dart';
 import '../../ui/campus_widgets.dart';
+import '../../ui/app_picker_field.dart';
+import '../../ui/campus_theme.dart';
+import '../../ui/date_labels.dart' show studentDate;
+import '../centers/academic_visuals.dart';
+
+DateTime firstMondayFromCurrentWeek(int week, {DateTime? today}) {
+  final now = today ?? schoolNow();
+  final date = DateTime.utc(now.year, now.month, now.day);
+  return date.subtract(Duration(days: date.weekday - 1 + (week - 1) * 7));
+}
+
+String _calendarDate(DateTime date) =>
+    '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
 class SemesterPage extends StatefulWidget {
   final AppController controller;
   final Map<String, dynamic>? existing;
-  const SemesterPage({super.key, required this.controller, this.existing});
+  final int pendingNoticeCount;
+  const SemesterPage({
+    super.key,
+    required this.controller,
+    this.existing,
+    this.pendingNoticeCount = 0,
+  });
   @override
   State<SemesterPage> createState() => _SemesterPageState();
 }
@@ -25,13 +45,23 @@ class _SemesterPageState extends State<SemesterPage> {
   final weeksField = GlobalKey<FormFieldState<String>>();
   final periodsField = GlobalKey<FormFieldState<String>>();
   late final TextEditingController name, monday, weeks, times;
-  bool confirmed = false, busy = false, submitted = false;
+  final currentWeek = TextEditingController();
+  bool inferMonday = false;
+  bool busy = false, submitted = false;
   String? error;
   @override
   void initState() {
     super.initState();
     final existing = widget.existing;
-    name = TextEditingController(text: existing?['name'] ?? '2026—2027学年第一学期');
+    inferMonday = existing == null;
+    final now = schoolNow();
+    final autumn = now.month >= 8 || now.month == 1;
+    final startYear = now.month >= 8 ? now.year : now.year - 1;
+    name = TextEditingController(
+      text:
+          existing?['name'] ??
+          '$startYear—${startYear + 1}学年${autumn ? '第一' : '第二'}学期',
+    );
     monday = TextEditingController(text: existing?['first_monday'] ?? '');
     weeks = TextEditingController(text: '${existing?['total_weeks'] ?? 20}');
     final periods = existing?['periods'] as List?;
@@ -47,18 +77,40 @@ class _SemesterPageState extends State<SemesterPage> {
   @override
   void dispose() {
     scroll.dispose();
-    for (final c in [name, monday, weeks, times]) {
+    for (final c in [name, monday, weeks, times, currentWeek]) {
       c.dispose();
     }
     super.dispose();
   }
 
+  void inferFromWeek(String value) {
+    final week = int.tryParse(value.trim());
+    setState(() {
+      monday.text =
+          week != null && week > 0 && week <= (int.tryParse(weeks.text) ?? 60)
+          ? _calendarDate(firstMondayFromCurrentWeek(week))
+          : '';
+      error = null;
+    });
+    if (submitted) mondayField.currentState?.validate();
+  }
+
   Future<void> save() async {
-    if (busy || !confirmed) return;
+    if (busy) return;
     setState(() {
       submitted = true;
       error = null;
     });
+    if (inferMonday) {
+      final value = int.tryParse(currentWeek.text.trim());
+      final total = int.tryParse(weeks.text.trim());
+      if (value == null || value < 1 || (total != null && value > total)) {
+        form.currentState!.validate();
+        setState(() => error = '请核对本学期当前周次和总周数');
+        revealInvalid(1);
+        return;
+      }
+    }
     // A long period list can unmount earlier form fields; validate the model too.
     final validations = [
       validateSemesterName(name.text),
@@ -74,7 +126,7 @@ class _SemesterPageState extends State<SemesterPage> {
       revealInvalid(invalidIndex);
       return;
     }
-    if (!form.currentState!.validate()) {
+    if (!validateAppForm(form)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         for (final field in [
@@ -112,8 +164,36 @@ class _SemesterPageState extends State<SemesterPage> {
           context: context,
           builder: (dialog) => AppDialog(
             title: const Text('确认修改校历？'),
-            content: Text(
-              '${differences.join('\n')}\n已导入课程会按新校历重新计算，请核对变更后的课表。',
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (existing['first_monday'] != monday.text.trim())
+                  _CalendarChange(
+                    label: '第1周周一',
+                    before: '${existing['first_monday']}',
+                    after: monday.text.trim(),
+                  ),
+                if (existing['total_weeks'] != int.parse(weeks.text.trim()))
+                  _CalendarChange(
+                    label: '学期周数',
+                    before: '${existing['total_weeks']}周',
+                    after: '${weeks.text.trim()}周',
+                  ),
+                if (jsonEncode(existing['periods']) != jsonEncode(periods))
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      '每天的节次时间已调整',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  '课表随之更新',
+                  style: TextStyle(fontSize: 14, color: CampusColors.muted),
+                ),
+              ],
             ),
             actions: [
               AppTextButton(
@@ -148,6 +228,13 @@ class _SemesterPageState extends State<SemesterPage> {
       );
       await widget.controller.openSession(null, '${saved['id']}');
       if (mounted) {
+        if ((saved['affected_plan_count'] as num? ?? 0) > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('设置已保存，${saved['affected_plan_count']} 段个人计划需要调整'),
+            ),
+          );
+        }
         if (existing == null) {
           context.go('/');
         } else {
@@ -162,34 +249,45 @@ class _SemesterPageState extends State<SemesterPage> {
   }
 
   void revealInvalid(int index) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || !scroll.hasClients) return;
       final key = [nameField, mondayField, weeksField, periodsField][index];
-      if (key.currentContext != null) {
-        Scrollable.ensureVisible(
-          key.currentContext!,
-          duration: const Duration(milliseconds: 250),
-          alignment: .15,
-        );
-      } else {
-        scroll.animateTo(
+      if (key.currentContext == null) {
+        await scroll.animateTo(
           index < 3 ? 0 : scroll.position.maxScrollExtent,
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
+        await WidgetsBinding.instance.endOfFrame;
       }
+      if (!mounted || key.currentContext == null) return;
+      key.currentState?.validate();
+      await Scrollable.ensureVisible(
+        key.currentContext!,
+        duration: const Duration(milliseconds: 250),
+        alignment: .15,
+      );
     });
   }
 
   Future<void> chooseMonday() async {
     if (busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     final now = schoolNow();
-    final chosen = await showDatePicker(
-      context: context,
-      initialDate: monday.text.isEmpty ? null : DateTime.tryParse(monday.text),
+    final saved = DateTime.tryParse(monday.text) ?? now;
+    final day = DateTime.utc(saved.year, saved.month, saved.day);
+    final initial = day.subtract(Duration(days: day.weekday - DateTime.monday));
+    final bounds = appDatePickerBounds(
+      initialDate: initial,
       firstDate: DateTime(2000),
       lastDate: DateTime(now.year + 5, 12, 31),
-      currentDate: DateTime(now.year, now.month, now.day),
+    );
+    final chosen = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: bounds.start,
+      lastDate: bounds.end,
+      currentDate: DateTime.utc(now.year, now.month, now.day),
       initialEntryMode: DatePickerEntryMode.calendarOnly,
       selectableDayPredicate: (date) => date.weekday == DateTime.monday,
       helpText: '选择学校校历第1周的周一',
@@ -198,6 +296,7 @@ class _SemesterPageState extends State<SemesterPage> {
     );
     if (chosen == null || !mounted) return;
     setState(() {
+      inferMonday = false;
       monday.text =
           '${chosen.year.toString().padLeft(4, '0')}-${chosen.month.toString().padLeft(2, '0')}-${chosen.day.toString().padLeft(2, '0')}';
       error = null;
@@ -215,24 +314,20 @@ class _SemesterPageState extends State<SemesterPage> {
           ? '确认创建学期'
           : '保存学期设置',
       icon: Icons.check_rounded,
-      onPressed: confirmed && !busy ? save : null,
+      onPressed: !busy ? save : null,
     ),
     body: Form(
       key: form,
       autovalidateMode: submitted
-          ? AutovalidateMode.onUserInteraction
+          ? AutovalidateMode.always
           : AutovalidateMode.disabled,
       child: ListView(
         controller: scroll,
         padding: const EdgeInsets.all(20),
         children: [
-          SoftNotice(
-            widget.existing == null
-                ? '节次时间为示例，请按学校作息调整。'
-                : '修改校历或节次后，课程时间会重新计算。',
-          ),
-          const SizedBox(height: 16),
-          EditorSection(
+          if (widget.existing == null && widget.pendingNoticeCount > 0)
+            const SoftNotice('通知已暂存，建立学期后继续核对。'),
+          AcademicEditorSection(
             title: '学期校历',
             icon: Icons.date_range_outlined,
             children: [
@@ -240,9 +335,46 @@ class _SemesterPageState extends State<SemesterPage> {
                 key: nameField,
                 controller: name,
                 enabled: !busy,
+                minLines: 1,
+                maxLines: 3,
                 validator: validateSemesterName,
                 decoration: const InputDecoration(labelText: '学期名称'),
               ),
+              const SizedBox(height: 14),
+              AppPickerField<bool>(
+                key: const Key('semester-monday-mode'),
+                initialValue: inferMonday,
+                decoration: const InputDecoration(labelText: '开学日期'),
+                items: const [
+                  DropdownMenuItem(value: false, child: Text('按校历选择')),
+                  DropdownMenuItem(value: true, child: Text('按当前周推算')),
+                ],
+                onChanged: busy
+                    ? null
+                    : (value) {
+                        if (value == null) return;
+                        setState(() => inferMonday = value);
+                        if (value) inferFromWeek(currentWeek.text);
+                      },
+              ),
+              if (inferMonday) ...[
+                const SizedBox(height: 14),
+                AppFormField(
+                  key: const Key('semester-current-week'),
+                  controller: currentWeek,
+                  enabled: !busy,
+                  keyboardType: TextInputType.number,
+                  onChanged: inferFromWeek,
+                  decoration: const InputDecoration(labelText: '现在是第几周'),
+                  validator: (value) {
+                    final week = int.tryParse(value?.trim() ?? '');
+                    final total = int.tryParse(weeks.text.trim());
+                    if (week == null || week < 1) return '填写本学期当前周次';
+                    if (total != null && week > total) return '当前周不能超过学期总周数';
+                    return null;
+                  },
+                ),
+              ],
               const SizedBox(height: 14),
               Semantics(
                 key: const Key('first-monday'),
@@ -258,8 +390,6 @@ class _SemesterPageState extends State<SemesterPage> {
                     labelText: '第1周周一',
                     floatingLabelBehavior: FloatingLabelBehavior.always,
                     hintText: '点击选择日期',
-                    helperText: '请按校历选择第1周的周一',
-                    helperMaxLines: 2,
                     errorMaxLines: 2,
                     suffixIcon: AppIconButton(
                       onPressed: busy ? null : chooseMonday,
@@ -277,14 +407,41 @@ class _SemesterPageState extends State<SemesterPage> {
                 validator: validateTotalWeeks,
                 decoration: const InputDecoration(labelText: '学期总周数'),
                 keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
               ),
-              const SizedBox(height: 14),
+              if (DateTime.tryParse(monday.text) != null &&
+                  (int.tryParse(weeks.text) ?? 0) > 0 &&
+                  (int.tryParse(weeks.text) ?? 0) <= 60)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.south_east_rounded,
+                        size: 18,
+                        color: CampusColors.teal,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '学期至 ${studentDate(DateTime.parse(monday.text).add(Duration(days: int.parse(weeks.text) * 7 - 1)))}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: CampusColors.teal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
-          EditorSection(
+          AcademicEditorSection(
             title: '每天的节次',
             icon: Icons.schedule_rounded,
-            subtitle: '点时间即可调整，请与学校作息核对。',
+            accent: CampusColors.teal,
+            subtitle: widget.existing == null ? '示例时间，按学校作息修改' : null,
             children: [
               PeriodEditor(
                 controller: times,
@@ -292,14 +449,6 @@ class _SemesterPageState extends State<SemesterPage> {
                 enabled: !busy,
               ),
             ],
-          ),
-          AppCheckRow(
-            contentPadding: EdgeInsets.zero,
-            value: confirmed,
-            onChanged: busy
-                ? null
-                : (v) => setState(() => confirmed = v ?? false),
-            title: const Text('我已核对学期起始日与节次时间'),
           ),
           if (error != null)
             Text(
@@ -309,6 +458,54 @@ class _SemesterPageState extends State<SemesterPage> {
           const SizedBox(height: 12),
         ],
       ),
+    ),
+  );
+}
+
+class _CalendarChange extends StatelessWidget {
+  const _CalendarChange({
+    required this.label,
+    required this.before,
+    required this.after,
+  });
+  final String label, before, after;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          before,
+          style: const TextStyle(fontSize: 14, color: CampusColors.muted),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.subdirectory_arrow_right_rounded,
+              size: 18,
+              color: CampusColors.teal,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                after,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: CampusColors.teal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     ),
   );
 }

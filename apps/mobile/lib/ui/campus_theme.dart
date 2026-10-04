@@ -18,6 +18,26 @@ abstract final class CampusColors {
   static const success = Color(0xFF397363);
   static const chartPurple = Color(0xFF8A789F);
   static const chartSand = Color(0xFFA28A60);
+
+  // 时间状态色系（Milestone 1新增）
+  static const timeFuture = Color(0xFF7B94C5); // 远期事件（3天+）
+  static const timeSoon = Color(0xFFD4A574); // 临近事件（1-3天）
+  static const timeUrgent = Color(0xFFE87A5D); // 紧急事件（<24h）
+  static const timeNow = Color(0xFFE84545); // 当前进行中
+  static const timePast = Color(0xFFB0BBC9); // 已过去/已完成
+
+  // 表面层次扩展
+  static const surfaceRaised = Color(0xFFFAFBFC);
+  static const surfaceOverlay = Color(0xFFF5F7FB);
+
+  // 阴影系统
+  static List<BoxShadow> elevation(int level, {Color? color}) => [
+    BoxShadow(
+      color: (color ?? primary).withValues(alpha: 0.08 * level.clamp(1, 5)),
+      blurRadius: 2.0 * level,
+      offset: Offset(0, level.toDouble()),
+    ),
+  ];
 }
 
 class CoursePalette {
@@ -62,6 +82,20 @@ ThemeData campusTheme() {
       surfaceTintColor: Colors.transparent,
       headerBackgroundColor: CampusColors.primary,
       headerForegroundColor: Colors.white,
+      confirmButtonStyle: TextButton.styleFrom(
+        foregroundColor: Colors.white,
+        backgroundColor: CampusColors.primary,
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      cancelButtonStyle: TextButton.styleFrom(
+        foregroundColor: CampusColors.ink,
+        backgroundColor: CampusColors.blueSoft,
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
     timePickerTheme: TimePickerThemeData(
@@ -214,6 +248,73 @@ ThemeData campusTheme() {
         height: 1.35,
         fontWeight: FontWeight.w700,
         color: CampusColors.ink,
+      ),
+    ),
+  );
+}
+
+/// Stronger campus light tokens; leaves text scaling to MediaQuery.
+ThemeData campusHighContrastTheme({ThemeData? base}) {
+  final theme = base ?? campusTheme();
+  const ink = Color(0xFF142238);
+  const muted = Color(0xFF384B63);
+  const primary = Color(0xFF244B9F);
+  const outline = Color(0xFF68788B);
+  final scheme = theme.colorScheme.copyWith(
+    primary: primary,
+    onPrimary: Colors.white,
+    secondary: const Color(0xFF205D4E),
+    onSecondary: Colors.white,
+    onPrimaryContainer: primary,
+    onSecondaryContainer: const Color(0xFF205D4E),
+    onSurface: ink,
+    onSurfaceVariant: muted,
+    outline: outline,
+    outlineVariant: outline,
+    error: const Color(0xFF8D2927),
+    onErrorContainer: const Color(0xFF8D2927),
+  );
+  return theme.copyWith(
+    colorScheme: scheme,
+    textTheme: theme.textTheme.apply(bodyColor: ink, displayColor: ink),
+    appBarTheme: theme.appBarTheme.copyWith(
+      foregroundColor: ink,
+      iconTheme: const IconThemeData(color: ink),
+      titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(color: ink),
+    ),
+    cardTheme: theme.cardTheme.copyWith(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: outline, width: 1.5),
+      ),
+    ),
+    dividerTheme: const DividerThemeData(color: outline, thickness: 1.5),
+    inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+      labelStyle: theme.inputDecorationTheme.labelStyle?.copyWith(color: muted),
+      helperStyle: theme.inputDecorationTheme.helperStyle?.copyWith(
+        color: muted,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: outline, width: 1.5),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: primary, width: 2),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        foregroundColor: primary,
+        side: const BorderSide(color: outline, width: 1.5),
+      ),
+    ),
+    listTileTheme: theme.listTileTheme.copyWith(
+      iconColor: muted,
+      titleTextStyle: theme.listTileTheme.titleTextStyle?.copyWith(color: ink),
+      subtitleTextStyle: theme.listTileTheme.subtitleTextStyle?.copyWith(
+        color: muted,
       ),
     ),
   );

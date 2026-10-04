@@ -9,7 +9,7 @@ import 'calendar_flow_test.dart' show semester;
 import 'centers_flow_test.dart' show settleIo;
 import 'controller_test.dart' show MemoryStore;
 import 'schedule_flow_test.dart' show ScheduleFixture;
-import 'ui_polish_test.dart' show mount;
+import 'ui_polish_test.dart' show mount, capture, loadPreviewFonts;
 
 Map<String, dynamic> sundayEvent(String id, String title, String at) => {
   'id': id,
@@ -22,114 +22,172 @@ Map<String, dynamic> sundayEvent(String id, String title, String at) => {
 };
 
 void main() {
-  testWidgets('phone week shows full Sunday agenda and day mode at 320dp', (
-    tester,
-  ) async {
-    final fixture = ScheduleFixture();
-    final previous = fixture.api.dio.httpClientAdapter as ControlledTransport;
-    fixture.api.dio.httpClientAdapter = ControlledTransport((request) async {
-      if (request.path.contains('/calendar?')) {
-        return body({
-          'semester_id': 's',
-          'revision': 1,
-          'entries': [
-            sundayEvent('a', '项目讨论', '17:00:00'),
-            sundayEvent('b', 'Java实验报告', '19:00:00'),
-            sundayEvent('c', '社团报名与材料确认', '19:15:00'),
-            sundayEvent('d', '整理调研材料', '20:00:00'),
-            {
-              'id': 'due',
-              'resource_id': 'due',
-              'resource_type': 'deadline',
-              'title': '提交开题报告',
-              'due_at': '2026-09-27T20:30:00+08:00',
-              'time_precision': 'exact',
-            },
-          ],
-          'undated': [],
-        });
-      }
-      return previous.respond(request);
-    });
-    await tester.runAsync(() => fixture.c.bind('s'));
-    final app =
-        AppController(
-            fixture.api,
-            MemoryStore(),
-            clearSchoolSession: () async {},
-          )
-          ..semester = semester()
-          ..week = 4;
-    final panel = GlobalKey<CalendarPanelState>();
-    await mount(
-      tester,
-      Scaffold(
-        body: SingleChildScrollView(
-          child: CalendarPanel(key: panel, app: app, items: fixture.c),
+  setUpAll(loadPreviewFonts);
+  testWidgets(
+    'phone preserves seven-column week and explicitly switches readable agendas at 320dp',
+    (tester) async {
+      final fixture = ScheduleFixture();
+      final previous = fixture.api.dio.httpClientAdapter as ControlledTransport;
+      fixture.api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.path.contains('/calendar?')) {
+          return body({
+            'semester_id': 's',
+            'revision': 1,
+            'entries': [
+              sundayEvent('a', '项目讨论', '17:00:00'),
+              sundayEvent('b', 'Java实验报告', '19:00:00'),
+              sundayEvent('c', '社团报名与材料确认', '19:15:00'),
+              sundayEvent('d', '整理调研材料', '20:00:00'),
+              {
+                'id': 'due',
+                'resource_id': 'due',
+                'resource_type': 'deadline',
+                'title': '提交开题报告',
+                'due_at': '2026-09-27T20:30:00+08:00',
+                'time_precision': 'exact',
+              },
+            ],
+            'undated': [],
+          });
+        }
+        return previous.respond(request);
+      });
+      await tester.runAsync(() => fixture.c.bind('s'));
+      final app =
+          AppController(
+              fixture.api,
+              MemoryStore(),
+              clearSchoolSession: () async {},
+            )
+            ..semester = semester()
+            ..week = 4;
+      final panel = GlobalKey<CalendarPanelState>();
+      await mount(
+        tester,
+        Scaffold(
+          body: SingleChildScrollView(
+            child: CalendarPanel(key: panel, app: app, items: fixture.c),
+          ),
         ),
-      ),
-      width: 320,
-      textScale: 1.5,
-    );
-    await settleIo(tester);
-    final weekAgenda = find.byKey(const ValueKey('calendar-week-agenda'));
-    expect(weekAgenda, findsOneWidget);
-    expect(find.byType(ScheduleGrid), findsNothing);
-    for (final title in ['项目讨论', 'Java实验报告', '社团报名与材料确认', '整理调研材料', '提交开题报告']) {
+        width: 320,
+        height: 420,
+        textScale: 1.5,
+      );
+      await settleIo(tester);
+      expect(find.byType(ScheduleGrid), findsOneWidget);
+      expect(find.text('周日'), findsOneWidget);
+      Finder gridScroll() => find
+          .descendant(
+            of: find.byType(ScheduleGrid),
+            matching: find.byWidgetPredicate(
+              (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+            ),
+          )
+          .first;
+      final position = tester.state<ScrollableState>(gridScroll()).position;
+      expect(position.maxScrollExtent, greaterThan(0));
+      position.jumpTo(position.maxScrollExtent / 2);
+      await tester.pumpAndSettle();
+      final gridOffset = position.pixels;
+      expect(gridOffset, greaterThan(0));
+      final selectedWeek = panel.currentState!.week;
+      final selectedDay = panel.currentState!.selectedDay;
+      await capture(tester, 'calendar-phone-grid-large');
+      await tester.tap(find.text('日程列表'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('周时间表'));
+      await tester.pumpAndSettle();
       expect(
-        find.descendant(of: weekAgenda, matching: find.text(title)),
+        tester.state<ScrollableState>(gridScroll()).position.pixels,
+        closeTo(gridOffset, .01),
+      );
+      expect(panel.currentState!.week, selectedWeek);
+      expect(panel.currentState!.selectedDay, selectedDay);
+      await tester.tap(find.text('日程列表'));
+      await tester.pumpAndSettle();
+      final weekAgenda = find.byKey(const ValueKey('calendar-week-agenda'));
+      expect(weekAgenda, findsOneWidget);
+      expect(find.byType(ScheduleGrid), findsNothing);
+      await capture(tester, 'calendar-phone-week-agenda-large');
+      for (final title in [
+        '项目讨论',
+        'Java实验报告',
+        '社团报名与材料确认',
+        '整理调研材料',
+        '提交开题报告',
+      ]) {
+        expect(
+          find.descendant(of: weekAgenda, matching: find.text(title)),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.descendant(of: weekAgenda, matching: find.text('17:00')),
         findsOneWidget,
       );
-    }
-    expect(
-      find.descendant(of: weekAgenda, matching: find.text('17:00')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: weekAgenda, matching: find.text('19:15')),
-      findsWidgets, // The live clock may also read 19:15 during the test.
-    );
-    expect(
-      find.descendant(of: weekAgenda, matching: find.text('5项')),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(of: weekAgenda, matching: find.text('19:15')),
+        findsWidgets, // The live clock may also read 19:15 during the test.
+      );
+      expect(
+        find.descendant(of: weekAgenda, matching: find.text('5项')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      expect(
+        panel.currentState!.onDay({
+          'time': {
+            'precision': 'exact',
+            'meaning': 'window',
+            'at': '2026-09-24T08:00:00+08:00',
+            'end_at': '2026-09-27T16:00:00+08:00',
+          },
+        }, DateTime.utc(2026, 9, 26)),
+        isTrue,
+      );
 
-    panel.currentState!.selectDay(DateTime.utc(2026, 9, 27));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('周').first);
-    await tester.pumpAndSettle();
-    final sunday = find.byKey(const ValueKey('calendar-day-2026-09-27'));
-    expect(sunday.hitTestable(), findsOneWidget);
-    expect(tester.getRect(sunday).right, lessThanOrEqualTo(320));
+      panel.currentState!.selectDay(DateTime.utc(2026, 9, 27));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('日程列表').first);
+      await tester.pumpAndSettle();
+      final sunday = find.byKey(const ValueKey('calendar-day-2026-09-27'));
+      await tester.ensureVisible(sunday);
+      await tester.pumpAndSettle();
+      expect(sunday.hitTestable(), findsOneWidget);
+      expect(tester.getRect(sunday).right, lessThanOrEqualTo(320));
 
-    final fade = find.byType(AnimatedCrossFade).first;
-    await tester.tap(find.text('日').first);
-    await tester.pumpAndSettle();
-    expect(
-      tester.widget<AnimatedCrossFade>(fade).crossFadeState,
-      CrossFadeState.showSecond,
-    );
-    final day = tester
-        .state<CalendarPanelState>(find.byType(CalendarPanel))
-        .selectedDay!;
-    expect(
-      find.text('${day.month}月${day.day}日 · 周${'一二三四五六日'[day.weekday - 1]}'),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('calendar-day-2026-09-27')),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('周').first);
-    await tester.pumpAndSettle();
-    expect(
-      tester.widget<AnimatedCrossFade>(fade).crossFadeState,
-      CrossFadeState.showFirst,
-    );
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-    fixture.c.dispose();
-    app.dispose();
-  });
+      final fade = find.byType(AnimatedCrossFade).first;
+      await tester.tap(sunday);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AnimatedCrossFade>(fade).crossFadeState,
+        CrossFadeState.showSecond,
+      );
+      final day = tester
+          .state<CalendarPanelState>(find.byType(CalendarPanel))
+          .selectedDay!;
+      expect(
+        find.text('${day.month}月${day.day}日 · 周${'一二三四五六日'[day.weekday - 1]}'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('calendar-day-2026-09-27')),
+        findsOneWidget,
+      );
+      final wholeWeek = find.byKey(const ValueKey('calendar-whole-week'));
+      await tester.ensureVisible(wholeWeek);
+      await tester.pumpAndSettle();
+      expect(wholeWeek.hitTestable(), findsOneWidget);
+      await tester.tap(wholeWeek);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AnimatedCrossFade>(fade).crossFadeState,
+        CrossFadeState.showFirst,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      fixture.c.dispose();
+      app.dispose();
+    },
+  );
 }

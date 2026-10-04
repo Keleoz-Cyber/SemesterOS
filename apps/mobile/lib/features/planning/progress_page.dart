@@ -1,3 +1,4 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'dart:math';
@@ -5,8 +6,10 @@ import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
 import '../../ui/detail_widgets.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/motion.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
+import '../items/task_surfaces.dart';
 import 'risk_widgets.dart';
 import 'plan_change_confirmation.dart';
 
@@ -25,6 +28,9 @@ class _ProgressPageState extends State<ProgressPage> {
   bool busy = false;
   String? error;
   List<Map<String, dynamic>>? history;
+  bool historyLoading = false;
+  String? historyError;
+  int historyEpoch = 0;
   @override
   void initState() {
     super.initState();
@@ -47,8 +53,38 @@ class _ProgressPageState extends State<ProgressPage> {
     return n == null || n < 0 || n > 525600 ? '请输入0至525600之间的整数分钟' : null;
   }
 
+  Future<void> loadHistory() async {
+    if (historyLoading) return;
+    final c = widget.controller;
+    final generation = c.api.generation, owner = c.owner, sid = c.semesterId;
+    final stamp = ++historyEpoch;
+    bool current() =>
+        mounted &&
+        stamp == historyEpoch &&
+        c.api.generation == generation &&
+        c.owner == owner &&
+        c.semesterId == sid;
+    setState(() {
+      historyLoading = true;
+      historyError = null;
+    });
+    try {
+      final data = await c.api.request(
+        'GET',
+        '/items/${widget.item['id']}/progress',
+      );
+      if (current()) {
+        setState(() => history = List<Map<String, dynamic>>.from(data));
+      }
+    } catch (e) {
+      if (current()) setState(() => historyError = userError(e));
+    } finally {
+      if (current()) setState(() => historyLoading = false);
+    }
+  }
+
   Future<void> save() async {
-    if (!form.currentState!.validate()) return;
+    if (!validateAppForm(form)) return;
     setState(() {
       busy = true;
       error = null;
@@ -76,8 +112,13 @@ class _ProgressPageState extends State<ProgressPage> {
           : await confirmPlanChange(
               context,
               title: complete ? '确认任务已经完成' : '确认现在还需要多久',
-              message:
-                  '原来还需：${minutesLabel(preview['before_remaining_minutes'])}\n现在还需：${minutesLabel(preview['after_remaining_minutes'])}\n实际投入单独记录。',
+              message: [
+                if (preview['before_remaining_minutes'] != null)
+                  '原来还需：${minutesLabel(preview['before_remaining_minutes'])}',
+                '现在还需：${minutesLabel(preview['after_remaining_minutes'])}',
+                if (preview['actual_minutes'] != null)
+                  '本次用时：${minutesLabel(preview['actual_minutes'])}',
+              ].join('\n'),
               confirmLabel: complete ? '确认完成并停止提醒' : '确认更新进度',
               blocks: blocks,
               cancelAll: complete,
@@ -97,15 +138,31 @@ class _ProgressPageState extends State<ProgressPage> {
                     children: [
                       Text('${widget.item['title']}'),
                       const SizedBox(height: 12),
-                      Text(
-                        '原来还需：${minutesLabel(preview['before_remaining_minutes'])}\n现在还需：${minutesLabel(preview['after_remaining_minutes'])}',
-                      ),
+                      if (preview['before_remaining_minutes'] != null)
+                        TaskChangeFacts(
+                          beforeLabel: '原来还需',
+                          afterLabel: '现在还需',
+                          before: minutesLabel(
+                            preview['before_remaining_minutes'],
+                          ),
+                          after: minutesLabel(
+                            preview['after_remaining_minutes'],
+                          ),
+                        )
+                      else
+                        TaskFactStrip(
+                          label: '现在还需',
+                          value: minutesLabel(
+                            preview['after_remaining_minutes'],
+                          ),
+                          icon: Icons.timelapse_rounded,
+                        ),
                       if (preview['actual_minutes'] != null)
                         Text(
                           '本次实际用时：${minutesLabel(preview['actual_minutes'])}',
                         ),
                       const SizedBox(height: 12),
-                      Text(complete ? '确认后标记完成，并停用未触发提醒。' : ''),
+                      if (complete) const Text('确认后标记完成，并停用未触发提醒。'),
                     ],
                   ),
                 ),
@@ -164,20 +221,18 @@ class _ProgressPageState extends State<ProgressPage> {
             icon: Icons.timelapse_rounded,
             children: [
               if (widget.item['remaining_minutes'] != null)
-                RecordFact(
+                TaskFactStrip(
                   label: '上次记录',
                   value: minutesLabel(widget.item['remaining_minutes']),
                   icon: Icons.history_rounded,
                 ),
               const SizedBox(height: 8),
-              AppFormField(
-                key: const Key('progress-remaining'),
+              WorkMinuteField(
+                fieldKey: const Key('progress-remaining'),
                 controller: remaining,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: '预计剩余（分钟）',
-                  helperText: '填0表示已完成',
-                ),
+                enabled: !busy,
+                label: '预计剩余',
+                helper: '填0表示已完成',
                 validator: (v) => number(v, required: true),
               ),
             ],
@@ -187,11 +242,11 @@ class _ProgressPageState extends State<ProgressPage> {
             icon: Icons.timer_outlined,
             accent: CampusColors.teal,
             children: [
-              AppFormField(
-                key: const Key('progress-actual'),
+              WorkMinuteField(
+                fieldKey: const Key('progress-actual'),
                 controller: actual,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '实际用时（分钟，选填）'),
+                enabled: !busy,
+                label: '本次用时（选填）',
                 validator: number,
               ),
               const SizedBox(height: 16),
@@ -199,7 +254,10 @@ class _ProgressPageState extends State<ProgressPage> {
                 controller: note,
                 maxLines: 3,
                 maxLength: 500,
-                decoration: const InputDecoration(labelText: '备注（选填）'),
+                decoration: const InputDecoration(
+                  labelText: '备注（选填）',
+                  counterText: '',
+                ),
               ),
             ],
           ),
@@ -209,35 +267,87 @@ class _ProgressPageState extends State<ProgressPage> {
           ],
           const SizedBox(height: 16),
           AppDisclosure(
-            title: const Text('查看进度记录'),
-            onExpansionChanged: (open) async {
-              if (!open) return;
-              try {
-                final data = await widget.controller.api.request(
-                  'GET',
-                  '/items/${widget.item['id']}/progress',
-                );
-                if (mounted) {
-                  setState(
-                    () => history = List<Map<String, dynamic>>.from(data),
-                  );
-                }
-              } catch (e) {
-                if (mounted) setState(() => error = userError(e));
+            title: Row(
+              children: [
+                const Expanded(child: Text('查看进度记录')),
+                AppLoadingIndicator(
+                  compact: true,
+                  visible: historyLoading && history != null,
+                  label: '正在更新进度记录',
+                ),
+              ],
+            ),
+            onExpansionChanged: (open) {
+              if (open) {
+                loadHistory();
+              } else {
+                historyEpoch++;
+                setState(() => historyLoading = false);
               }
             },
             children: [
-              if (history == null)
-                const Text('正在读取…')
-              else if (history!.isEmpty)
-                const Text('尚无单独记录的进度更新'),
+              AnimatedSwitcher(
+                duration: AppMotion.feedback(context),
+                switchInCurve: Curves.easeOutCubic,
+                child: historyLoading && history == null
+                    ? const Column(
+                        key: ValueKey('progress-history-loading'),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SkeletonLoader(width: 144, height: 16),
+                          SizedBox(height: 10),
+                          SkeletonLoader(width: 200, height: 12),
+                        ],
+                      )
+                    : historyError != null
+                    ? Row(
+                        key: const ValueKey('progress-history-error'),
+                        children: [
+                          Expanded(
+                            child: Text(
+                              historyError!,
+                              style: const TextStyle(color: CampusColors.muted),
+                            ),
+                          ),
+                          AppTextButton(
+                            onPressed: historyLoading ? null : loadHistory,
+                            child: const Text('重试'),
+                          ),
+                        ],
+                      )
+                    : history?.isEmpty == true
+                    ? const Align(
+                        key: ValueKey('progress-history-empty'),
+                        alignment: Alignment.centerLeft,
+                        child: Text('尚无单独记录的进度更新'),
+                      )
+                    : const SizedBox.shrink(),
+              ),
               for (final row in history ?? <Map<String, dynamic>>[])
                 AppTile(
                   title: Text(
-                    '${minutesLabel(row['before_remaining_minutes'])} → ${minutesLabel(row['remaining_minutes'])}',
+                    row['before_remaining_minutes'] == null
+                        ? '还需 ${minutesLabel(row['remaining_minutes'])}'
+                        : '${minutesLabel(row['before_remaining_minutes'])} → ${minutesLabel(row['remaining_minutes'])}',
                   ),
-                  subtitle: Text(
-                    '${row['undone'] == true ? '已撤销，不计入统计\n' : ''}${displayInstant(row['created_at'])}\n实际投入：${row['actual_minutes'] == null ? '未记录' : minutesLabel(row['actual_minutes'])}\n${row['note']}',
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        [
+                          if (row['created_at'] != null)
+                            displayInstant(row['created_at']),
+                          if (row['undone'] == true) '已撤销',
+                        ].join(' · '),
+                      ),
+                      if (row['actual_minutes'] != null)
+                        Text('本次用时 ${minutesLabel(row['actual_minutes'])}'),
+                      if ('${row['note'] ?? ''}'.trim().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text('${row['note']}'),
+                        ),
+                    ],
                   ),
                 ),
             ],

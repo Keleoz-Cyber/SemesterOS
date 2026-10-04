@@ -1,3 +1,5 @@
+import '../../ui/app_loading.dart';
+import '../../ui/app_sheet.dart';
 import '../../ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -6,18 +8,23 @@ import '../../ui/campus_theme.dart';
 import '../../ui/app_selection.dart';
 import '../items/items_controller.dart';
 import 'schedule_grid.dart';
+import 'time_track.dart';
 import 'calendar_repository.dart';
 import 'day_context_panel.dart';
+import 'event_form.dart';
+import '../../ui/empty_states.dart';
 
 class CalendarPanel extends StatefulWidget {
   final AppController app;
   final ItemsController items;
   final bool todayOnly;
+  final DateTime Function()? now;
   const CalendarPanel({
     super.key,
     required this.app,
     required this.items,
     this.todayOnly = false,
+    this.now,
   });
   @override
   State<CalendarPanel> createState() => CalendarPanelState();
@@ -29,13 +36,28 @@ class CalendarPanelState extends State<CalendarPanel>
   final ScrollController dayStripController = ScrollController();
   String? dayStripAnchor;
   late int week;
-  bool grid = true, active = true;
+  bool grid = true, weekList = false, active = true, foreground = true;
+  MinuteClock? clock;
+  DateTime get now => widget.now?.call() ?? schoolNow();
+  bool get hasSemester => widget.app.semester != null;
+  void updateClock() {
+    if (!active || !foreground || !hasSemester) {
+      clock?.cancel();
+      clock = null;
+    } else {
+      clock ??= MinuteClock(() {
+        if (mounted && active && foreground && hasSemester) setState(() {});
+      }, now: () => now);
+    }
+  }
+
   String kind = 'all';
   DateTime? selectedDay;
   String? sid;
   int? seenRevision;
   int get expectedRevision {
-    final a = semester['revision'] as int, b = widget.items.itemsRevision ?? 0;
+    final a = widget.app.semester?['revision'] as int? ?? 0,
+        b = widget.items.itemsRevision ?? 0;
     return a > b ? a : b;
   }
 
@@ -44,8 +66,8 @@ class CalendarPanelState extends State<CalendarPanel>
     'course': '课程',
     'event': '活动',
     'exam': '考试',
-    'plan': '个人计划',
-    'deadline': '待办截止',
+    'plan': '学习安排',
+    'deadline': '待办',
   };
   Future<void> chooseKind() async {
     const icons = {
@@ -56,10 +78,8 @@ class CalendarPanelState extends State<CalendarPanel>
       'plan': Icons.edit_calendar_outlined,
       'deadline': Icons.flag_outlined,
     };
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showAppSheet<String>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       builder: (sheetContext) => SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -86,9 +106,6 @@ class CalendarPanelState extends State<CalendarPanel>
                       selected: entry.key == kind,
                       leading: Icon(icons[entry.key]),
                       title: Text(entry.value),
-                      subtitle: entry.key == 'plan'
-                          ? const Text('为任务预留的时间')
-                          : null,
                       trailing: Icon(
                         entry.key == kind
                             ? Icons.radio_button_checked_rounded
@@ -122,11 +139,7 @@ class CalendarPanelState extends State<CalendarPanel>
     sid = semester['id'];
     seenRevision = expectedRevision;
     week = widget.todayOnly ? widget.app.weekNow(semester) : widget.app.week;
-    final today = DateTime.utc(
-      schoolNow().year,
-      schoolNow().month,
-      schoolNow().day,
-    );
+    final today = DateTime.utc(now.year, now.month, now.day);
     selectedDay =
         !today.isBefore(first) &&
             today.isBefore(first.add(const Duration(days: 7)))
@@ -137,6 +150,7 @@ class CalendarPanelState extends State<CalendarPanel>
 
   void itemsChanged() {
     if (!mounted ||
+        !hasSemester ||
         widget.items.semesterId != sid ||
         seenRevision == expectedRevision) {
       return;
@@ -158,12 +172,17 @@ class CalendarPanelState extends State<CalendarPanel>
     super.didChangeDependencies();
     final was = active;
     active = TickerMode.valuesOf(context).enabled;
+    updateClock();
     if (active && !was && repository.revision != expectedRevision) reload();
   }
 
   @override
   void didUpdateWidget(covariant CalendarPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!hasSemester) {
+      updateClock();
+      return;
+    }
     if (sid != semester['id'] ||
         seenRevision != expectedRevision ||
         oldWidget.todayOnly != widget.todayOnly ||
@@ -178,18 +197,25 @@ class CalendarPanelState extends State<CalendarPanel>
     }
   }
 
-  Future<void> reload() {
+  Future<void> reload() async {
+    if (!hasSemester || !mounted) return;
     if (widget.todayOnly) week = widget.app.weekNow(semester);
-    return repository.load(semester['id'], first);
+    await repository.load(semester['id'], first);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted && active) reload();
+    foreground = state == AppLifecycleState.resumed;
+    updateClock();
+    if (foreground && mounted && active) {
+      setState(() {});
+      reload();
+    }
   }
 
   @override
   void dispose() {
+    clock?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     widget.items.removeListener(itemsChanged);
     dayStripController.dispose();
@@ -198,6 +224,7 @@ class CalendarPanelState extends State<CalendarPanel>
   }
 
   void changeWeek(int next) {
+    if (!hasSemester) return;
     if (next == week || next < 1 || next > semester['total_weeks']) return;
     final weekday = selectedDay?.weekday ?? 1;
     setState(() {
@@ -223,15 +250,44 @@ class CalendarPanelState extends State<CalendarPanel>
       week = next;
       selectedDay = date;
       grid = false;
+      weekList = false;
     });
     if (changed) reload();
   }
 
+  Future<void> quickAdd() async {
+    if (!hasSemester) return;
+    final generation = widget.items.api.generation, term = sid;
+    final day = selectedDay ?? first;
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventFormPage(
+          controller: widget.items,
+          semester: semester,
+          candidate: {
+            'event': {
+              'title': '',
+              'category_id': 'affairs',
+              'certainty': 'formal',
+              'time': {'precision': 'date', 'date': calendarDate(day)},
+            },
+          },
+        ),
+      ),
+    );
+    if (saved == true &&
+        mounted &&
+        generation == widget.items.api.generation &&
+        term == sid) {
+      await widget.items.refresh();
+      if (mounted) await reload();
+    }
+  }
+
   Future<void> chooseWeek() async {
-    final selected = await showModalBottomSheet<int>(
+    final selected = await showAppSheet<int>(
       context: context,
-      useSafeArea: true,
-      showDragHandle: true,
       builder: (context) => SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -276,14 +332,25 @@ class CalendarPanelState extends State<CalendarPanel>
   }
 
   bool onDay(Map<String, dynamic> row, DateTime day) {
+    row = calendarDisplayEntry(row);
     final a = DateTime.utc(
           day.year,
           day.month,
           day.day,
         ).subtract(const Duration(hours: 8)),
         b = a.add(const Duration(days: 1));
+    final time = calendarTime(row);
+    if (calendarMeaning(row) == 'window' && time['at'] != null) {
+      final begin = DateTime.parse(time['at']),
+          end = DateTime.parse(time['end_at'] ?? time['at']);
+      return begin.isBefore(b) && !end.isBefore(a);
+    }
     if (row['start_at'] != null) {
-      final begin = DateTime.parse(row['start_at']),
+      final begin = DateTime.parse(
+            row['end_at'] == null
+                ? row['start_at']
+                : row['occupancy_start_at'] ?? row['start_at'],
+          ),
           end = row['end_at'] == null
               ? DateTime.parse(
                   row['start_at'],
@@ -321,7 +388,7 @@ class CalendarPanelState extends State<CalendarPanel>
     _ => CampusColors.muted,
   };
 
-  Widget tile(Map<String, dynamic> row, {bool showTime = true}) {
+  Widget tile(Map<String, dynamic> row, {bool showTime = true, Widget? clock}) {
     final accent = color(row);
     final background = switch (row['resource_type']) {
       'course' => CoursePalette.forTitle('${row['title']}').background,
@@ -370,7 +437,11 @@ class CalendarPanelState extends State<CalendarPanel>
                   runSpacing: 4,
                   children: [
                     Text(
-                      kinds[row['resource_type']] ?? '安排',
+                      row['reserve_time'] == false
+                          ? calendarParticipationLabel(row)
+                          : calendarMeaning(row) == 'window'
+                          ? '办理窗口'
+                          : kinds[row['resource_type']] ?? '安排',
                       style: TextStyle(
                         fontSize: 12,
                         color: accent,
@@ -387,7 +458,7 @@ class CalendarPanelState extends State<CalendarPanel>
                       ),
                   ],
                 ),
-                if (showTime) ...[
+                if (showTime && calendarTimeLabel(row).isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
                     calendarTimeLabel(row),
@@ -397,6 +468,17 @@ class CalendarPanelState extends State<CalendarPanel>
                     ),
                   ),
                 ],
+                if (calendarArrivalLabel(row).isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    calendarArrivalLabel(row),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: CampusColors.muted,
+                    ),
+                  ),
+                ],
+                ?clock,
               ],
             ),
           ),
@@ -406,12 +488,13 @@ class CalendarPanelState extends State<CalendarPanel>
   }
 
   bool hasOverlap(Map<String, dynamic> row, List<Map<String, dynamic>> rows) {
-    if (row['end_at'] == null) return false;
+    if (row['end_at'] == null || !calendarReservesTime(row)) return false;
     final start = DateTime.parse(row['start_at']);
     final end = DateTime.parse(row['end_at']);
     return rows.any(
       (other) =>
           !identical(row, other) &&
+          calendarReservesTime(other) &&
           other['end_at'] != null &&
           start.isBefore(DateTime.parse(other['end_at'])) &&
           end.isAfter(DateTime.parse(other['start_at'])),
@@ -427,14 +510,15 @@ class CalendarPanelState extends State<CalendarPanel>
             )
             .toList()
           ..sort(
-            (a, b) => DateTime.parse(
-              a['start_at'],
-            ).compareTo(DateTime.parse(b['start_at'])),
+            (a, b) => DateTime.parse(a['occupancy_start_at'] ?? a['start_at'])
+                .compareTo(
+                  DateTime.parse(b['occupancy_start_at'] ?? b['start_at']),
+                ),
           );
     final other = rows
         .where((r) => r['start_at'] == null || r['resource_type'] == 'deadline')
         .toList();
-    final now = schoolNow();
+    final now = this.now;
     final today = calendarDate(now) == calendarDate(date);
     return GestureDetector(
       onHorizontalDragEnd: (d) {
@@ -492,96 +576,37 @@ class CalendarPanelState extends State<CalendarPanel>
                 ],
               ),
             ),
-          for (final row in timed)
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    width: MediaQuery.textScalerOf(context).scale(1) > 1.3
-                        ? 84
-                        : 68,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 12),
-                        Text(
-                          hhmm(schoolTime(row['start_at'])),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: CampusColors.ink,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        if (row['end_at'] != null)
-                          Text(
-                            hhmm(schoolTime(row['end_at'])),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: CampusColors.muted,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    width: 20,
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 18),
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: color(row),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Expanded(
-                          child: Container(width: 2, color: CampusColors.line),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (hasOverlap(row, timed))
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 4),
-                            child: Text(
-                              '时间重叠',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: CampusColors.error,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        tile(
-                          row,
-                          showTime:
-                              row['end_at'] != null &&
-                              calendarDate(schoolTime(row['start_at'])) !=
-                                  calendarDate(schoolTime(row['end_at'])),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+          TimeTrack(
+            rows: timed,
+            date: date,
+            now: now,
+            railX: MediaQuery.textScalerOf(context).scale(1) > 1.3
+                ? 72.5
+                : 60.5,
+            rowBuilder: (row, last, clock) => Column(
+              children: [
+                weekAgendaRow(
+                  row,
+                  date,
+                  clock: clock,
+                  overlap: hasOverlap(row, timed),
+                ),
+                const Divider(height: 1, color: CampusColors.line),
+              ],
             ),
+          ),
           if (other.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.only(top: 12, bottom: 12),
               child: Text(
-                '截止与待定事项',
+                '按日期记录',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
-            for (final row in other) tile(row),
+            for (final row in other) ...[
+              weekAgendaRow(row, date),
+              const Divider(height: 1, color: CampusColors.line),
+            ],
           ],
         ],
       ),
@@ -589,32 +614,52 @@ class CalendarPanelState extends State<CalendarPanel>
   }
 
   DateTime? agendaInstant(Map<String, dynamic> row) {
-    final raw = row['start_at'] ?? row['due_at'];
+    final raw = row['occupancy_start_at'] ?? row['start_at'] ?? row['due_at'];
     return raw == null ? null : DateTime.tryParse('$raw');
   }
 
-  Widget weekAgendaRow(Map<String, dynamic> row, DateTime day) {
+  Widget weekAgendaRow(
+    Map<String, dynamic> row,
+    DateTime day, {
+    Widget? clock,
+    bool overlap = false,
+  }) {
     final type = '${row['resource_type'] ?? ''}';
+    final meaning = calendarMeaning(row);
     final start = row['start_at'];
     final due = row['due_at'];
     final time = start != null
         ? hhmm(schoolTime('$start'))
         : due != null
         ? hhmm(schoolTime('$due'))
-        : type == 'deadline'
+        : meaning == 'window'
+        ? '范围'
+        : type == 'deadline' && meaning != 'start'
         ? '截止'
-        : '全天';
+        : '';
     final end = row['end_at'];
     final crossesDay =
         start != null &&
         end != null &&
         calendarDate(schoolTime('$start')) != calendarDate(schoolTime('$end'));
     final detail = <String>[
+      if (calendarParticipationLabel(row).isNotEmpty)
+        calendarParticipationLabel(row),
+      if (calendarArrivalLabel(row).isNotEmpty) calendarArrivalLabel(row),
+      if (meaning == 'window' && calendarTimeLabel(row).isNotEmpty)
+        calendarTimeLabel(row),
       if (type == 'deadline' && due != null) '截止',
       if (crossesDay)
         '至${schoolTime('$end').month}/${schoolTime('$end').day} ${hhmm(schoolTime('$end'))}',
       if ('${row['location'] ?? ''}'.trim().isNotEmpty) '${row['location']}',
     ];
+    final subtitle = [
+      if (meaning == 'window')
+        '办理时间'
+      else if (type != 'event')
+        kinds[type] ?? '日程',
+      ...detail,
+    ].where((s) => s.trim().isNotEmpty).join(' · ');
     final accent = color(row);
     return Material(
       color: Colors.transparent,
@@ -627,19 +672,37 @@ class CalendarPanelState extends State<CalendarPanel>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
-                width: MediaQuery.textScalerOf(context).scale(1) > 1.3
+                width: time.isEmpty
+                    ? 0
+                    : MediaQuery.textScalerOf(context).scale(1) > 1.3
                     ? 70
                     : 58,
-                child: Text(
-                  time,
-                  maxLines: 2,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: type == 'deadline'
-                        ? CampusColors.muted
-                        : CampusColors.ink,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      time,
+                      maxLines: 2,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: type == 'deadline'
+                            ? CampusColors.muted
+                            : CampusColors.ink,
+                      ),
+                    ),
+                    if (end != null && !crossesDay && meaning != 'window')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Text(
+                          hhmm(schoolTime('$end')),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: CampusColors.muted,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               Padding(
@@ -657,6 +720,17 @@ class CalendarPanelState extends State<CalendarPanel>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (overlap)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 3),
+                        child: Text(
+                          '时间重叠',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: CampusColors.error,
+                          ),
+                        ),
+                      ),
                     Text(
                       '${row['title'] ?? '日程'}',
                       softWrap: true,
@@ -667,16 +741,18 @@ class CalendarPanelState extends State<CalendarPanel>
                         height: 1.35,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      [kinds[type] ?? '日程', ...detail].join(' · '),
-                      softWrap: true,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: CampusColors.muted,
-                        height: 1.3,
+                    if (subtitle.isNotEmpty) const SizedBox(height: 3),
+                    if (subtitle.isNotEmpty)
+                      Text(
+                        subtitle,
+                        softWrap: true,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: CampusColors.muted,
+                          height: 1.3,
+                        ),
                       ),
-                    ),
+                    ?clock,
                   ],
                 ),
               ),
@@ -719,6 +795,7 @@ class CalendarPanelState extends State<CalendarPanel>
   );
 
   Widget weekAgenda(List<Map<String, dynamic>> entries, DateTime selected) {
+    final now = this.now;
     final days = <DateTime>[
       for (var i = 0; i < 7; i++) first.add(Duration(days: i)),
     ];
@@ -735,11 +812,10 @@ class CalendarPanelState extends State<CalendarPanel>
               if (y == null) return -1;
               return x.compareTo(y);
             });
-      if (rows.isNotEmpty || calendarDate(day) == calendarDate(selected)) {
+      if (rows.isNotEmpty || calendarDate(day) == calendarDate(now)) {
         groups[day] = rows;
       }
     }
-    final now = schoolNow();
     return Column(
       key: const ValueKey('calendar-week-agenda'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -794,20 +870,34 @@ class CalendarPanelState extends State<CalendarPanel>
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Text('暂无安排', style: TextStyle(color: CampusColors.muted)),
             ),
-          for (var i = 0; i < group.value.length; i++) ...[
-            if (calendarDate(group.key) == calendarDate(now) &&
-                (i == 0 ||
-                    (agendaInstant(group.value[i - 1])?.isBefore(now) ??
-                        false)) &&
-                (agendaInstant(group.value[i])?.isAfter(now) ?? false))
-              currentTimeRule(now),
-            weekAgendaRow(group.value[i], group.key),
-            const Divider(height: 1, color: CampusColors.line),
-          ],
-          if (group.value.isNotEmpty &&
-              calendarDate(group.key) == calendarDate(now) &&
-              !(agendaInstant(group.value.last)?.isAfter(now) ?? false))
-            currentTimeRule(now),
+          TimeTrack(
+            rows: group.value
+                .where(
+                  (row) =>
+                      row['start_at'] != null &&
+                      calendarMeaning(row) != 'window' &&
+                      row['resource_type'] != 'deadline',
+                )
+                .toList(),
+            date: group.key,
+            now: now,
+            railX: MediaQuery.textScalerOf(context).scale(1) > 1.3
+                ? 72.5
+                : 60.5,
+            rowBuilder: (row, last, clock) => Column(
+              children: [
+                weekAgendaRow(row, group.key, clock: clock),
+                const Divider(height: 1, color: CampusColors.line),
+              ],
+            ),
+          ),
+          for (final row in group.value.where(
+            (row) =>
+                row['start_at'] == null ||
+                calendarMeaning(row) == 'window' ||
+                row['resource_type'] == 'deadline',
+          ))
+            weekAgendaRow(row, group.key),
         ],
       ],
     );
@@ -862,7 +952,8 @@ class CalendarPanelState extends State<CalendarPanel>
               Builder(
                 builder: (context) {
                   final day = first.add(Duration(days: i));
-                  final selected = calendarDate(day) == calendarDate(date);
+                  final selected =
+                      !weekList && calendarDate(day) == calendarDate(date);
                   final today = calendarDate(day) == calendarDate(now);
                   return Semantics(
                     selected: selected,
@@ -938,8 +1029,179 @@ class CalendarPanelState extends State<CalendarPanel>
     },
   );
 
+  Widget calendarToolbar(DateTime now) {
+    final first = start.add(Duration(days: (week - 1) * 7));
+    final last = first.add(const Duration(days: 6));
+    final listMode = !grid || weekList;
+    final spaciousControls = MediaQuery.textScalerOf(context).scale(1) > 1.3;
+    void today() {
+      final date = DateTime.utc(now.year, now.month, now.day),
+          next = widget.app.weekNow(semester);
+      if (next != week) changeWeek(next);
+      setState(() {
+        selectedDay = date.isBefore(start) || date.isAfter(end) ? first : date;
+        if (listMode) {
+          grid = false;
+          weekList = false;
+        }
+      });
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: AppTextButton(
+                style: TextButton.styleFrom(
+                  alignment: Alignment.centerLeft,
+                  padding: EdgeInsets.zero,
+                ),
+                onPressed: chooseWeek,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '第$week周',
+                            style: TextStyle(
+                              fontSize: spaciousControls ? 20 : 23,
+                              fontWeight: FontWeight.w700,
+                              color: CampusColors.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            runSpacing: 2,
+                            children: [
+                              Text(
+                                '${first.month}月${first.day}日',
+                                softWrap: false,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: CampusColors.muted,
+                                ),
+                              ),
+                              Text(
+                                '—${last.month}月${last.day}日',
+                                softWrap: false,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: CampusColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 17,
+                      color: CampusColors.muted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            AppLoadingIndicator(
+              compact: true,
+              visible: repository.busy,
+              label: '正在更新日程',
+            ),
+            if (!spaciousControls)
+              AppTextButton(onPressed: today, child: const Text('今天')),
+            AppIconButton(
+              tooltip: '上一周',
+              onPressed: week > 1 ? () => changeWeek(week - 1) : null,
+              icon: const Icon(Icons.chevron_left_rounded),
+            ),
+            AppIconButton(
+              tooltip: '下一周',
+              onPressed: week < semester['total_weeks']
+                  ? () => changeWeek(week + 1)
+                  : null,
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (spaciousControls)
+          AppSegmentedControl<String>(
+            value: listMode ? 'list' : 'table',
+            options: const {'table': '周时间表', 'list': '日程列表'},
+            onChanged: (value) => setState(() {
+              grid = true;
+              weekList = value == 'list';
+            }),
+          ),
+        Row(
+          children: [
+            if (!spaciousControls)
+              Expanded(
+                child: AppSegmentedControl<String>(
+                  value: listMode ? 'list' : 'table',
+                  options: const {'table': '周时间表', 'list': '日程列表'},
+                  onChanged: (value) => setState(() {
+                    grid = true;
+                    weekList = value == 'list';
+                  }),
+                ),
+              ),
+            if (spaciousControls) ...[
+              AppTextButton(onPressed: today, child: const Text('今天')),
+              const Spacer(),
+            ] else
+              const SizedBox(width: 8),
+            AppIconButton(
+              tooltip: '添加日程',
+              onPressed: quickAdd,
+              icon: const Icon(Icons.add_rounded),
+            ),
+            AppIconButton(
+              tooltip: '筛选日程',
+              onPressed: chooseKind,
+              icon: Icon(
+                Icons.tune_rounded,
+                color: kind == 'all'
+                    ? CampusColors.muted
+                    : CampusColors.primary,
+              ),
+            ),
+          ],
+        ),
+        if (listMode || kind != 'all')
+          Row(
+            children: [
+              if (listMode)
+                AppTextButton(
+                  key: const ValueKey('calendar-whole-week'),
+                  onPressed: () => setState(() {
+                    grid = true;
+                    weekList = true;
+                  }),
+                  child: Text(weekList ? '整周' : '查看整周'),
+                ),
+              if (kind != 'all')
+                Text(
+                  '仅看${kinds[kind]}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: CampusColors.muted,
+                  ),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!hasSemester) return const SizedBox.shrink();
     final entries = repository.entries
         .where((e) => kind == 'all' || e['resource_type'] == kind)
         .toList();
@@ -947,10 +1209,8 @@ class CalendarPanelState extends State<CalendarPanel>
       ...entries.where((e) => e['time_precision'] == 'week'),
       ...repository.undated,
     ].where((e) => kind == 'all' || e['resource_type'] == kind).toList();
-    final now = schoolNow(), date = selectedDay ?? first;
-    final large = MediaQuery.textScalerOf(context).scale(1) > 1.3,
-        weekMode = grid,
-        phoneWeek = MediaQuery.sizeOf(context).width < 600 || large;
+    final now = this.now, date = selectedDay ?? first;
+    final weekMode = grid, phoneWeek = weekList;
     final duration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 220);
@@ -973,152 +1233,30 @@ class CalendarPanelState extends State<CalendarPanel>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (large) ...[
-          Text(
-            '${first.year}年${first.month}月',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: AppTextButton(
-                  style: TextButton.styleFrom(
-                    alignment: Alignment.centerLeft,
-                    padding: EdgeInsets.zero,
-                  ),
-                  onPressed: chooseWeek,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(child: Text('第$week周')),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-                    ],
-                  ),
-                ),
-              ),
-              AppIconButton(
-                tooltip: '上一周',
-                onPressed: week > 1 ? () => changeWeek(week - 1) : null,
-                icon: const Icon(Icons.chevron_left_rounded),
-              ),
-              AppIconButton(
-                tooltip: '下一周',
-                onPressed: week < semester['total_weeks']
-                    ? () => changeWeek(week + 1)
-                    : null,
-                icon: const Icon(Icons.chevron_right_rounded),
-              ),
-            ],
-          ),
-          Text(
-            '${first.month}/${first.day}—${first.add(const Duration(days: 6)).month}/${first.add(const Duration(days: 6)).day}',
-            style: const TextStyle(fontSize: 14, color: CampusColors.muted),
-          ),
-        ] else
-          Row(
-            children: [
-              Expanded(
-                child: AppTextButton(
-                  style: TextButton.styleFrom(
-                    alignment: Alignment.centerLeft,
-                    padding: EdgeInsets.zero,
-                  ),
-                  onPressed: chooseWeek,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${first.year}年${first.month}月',
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          color: CampusColors.ink,
-                        ),
-                      ),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            '第$week周 · ${first.month}/${first.day}—${first.add(const Duration(days: 6)).month}/${first.add(const Duration(days: 6)).day}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: CampusColors.muted,
-                            ),
-                          ),
-                          const Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            size: 18,
-                            color: CampusColors.muted,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              AppIconButton(
-                tooltip: '上一周',
-                onPressed: week > 1 ? () => changeWeek(week - 1) : null,
-                icon: const Icon(Icons.chevron_left_rounded),
-              ),
-              AppIconButton(
-                tooltip: '下一周',
-                onPressed: week < semester['total_weeks']
-                    ? () => changeWeek(week + 1)
-                    : null,
-                icon: const Icon(Icons.chevron_right_rounded),
-              ),
-            ],
-          ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          alignment: WrapAlignment.spaceBetween,
-          children: [
-            SizedBox(
-              width: 164,
-              child: AppSegmentedControl<bool>(
-                value: weekMode,
-                options: const {false: '日', true: '周'},
-                onChanged: (value) => setState(() => grid = value),
-              ),
-            ),
-            AppTextButton(
-              onPressed: () {
-                final today = DateTime.utc(now.year, now.month, now.day);
-                final next = widget.app.weekNow(semester);
-                if (next != week) changeWeek(next);
-                setState(
-                  () =>
-                      selectedDay = today.isBefore(start) || today.isAfter(end)
-                      ? first
-                      : today,
-                );
-              },
-              child: const Text('本周'),
-            ),
-            Tooltip(
-              message: '筛选日程',
-              child: AppTextButton.icon(
-                onPressed: chooseKind,
-                icon: const Icon(Icons.tune_rounded, size: 20),
-                label: Text(kind == 'all' ? '筛选' : kinds[kind]!),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(48, 48),
-                  backgroundColor: kind == 'all' ? null : CampusColors.blueSoft,
-                ),
-              ),
-            ),
-          ],
-        ),
+        calendarToolbar(now),
         const SizedBox(height: 12),
         if (!weekMode || phoneWeek) dateStrip(date, now, duration),
         const SizedBox(height: 12),
-        if (repository.busy) const LinearProgressIndicator(minHeight: 2),
-        if (repository.offline)
+        if (!repository.busy &&
+            repository.data != null &&
+            widget.items.courses.isEmpty &&
+            (kind == 'course' ||
+                kind == 'all' &&
+                    repository.entries.isEmpty &&
+                    repository.undated.isEmpty) &&
+            !repository.entries.any((row) => row['resource_type'] == 'course'))
+          EmptyTimetable(
+            onImport: () => context.push('/import'),
+            title: '还没有课程',
+            message: '可以导入课表，也可以手工添加。',
+          ),
+        if (repository.offline && repository.data == null)
+          NetworkError(
+            onRetry: reload,
+            title: '安排暂时无法读取',
+            message: repository.error,
+          )
+        else if (repository.offline)
           Row(
             children: [
               Expanded(
@@ -1137,19 +1275,22 @@ class CalendarPanelState extends State<CalendarPanel>
             ],
           ),
         AnimatedCrossFade(
+          key: ValueKey('calendar-view-$sid'),
           duration: duration,
           alignment: Alignment.topCenter,
           crossFadeState: weekMode
               ? CrossFadeState.showFirst
               : CrossFadeState.showSecond,
-          firstChild: phoneWeek
-              ? weekAgenda(entries, date)
-              : TickerMode(
-                  enabled: weekMode,
+          firstChild: Column(
+            children: [
+              Offstage(
+                offstage: phoneWeek,
+                child: TickerMode(
+                  enabled: weekMode && !phoneWeek,
                   child: SizedBox(
-                    height: (MediaQuery.sizeOf(context).height * .58).clamp(
+                    height: (MediaQuery.sizeOf(context).height * .68).clamp(
                       320.0,
-                      560.0,
+                      660.0,
                     ),
                     child: NotificationListener<OverscrollNotification>(
                       onNotification: (n) {
@@ -1172,12 +1313,15 @@ class CalendarPanelState extends State<CalendarPanel>
                         minDay: start,
                         maxDay: end,
                         entries: repository.entries,
+                        periods: widget.items.rows(semester['periods']),
                         loading: repository.busy,
                         resourceFilter: kind,
                         revision: currentRevision,
                         showHeader: true,
                         selectedDay: date,
-                        visible: weekMode,
+                        visible: weekMode && !phoneWeek,
+                        now: widget.now,
+                        refreshClock: false,
                         onOpen: open,
                         onDay: selectDay,
                         onWeek: (d) =>
@@ -1186,6 +1330,10 @@ class CalendarPanelState extends State<CalendarPanel>
                     ),
                   ),
                 ),
+              ),
+              if (phoneWeek) weekAgenda(entries, date),
+            ],
+          ),
           secondChild: agenda(entries, date),
         ),
         if (weekMode &&
@@ -1195,12 +1343,12 @@ class CalendarPanelState extends State<CalendarPanel>
                   e['time_precision'] != 'week' &&
                   (e['resource_type'] == 'deadline' ||
                       e['start_at'] == null ||
-                      e['end_at'] == null),
+                      calendarMeaning(e) == 'window'),
             )) ...[
           const Padding(
             padding: EdgeInsets.only(top: 16, bottom: 10),
             child: Text(
-              '截止与待定事项',
+              '按日期记录',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
             ),
           ),
@@ -1209,26 +1357,25 @@ class CalendarPanelState extends State<CalendarPanel>
                 e['time_precision'] != 'week' &&
                 (e['resource_type'] == 'deadline' ||
                     e['start_at'] == null ||
-                    e['end_at'] == null),
+                    calendarMeaning(e) == 'window'),
           ))
             tile(r),
         ],
-        DayContextPanel(
-          items: widget.items,
-          semesterId: sid!,
-          day: date,
-          revision: currentRevision,
-        ),
-        if (untimed.isNotEmpty) ...[
-          const Padding(
-            padding: EdgeInsets.only(top: 18, bottom: 10),
-            child: Text(
-              '时间待确认',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        if (!weekMode)
+          DayContextPanel(
+            items: widget.items,
+            semesterId: sid!,
+            day: date,
+            revision: currentRevision,
+          ),
+        if (untimed.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 18),
+            child: AppDisclosure(
+              title: Text('未定日期 · ${untimed.length}'),
+              children: [for (final r in untimed) tile(r)],
             ),
           ),
-          for (final r in untimed) tile(r),
-        ],
       ],
     );
   }

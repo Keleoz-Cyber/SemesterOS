@@ -1,4 +1,6 @@
 import 'app_controls.dart';
+import 'app_sheet.dart';
+import 'campus_theme.dart';
 import 'package:flutter/material.dart';
 
 /// Ordinary date/time fields stay on the page. Less common ways of recording
@@ -15,30 +17,47 @@ class TimeInputOptions extends StatelessWidget {
   });
 
   Future<void> otherTime(BuildContext context) async {
-    final value = await showModalBottomSheet<String>(
+    FocusManager.instance.primaryFocus?.unfocus();
+    final value = await showAppSheet<String>(
       context: context,
-      useSafeArea: true,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: Text(
-                '通知没有写具体日期？',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-              ),
-            ),
+            const AppSheetHeading(title: '时间方式'),
             for (final entry in const {
-              'week': '按学期周次填写',
-              'range': '填写一段日期范围',
+              'week': '按学期周次',
+              'range': '日期范围',
               'unknown': '暂不填写时间',
             }.entries)
               AppTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                selected: precision == entry.key,
+                leading: Icon(
+                  switch (entry.key) {
+                    'week' => Icons.date_range_outlined,
+                    'range' => Icons.unfold_more_rounded,
+                    _ => Icons.event_busy_outlined,
+                  },
+                  color: CampusColors.teal,
+                ),
                 title: Text(entry.value),
                 trailing: precision == entry.key
-                    ? const Icon(Icons.check)
-                    : null,
+                    ? const Text(
+                        '当前',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: CampusColors.teal,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: CampusColors.muted,
+                      ),
                 onTap: () => Navigator.pop(context, entry.key),
               ),
             const SizedBox(height: 12),
@@ -52,24 +71,39 @@ class TimeInputOptions extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Wrap(
     spacing: 8,
+    runSpacing: 8,
     children: [
-      AppTextButton(
+      AppTextButton.icon(
         onPressed: onChanged == null
             ? null
             : () => onChanged!(
-                precision.startsWith('exact') ? 'date' : exactValue,
+                precision.startsWith('exact')
+                    ? 'date'
+                    : precision == 'date'
+                    ? exactValue
+                    : 'date',
               ),
-        child: Text(
+        icon: Icon(
+          precision.startsWith('exact')
+              ? Icons.event_available_outlined
+              : precision == 'date'
+              ? Icons.more_time_rounded
+              : Icons.calendar_today_outlined,
+          size: 18,
+          color: CampusColors.teal,
+        ),
+        label: Text(
           precision.startsWith('exact')
               ? '只记日期'
               : precision == 'date'
               ? '添加具体时刻'
-              : '添加日期和时间',
+              : '添加日期',
         ),
       ),
-      AppTextButton(
+      AppTextButton.icon(
         onPressed: onChanged == null ? null : () => otherTime(context),
-        child: const Text('其他时间写法'),
+        icon: const Icon(Icons.tune_rounded, size: 18, color: CampusColors.muted),
+        label: const Text('时间方式'),
       ),
     ],
   );
@@ -90,7 +124,7 @@ class TentativeSwitch extends StatelessWidget {
   Widget build(BuildContext context) => AppSwitchRow(
     contentPadding: EdgeInsets.zero,
     title: const Text('暂定安排'),
-    value: certainty != 'formal',
+    value: certainty == 'tentative',
     onChanged: onChanged == null
         ? null
         : (value) => onChanged!(value ? 'tentative' : 'formal'),

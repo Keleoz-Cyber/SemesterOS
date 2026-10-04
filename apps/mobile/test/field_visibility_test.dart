@@ -114,10 +114,19 @@ void main() {
         textScale: scale,
       );
       await settle(tester);
-      expect(find.text('2026-10-03 14:00'), findsOneWidget);
+      expect(find.textContaining('10月3日 · 周六'), findsOneWidget);
+      expect(find.text('14:00'), findsOneWidget);
       for (final text in ['结束', '地点', '提醒', '未设置提醒', '时间待确认', '通知原文']) {
         expect(find.text(text), findsNothing, reason: text);
       }
+      await reveal(tester, find.text('添加提醒'));
+      await tester.tap(find.text('添加提醒'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ReminderEditor), findsOneWidget);
+      expect(find.byType(EventFormPage), findsNothing);
+      Navigator.of(tester.element(find.byType(ReminderEditor))).pop();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('课题组阶段汇报'));
       await shot(tester, 'sparse-event-$scale');
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
@@ -195,6 +204,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(sent?['certainty'], 'unknown');
       expect(sent?['time'], {
+        'meaning': 'unspecified', 'expression': '',
         'precision': 'exact',
         'at': '2026-10-03T06:00:00.000Z',
       });
@@ -235,7 +245,7 @@ void main() {
       await tester.tap(find.byTooltip('删除这条提醒'));
       await tester.pumpAndSettle();
       expect(find.text('提前1天提醒'), findsNothing);
-      expect(find.text('添加提醒'), findsOneWidget);
+      expect(find.byTooltip('添加提醒'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
     },
@@ -257,14 +267,17 @@ void main() {
         ),
         textScale: 1.6,
       );
-      expect(find.text('按学期周次填写'), findsNothing);
-      await tester.tap(find.text('其他时间写法'));
+      expect(find.text('按学期周次'), findsNothing);
+      await tester.tap(find.text('时间方式'));
       await tester.pumpAndSettle();
       await shot(tester, 'time-options-1.6');
-      await tester.tap(find.text('按学期周次填写'));
+      await tester.tap(find.text('按学期周次'));
       await tester.pumpAndSettle();
       expect(precision, 'week');
-      await tester.tap(find.text('添加日期和时间'));
+      await tester.tap(find.text('添加日期'));
+      await tester.pumpAndSettle();
+      expect(precision, 'date');
+      await tester.tap(find.text('添加具体时刻'));
       await tester.pumpAndSettle();
       expect(precision, 'exact');
       await tester.tap(find.text('只记日期'));

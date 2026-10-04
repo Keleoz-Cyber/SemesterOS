@@ -76,6 +76,12 @@ void main() {
       textScale: 1.5,
     );
     expect(tester.takeException(), isNull);
+    f.c.items.clear();
+    f.c.planFeed!['blocks'] = [];
+    await mount(tester, Scaffold(body: PlanningEntry(controller: f.c)));
+    expect(find.text('任务还没有安排到具体时间'), findsNothing);
+    expect(find.byKey(const ValueKey('learning-plan-action')), findsNothing);
+    expect(find.text('全部安排'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     f.c.dispose();
   });

@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from .academics import identity, owned_semester, remember, replay
+from .academics import course_payload, identity, owned_semester, remember, replay
 from .auth import current_user, error
 from .database import get_db
 from .items import audit
-from .models import CourseMeeting, RealityChange, StudyItem, User
+from .models import CourseMeeting, StudyItem, User
 from .reminder_rules import utcnow
 from .schemas import CourseUpdate
 
@@ -32,19 +32,6 @@ def _family(db, user, course):
             source and row.payload.get('source_id') == source]
 
 
-def _has_applied_change(db, user, semester_id, course_ids):
-    changes = db.scalars(select(RealityChange).where(
-        RealityChange.user_id == user.id,
-        RealityChange.semester_id == semester_id,
-        RealityChange.applied_revision.is_not(None)))
-    for change in changes:
-        patch = change.payload.get('patch', {})
-        for occurrence in patch.get('before', []) + patch.get('after', []):
-            if occurrence.get('course_id') in course_ids:
-                return True
-    return False
-
-
 def _linked_items(db, user, semester_id, course_ids):
     return [item for item in db.scalars(select(StudyItem).where(
         StudyItem.user_id == user.id, StudyItem.semester_id == semester_id))
@@ -66,7 +53,7 @@ def update_course(course_id: str, body: CourseUpdate,
                   idempotency_key: str | None = Header(default=None)):
     course = _owned_course(db, user, course_id)
     semester = owned_semester(db, user, course.semester_id, lock=True)
-    request = body.model_dump(mode='json')
+    request = {**course_payload(body), 'expected_revision': body.expected_revision}
     cached = replay(db, user, f'update-course:{course_id}', idempotency_key, request)
     if cached is not None:
         return cached
@@ -74,12 +61,17 @@ def update_course(course_id: str, body: CourseUpdate,
         error(409, 'SNAPSHOT_STALE', '课表已变化，请重新打开课程后再保存')
     if max(body.weeks) > semester.total_weeks:
         error(422, 'CALENDAR_MISMATCH', '课程周次超出学期范围，请先修改学期周数')
+    data = course_payload(body)
+    slot_changed = (body.weekday != course.payload['weekday'] or body.sections != course.payload['sections'])
+    if not {'start_time', 'end_time'} & body.model_fields_set and not slot_changed:
+        for key in ('start_time', 'end_time'):
+            if key in course.payload:
+                data[key] = course.payload[key]
+    if 'attendance_exempt' not in body.model_fields_set and course.payload.get('attendance_exempt'):
+        data['attendance_exempt'] = True
     missing = set(body.sections) - {p['number'] for p in semester.periods}
-    if missing:
+    if missing and not data.get('start_time'):
         error(422, 'CALENDAR_MISMATCH', f'学期作息缺少第{min(missing)}节，请先补充节次')
-    if _has_applied_change(db, user, semester.id, {course.id}):
-        error(409, 'APPLIED_CHANGE', '这门课有已确认的调课或停课，请先核对变化')
-    data = body.model_dump(mode='json', exclude={'expected_revision'})
     if course.payload.get('source_id') and not data.get('source_id'):
         data['source_id'] = course.payload['source_id']
     new_key = identity(data)
@@ -137,8 +129,6 @@ def delete_course(course_id: str, expected_revision: int = Query(ge=0),
         error(409, 'SNAPSHOT_STALE', '课表已变化，请重新查看删除范围')
     family = _family(db, user, course)
     ids = {row.id for row in family}
-    if _has_applied_change(db, user, semester.id, ids):
-        error(409, 'APPLIED_CHANGE', '这门课有已确认的调课或停课，请先核对变化')
     linked = _linked_items(db, user, semester.id, ids)
     for item in linked:
         old_title = item.payload.get('course_title') or course.payload['title']

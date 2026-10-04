@@ -4,9 +4,10 @@ import time
 
 from ortools.sat.python import cp_model
 from ortools import __version__ as solver_version
-from .capacity import calendar_context, merge, subtract, CapacityIndex
+from .capacity import calendar_context, merge, subtract, uncertainty_affects_window
 from .plan_rules import classify, future_minutes
 from .reminder_rules import instant, anchor_at
+from .task_readiness import start_policy
 
 
 def chunks(minutes, size=45, splittable=True):
@@ -40,10 +41,10 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
     base={'window_start':stamp(start),'window_end':stamp(end),'blocks':[],'tasks':[],
           'status':'INPUT_INVALID','messages':[],'solver_status':None,'optimal':False,
           'unarranged_minutes':0,'can_apply':False,'existing_conflict_count':len(context['conflicts'])}
+    base['uncertainty_warnings']=[w for w in context['uncertainty_warnings'] if uncertainty_affects_window(w,start*60,end*60)]
+    base['messages']=[w['message'] for w in base['uncertainty_warnings']]
     if not preferences.get('configured'):base['messages']=['请先设置每周的学习时间'];return base,None
     if end<=start:base['messages']=['请选择本学期内尚未过去的时间'];return base,None
-    if any(a<end*60 and b>start*60 and missing for a,b,missing,_ in context['uncertain']):
-        base['messages']=['这段时间内有固定安排缺少开始或结束时间，请先补充'];return base,None
     future=[b for b in plans if b['status']=='active' and instant(b['end_at']).timestamp()>now.timestamp()]
     if len(request['tasks'])>100 or len(future)>300:
         base.update(status='INPUT_LIMIT',messages=['一次最多安排100项任务、300段计划，请分批安排']);return base,None
@@ -53,7 +54,7 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
     by_id={i['id']:i for i in items};selected=[]
     for choice in request['tasks']:
         item=by_id.get(choice['item_id'])
-        if not item or item['kind']=='exam' or item['lifecycle']!='active' or item.get('remaining_minutes') is None or item.get('start_policy','unconfirmed')=='unconfirmed':
+        if not item or item['kind']=='exam' or item['lifecycle']!='active' or item.get('remaining_minutes') is None or start_policy(item)=='unconfirmed':
             base['messages']=['请选择尚未完成的任务，并填写还需要多久、最早何时能开始'];return base,None
         remaining=item['remaining_minutes'];own=[b for b in valid if b['item_id']==item['id']]
         existing=sum(future_minutes(b,now.timestamp(),start*60,end*60) for b in own)
@@ -70,7 +71,7 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
                 base['messages']=['这项任务在所选日期内到期，请安排全部剩余工作；已排在其他日期的部分会自动扣除'];return base,None
             target=required
         elif target is None:
-            base['messages']=['这项任务还没确定截止时间，或不在所选日期内到期，请填写这次想安排多久'];return base,None
+            target=remaining-outside
         if target<existing or target>remaining-outside or target<=0:
             base['messages']=['安排目标需包含这段时间内已有的计划，并且不能超过任务还需要的时间'];return base,None
         if not item.get('splittable',True) and (target!=remaining-outside or (total_existing and target>existing)):
@@ -196,7 +197,8 @@ def generate(calendar, preferences, courses, items, plans, request, now):
     missing=sum(t['unarranged_minutes'] for t in result['tasks'])
     result.update(status='FEASIBLE_PARTIAL' if missing else 'FEASIBLE_COMPLETE',unarranged_minutes=missing,
         can_apply=bool(result['blocks']),solver_status=solver.status_name(reported_status),optimal=optimal,phases=phases,
-        elapsed_ms=round((time.monotonic()-started)*1000),messages=['保留已有计划，只为尚未安排的工作补充时间'])
+        elapsed_ms=round((time.monotonic()-started)*1000),messages=['保留已有计划，只为尚未安排的工作补充时间']+
+        [w['message'] for w in result['uncertainty_warnings']])
     if not validate_result(context,result,optional):
         result.update(status='INPUT_INVALID',blocks=[],can_apply=False,messages=['这份方案还有时间冲突，尚未保存，请重新生成'])
     return result

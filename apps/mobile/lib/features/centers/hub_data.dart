@@ -1,3 +1,4 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'dart:async';
@@ -147,38 +148,47 @@ class HubDataState extends State<HubData> with WidgetsBindingObserver {
         !widget.controller.revisionIsStale(sid, value['revision']) &&
         until != null &&
         DateTime.parse(until).isAfter(DateTime.now());
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (busy) const LinearProgressIndicator(),
-        if (error != null) ...[
-          SoftNotice(
-            value == null ? error! : '更新失败，保留上次记录。$error',
-            warning: true,
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: AppTextButton.icon(
-              onPressed: busy ? null : load,
-              icon: const Icon(Icons.refresh),
-              label: const Text('重试'),
+    if (value == null && busy) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: AppLoadingIndicator(label: '正在读取安排'),
+      );
+    }
+    return AppLoadingOverlay(
+      loading: busy,
+      label: '正在更新',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (error != null) ...[
+            SoftNotice(
+              value == null ? error! : '更新失败，保留上次记录。$error',
+              warning: true,
             ),
-          ),
-        ],
-        if (value != null) ...[
-          if (!fresh && error == null) ...[
-            const SoftNotice('安排已更新或分析过期，时间余量待更新。', warning: true),
             Align(
               alignment: Alignment.centerLeft,
-              child: AppTextButton(
+              child: AppTextButton.icon(
                 onPressed: busy ? null : load,
-                child: const Text('更新数据'),
+                icon: const Icon(Icons.refresh),
+                label: const Text('重试'),
               ),
             ),
           ],
-          widget.builder(context, value, fresh, load),
+          if (value != null) ...[
+            if (!fresh && error == null) ...[
+              const SoftNotice('安排已更新或分析过期，时间余量待更新。', warning: true),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppTextButton(
+                  onPressed: busy ? null : load,
+                  child: const Text('更新数据'),
+                ),
+              ),
+            ],
+            widget.builder(context, value, fresh, load),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

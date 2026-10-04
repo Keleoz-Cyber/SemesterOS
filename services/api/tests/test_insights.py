@@ -132,9 +132,10 @@ def test_cancelled_and_other_semester_sources_do_not_enter_range(client):
             created_at='2026-09-21T00:00:00Z'))
         db.commit()
     result = insights(client, h, s['id']).json()
-    assert result['summary'] == {'entry_count': 0, 'fixed_scheduled_minutes': 0,
+    assert {k:v for k,v in result['summary'].items() if k!='tasks'} == {'entry_count': 0, 'fixed_scheduled_minutes': 0,
         'personal_planned_minutes': 0, 'occupied_union_minutes': 0, 'actual_minutes': None,
         'unknown_duration_count': 0, 'undated_count': 0}
+    assert all(result['summary']['tasks'][k]==0 for k in ('active','completed','overdue'))
     assert foreign_id not in {t['id'] for t in result['tags']}
 
 

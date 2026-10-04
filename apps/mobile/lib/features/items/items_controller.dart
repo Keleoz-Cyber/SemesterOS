@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import '../../core/api.dart';
 import '../../core/cache.dart';
 import 'reminder_sync.dart';
+import 'notification_target.dart';
+import 'reminder_preferences.dart';
 import '../planning/risk_state.dart';
 import '../media/drafts.dart';
 
@@ -14,6 +16,8 @@ class ItemsController extends ChangeNotifier {
   List<Map<String, dynamic>> items = [];
   List<Map<String, dynamic>> courses = [], reminderFeed = [];
   bool offline = false;
+  ReminderPreferences reminderPreferences = const ReminderPreferences();
+  int _reminderRequest = 0;
   bool busy = false;
   String? notice, notificationStatus, syncedAt;
   String? _owner, semesterId;
@@ -117,6 +121,7 @@ class ItemsController extends ChangeNotifier {
     _saved = {};
     notice = null;
     notificationStatus = null;
+    reminderPreferences = const ReminderPreferences();
     syncedAt = null;
     busy = false;
     offline = false;
@@ -142,12 +147,17 @@ class ItemsController extends ChangeNotifier {
       }
     }
     if (!valid(epoch, generation) || _owner == null) return;
+    reminderPreferences = await ReminderPreferenceStore(cache).read(_owner!);
+    if (!valid(epoch, generation)) return;
     if (selected == null) {
       _saved = {};
       final account = _owner!;
       final old = await cache.read('items:$account') ?? {};
       if (!valid(epoch, generation)) return;
+      reminderFeed = rows(old['reminders']);
+      syncedAt = old['synced_at'];
       await cache.write('items:$account', {...old, 'semesters': {}});
+      await syncNotifications();
       try {
         await refreshOwnerReminders();
       } catch (_) {
@@ -177,6 +187,7 @@ class ItemsController extends ChangeNotifier {
     if (_owner == null || semesterId == null || owner != _owner) return;
     final epoch = _epoch, generation = api.generation, request = ++_request;
     final sid = semesterId!;
+    final reminderRequest = ++_reminderRequest;
     invalidateRisk();
     busy = true;
     changed();
@@ -184,15 +195,21 @@ class ItemsController extends ChangeNotifier {
       final result = await Future.wait([
         api.request('GET', '/semesters/$sid/items'),
         api.request('GET', '/semesters/$sid/courses'),
-        api.request('GET', '/reminders'),
+        api.request(
+          'GET',
+          '/reminders',
+          queryParameters: reminderPreferences.query,
+        ),
       ]);
       if (!valid(epoch, generation) || request != _request) return;
       if (result[2]['owner_id'] != _owner) throw ApiFailure('提醒清单账号不一致');
       items = rows(result[0]['items']);
       itemsRevision = result[0]['revision'];
       courses = rows(result[1]);
-      reminderFeed = rows(result[2]['reminders']);
-      syncedAt = result[2]['synced_at'];
+      if (reminderRequest == _reminderRequest) {
+        reminderFeed = rows(result[2]['reminders']);
+        syncedAt = result[2]['synced_at'];
+      }
       _saved[sid] = {'items': items, 'courses': courses};
       for (final deleted in _deletedSemesterIds) {
         _saved.remove(deleted);
@@ -237,7 +254,10 @@ class ItemsController extends ChangeNotifier {
     try {
       if (requestPermission) await reminders.port.permission(request: true);
       if (!valid(epoch, generation)) return;
-      final state = await reminders.replace(_owner!, reminderFeed);
+      final state = await reminders.replace(
+        _owner!,
+        reminderFeed.where(reminderPreferences.accepts).toList(),
+      );
       if (valid(epoch, generation)) notificationStatus = state;
     } catch (_) {
       if (valid(epoch, generation)) {
@@ -265,8 +285,13 @@ class ItemsController extends ChangeNotifier {
     final account = owner;
     if (account == null || _owner != account) return;
     final epoch = _epoch, generation = api.generation;
-    final response = await api.request('GET', '/reminders');
-    if (!valid(epoch, generation)) return;
+    final request = ++_reminderRequest;
+    final response = await api.request(
+      'GET',
+      '/reminders',
+      queryParameters: reminderPreferences.query,
+    );
+    if (!valid(epoch, generation) || request != _reminderRequest) return;
     if (response['owner_id'] != account) {
       throw ApiFailure('提醒清单账号不一致');
     }
@@ -279,6 +304,101 @@ class ItemsController extends ChangeNotifier {
       'synced_at': response['synced_at'],
     });
     await syncNotifications();
+  }
+
+  Future<void> saveReminderPreferences(ReminderPreferences preferences) async {
+    final account = owner;
+    if (account == null || _owner != account) return;
+    final epoch = _epoch, generation = api.generation;
+    _reminderRequest++;
+    await ReminderPreferenceStore(cache).write(account, preferences);
+    if (!valid(epoch, generation)) return;
+    reminderPreferences = preferences;
+    changed();
+    // Turning courses off/changing their lead must remove old alarms even if
+    // the server is temporarily unreachable. Generation guards isolate owners.
+    await syncNotifications();
+    try {
+      await refreshOwnerReminders();
+    } catch (_) {
+      if (valid(epoch, generation)) {
+        notificationStatus = '设置已保存在本机；课程提醒需联网后更新';
+        changed();
+      }
+    }
+  }
+
+  Future<bool> handleNotificationAction(NotificationTarget target) async {
+    final account = owner;
+    if (account == null || account != target.ownerId || _owner != account) {
+      return false;
+    }
+    final epoch = _epoch, generation = api.generation;
+    try {
+      // A cold-start action can arrive while bind() is still reading the
+      // account cache. Load its opt-in before constructing the server query.
+      final preferences = await ReminderPreferenceStore(cache).read(account);
+      if (!valid(epoch, generation)) return false;
+      reminderPreferences = preferences;
+      await refreshOwnerReminders();
+      if (!valid(epoch, generation)) return false;
+      final source = reminderFeed
+          .where(reminderPreferences.accepts)
+          .where(
+            (rule) =>
+                rule['enabled'] != false &&
+                {'scheduled', 'expired'}.contains(rule['schedule_state']) &&
+                rule['trigger_at'] != null &&
+                reminderFingerprint(account, rule) ==
+                    target.data['fingerprint'],
+          )
+          .firstOrNull;
+      if (source == null ||
+          source['resource_type'] != target.resourceType ||
+          source['resource_id'] != target.resourceId) {
+        notificationStatus = '安排已更新，这条旧提醒已失效，请查看最新详情';
+        changed();
+        return false;
+      }
+      if (target.actionId == 'snooze_10' && target.notificationId != null) {
+        final saved = await reminders.snooze(account, target.notificationId!, {
+          ...source,
+          'fingerprint': target.data['fingerprint'],
+        });
+        if (valid(epoch, generation)) {
+          notificationStatus = saved ? '已设为10分钟后提醒' : '请开启系统通知后重试';
+          changed();
+        }
+        return saved;
+      }
+      if (target.actionId == 'complete' &&
+          target.resourceType == 'item' &&
+          source['can_complete'] == true) {
+        final item = await get(target.resourceId);
+        if (!valid(epoch, generation)) return false;
+        if (item['version'] != source['item_version'] ||
+            item['lifecycle'] != 'active' ||
+            !{'task', 'assignment'}.contains(item['kind'])) {
+          notificationStatus = '事项已变化，请在详情中核对后完成';
+          changed();
+          return false;
+        }
+        await lifecycle(item, 'completed');
+        if (!valid(epoch, generation)) return false;
+        if (target.notificationId != null) {
+          await reminders.port.cancel(target.notificationId!);
+        }
+        notificationStatus = '已标记完成';
+        changed();
+        return true;
+      }
+    } catch (_) {
+      if (valid(epoch, generation)) {
+        notificationStatus = '提醒操作未完成，请联网后重试，并在详情中核对当前状态';
+        changed();
+      }
+    }
+    return false;
   }
 
   Future<Map<String, dynamic>> save(
@@ -396,20 +516,6 @@ class ItemsController extends ChangeNotifier {
     });
     await refresh();
   }
-
-  Future<Map<String, dynamic>> parse(String text, String referenceAt) async =>
-      Map<String, dynamic>.from(
-        await api.request(
-          'POST',
-          '/capture/text',
-          data: {
-            'semester_id': semesterId,
-            'text': text,
-            'reference_at': referenceAt,
-          },
-          receiveTimeout: const Duration(seconds: 60),
-        ),
-      );
 
   Future<void> refreshRisk({bool reloadOnMismatch = true}) async {
     if (owner == null ||

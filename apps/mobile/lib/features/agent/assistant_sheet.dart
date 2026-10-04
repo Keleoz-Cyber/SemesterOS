@@ -10,6 +10,8 @@ Future<void> openAssistantSheet(
   String? initialText,
   String? mediaKind,
   bool autoSubmit = false,
+  List<String> selectedRecordIds = const [],
+  bool noticeInput = false,
 }) => showAppSheet<void>(
   context: context,
   heightFactor: .90,
@@ -20,6 +22,8 @@ Future<void> openAssistantSheet(
     initialText: initialText,
     initialMediaKind: mediaKind,
     autoSubmit: autoSubmit,
+    initialRecordIds: selectedRecordIds,
+    initialNotice: noticeInput,
     autofocus: initialText == null && mediaKind == null,
   ),
 );

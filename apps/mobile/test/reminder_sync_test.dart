@@ -56,6 +56,17 @@ class FakeNotifications implements NotificationPort {
   }
 }
 
+class PreciseNotifications extends FakeNotifications
+    implements PreciseNotificationPort {
+  bool precise = true;
+  @override
+  Future<bool> precisePermission({bool request = false}) async => precise;
+  @override
+  Future<void> schedule(int id, Map<String, dynamic> data) async {
+    await super.schedule(id, {...data, 'precise': precise});
+  }
+}
+
 Map<String, dynamic> rule(
   String id, {
   String state = 'scheduled',
@@ -73,6 +84,82 @@ Map<String, dynamic> rule(
 
 void main() {
   final start = DateTime.utc(2026, 9, 27);
+  test(
+    'permission changes re-arm future reminders in the permitted mode',
+    () async {
+      final port = PreciseNotifications();
+      final sync = ReminderSync(port, now: () => start);
+      final reminder = rule('one', at: start.add(const Duration(hours: 1)));
+      await sync.replace('a', [reminder]);
+      final id = port.scheduled.keys.single;
+      port.precise = false;
+      await sync.replace('a', [reminder]);
+      expect(port.scheduled[id]!['precise'], isFalse);
+      port.precise = true;
+      await sync.replace('a', [reminder]);
+      expect(port.scheduled[id]!['precise'], isTrue);
+      expect(port.scheduleCalls, 3);
+    },
+  );
+  test(
+    'snooze survives refresh and permission downgrade but source edits cancel it',
+    () async {
+      var now = start;
+      final port = PreciseNotifications();
+      final sync = ReminderSync(port, now: () => now);
+      final reminder = rule('one', at: start.add(const Duration(seconds: 1)));
+      await sync.replace('a', [reminder]);
+      final id = port.scheduled.keys.single;
+      final source = {...port.scheduled[id]!};
+      now = start.add(const Duration(seconds: 2));
+      expect(await sync.snooze('a', id, source), isTrue);
+      final until = port.scheduled[id]!['trigger_at'];
+      port.precise = false;
+      await sync.replace('a', [
+        {...reminder, 'schedule_state': 'expired'},
+      ]);
+      expect(port.scheduled[id]!['trigger_at'], until);
+      expect(port.scheduled[id]!['precise'], isFalse);
+      await sync.replace('a', [
+        {...reminder, 'schedule_state': 'expired', 'version': 2},
+      ]);
+      expect(port.scheduled, isEmpty);
+    },
+  );
+  test(
+    'logout invalidates a queued snooze without recreating old alarms',
+    () async {
+      final port = FakeNotifications();
+      final sync = ReminderSync(port, now: () => start);
+      await sync.replace('a', [
+        rule('one', at: start.add(const Duration(hours: 1))),
+      ]);
+      final id = port.scheduled.keys.single;
+      port.permissionGate = Completer<void>();
+      final snooze = sync.snooze('a', id, port.scheduled[id]!);
+      await Future<void>.delayed(Duration.zero);
+      final logout = sync.clear();
+      port.permissionGate!.complete();
+      expect(await snooze, isFalse);
+      await logout;
+      expect(port.scheduled, isEmpty);
+    },
+  );
+  test(
+    'completed source removes its delivered notification in the same session',
+    () async {
+      final port = FakeNotifications();
+      final sync = ReminderSync(port, now: () => start);
+      await sync.replace('a', [
+        rule('one', at: start.add(const Duration(hours: 1))),
+      ]);
+      final id = port.scheduled.keys.single;
+      port.scheduled.clear();
+      port.active.add(id);
+      await sync.replace('a', []);
+      expect(port.active, isEmpty);
+    },
+  );
   for (final phase in ['pending', 'active']) {
     test(
       'same-owner replacement during $phase snapshot keeps cold-start cleanup',

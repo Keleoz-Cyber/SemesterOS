@@ -1,10 +1,13 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/app_sheet.dart';
 import 'package:flutter/material.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/campus_widgets.dart';
 import '../../ui/detail_widgets.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
+import '../items/task_surfaces.dart' show TaskTimeBudget;
 
 String minutesLabel(dynamic value) {
   if (value == null) return '待补齐信息';
@@ -15,12 +18,6 @@ String minutesLabel(dynamic value) {
   return n < 0 ? '−$text' : text;
 }
 
-String riskLabel(String? value) => switch (value) {
-  'high' => '需优先处理',
-  'medium' => '需要留意',
-  'low' => '按当前安排，时间较充裕',
-  _ => '还需补充信息',
-};
 Color riskColor(String? value) => switch (value) {
   'high' => CampusColors.error,
   'medium' => CampusColors.warning,
@@ -147,27 +144,28 @@ class RiskOverview extends StatelessWidget {
     final data = c.hasCurrentRisk ? c.analysis : null;
     final summary = data?['summary'];
     final gap = summary?['window_gap_minutes'] ?? 0;
-    final configured = summary?['configured'];
     final conflicts = c.rows(data?['fixed_conflicts']);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (c.riskBusy) const LinearProgressIndicator(),
-        if (configured == false)
-          AppOutlineButton.icon(
-            onPressed: onSettings,
-            icon: const Icon(Icons.edit_calendar_outlined),
-            label: const Text('设置可学习时间'),
-          )
-        else
-          Align(
-            alignment: Alignment.centerRight,
-            child: AppTextButton.icon(
-              onPressed: onSettings,
-              icon: const Icon(Icons.tune, size: 18),
-              label: const Text('学习时间设置'),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            AppLoadingIndicator(
+              compact: true,
+              visible: c.riskBusy,
+              label: '正在更新时间评估',
             ),
-          ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: AppTextButton.icon(
+                onPressed: onSettings,
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: const Text('学习时间'),
+              ),
+            ),
+          ],
+        ),
         if (c.riskNotice != null) SoftNotice(c.riskNotice!, warning: true),
         if (gap > 0)
           SoftNotice('截止前还缺 ${minutesLabel(gap)}，优先处理下面标记的任务。', warning: true),
@@ -184,7 +182,6 @@ class RiskOverview extends StatelessWidget {
             '${summary['plan_conflict_count']}段学习安排与当前日程冲突，请在“安排记录”中核对。',
             warning: true,
           ),
-        if (configured == false) const Text('填好空闲时段后，就能为任务安排具体时间。'),
       ],
     );
   }
@@ -207,15 +204,22 @@ Future<void> showRiskDetails(
               .firstOrNull ??
           original;
       final risk = controller.riskFor(current);
+      final shared = risk?['critical_window'] as Map?;
+      final sharedDeficit =
+          shared?['gap_minutes'] is num &&
+          (shared!['gap_minutes'] as num) > 0 &&
+          shared['capacity_minutes'] is num &&
+          shared['demand_minutes'] is num;
       Widget fact(String label, dynamic n) {
+        if (n == null) return const SizedBox.shrink();
         final total =
-            label == '单项计划余量' || label == '扣除这些安排后可用' || label == '至少缺少';
+            label == '完成后剩余时间' || label == '扣除这些安排后可用' || label == '至少缺少';
         final shortage =
             n is num &&
-            ((label == '至少缺少' && n > 0) || (label == '单项计划余量' && n < 0));
+            ((label == '至少缺少' && n > 0) || (label == '完成后剩余时间' && n < 0));
         final accent = shortage ? riskColor('high') : CampusColors.teal;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           margin: const EdgeInsets.only(bottom: 4),
           decoration: BoxDecoration(
             color: total
@@ -263,12 +267,29 @@ Future<void> showRiskDetails(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            RecordHeading(
-              title: '${current['title']}',
-              label: '安排评估',
-              icon: Icons.calculate_outlined,
+            AppSheetHeading(
+              title: '时间评估',
+              subtitle: '${current['title']}',
+              leading: const Icon(Icons.calculate_outlined),
+              padding: EdgeInsets.zero,
             ),
             RiskBadge(risk: risk),
+            if (sharedDeficit)
+              TaskTimeBudget(
+                available: shared['capacity_minutes'] as num,
+                needed: shared['demand_minutes'] as num,
+                availableLabel: '同期共同可用',
+                neededLabel: '同期任务合计需用',
+              )
+            else if (risk?['capacity_after_fixed_minutes'] is num &&
+                risk?['other_plan_minutes'] is num &&
+                risk?['remaining_minutes'] is num)
+              TaskTimeBudget(
+                available:
+                    (risk!['capacity_after_fixed_minutes'] as num) -
+                    (risk['other_plan_minutes'] as num),
+                needed: risk['remaining_minutes'] as num,
+              ),
             if (risk?['planned_minutes'] != null)
               fact('后续已安排', risk!['planned_minutes']),
             if (risk?['unplanned_minutes'] != null)
@@ -276,78 +297,94 @@ Future<void> showRiskDetails(
             const SizedBox(height: 16),
             if (risk == null)
               const SoftNotice('分析已过期、安排已变化或尚未计算。请刷新后查看本次结果。', warning: true)
-            else ...[
-              for (final code in (risk['reason_codes'] as List? ?? []).skip(1))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: SoftNotice(
-                    reasonLabel('$code'),
-                    warning: risk['level'] != 'low',
-                  ),
-                ),
-              if (risk['capacity_after_fixed_minutes'] != null)
-                EditorSection(
-                  title: '可用时间如何扣除',
-                  icon: Icons.timelapse_rounded,
-                  children: [
-                    fact('截止前可用于学习的时间', risk['capacity_before_fixed_minutes']),
-                    fact('课程、考试和不可用时段占用', risk['fixed_occupied_minutes']),
-                    const Divider(),
-                    fact('扣除这些安排后可用', risk['capacity_after_fixed_minutes']),
-                    fact('已安排给其他任务的时间', risk['other_plan_minutes']),
-                    fact('这项任务还需要', risk['remaining_minutes']),
-                    const Divider(),
-                    fact('单项计划余量', risk['task_slack_minutes']),
-                    fact('最长连续空档', risk['max_contiguous_minutes']),
+            else
+              AppDisclosure(
+                title: const Text('时间计算'),
+                tilePadding: EdgeInsets.zero,
+                children: [
+                  for (final code in (risk['reason_codes'] as List? ?? []).skip(
+                    1,
+                  ))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: SoftNotice(
+                        reasonLabel('$code'),
+                        warning: risk['level'] != 'low',
+                      ),
+                    ),
+                  if (risk['capacity_after_fixed_minutes'] != null)
+                    EditorSection(
+                      title: '可用时间如何扣除',
+                      icon: Icons.timelapse_rounded,
+                      children: [
+                        fact(
+                          '截止前可用于学习的时间',
+                          risk['capacity_before_fixed_minutes'],
+                        ),
+                        fact('课程、考试和不可用时段占用', risk['fixed_occupied_minutes']),
+                        const Divider(),
+                        fact('扣除这些安排后可用', risk['capacity_after_fixed_minutes']),
+                        fact('已安排给其他任务的时间', risk['other_plan_minutes']),
+                        fact('这项任务还需要', risk['remaining_minutes']),
+                        const Divider(),
+                        fact('完成后剩余时间', risk['task_slack_minutes']),
+                        fact('最长连续空档', risk['max_contiguous_minutes']),
+                      ],
+                    ),
+                  if (risk['critical_window'] != null) ...[
+                    EditorSection(
+                      title: '同期任务共同占用',
+                      icon: Icons.groups_outlined,
+                      accent: CampusColors.teal,
+                      children: [
+                        Text(
+                          '${displayInstant(risk['critical_window']['start_at'])}\n至 ${displayInstant(risk['critical_window']['end_at'])}',
+                        ),
+                        fact(
+                          '这些任务总共需要',
+                          risk['critical_window']['demand_minutes'],
+                        ),
+                        fact(
+                          risk['critical_window']['capacity_is_upper_bound'] ==
+                                  true
+                              ? '已知安排下最多可用'
+                              : '这段时间内可用',
+                          risk['critical_window']['capacity_minutes'],
+                        ),
+                        fact('至少缺少', risk['critical_window']['gap_minutes']),
+                        const Text(
+                          '单看每项任务，时间可能够用；放在一起时，它们会争用同一段空闲时间。',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
                   ],
-                ),
-              if (risk['critical_window'] != null) ...[
-                EditorSection(
-                  title: '同期任务共同占用',
-                  icon: Icons.groups_outlined,
-                  accent: CampusColors.teal,
-                  children: [
-                    Text(
-                      '${displayInstant(risk['critical_window']['start_at'])}\n至 ${displayInstant(risk['critical_window']['end_at'])}',
-                    ),
-                    fact('这些任务总共需要', risk['critical_window']['demand_minutes']),
-                    fact(
-                      risk['critical_window']['capacity_is_upper_bound'] == true
-                          ? '已知安排下最多可用'
-                          : '这段时间内可用',
-                      risk['critical_window']['capacity_minutes'],
-                    ),
-                    fact('至少缺少', risk['critical_window']['gap_minutes']),
-                    const Text(
-                      '单看每项任务，时间可能够用；放在一起时，它们会争用同一段空闲时间。',
-                      style: TextStyle(fontSize: 14),
-                    ),
+                  if (controller.analysis?['fixed_conflicts'] is List &&
+                      (controller.analysis!['fixed_conflicts'] as List)
+                          .isNotEmpty) ...[
+                    const SectionHeading('学期内固定安排冲突'),
+                    for (final conflict
+                        in controller.analysis!['fixed_conflicts'])
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: SoftNotice(
+                          '${(conflict['titles'] as List).join(' / ')}\n${displayInstant(conflict['start_at'])} 至 ${displayInstant(conflict['end_at'])}',
+                          warning: true,
+                        ),
+                      ),
+                    if ((controller
+                                .analysis?['summary']?['fixed_conflict_count'] ??
+                            0) >
+                        30)
+                      const Text('这里显示最近30处，完整数量见分析概况。'),
                   ],
-                ),
-              ],
-              if (controller.analysis?['fixed_conflicts'] is List &&
-                  (controller.analysis!['fixed_conflicts'] as List)
-                      .isNotEmpty) ...[
-                const SectionHeading('学期内固定安排冲突'),
-                for (final conflict in controller.analysis!['fixed_conflicts'])
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SoftNotice(
-                      '${(conflict['titles'] as List).join(' / ')}\n${displayInstant(conflict['start_at'])} 至 ${displayInstant(conflict['end_at'])}',
-                      warning: true,
-                    ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '按当前记录估算，重叠时段只计一次。任务用时以填写的剩余时间为准。',
+                    style: TextStyle(fontSize: 12, color: CampusColors.muted),
                   ),
-                if ((controller.analysis?['summary']?['fixed_conflict_count'] ??
-                        0) >
-                    30)
-                  const Text('这里显示最近30处，完整数量见分析概况。'),
-              ],
-            ],
-            const SizedBox(height: 16),
-            const Text(
-              '根据当前记录估算，重叠的占用时间只计算一次。本任务已经安排的时间仍算可用，实际进度以你填写的剩余时间为准。',
-              style: TextStyle(fontSize: 12, color: CampusColors.muted),
-            ),
+                ],
+              ),
             const SizedBox(height: 14),
             AppButton(
               onPressed: controller.busy || controller.riskBusy

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .academics import owned_semester,replay,remember,fingerprint
 from .auth import current_user,error
 from .database import get_db
-from .models import CourseMeeting,StudyItem,PlanBlock,PlanProposal,User
+from .models import StudyItem,PlanBlock,PlanProposal,User
 from .planning import availability_row,availability_value
 from .plan_store import block_value,plan_rows,record
 from .plan_rules import classify

@@ -2,25 +2,37 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 
 import 'campus_theme.dart';
+import 'accessibility.dart';
 
 /// Forui and Material share the same campus palette, rather than mixing themes.
-FThemeData campusForuiTheme({String? fontFamily}) {
-  final colors = FColors.neutralLight.copyWith(
-    background: CampusColors.surface,
-    foreground: CampusColors.ink,
-    primary: CampusColors.primary,
-    primaryForeground: Colors.white,
-    secondary: CampusColors.blueSoft,
-    secondaryForeground: CampusColors.primary,
-    muted: CampusColors.background,
-    mutedForeground: CampusColors.muted,
-    card: CampusColors.surface,
-    border: CampusColors.line,
-    destructive: CampusColors.error,
-    destructiveForeground: Colors.white,
-    error: CampusColors.error,
-    errorForeground: Colors.white,
-  );
+FThemeData campusForuiTheme({
+  String? fontFamily,
+  ThemeData? materialTheme,
+  bool highContrast = false,
+}) {
+  final base = materialTheme ?? campusTheme();
+  final theme = highContrast ? campusHighContrastTheme(base: base) : base;
+  final scheme = theme.colorScheme;
+  final colors =
+      (theme.brightness == Brightness.dark
+              ? FColors.neutralDark
+              : FColors.neutralLight)
+          .copyWith(
+            background: scheme.surface,
+            foreground: scheme.onSurface,
+            primary: scheme.primary,
+            primaryForeground: scheme.onPrimary,
+            secondary: scheme.primaryContainer,
+            secondaryForeground: scheme.onPrimaryContainer,
+            muted: theme.scaffoldBackgroundColor,
+            mutedForeground: scheme.onSurfaceVariant,
+            card: scheme.surface,
+            border: scheme.outlineVariant,
+            destructive: scheme.error,
+            destructiveForeground: scheme.onError,
+            error: scheme.error,
+            errorForeground: scheme.onError,
+          );
   final typeface = FTypeface.inherit(
     colors: colors,
     touch: true,
@@ -28,7 +40,7 @@ FThemeData campusForuiTheme({String? fontFamily}) {
   );
   final typography = FTypography(body: typeface, display: typeface);
   return FThemeData(
-    debugLabel: '拾日 · 校园蓝绿',
+    debugLabel: highContrast ? '拾日 · 校园高对比度' : '拾日 · 校园蓝绿',
     colors: colors,
     touch: true,
     typography: typography,
@@ -38,7 +50,7 @@ FThemeData campusForuiTheme({String? fontFamily}) {
             md: BorderRadius.all(Radius.circular(14)),
             lg: BorderRadius.all(Radius.circular(18)),
           ),
-          // Avoid scaling whole rows/buttons on press; state colors convey feedback.
+          // Rows remain still; compact buttons opt into a bounded press response.
           tappableStyle: const FTappableStyleDelta.delta(
             motion: FTappableMotion.none,
           ),
@@ -51,10 +63,15 @@ class ShiriForuiTheme extends StatelessWidget {
   const ShiriForuiTheme({super.key, required this.child});
 
   @override
-  Widget build(BuildContext context) => FTheme(
-    data: campusForuiTheme(
-      fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
-    ),
+  Widget build(BuildContext context) => HighContrastDetector(
     child: child,
+    builder: (context, highContrast) => FTheme(
+      data: campusForuiTheme(
+        fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
+        materialTheme: Theme.of(context),
+        highContrast: highContrast,
+      ),
+      child: child,
+    ),
   );
 }

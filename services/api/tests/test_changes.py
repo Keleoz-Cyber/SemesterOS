@@ -65,13 +65,13 @@ def test_holiday_cancels_only_selected_occurrences_and_addition_reaches_capacity
     assert client.get(path+'/timetable?week=1',headers=h).json()['events'][0]['title']=='补课'
 
 
-def test_expired_occurrence_preview_cannot_apply(client,monkeypatch):
+def test_course_correction_is_not_invalidated_only_because_its_date_passed(client,monkeypatch):
     from app import changes
     h,s,path,old=setup(client,monkeypatch)
     p=client.post(path+'/changes',headers=h,json={'kind':'cancel','targets':[old['id']],'title':'停课','source_text':'停课通知'}).json()
     monkeypatch.setattr(changes,'utcnow',lambda:datetime.fromisoformat('2026-09-02T09:00:00+08:00'))
-    assert client.post(f"/api/v1/changes/{p['id']}/apply",headers=h,json={'expected_revision':p['base_revision']}).status_code==422
-    assert client.get(path+'/timetable?week=1',headers=h).json()['events'][0]['id']==old['id']
+    assert client.post(f"/api/v1/changes/{p['id']}/apply",headers=h,json={'expected_revision':p['base_revision']}).status_code==200
+    assert client.get(path+'/timetable?week=1',headers=h).json()['events']==[]
 
 
 def test_parser_suggestions_never_write_reality_and_reject_fabricated_evidence(client,monkeypatch):

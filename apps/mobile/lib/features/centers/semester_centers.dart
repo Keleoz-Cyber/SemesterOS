@@ -1,11 +1,13 @@
+import 'academic_visuals.dart';
 import '../../ui/app_controls.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../ui/campus_widgets.dart';
 import '../../ui/campus_theme.dart';
-import '../../ui/detail_widgets.dart';
 import '../../ui/record_actions.dart';
+import '../../ui/app_sheet.dart';
+import '../../ui/app_number_picker.dart' show formatNumberSelection;
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import '../items/item_form.dart';
@@ -13,6 +15,7 @@ import '../import/manual_page.dart';
 import '../planning/risk_widgets.dart';
 import '../timetable/course_widgets.dart';
 import '../changes/changes_page.dart';
+import '../changes/course_change_display.dart';
 import 'hub_data.dart';
 import 'exam_pages.dart';
 export 'semester_timeline.dart' show SemesterHome, SemesterHomeState;
@@ -107,19 +110,86 @@ class CourseHubPage extends StatelessWidget {
           }
 
           Future<void> editCourse() async {
+            final generation = controller.api.generation;
+            final sid = controller.semesterId;
+            bool current() =>
+                controller.api.generation == generation &&
+                controller.semesterId == sid;
             try {
-              final detail = Map<String, dynamic>.from(
-                await controller.api.request('GET', '/courses/$courseId'),
-              );
-              if (!context.mounted) return;
+              final ids = (course['course_ids'] as List? ?? [courseId])
+                  .whereType<String>()
+                  .toSet()
+                  .toList();
+              if (ids.isEmpty) ids.add(courseId);
+              Map<String, dynamic>? detail;
+              if (ids.length > 1) {
+                final arrangements = await Future.wait([
+                  for (final id in ids)
+                    controller.api
+                        .request('GET', '/courses/$id')
+                        .then(
+                          (value) => <String, dynamic>{
+                            ...Map<String, dynamic>.from(value),
+                            'id': id,
+                          },
+                        ),
+                ]);
+                if (!context.mounted || !current()) return;
+                arrangements.sort((a, b) {
+                  final x = Map<String, dynamic>.from(a['course']),
+                      y = Map<String, dynamic>.from(b['course']);
+                  final weekday = (x['weekday'] as int).compareTo(y['weekday']);
+                  if (weekday != 0) return weekday;
+                  return (x['sections'] as List).cast<int>().first.compareTo(
+                    (y['sections'] as List).cast<int>().first,
+                  );
+                });
+                detail = await showAppSheet<Map<String, dynamic>>(
+                  context: context,
+                  builder: (sheetContext) => Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          '选择要编辑的安排',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 12),
+                        for (final arrangement in arrangements)
+                          _CourseArrangementChoice(
+                            detail: arrangement,
+                            semester: Map<String, dynamic>.from(
+                              data['semester'],
+                            ),
+                            onTap: () =>
+                                Navigator.pop(sheetContext, arrangement),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+                if (detail == null) return;
+              } else {
+                detail = Map<String, dynamic>.from(
+                  await controller.api.request('GET', '/courses/${ids.single}'),
+                );
+              }
+              if (!context.mounted || !current()) return;
+              final selectedDetail = detail;
+              final selectedId = '${selectedDetail['id'] ?? ids.first}';
               final saved = await Navigator.push<bool>(
                 context,
                 MaterialPageRoute(
                   builder: (_) => ManualPage.edit(
                     items: controller,
-                    existing: Map<String, dynamic>.from(detail['course']),
-                    revision: detail['revision'] as int,
-                    courseId: courseId,
+                    semester: Map<String, dynamic>.from(data['semester']),
+                    existing: Map<String, dynamic>.from(
+                      selectedDetail['course'],
+                    ),
+                    revision: selectedDetail['revision'] as int,
+                    courseId: selectedId,
                   ),
                 ),
               );
@@ -147,8 +217,8 @@ class CourseHubPage extends StatelessWidget {
                 builder: (dialog) => AppDialog(
                   title: Text('删除“${preview['title']}”？'),
                   content: Text(
-                    '将删除 ${preview['meetings']} 条上课安排。'
-                    '${preview['linked_items']} 条关联事项会保留，并解除课程关联。',
+                    '将删除这门课程的全部上课安排。'
+                    '${(preview['linked_items'] as num? ?? 0) > 0 ? '${preview['linked_items']}条关联事项会保留，并解除课程关联。' : ''}',
                   ),
                   actions: [
                     AppTextButton(
@@ -163,15 +233,21 @@ class CourseHubPage extends StatelessWidget {
                 ),
               );
               if (confirmed != true || !context.mounted) return;
+              final navigator = Navigator.of(context);
+              final route = ModalRoute.of(context);
               final result = Map<String, dynamic>.from(
                 await controller.api.request(
                   'DELETE',
                   '/courses/$courseId?expected_revision=${preview['revision']}',
                 ),
               );
+              // Leave the deleted resource before a catalog refresh rebuilds
+              // this route/context and starts a request for a missing course.
+              if (navigator.mounted && route?.isCurrent == true) {
+                navigator.pop();
+              }
               await controller.onRealityChanged?.call(result);
               await controller.refresh();
-              if (context.mounted) Navigator.pop(context);
             } catch (e) {
               if (context.mounted) {
                 ScaffoldMessenger.of(
@@ -184,8 +260,8 @@ class CourseHubPage extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              RecordHeading(
-                label: '课程事务',
+              AcademicRecordHeading(
+                label: '',
                 title: course['title'],
                 icon: Icons.menu_book_rounded,
                 color: CoursePalette.forTitle(course['title']).ink,
@@ -193,27 +269,30 @@ class CourseHubPage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 8,
+                  vertical: 12,
                 ),
                 decoration: BoxDecoration(
                   color: CoursePalette.forTitle(course['title']).background,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if ('${course['teacher'] ?? ''}'.trim().isNotEmpty) ...[
-                      RecordFact(
-                        label: '任课教师',
-                        value: '${course['teacher']}',
-                        icon: Icons.person_outline_rounded,
-                      ),
-                      const Divider(height: 1),
-                    ],
-                    RecordFact(
-                      label: '本学期课次',
-                      value:
-                          '${controller.rows(data['occurrences']).length} 次上课安排',
-                      icon: Icons.calendar_view_week_rounded,
+                    Wrap(
+                      spacing: 18,
+                      runSpacing: 8,
+                      children: [
+                        if ('${course['teacher'] ?? ''}'.trim().isNotEmpty)
+                          _CourseMeta(
+                            icon: Icons.person_outline_rounded,
+                            text: '${course['teacher']}',
+                          ),
+                        _CourseMeta(
+                          icon: Icons.calendar_view_week_rounded,
+                          text:
+                              '${controller.rows(data['occurrences']).length} 次上课安排',
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -221,9 +300,8 @@ class CourseHubPage extends StatelessWidget {
               const SizedBox(height: 16),
               AppButton.icon(
                 onPressed: () async {
-                  final kind = await showModalBottomSheet<String>(
+                  final kind = await showAppSheet<String>(
                     context: context,
-                    useSafeArea: true,
                     builder: (sheetContext) => Padding(
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                       child: Column(
@@ -334,9 +412,17 @@ class CourseHubPage extends StatelessWidget {
                             : CampusColors.muted,
                       ),
                       title: Text(displayInstant(e['start_at'])),
-                      subtitle: Text(
-                        '${e['location'] ?? ''}${e['changed'] == true ? ' · 已变更' : ''}',
-                      ),
+                      subtitle:
+                          '${e['location'] ?? ''}'.trim().isNotEmpty ||
+                              e['changed'] == true
+                          ? Text(
+                              [
+                                if ('${e['location'] ?? ''}'.trim().isNotEmpty)
+                                  '${e['location']}',
+                                if (e['changed'] == true) '已变更',
+                              ].join(' · '),
+                            )
+                          : null,
                       onTap: () => showCourseDetails(context, e),
                     ),
                 ],
@@ -355,38 +441,93 @@ class CourseHubPage extends StatelessWidget {
   );
 }
 
-Widget changeCard(Map<String, dynamic> change) => Container(
-  margin: const EdgeInsets.symmetric(vertical: 8),
-  padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-  decoration: const BoxDecoration(
-    border: Border(left: BorderSide(color: CampusColors.teal, width: 3)),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
+Widget changeCard(Map<String, dynamic> change, {VoidCallback? onOpen}) =>
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CourseChangeSummary(change: change, onOpen: onOpen),
+        const Divider(height: 16),
+      ],
+    );
+
+class _CourseMeta extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _CourseMeta({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
     children: [
-      Text(
-        '${changeNames[change['kind']] ?? '变化'} · ${change['title']}',
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-      ),
-      const SizedBox(height: 8),
-      for (final e in change['before'] ?? [])
-        Text(
-          '原：${displayInstant(e['start_at'])}',
-          style: const TextStyle(color: CampusColors.muted),
-        ),
-      for (final e in change['after'] ?? [])
-        Text(
-          '新：${displayInstant(e['start_at'])}',
-          style: const TextStyle(
-            color: CampusColors.teal,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      const SizedBox(height: 8),
-      Text(
-        '依据：${change['source_text']}',
-        style: const TextStyle(fontSize: 14, color: CampusColors.muted),
-      ),
+      Icon(icon, size: 18, color: CampusColors.muted),
+      const SizedBox(width: 6),
+      Flexible(child: Text(text, style: const TextStyle(fontSize: 14))),
     ],
-  ),
-);
+  );
+}
+
+class _CourseArrangementChoice extends StatelessWidget {
+  final Map<String, dynamic> detail, semester;
+  final VoidCallback onTap;
+  const _CourseArrangementChoice({
+    required this.detail,
+    required this.semester,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final course = Map<String, dynamic>.from(detail['course']);
+    final sections = List<int>.from(course['sections']);
+    final weeks = List<int>.from(course['weeks']);
+    final periods =
+        List<Map<String, dynamic>>.from(
+            semester['periods'] ?? [],
+          ).where((p) => sections.contains(p['number'])).toList()
+          ..sort((a, b) => (a['number'] as int).compareTo(b['number'] as int));
+    final consecutive =
+        sections.length <= 1 ||
+        List.generate(
+          sections.length - 1,
+          (i) => sections[i + 1] - sections[i],
+        ).every((difference) => difference == 1);
+    final clock = course['start_time'] != null && course['end_time'] != null
+        ? '${course['start_time']}–${course['end_time']}'
+        : consecutive && periods.isNotEmpty && periods.length == sections.length
+        ? '${periods.first['start']}–${periods.last['end']}'
+        : null;
+    final rawLocation = '${course['location'] ?? ''}'.trim();
+    final location =
+        {
+          '待定',
+          '待通知',
+          '待确认',
+          '未确定',
+          '未填写',
+          '暂无',
+          'unknown',
+          'unspecified',
+          'none',
+        }.contains(rawLocation)
+        ? ''
+        : rawLocation;
+    return AppTile(
+      key: ValueKey('course-arrangement-${detail['id']}'),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      leading: const Icon(Icons.calendar_view_week_outlined),
+      title: Text(
+        '周${'一二三四五六日'[(course['weekday'] as int) - 1]} · '
+        '${formatNumberSelection(sections, unit: '节')}',
+      ),
+      subtitle: Text(
+        [
+          if (weeks.isNotEmpty) formatNumberSelection(weeks, unit: '周'),
+          ?clock,
+          if (location.isNotEmpty) location,
+        ].join(' · '),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
+    );
+  }
+}

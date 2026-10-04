@@ -9,11 +9,12 @@ from sqlalchemy import text
 
 from . import calendar_events
 from . import agent_api
+from . import agent_media
+from . import user_profiles
 from . import insights
 from . import briefs
 from . import taxonomy
 from . import academics, auth, items, capture, planning, schedule_api, changes, change_parser, centers, exam_planning, media, operations, semester_management, course_management
-from pathlib import Path
 from dotenv import dotenv_values
 from threading import Lock, BoundedSemaphore
 import os
@@ -95,6 +96,8 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
 
     app.include_router(calendar_events.router, prefix="/api/v1")
     app.include_router(agent_api.router, prefix="/api/v1")
+    app.include_router(agent_media.router, prefix="/api/v1")
+    app.include_router(user_profiles.router, prefix="/api/v1")
     app.include_router(insights.router, prefix="/api/v1")
     app.include_router(briefs.router, prefix="/api/v1")
     app.include_router(taxonomy.router, prefix="/api/v1")

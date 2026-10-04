@@ -1,6 +1,8 @@
+import 'school_adapters.dart';
+
 const schoolHost = 'jwglxt.haut.edu.cn';
 
-enum SchoolNavigationAction { allow, upgradeHttps, block }
+enum SchoolNavigationAction { allow, upgradeHttps, redirectLogin, block }
 
 class SchoolNavigationDecision {
   final SchoolNavigationAction action;
@@ -8,23 +10,56 @@ class SchoolNavigationDecision {
   const SchoolNavigationDecision(this.action, [this.destination]);
 }
 
-bool isTrustedSchoolUrl(String url) {
-  final uri = Uri.tryParse(url);
-  return uri != null &&
-      uri.scheme == 'https' &&
-      uri.host == schoolHost &&
-      uri.port == 443 &&
+bool _matchesOrigin(Uri uri, String origin) {
+  final trusted = Uri.parse(origin);
+  return uri.scheme == trusted.scheme &&
+      uri.host == trusted.host &&
+      uri.port == trusted.port &&
       uri.userInfo.isEmpty;
 }
 
-SchoolNavigationDecision schoolNavigation(String url) {
-  if (url == 'about:blank' || isTrustedSchoolUrl(url)) {
+bool _insecureLogin(Uri uri, SchoolAdapter school) =>
+    uri.scheme == 'http' &&
+    school.insecureLoginPaths.contains(
+      uri.path.replaceFirst(RegExp(r'/+$'), ''),
+    );
+
+bool isTrustedSchoolUrl(String url, {SchoolAdapter school = hautSchool}) {
+  final uri = Uri.tryParse(url);
+  return uri != null &&
+      !_insecureLogin(uri, school) &&
+      school.origins.any((origin) => _matchesOrigin(uri, origin));
+}
+
+bool isSchoolCourseUrl(String url, {SchoolAdapter school = hautSchool}) {
+  final uri = Uri.tryParse(url);
+  return uri != null &&
+      !_insecureLogin(uri, school) &&
+      school.courseOrigins.any((origin) => _matchesOrigin(uri, origin));
+}
+
+SchoolNavigationDecision schoolNavigation(
+  String url, {
+  SchoolAdapter school = hautSchool,
+}) {
+  if (url == 'about:blank') {
     return const SchoolNavigationDecision(SchoolNavigationAction.allow);
   }
   final uri = Uri.tryParse(url);
   if (uri != null &&
+      _insecureLogin(uri, school) &&
+      school.origins.any((origin) => _matchesOrigin(uri, origin))) {
+    return SchoolNavigationDecision(
+      SchoolNavigationAction.redirectLogin,
+      Uri.parse(school.loginUrl),
+    );
+  }
+  if (isTrustedSchoolUrl(url, school: school)) {
+    return const SchoolNavigationDecision(SchoolNavigationAction.allow);
+  }
+  if (uri != null &&
       uri.scheme == 'http' &&
-      uri.host == schoolHost &&
+      school.httpsUpgradeHosts.contains(uri.host) &&
       uri.port == 80 &&
       uri.userInfo.isEmpty) {
     return SchoolNavigationDecision(

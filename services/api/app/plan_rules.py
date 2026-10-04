@@ -1,5 +1,6 @@
 from math import floor
 from .reminder_rules import instant, anchor_at
+from .task_readiness import start_policy
 
 
 def future_minutes(block, now, start=None, end=None):
@@ -22,7 +23,7 @@ def classify(plans, items, free_spans, now):
         if item:
             if not item.get('splittable',True) and sum(o['item_id']==b['item_id'] for o in future)>1:reasons.append('unsplittable_multiple_blocks')
             if item.get('remaining_minutes') is None:reasons.append('needs_estimate')
-            if item.get('start_policy','unconfirmed')=='unconfirmed':reasons.append('needs_start')
+            if start_policy(item)=='unconfirmed':reasons.append('needs_start')
             if item.get('start_policy')=='at' and item.get('earliest_start_at') and tail<instant(item['earliest_start_at']).timestamp():reasons.append('before_release')
             due=anchor_at(item) if item.get('certainty')=='formal' else None
             if due and end>due.timestamp():reasons.append('after_deadline')

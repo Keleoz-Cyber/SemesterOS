@@ -66,21 +66,19 @@ void main() {
         ChangePreviewPage(controller: f.c, preview: change(f, conflict: true)),
       );
       await tester.scrollUntilVisible(
-        find.text('我已核实通知，确认保存并保留时间冲突提示'),
+        find.text('保留这些重叠安排'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.textContaining('合成考试'), findsOneWidget);
       await tester.scrollUntilVisible(
-        find.text('确认现实变化，暂不移动个人计划'),
+        find.text('保存修改'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
       expect(
         tester
-            .widget<AppButton>(
-              find.widgetWithText(AppButton, '确认现实变化，暂不移动个人计划'),
-            )
+            .widget<AppButton>(find.widgetWithText(AppButton, '保存修改'))
             .onPressed,
         isNull,
       );
@@ -143,13 +141,13 @@ void main() {
       expect(replans, 0);
       expect(f.applied, 0);
       await tester.scrollUntilVisible(
-        find.text('确认现实变化，暂不移动个人计划'),
+        find.text('保存修改'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
-      expect(find.text('确认现实变化，暂不移动个人计划').hitTestable(), findsOneWidget);
-      await ioTap(tester, find.text('确认现实变化，暂不移动个人计划'));
+      expect(find.text('保存修改').hitTestable(), findsOneWidget);
+      await ioTap(tester, find.text('保存修改'));
       expect(changesApplied, 1);
       expect(calendarRefresh, 1);
       expect(replans, 0);
@@ -195,13 +193,13 @@ void main() {
     f.c.observeRevision('s', 2);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('确认现实变化，暂不移动个人计划'),
+      find.text('保存修改'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     expect(
       tester
-          .widget<AppButton>(find.widgetWithText(AppButton, '确认现实变化，暂不移动个人计划'))
+          .widget<AppButton>(find.widgetWithText(AppButton, '保存修改'))
           .onPressed,
       isNull,
     );

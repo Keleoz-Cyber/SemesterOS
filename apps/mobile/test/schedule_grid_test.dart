@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/features/calendar/schedule_grid.dart';
 import 'ui_polish_test.dart' show mount, capture, loadPreviewFonts;
-import 'package:calendar_view/calendar_view.dart' as cv;
 
 Map<String, dynamic> event(String id, String name, String start, String end) =>
     {
@@ -20,7 +19,223 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
   testWidgets(
-    'hidden calendar suspends library timers and restores its scroll',
+    'an optional reference stays clickable without an occupied block',
+    (tester) async {
+      Map<String, dynamic>? opened;
+      final row = {
+        ...event(
+          'reference',
+          '可选讲座',
+          '2026-09-21T09:00:00+08:00',
+          '2026-09-21T10:00:00+08:00',
+        ),
+        'reserve_time': false,
+        'details': {'participation_status': 'optional'},
+      };
+      await mount(
+        tester,
+        Scaffold(
+          body: SizedBox(
+            height: 500,
+            child: ScheduleGrid(
+              firstDay: DateTime.utc(2026, 9, 21),
+              entries: [row],
+              onOpen: (r) => opened = r,
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey('schedule-start-reference/2026-09-21')),
+        findsOneWidget,
+      );
+      expect(find.text('可选'), findsOneWidget);
+      await tester.tap(find.text('可选'));
+      await tester.pump();
+      expect(opened?['reserve_time'], isFalse);
+      expect(opened?['end_at'], '2026-09-21T10:00:00+08:00');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'current time follows minute position and stops while hidden or backgrounded',
+    (tester) async {
+      var now = DateTime.utc(2026, 9, 21, 9, 30), reads = 0;
+      final visible = ValueNotifier(true);
+      await mount(
+        tester,
+        Scaffold(
+          body: ValueListenableBuilder(
+            valueListenable: visible,
+            builder: (_, show, _) => SizedBox(
+              height: 500,
+              child: ScheduleGrid(
+                firstDay: DateTime.utc(2026, 9, 21),
+                entries: const [],
+                onOpen: (_) {},
+                visible: show,
+                now: () {
+                  reads++;
+                  return now;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      double top() => tester
+          .widget<Positioned>(
+            find.byKey(const ValueKey('schedule-current-time')),
+          )
+          .top!;
+      expect(top(), closeTo(85.5, .01));
+      now = DateTime.utc(2026, 9, 21, 9, 31);
+      await tester.pump(const Duration(seconds: 58));
+      expect(top(), closeTo(85.5, .01));
+      await tester.pump(const Duration(seconds: 2));
+      expect(top(), closeTo(86.45, .01));
+      visible.value = false;
+      await tester.pump();
+      final hiddenReads = reads;
+      await tester.pump(const Duration(minutes: 2));
+      expect(reads, hiddenReads);
+      visible.value = true;
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      final pausedReads = reads;
+      await tester.pump(const Duration(minutes: 2));
+      expect(reads, pausedReads);
+      now = DateTime.utc(2026, 9, 28, 9, 31);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('schedule-current-time')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      visible.dispose();
+    },
+  );
+  for (final screen in [
+    ('phone', 375.0, 844.0, 1.0),
+    ('large', 320.0, 844.0, 1.6),
+    ('landscape', 740.0, 390.0, 1.0),
+  ]) {
+    testWidgets(
+      'seven-column grid supports ${screen.$1} with short and point markers',
+      (tester) async {
+        final rows = [
+          {
+            ...event(
+              'mon',
+              '高等数学',
+              '2026-09-21T08:00:00+08:00',
+              '2026-09-21T10:00:00+08:00',
+            ),
+            'resource_type': 'course',
+          },
+          {
+            ...event(
+              'point',
+              '班会',
+              '2026-09-22T09:00:00+08:00',
+              '2026-09-22T10:00:00+08:00',
+            ),
+            'end_at': null,
+          },
+          event(
+            'short',
+            '取材料',
+            '2026-09-23T08:15:00+08:00',
+            '2026-09-23T08:25:00+08:00',
+          ),
+          {
+            ...event(
+              'thu',
+              '大学英语',
+              '2026-09-24T09:00:00+08:00',
+              '2026-09-24T10:00:00+08:00',
+            ),
+            'resource_type': 'course',
+          },
+          event(
+            'sun',
+            '项目组会',
+            '2026-09-27T09:00:00+08:00',
+            '2026-09-27T10:00:00+08:00',
+          ),
+        ];
+        await mount(
+          tester,
+          Scaffold(
+            body: ScheduleGrid(
+              firstDay: DateTime.utc(2026, 9, 21),
+              entries: rows,
+              onOpen: (_) {},
+              now: () => DateTime.utc(2026, 9, 21, 9, 30),
+            ),
+          ),
+          width: screen.$2,
+          height: screen.$3,
+          textScale: screen.$4,
+        );
+        expect(find.text('周日'), findsOneWidget);
+        expect(find.text('班会'), findsOneWidget);
+        expect(find.text('开始'), findsNothing);
+        expect(
+          find.byKey(const ValueKey('schedule-start-point/2026-09-22')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('schedule-tile-short/2026-09-23')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        await capture(tester, 'calendar-grid-${screen.$1}');
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+  testWidgets(
+    'a start-only event is a clickable point without invented end time',
+    (tester) async {
+      Map<String, dynamic>? opened;
+      final row = {
+        ...event(
+          'point',
+          '通知会议',
+          '2026-09-21T10:10:00+08:00',
+          '2026-09-21T11:10:00+08:00',
+        ),
+        'end_at': null,
+      };
+      await mount(
+        tester,
+        Scaffold(
+          body: SizedBox(
+            height: 550,
+            child: ScheduleGrid(
+              firstDay: DateTime.utc(2026, 9, 21),
+              entries: [row],
+              onOpen: (value) => opened = value,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('schedule-start-point/2026-09-21')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('schedule-start-point/2026-09-21')),
+      );
+      await tester.pump();
+      expect(opened?['resource_id'], 'point');
+      expect(opened?['end_at'], isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'hidden calendar suspends its minute clock and restores its scroll',
     (tester) async {
       final visible = ValueNotifier(true);
       await mount(
@@ -40,7 +255,7 @@ void main() {
           ),
         ),
       );
-      final view = find.byWidgetPredicate((w) => w is cv.WeekView);
+      final view = find.byType(ScheduleGrid);
       Finder vertical() => find
           .descendant(
             of: view,
@@ -53,7 +268,7 @@ void main() {
       await tester.pump();
       visible.value = false;
       await tester.pumpAndSettle();
-      expect(view, findsNothing);
+      expect(find.byKey(const ValueKey('schedule-grid-scroll')), findsNothing);
       await tester.pump(const Duration(minutes: 2));
       visible.value = true;
       await tester.pumpAndSettle();
@@ -101,6 +316,11 @@ void main() {
       expect(tester.getRect(find.text('周日')).right, lessThanOrEqualTo(390));
       expect(find.text('2项重叠'), findsOneWidget);
       await tester.tap(find.text('2项重叠'));
+      await tester.pumpAndSettle();
+      expect(find.text('2项时间重叠'), findsOneWidget);
+      expect(find.text('课程甲'), findsOneWidget);
+      expect(find.text('课程乙'), findsOneWidget);
+      await tester.tap(find.text('查看这一天'));
       await tester.pumpAndSettle();
       expect(opened?.day, 21);
       await tester.pumpWidget(const SizedBox());

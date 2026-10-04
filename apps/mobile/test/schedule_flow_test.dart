@@ -175,15 +175,38 @@ void main() {
     tester,
   ) async {
     final f = ScheduleFixture();
+    final previous = f.api.dio.httpClientAdapter as ControlledTransport;
+    f.api.dio.httpClientAdapter = ControlledTransport((request) async {
+      if (request.path.endsWith('/schedule/setup')) {
+        return body({
+          'revision': f.revision,
+          'tasks': [
+            {...f.item, 'can_schedule': true},
+          ],
+          'availability': {
+            'needs_confirmation': false,
+            'current': {'version': 1, 'weekly': [], 'exclusions': []},
+          },
+        });
+      }
+      if (request.path.endsWith('/plan-proposals')) {
+        f.generated++;
+        expect(request.data['tasks'], [
+          {'item_id': 't'},
+        ]);
+        return body(f.proposal(), 201);
+      }
+      return previous.respond(request);
+    });
     await tester.runAsync(() => f.c.bind('s'));
     await route(tester, SchedulePage(controller: f.c));
     await capture(tester, 'schedule-input');
     await tester.scrollUntilVisible(
-      find.text('生成计划方案'),
+      find.text('生成安排'),
       350,
       scrollable: find.byType(Scrollable).first,
     );
-    await ioTap(tester, find.text('生成计划方案'));
+    await ioTap(tester, find.text('生成安排'));
     expect(f.generated, 1);
     expect(f.applied, 0);
     expect(find.text('查看计划方案'), findsOneWidget);
@@ -208,11 +231,12 @@ void main() {
         tester,
         ProposalPage(controller: f.c, proposal: f.proposal(partial: true)),
       );
-      final button = find.widgetWithText(FButton, '保存已安排部分（仍有45分钟未安排）');
+      final button = find.widgetWithText(FButton, '保存已安排部分');
       expect(tester.widget<FButton>(button).onPress, isNull);
       expect(f.applied, 0);
       await tester.scrollUntilVisible(
-        find.byType(AppCheckRow), 350,
+        find.byType(AppCheckRow),
+        350,
         scrollable: find.byType(Scrollable).first,
       );
       await tester.ensureVisible(find.byType(AppCheckRow));
@@ -261,7 +285,7 @@ void main() {
       await tester.pumpAndSettle();
       final button = find.widgetWithText(AppButton, '确认完成');
       expect(tester.widget<AppButton>(button).onPressed, isNull);
-      await tester.tap(find.text('我确认解锁并取消所选锁定计划'));
+      await tester.tap(find.text('取消所选固定安排'));
       await tester.pumpAndSettle();
       await tester.tap(button);
       await tester.pumpAndSettle();
@@ -296,18 +320,19 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 100)),
       );
       await tester.pumpAndSettle();
+      final firstBlock = find.byKey(const ValueKey('learning-plan-b0'));
       await tester.scrollUntilVisible(
-        find.text('锁定').first,
+        firstBlock,
         350,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(firstBlock);
       await tester.pumpAndSettle();
-      await Scrollable.ensureVisible(
-        tester.element(find.text('锁定').first),
-        alignment: .4,
-      );
+      expect(find.text('锁定'), findsNothing);
+      await tester.tap(firstBlock);
       await tester.pumpAndSettle();
-      await tester.runAsync(() => tester.tap(find.text('锁定').first));
+      expect(find.text('查看任务'), findsOneWidget);
+      await tester.runAsync(() => tester.tap(find.text('固定这段时间')));
       // The page init refresh starts in FakeAsync; interleave frames and I/O
       // when testing a second platform-queue mutation from the real async zone.
       for (var i = 0; i < 5; i++) {

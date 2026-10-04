@@ -1,9 +1,14 @@
+import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/app_sheet.dart';
 import '../calendar/calendar_panel.dart';
 import '../../ui/app_navigation.dart';
 import '../../ui/motion.dart';
 import '../../ui/assistant_scope.dart';
 import '../../ui/brand.dart';
+import '../media/clipboard_notice_prompt.dart';
+import '../profile/student_profile_prompt.dart';
+import '../agent/assistant_sheet.dart';
 import '../home/today_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -11,20 +16,24 @@ import '../../app/controller.dart';
 import '../../core/api.dart' show userError;
 import '../../ui/campus_theme.dart';
 import '../../ui/campus_widgets.dart';
-import 'course_widgets.dart';
-import 'today_view.dart';
-import 'week_view.dart';
 import 'semester_view.dart';
 import '../items/items_controller.dart';
 import '../items/items_view.dart';
+import '../items/item_form.dart';
 import '../centers/semester_centers.dart';
 import '../semester/semester_page.dart';
 import '../media/drafts.dart';
 
 class ShellPage extends StatefulWidget {
   final AppController controller;
-  final ItemsController? items;
-  const ShellPage({super.key, required this.controller, this.items});
+  final ItemsController items;
+  final int initialTab;
+  const ShellPage({
+    super.key,
+    required this.controller,
+    required this.items,
+    this.initialTab = 0,
+  });
   @override
   State<ShellPage> createState() => _ShellPageState();
 }
@@ -36,42 +45,37 @@ class _ShellPageState extends State<ShellPage> {
   String? actor;
   final visitedTabs = <int>{0};
   int tab = 0;
-  double tabDirection = 1;
-  bool grid = true;
+  AxisDirection tabDirection = AxisDirection.right;
   AppController get c => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    tab = widget.initialTab.clamp(0, 3);
+    visitedTabs.add(tab);
+  }
+
+  @override
+  void didUpdateWidget(covariant ShellPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      switchTab(widget.initialTab.clamp(0, 3));
+    }
+  }
 
   void switchTab(int value) {
     if (value == tab) return;
     setState(() {
-      tabDirection = value > tab ? 1 : -1;
+      tabDirection = value > tab ? AxisDirection.right : AxisDirection.left;
       tab = value;
       visitedTabs.add(value);
     });
-    if (value == 0 && c.semester != null && widget.items == null) {
-      c.loadWeek(c.weekNow(c.semester!));
-    }
   }
 
   void openImport() =>
       context.push(c.semester == null ? '/semester/new' : '/import');
   void manual() =>
       context.push(c.semester == null ? '/semester/new' : '/manual');
-
-  void openCourse(Map<String, dynamic> event) {
-    if (widget.items != null && event['course_id'] != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CourseHubPage(
-            controller: widget.items!,
-            courseId: event['course_id'],
-          ),
-        ),
-      );
-    } else {
-      showCourseDetails(context, event);
-    }
-  }
 
   Future<void> editSemester() async {
     final selected = c.semester;
@@ -138,7 +142,7 @@ class _ShellPageState extends State<ShellPage> {
         preview['revision'] as int,
       );
       try {
-        await widget.items?.forgetDeletedSemester('${selected['id']}');
+        await widget.items.forgetDeletedSemester('${selected['id']}');
         await CaptureDrafts.clearSemester(c.cache, owner, '${selected['id']}');
       } catch (_) {
         if (mounted) {
@@ -171,19 +175,21 @@ class _ShellPageState extends State<ShellPage> {
           appBar: AppBar(title: const Text('管理学期与课表')),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
-            child: SemesterView(
-              semesters: c.semesters,
-              current: c.semester!,
-              onSelect: (s) async {
-                await c.selectSemester(s);
-                if (mounted && context.mounted) Navigator.pop(context);
-              },
-              onCreate: () => context.push('/semester/new'),
-              onImport: openImport,
-              onManual: manual,
-              onEdit: editSemester,
-              onDelete: deleteSemester,
-            ),
+            child: c.semester == null
+                ? const SizedBox.shrink()
+                : SemesterView(
+                    semesters: c.semesters,
+                    current: c.semester!,
+                    onSelect: (s) async {
+                      await c.selectSemester(s);
+                      if (mounted && context.mounted) Navigator.pop(context);
+                    },
+                    onCreate: () => context.push('/semester/new'),
+                    onImport: openImport,
+                    onManual: manual,
+                    onEdit: editSemester,
+                    onDelete: deleteSemester,
+                  ),
           ),
         ),
       ),
@@ -197,7 +203,7 @@ class _ShellPageState extends State<ShellPage> {
     } else {
       await c.openSession();
     }
-    await widget.items?.refresh();
+    await widget.items.refresh();
     if (tab == 0) await todayKey.currentState?.reload();
     if (tab == 1) await calendarKey.currentState?.reload();
     if (tab == 3) await semesterKey.currentState?.reload();
@@ -211,26 +217,40 @@ class _ShellPageState extends State<ShellPage> {
     await AssistantScope.open(context);
   }
 
-  Future<void> account() => showModalBottomSheet<void>(
+  Future<void> account() => showAppSheet<void>(
     context: context,
-    useSafeArea: true,
-    isScrollControlled: true,
-    builder: (sheet) => SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    builder: (sheet) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const AppSheetHeading(title: '账户', closeLabel: '关闭'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
+          child: Row(
             children: [
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 27,
                 backgroundColor: CampusColors.blueSoft,
-                child: Icon(
-                  Icons.person_outline_rounded,
-                  color: CampusColors.primary,
-                  size: 30,
-                ),
+                child: c.isDemo
+                    ? const Icon(
+                        Icons.person_outline_rounded,
+                        color: CampusColors.primary,
+                        size: 27,
+                      )
+                    : Text(
+                        '${c.user['username']}'.trim().isEmpty
+                            ? '拾'
+                            : '${c.user['username']}'
+                                  .trim()
+                                  .characters
+                                  .first
+                                  .toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: CampusColors.primary,
+                        ),
+                      ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -238,151 +258,161 @@ class _ShellPageState extends State<ShellPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${c.user['username']}',
+                      c.isDemo ? '体验账号' : '${c.user['username']}',
                       style: const TextStyle(
                         fontSize: 21,
                         fontWeight: FontWeight.w800,
                       ),
-                    ),
-                    const Text(
-                      '我的账号',
-                      style: TextStyle(fontSize: 13, color: CampusColors.muted),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 23),
-          const SoftNotice('退出后会清理本机缓存，云端已保存的课表仍保留。'),
-          const SizedBox(height: 18),
-          AppOutlineButton.icon(
-            onPressed: () {
-              Navigator.pop(sheet);
-              c.logout();
-            },
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('退出登录'),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: Column(
+            children: [
+              AppTile(
+                key: const Key('account-profile'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  context.push('/profile');
+                },
+                leading: const Icon(Icons.badge_outlined),
+                title: const Text('个人资料'),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+              ),
+              const Divider(height: 1),
+              AppTile(
+                onTap: () {
+                  Navigator.pop(sheet);
+                  context.push('/help');
+                },
+                leading: const Icon(Icons.help_outline_rounded),
+                title: const Text('使用说明'),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+              ),
+              ...[
+                const Divider(height: 1),
+                AppTile(
+                  onTap: () {
+                    Navigator.pop(sheet);
+                    context.push('/reminders');
+                  },
+                  leading: const Icon(Icons.notifications_outlined),
+                  title: const Text('提醒设置'),
+                  trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                ),
+              ],
+              const SizedBox(height: 14),
+              const Divider(height: 1),
+              const SizedBox(height: 6),
+              AppTextButton.icon(
+                onPressed: () {
+                  Navigator.pop(sheet);
+                  c.logout();
+                },
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('退出登录'),
+                style: AppTextButton.styleFrom(
+                  foregroundColor: CampusColors.error,
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 20),
+                child: Text(
+                  '本机缓存将清理，已保存课表保留。',
+                  style: TextStyle(fontSize: 12, color: CampusColors.muted),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
+
+  void showCalendarDay(DateTime day) {
+    switchTab(1);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) calendarKey.currentState?.selectDay(day);
+    });
+  }
+
+  Future<void> editTask(Map<String, dynamic> row) async {
+    final items = widget.items, semester = c.semester;
+    if (semester == null) return;
+    final generation = items.api.generation, owner = items.owner;
+    try {
+      final latest = await items.get('${row['id']}');
+      if (!mounted ||
+          generation != items.api.generation ||
+          owner != items.owner ||
+          c.semester?['id'] != semester['id']) {
+        return;
+      }
+      final saved = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ItemFormPage(
+            controller: items,
+            semester: semester,
+            initial: latest,
+          ),
+        ),
+      );
+      if (saved == true && mounted && generation == items.api.generation) {
+        await items.refresh();
+      }
+    } catch (e) {
+      if (mounted && generation == items.api.generation) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userError(e))));
+      }
+    }
+  }
 
   Widget page(int index) {
     if (c.semester == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const CampusHero(
-            eyebrow: '',
-            title: '建立学期',
-            subtitle: '设置开学日期，然后导入课表',
-          ),
-          const SizedBox(height: 22),
           EmptyPanel(
-            title: '先建立你的学期',
-            message: '选择学校校历的第1周周一，再导入课程。',
+            title: '还没有学期',
+            message: '设置第1周周一，然后导入课表。',
             action: '创建学期',
             onAction: () => context.push('/semester/new'),
           ),
         ],
       );
     }
-    final hasData =
-        c.savedWeeks['${c.semester!['id']}/${c.week}']?['revision'] ==
-        c.semester!['revision'];
-    switch (index) {
-      case 1:
-        if (widget.items != null) {
-          return CalendarPanel(key: calendarKey, app: c, items: widget.items!);
-        }
-        return WeekView(
-          semester: c.semester!,
-          events: c.events,
-          now: DateTime.now(),
-          week: c.week,
-          grid: grid,
-          hasData: hasData,
-          onMode: (value) => setState(() => grid = value),
-          onWeek: c.loadWeek,
-          onCurrent: () => c.loadWeek(c.weekNow(c.semester!)),
-          onImport: openImport,
-          onCourse: openCourse,
-        );
-      case 2:
-        if (widget.items != null) {
-          return ItemsView(
-            controller: widget.items!,
-            onCreate: add,
-            onOpen: (id) => context.push('/items/$id'),
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const CampusHero(eyebrow: '', title: '个人计划', subtitle: ''),
-            const SizedBox(height: 22),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: StatusPill('暂时无法加载', icon: Icons.construction_rounded),
-            ),
-            const SizedBox(height: 12),
-            EmptyPanel(
-              title: '计划暂时无法加载',
-              message: '可以先查看课表，稍后重新打开App再试。',
-              action: '查看本周课表',
-              onAction: () => switchTab(1),
-              icon: Icons.checklist_rounded,
-            ),
-          ],
-        );
-      case 3:
-        if (widget.items != null) {
-          return SemesterHome(
-            key: semesterKey,
-            controller: widget.items!,
-            onManage: manageSemester,
-          );
-        }
-        return SemesterView(
-          semesters: c.semesters,
-          current: c.semester!,
-          onSelect: c.selectSemester,
-          onCreate: () => context.push('/semester/new'),
-          onImport: openImport,
-          onManual: manual,
-          onEdit: editSemester,
-          onDelete: deleteSemester,
-        );
-      default:
-        if (widget.items != null) {
-          return TodayDashboard(
-            key: todayKey,
-            app: c,
-            items: widget.items!,
-            onCalendar: () => switchTab(1),
-          );
-        }
-        return TodayView(
-          itemsBlock: widget.items == null
-              ? null
-              : TodayItems(
-                  controller: widget.items!,
-                  onAll: () => switchTab(2),
-                  onOpen: (id) => context.push('/items/$id'),
-                ),
-          semester: c.semester!,
-          events: c.events,
-          now: DateTime.now(),
-          week: c.week,
-          hasData: hasData,
-          onTimetable: () => switchTab(1),
-          onImport: openImport,
-          onManual: manual,
-          onCourse: openCourse,
-        );
-    }
+    return switch (index) {
+      1 => CalendarPanel(key: calendarKey, app: c, items: widget.items),
+      2 => ItemsView(
+        controller: widget.items,
+        onCreate: add,
+        onOpen: (id) => context.push('/items/$id'),
+        onEdit: editTask,
+        sliver: true,
+      ),
+      3 => SemesterHome(
+        key: semesterKey,
+        controller: widget.items,
+        onManage: manageSemester,
+      ),
+      _ => TodayDashboard(
+        key: todayKey,
+        app: c,
+        items: widget.items,
+        onCalendar: () => switchTab(1),
+        onCalendarDay: showCalendarDay,
+        onTaskEdit: editTask,
+        onAllTasks: () => switchTab(2),
+      ),
+    };
   }
 
   @override
@@ -390,7 +420,9 @@ class _ShellPageState extends State<ShellPage> {
     listenable: c,
     builder: (context, _) {
       if (!c.ready) {
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        return const Scaffold(
+          body: Center(child: AppLoadingIndicator(label: '正在打开拾日')),
+        );
       }
       final nextActor = '${c.user['id']}:${c.semester?['id']}';
       if (actor != nextActor) {
@@ -403,80 +435,130 @@ class _ShellPageState extends State<ShellPage> {
           ..add(tab);
       }
       return Scaffold(
-        appBar: AppBar(
-          toolbarHeight: 52,
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const ExcludeSemantics(child: BrandMark(size: 30)),
-              const SizedBox(width: 9),
-              const Text(
-                appName,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -.5,
+        appBar: tab == 1
+            ? null
+            : AppBar(
+                toolbarHeight: 48,
+                title: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ExcludeSemantics(child: BrandMark(size: 26)),
+                    const SizedBox(width: 9),
+                    Text(
+                      tab == 0
+                          ? appName
+                          : tab == 2
+                          ? '任务与安排'
+                          : '学期',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -.5,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            AppIconButton(
-              onPressed: account,
-              tooltip: '账户',
-              icon: const CircleAvatar(
-                radius: 18,
-                backgroundColor: CampusColors.blueSoft,
-                child: Icon(
-                  Icons.person_outline_rounded,
-                  size: 23,
-                  color: CampusColors.primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: IndexedStack(
-          index: tab,
-          children: [
-            for (var index = 0; index < 4; index++)
-              if (!visitedTabs.contains(index))
-                const SizedBox()
-              else
-                KeyedSubtree(
-                  key: ValueKey(
-                    'tab-${c.user['id']}-${c.semester?['id']}-$index',
+                actions: [
+                  AppIconButton(
+                    onPressed: account,
+                    guardAsync: false,
+                    tooltip: '账户',
+                    icon: const CircleAvatar(
+                      radius: 18,
+                      backgroundColor: CampusColors.blueSoft,
+                      child: Icon(
+                        Icons.person_outline_rounded,
+                        size: 23,
+                        color: CampusColors.primary,
+                      ),
+                    ),
                   ),
-                  child: TickerMode(
-                    enabled: tab == index,
-                    child: TabEntrance(
-                      active: tab == index,
-                      animateOnMount: index != 0,
-                      direction: tabDirection,
-                      child: RefreshIndicator(
-                        onRefresh: refresh,
-                        child: ListView(
-                          key: PageStorageKey(
-                            'semester-tab-${c.user['id']}-${c.semester?['id']}-$index',
-                          ),
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 22),
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          children: [
-                            if (c.notice != null &&
-                                (!c.notice!.startsWith('正在同步') ||
-                                    c.offline)) ...[
-                              SoftNotice(c.notice!, warning: c.offline),
-                              const SizedBox(height: 14),
+                  const SizedBox(width: 8),
+                ],
+              ),
+        body: SafeArea(
+          bottom: false,
+          child: IndexedStack(
+            index: tab,
+            children: [
+              for (var index = 0; index < 4; index++)
+                if (!visitedTabs.contains(index))
+                  const SizedBox()
+                else
+                  KeyedSubtree(
+                    key: ValueKey(
+                      'tab-${c.user['id']}-${c.semester?['id']}-$index',
+                    ),
+                    child: TickerMode(
+                      enabled: tab == index,
+                      child: TabEntrance(
+                        active: tab == index,
+                        animateOnMount: index != 0,
+                        direction: tabDirection,
+                        child: RefreshIndicator(
+                          onRefresh: refresh,
+                          child: CustomScrollView(
+                            key: PageStorageKey(
+                              'semester-tab-${c.user['id']}-${c.semester?['id']}-$index',
+                            ),
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  8,
+                                  16,
+                                  22,
+                                ),
+                                sliver: SliverMainAxisGroup(
+                                  slivers: [
+                                    if (index == 0 && c.semester != null)
+                                      SliverToBoxAdapter(
+                                        child: Column(
+                                          children: [
+                                            const StudentProfilePrompt(),
+                                            ClipboardNoticePrompt(
+                                              onImport: (text) =>
+                                                  openAssistantSheet(
+                                                    context,
+                                                    controller: widget.items,
+                                                    semester: c.semester!,
+                                                    initialText: text,
+                                                    noticeInput: true,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    if (c.notice != null &&
+                                        (!c.notice!.startsWith('正在同步') ||
+                                            c.offline))
+                                      SliverToBoxAdapter(
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 14,
+                                          ),
+                                          child: SoftNotice(
+                                            c.notice!,
+                                            warning: c.offline,
+                                          ),
+                                        ),
+                                      ),
+                                    if (index == 2 && c.semester != null)
+                                      page(index)
+                                    else
+                                      SliverToBoxAdapter(child: page(index)),
+                                  ],
+                                ),
+                              ),
                             ],
-                            page(index),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-          ],
+            ],
+          ),
         ),
         bottomNavigationBar: AppNavigation(
           selected: tab,

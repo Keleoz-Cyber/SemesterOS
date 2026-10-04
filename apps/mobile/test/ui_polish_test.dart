@@ -1,6 +1,5 @@
 import 'package:forui/forui.dart';
 import 'package:semester_os/ui/forui_theme.dart';
-import 'package:semester_os/ui/app_selection.dart';
 import 'package:semester_os/ui/app_navigation.dart';
 import 'package:semester_os/ui/assistant_scope.dart';
 import 'dart:io';
@@ -14,9 +13,17 @@ import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/core/api.dart';
 import 'package:semester_os/features/import/preview.dart';
 import 'package:semester_os/features/timetable/shell_page.dart';
+import 'package:semester_os/features/items/items_controller.dart';
+import 'package:semester_os/features/items/items_view.dart';
+import 'package:semester_os/features/items/reminder_sync.dart';
+import 'package:semester_os/features/home/today_dashboard.dart';
+import 'package:semester_os/features/calendar/calendar_panel.dart';
+import 'package:semester_os/features/centers/semester_centers.dart';
+import 'package:semester_os/features/centers/academic_visuals.dart';
 import 'package:semester_os/ui/campus_theme.dart';
 import 'api_session_test.dart' show ControlledTransport, body, account;
 import 'controller_test.dart' show MemoryStore;
+import 'reminder_sync_test.dart' show FakeNotifications;
 
 final output = Platform.environment['UI_PREVIEW_DIR'];
 var previewFont = false;
@@ -83,6 +90,62 @@ AppController sampleController() {
         'base_revision': 1,
       }, 201);
     }
+    if (r.path.endsWith('/reminders')) {
+      return body({'owner_id': 'preview_demo', 'reminders': []});
+    }
+    if (r.path.endsWith('/items')) return body({'revision': 1, 'items': []});
+    if (r.path.endsWith('/courses')) return body(events);
+    if (r.path.endsWith('/plans')) {
+      return body({
+        'semester_id': 'sample',
+        'revision': 1,
+        'blocks': [],
+        'invalid_blocks': [],
+      });
+    }
+    final query = Uri.parse(r.path).queryParameters;
+    final entries = events
+        .map((e) => {...e, 'resource_type': 'course', 'resource_id': e['id']})
+        .toList();
+    if (r.path.contains('/calendar?')) {
+      return body({
+        'semester_id': 'sample',
+        'revision': 1,
+        'from_date': query['from_date'],
+        'to_date': query['to_date'],
+        'entries': entries,
+        'undated': [],
+      });
+    }
+    if (r.path.contains('/day-brief?')) {
+      return body({
+        'semester_id': 'sample',
+        'revision': 1,
+        'date': query['day'],
+        'valid_until': DateTime.now()
+            .toUtc()
+            .add(const Duration(hours: 1))
+            .toIso8601String(),
+        'entries': entries.where((e) => e['weekday'] == today.weekday).toList(),
+        'suggestions': [],
+      });
+    }
+    if (r.path.endsWith('/hub')) {
+      return body({
+        'semester_id': 'sample',
+        'semester': semester,
+        'revision': 1,
+        'valid_until': DateTime.now()
+            .toUtc()
+            .add(const Duration(hours: 1))
+            .toIso8601String(),
+        'courses': events,
+        'items': [],
+        'exams': [],
+        'weeks': [],
+        'changes': [],
+      });
+    }
     return body({'revision': 1, 'events': events});
   });
   return AppController(api, MemoryStore(), clearSchoolSession: () async {})
@@ -94,6 +157,16 @@ AppController sampleController() {
     ..savedWeeks = {
       'sample/4': {'revision': 1, 'events': events},
     };
+}
+
+Future<ItemsController> sampleItems(AppController app) async {
+  final items = ItemsController(
+    app.api,
+    app.cache,
+    ReminderSync(FakeNotifications()),
+  );
+  await items.bind('${app.semester!['id']}');
+  return items;
 }
 
 Future<void> mount(
@@ -223,11 +296,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
   testWidgets(
-    'main views render sample data and course details remain accessible',
+    'live shell renders sample today, calendar, task and semester views',
     (tester) async {
       final controller = sampleController();
-      await mount(tester, ShellPage(controller: controller));
-      expect(find.text('今天的安排'), findsOneWidget);
+      final items = (await tester.runAsync(() => sampleItems(controller)))!;
+      await mount(tester, ShellPage(controller: controller, items: items));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(TodayDashboard), findsOneWidget);
       expect(tester.takeException(), isNull);
       await capture(tester, 'today');
       await tester.tap(
@@ -240,32 +318,33 @@ void main() {
       expect(find.text('周日'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await capture(tester, 'timetable');
+      expect(find.byType(CalendarPanel), findsOneWidget);
+      expect(find.text('高等数学'), findsWidgets);
       await tester.tap(
         find.descendant(
-          of: find.byType(AppSegmentedControl<bool>),
-          matching: find.text('日程'),
+          of: find.byType(AppNavigation),
+          matching: find.text('计划'),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('高等数学').first,
-        160,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(find.text('高等数学').first);
-      await tester.pumpAndSettle();
-      expect(find.text('固定课程'), findsOneWidget);
-      expect(find.text('返回课表'), findsOneWidget);
+      expect(find.byType(ItemsView), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await capture(tester, 'course-detail');
-      await tester.tap(find.text('返回课表'));
+      await capture(tester, 'tasks');
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppNavigation),
+          matching: find.text('学期'),
+        ),
+      );
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('学期'));
-      await tester.pumpAndSettle();
-      expect(find.text('当前学期'), findsOneWidget);
+      expect(find.byType(SemesterHome), findsOneWidget);
       expect(tester.takeException(), isNull);
       await capture(tester, 'semester');
       await tester.pumpWidget(const SizedBox.shrink());
+      items.dispose();
       controller.dispose();
     },
   );
@@ -274,6 +353,7 @@ void main() {
     'small screen with large text keeps navigation and courses usable',
     (tester) async {
       final controller = sampleController();
+      final items = (await tester.runAsync(() => sampleItems(controller)))!;
       var opened = false;
       await mount(
         tester,
@@ -282,7 +362,7 @@ void main() {
               (context, {initialText, mediaKind, autoSubmit = false}) async {
                 opened = true;
               },
-          child: ShellPage(controller: controller),
+          child: ShellPage(controller: controller, items: items),
         ),
         width: 360,
         height: 800,
@@ -296,20 +376,29 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('大字号下以日程列表展示'), findsOneWidget);
+      expect(find.byType(CalendarPanel), findsOneWidget);
+      expect(find.text('高等数学'), findsWidgets);
       expect(tester.takeException(), isNull);
       await capture(tester, 'large-text');
-      await tester.tap(find.text('输入通知或日程问题'));
+      await tester.tap(find.byKey(const Key('assistant-dock-input')));
       await tester.pumpAndSettle();
       expect(opened, isTrue);
       expect(find.byType(FloatingActionButton), findsNothing);
       expect(tester.takeException(), isNull);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppNavigation),
+          matching: find.text('今日'),
+        ),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('账户'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await tester.ensureVisible(find.text('退出登录'));
       expect(find.text('退出登录').hitTestable(), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
+      items.dispose();
       controller.dispose();
     },
   );
@@ -346,7 +435,19 @@ void main() {
         ),
       ),
     );
-    expect(find.text('新增 2'), findsOneWidget);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 30)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('新增'), findsOneWidget);
+    expect(
+      tester
+          .widget<AcademicStatStrip>(find.byType(AcademicStatStrip))
+          .stats
+          .singleWhere((stat) => stat.label == '新增')
+          .value,
+      2,
+    );
     expect(find.text('确认保存课表'), findsOneWidget);
     expect(find.text('第1—7周 · 单周'), findsOneWidget);
     expect(tester.takeException(), isNull);

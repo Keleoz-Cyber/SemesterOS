@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:semester_os/core/api.dart';
 import 'package:semester_os/features/items/items_controller.dart';
 import 'package:semester_os/features/items/reminder_sync.dart';
+import 'package:semester_os/features/items/notification_target.dart';
 import 'api_session_test.dart' show ControlledTransport, account, body;
 import 'controller_test.dart' show MemoryStore;
 import 'reminder_sync_test.dart' show FakeNotifications, rule;
@@ -26,6 +27,94 @@ class BlockingNotifications extends FakeNotifications {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  test(
+    'notification completion requires the same account and resource then uses the live version',
+    () async {
+      final start = DateTime.utc(2026, 10, 1);
+      var now = start, completed = false;
+      var writes = 0;
+      final api = SemesterApi()..session = account('a');
+      final port = FakeNotifications();
+      final reminder = {
+        ...rule('r', at: start.add(const Duration(seconds: 1))),
+        'resource_type': 'item',
+        'resource_id': 'task',
+        'semester_id': 's',
+        'can_complete': true,
+        'place': 'A305',
+      };
+      Map<String, dynamic> item() => {
+        'id': 'task',
+        'semester_id': 's',
+        'kind': 'task',
+        'lifecycle': completed ? 'completed' : 'active',
+        'version': completed ? 2 : 1,
+        'reminders': completed ? [] : [reminder],
+      };
+      api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.path.endsWith('/lifecycle')) {
+          writes++;
+          expect(request.data['expected_version'], 1);
+          expect(request.data['lifecycle'], 'completed');
+          completed = true;
+          return body(item());
+        }
+        if (request.path.endsWith('/reminders')) {
+          return body({
+            'owner_id': 'a',
+            'reminders': completed
+                ? []
+                : [
+                    {
+                      ...reminder,
+                      'schedule_state': now == start ? 'scheduled' : 'expired',
+                    },
+                  ],
+          });
+        }
+        if (request.path.endsWith('/items/task')) return body(item());
+        if (request.path.endsWith('/courses')) return body([]);
+        return body({
+          'items': [item()],
+          'revision': completed ? 2 : 1,
+          'blocks': [],
+        });
+      });
+      final c = ItemsController(
+        api,
+        MemoryStore(),
+        ReminderSync(port, now: () => now),
+      );
+      await c.bind('s');
+      final id = port.scheduled.keys.single;
+      final payload = {...port.scheduled[id]!};
+      NotificationTarget target(String owner, String resource) =>
+          NotificationTarget(
+            ownerId: owner,
+            resourceType: 'item',
+            resourceId: resource,
+            semesterId: 's',
+            actionId: 'complete',
+            notificationId: id,
+            data: payload,
+          );
+      expect(await c.handleNotificationAction(target('b', 'task')), isFalse);
+      expect(
+        await c.handleNotificationAction(target('a', 'another-task')),
+        isFalse,
+      );
+      expect(writes, 0);
+      now = start.add(const Duration(seconds: 2));
+      port.scheduled.clear();
+      port.active.add(id);
+      expect(await c.handleNotificationAction(target('a', 'task')), isTrue);
+      expect(writes, 1);
+      expect(completed, isTrue);
+      expect(port.scheduled, isEmpty);
+      expect(port.active, isEmpty);
+      c.dispose();
+    },
+  );
   test(
     'semester deletion removes its cache and pending device reminders',
     () async {

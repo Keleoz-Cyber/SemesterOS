@@ -15,7 +15,9 @@ from .capture import admission
 from .operation_schemas import OperationParse,OperationResolve,OperationAction
 from .operation_parser import PROMPT,validate_suggestion
 from .text_model import deepseek_text
+from .model_context import model_reference
 from .schedule_schemas import ScheduleInput,ReplanInput
+from .task_readiness import start_policy
 
 router=APIRouter()
 
@@ -80,7 +82,7 @@ def prepare(db,user,p,s,selection):
         for target in selection.tasks:
             item=owned_item(db,user,target.item_id)
             if item.semester_id!=s.id or item.lifecycle!='active' or item.payload['kind']=='exam':error(422,'INVALID_TARGET','只能选择本学期活跃的个人任务或作业')
-            if item.payload.get('remaining_minutes') is None or item.payload.get('start_policy','unconfirmed')=='unconfirmed':error(422,'PLAN_INPUT_INCOMPLETE','请先到任务详情填写还需要多久，以及最早什么时候能开始')
+            if item.payload.get('remaining_minutes') is None or start_policy(item.payload)=='unconfirmed':error(422,'PLAN_INPUT_INCOMPLETE','请先到任务详情填写还需要多久，以及最早什么时候能开始')
             if target.target_minutes is not None and target.target_minutes>item.payload['remaining_minutes']:error(422,'TARGET_EXCEEDS_WORK','安排时长不能超过任务还需要的时间。如果工作增加了，请先更新任务进度')
             tasks.append(serialize_item(db,item))
         mode=selection.plan_mode or suggestion['plan_mode'];selected['plan_mode']=mode
@@ -155,7 +157,8 @@ def parse_operation(body:OperationParse,request:Request,user:User=Depends(curren
         source={'id':origin.id,'version':origin.version,'kind':origin.kind,'original_text':origin.original_text,'reviewed_text':origin.text}
     admission(request,user)
     model=getattr(request.app.state,'operation_model',None)
-    raw,metadata=model(body.text,body.reference_at.isoformat(),[]) if model else deepseek_text(body.text,body.reference_at.isoformat(),[],system_prompt=PROMPT,prompt_version='operation-v2')
+    reference=model_reference(body.reference_at)['reference_at']
+    raw,metadata=model(body.text,reference,[]) if model else deepseek_text(body.text,reference,[],system_prompt=PROMPT,prompt_version='operation-v2')
     suggestion=validate_suggestion(raw,body.text)
     db.expire_all();s=owned_semester(db,user,body.semester_id,lock=True);source_guard(db,user,source,s.id,True)
     rows=eligible(db,user,s.id,suggestion['intent']);q=''.join(suggestion['target_query'].casefold().split()).strip('“”"\'')

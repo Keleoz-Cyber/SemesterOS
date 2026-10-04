@@ -26,8 +26,33 @@ void main() {
           'kind': 'batch',
           'token': 'token',
           'groups': [
-            {'id': 'g1', 'title': '公共组会', 'operations': []},
-            {'id': 'g2', 'title': '提交材料', 'operations': []},
+            {
+              'id': 'g1',
+              'title': '公共组会',
+              'operations': [
+                {
+                  'kind': 'event',
+                  'action': 'create',
+                  'after': {'title': '公共组会'},
+                },
+                {
+                  'kind': 'event',
+                  'action': 'create',
+                  'after': {'title': '补充讨论'},
+                },
+              ],
+            },
+            {
+              'id': 'g2',
+              'title': '提交材料',
+              'operations': [
+                {
+                  'kind': 'item',
+                  'action': 'create',
+                  'after': {'title': '提交材料'},
+                },
+              ],
+            },
           ],
           'impact': {
             'fixed_conflicts': [
@@ -71,12 +96,12 @@ void main() {
       expect(find.text('有时间冲突'), findsNothing);
       await ioTap(tester, find.text('提交材料'));
       await tester.pumpAndSettle();
-      expect(find.text('保存所选 1 组'), findsOneWidget);
+      expect(find.text('保存 2 项'), findsOneWidget);
       expect(find.text('有时间冲突'), findsOneWidget);
       await capture(tester, 'agent-selected-group-conflict');
-      await tester.tap(find.text('已核对，仍按通知记录这些安排'));
+      await tester.tap(find.text('保留这些重叠安排'));
       await tester.pumpAndSettle();
-      await ioTap(tester, find.text('保存所选 1 组'));
+      await ioTap(tester, find.text('保存 2 项'));
       expect(decision?['selected_group_ids'], ['g1']);
       expect(decision?['confirm_fixed_conflicts'], true);
       await tester.pumpWidget(const SizedBox());
@@ -133,7 +158,10 @@ void main() {
         return old.respond(r);
       });
       await tester.runAsync(() => f.c.bind('s'));
-      await mount(tester, AgentPage(controller: f.c, semester: {'id': 's'}));
+      await mount(
+        tester,
+        AgentPage(controller: f.c, semester: {'id': 's'}, initialThreadId: 't'),
+      );
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 80)),
       );

@@ -168,7 +168,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('输入通知或日程问题'));
+    await tester.tap(find.byKey(const Key('assistant-dock-input')));
     await tester.tap(find.byTooltip('语音输入'));
     await tester.pumpAndSettle();
     expect(modes, [null, 'audio']);

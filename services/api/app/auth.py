@@ -29,7 +29,7 @@ def error(status, code, message):
 
 
 def public_user(user):
-    return {"id": user.id, "username": user.username}
+    return {"id": user.id, "username": user.username, "is_demo":user.username.startswith('demo_')}
 
 
 def mint(db, user, existing=None):
@@ -59,6 +59,7 @@ def current_user(login: LoginSession = Depends(current_session), db: Session = D
 
 @router.post("/auth/register", status_code=201)
 def register(body: Credentials, db: Session = Depends(get_db)):
+    if body.username.startswith('demo_'):error(422,'RESERVED_USERNAME','此用户名用于体验账号，请换一个用户名')
     code = secrets.token_urlsafe(24)
     user = User(username=body.username, password_hash=hasher.hash(body.password), recovery_hash=digest(code))
     db.add(user)
@@ -70,6 +71,52 @@ def register(body: Credentials, db: Session = Depends(get_db)):
     response = mint(db, user)
     db.commit()
     return {**response, "recovery_code": code}
+
+
+@router.post('/auth/demo',status_code=201)
+def demo(db:Session=Depends(get_db)):
+    """Create a fresh, normally authenticated owner with clearly labelled samples."""
+    from datetime import timedelta
+    from .reminder_rules import utcnow,SHANGHAI
+    from .models import Semester,ImportBatch,CourseMeeting,UserProfile
+    from .academics import identity
+    from .schemas import CourseInput
+    from .item_schemas import ItemCreate
+    from .items import create_item_command
+    now=utcnow();today=now.astimezone(SHANGHAI).date();monday=today-timedelta(days=today.weekday())
+    user=User(username='demo_'+secrets.token_hex(10),password_hash=hasher.hash(secrets.token_urlsafe(32)),
+        recovery_hash=digest(secrets.token_urlsafe(32)))
+    db.add(user);db.flush()
+    s=Semester(user_id=user.id,name='体验学期 · 示例数据',first_monday=str(monday),total_weeks=16,
+        periods=[{'number':1,'start':'08:00','end':'08:50'},{'number':2,'start':'09:00','end':'09:50'},
+                 {'number':3,'start':'14:00','end':'14:50'},{'number':4,'start':'15:00','end':'15:50'}])
+    db.add(s);db.flush()
+    tomorrow=today+timedelta(days=1)
+    demo_courses=[CourseInput(title='示例 · 大学英语',teacher='示例教师',location='教学楼 A201',
+        weekday=today.isoweekday(),weeks=list(range(1,17)),sections=[3,4]).model_dump(mode='json'),
+        CourseInput(title='示例 · 高等数学',teacher='示例教师',location='教学楼 B302',
+        weekday=tomorrow.isoweekday(),weeks=list(range(1,17)),sections=[1,2]).model_dump(mode='json')]
+    batch=ImportBatch(user_id=user.id,semester_id=s.id,source='manual',source_term='体验示例',
+        courses=demo_courses,base_revision=0,receipt={'sample':True})
+    db.add(batch);db.flush()
+    for course in demo_courses:
+        db.add(CourseMeeting(user_id=user.id,semester_id=s.id,identity_key=identity(course),payload=course,source_batch_id=batch.id))
+    db.add(UserProfile(user_id=user.id,payload={'onboarding_completed':True}))
+    create_item_command(db,user,ItemCreate(semester_id=s.id,kind='assignment',title='示例 · 整理实验报告',
+        certainty='formal',remaining_minutes=90,start_policy='now',
+        time={'precision':'date','date':str(today+timedelta(days=1))},
+        notes='这是体验数据，可自由修改；退出体验后可登录自己的账号。',category_id='study'))
+    create_item_command(db,user,ItemCreate(semester_id=s.id,kind='task',title='示例 · 汇总班级材料',
+        certainty='formal',details={'responsibility':'班委收集并汇总材料','materials':['申请表'],
+        'submission_channel':'示例班级群'},category_id='affairs'))
+    exam_day=monday+timedelta(days=9)
+    create_item_command(db,user,ItemCreate(semester_id=s.id,kind='exam',title='示例 · 大学英语测验',
+        certainty='formal',location='教学楼 A201',category_id='study',
+        time={'precision':'exact','at':f'{exam_day}T10:00:00+08:00','end_at':f'{exam_day}T11:00:00+08:00'},
+        notes='这是演示考试，可用于体验考试日程和提醒；不是真实学校通知。',
+        reminders=[{'mode':'relative','lead_minutes':1440}]))
+    response=mint(db,user);db.commit()
+    return {**response,'is_demo':True,'semester_id':s.id}
 
 
 @router.post("/auth/login")

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'app_sheet.dart';
 import 'campus_theme.dart';
+import 'app_controls.dart' show appRowStyle;
 
 /// A secondary record action shown as one accessible, full-width row.
 class RecordActionTile extends StatelessWidget {
@@ -21,14 +22,12 @@ class RecordActionTile extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: FItem.raw(
-      style: const FItemStyleDelta.delta(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-        ),
+      style: appRowStyle(
+        selectedBackground: Theme.of(context).colorScheme.primaryContainer,
       ),
       onPress: onTap,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 40),
+        constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: [
             SizedBox(
