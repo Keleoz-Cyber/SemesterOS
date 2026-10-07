@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/motion.dart' show AppMotion;
 import '../../core/api.dart' show userError;
 import '../items/items_controller.dart';
 import '../planning/schedule_page.dart';
@@ -84,7 +85,12 @@ class _ForwardingDraftCardState extends State<ForwardingDraftCard> {
               await Clipboard.setData(ClipboardData(text: text.text));
               if (mounted) setState(() => copied = true);
             },
-            label: Text(copied ? '已复制' : '复制文案'),
+            label: AnimatedSwitcher(
+              duration: AppMotion.allowed(context)
+                  ? const Duration(milliseconds: 180)
+                  : Duration.zero,
+              child: Text(copied ? '已复制' : '复制文案', key: ValueKey(copied)),
+            ),
           ),
         ),
       ],

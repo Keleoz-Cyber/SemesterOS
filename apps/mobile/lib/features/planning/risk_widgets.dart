@@ -133,10 +133,12 @@ class RiskBadge extends StatelessWidget {
 class RiskOverview extends StatelessWidget {
   final ItemsController controller;
   final VoidCallback onSettings;
+  final bool showSettings;
   const RiskOverview({
     super.key,
     required this.controller,
     required this.onSettings,
+    this.showSettings = true,
   });
   @override
   Widget build(BuildContext context) {
@@ -148,24 +150,26 @@ class RiskOverview extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            AppLoadingIndicator(
-              compact: true,
-              visible: c.riskBusy,
-              label: '正在更新时间评估',
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: AppTextButton.icon(
-                onPressed: onSettings,
-                icon: const Icon(Icons.tune_rounded, size: 18),
-                label: const Text('学习时间'),
+        if (showSettings || c.riskBusy)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AppLoadingIndicator(
+                compact: true,
+                visible: c.riskBusy,
+                label: '正在更新时间评估',
               ),
-            ),
-          ],
-        ),
+              if (showSettings) const SizedBox(width: 8),
+              if (showSettings)
+                Flexible(
+                  child: AppTextButton.icon(
+                    onPressed: onSettings,
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: const Text('学习时间'),
+                  ),
+                ),
+            ],
+          ),
         if (c.riskNotice != null) SoftNotice(c.riskNotice!, warning: true),
         if (gap > 0)
           SoftNotice('截止前还缺 ${minutesLabel(gap)}，优先处理下面标记的任务。', warning: true),
@@ -191,10 +195,8 @@ Future<void> showRiskDetails(
   BuildContext context,
   ItemsController controller,
   Map<String, dynamic> original,
-) => showModalBottomSheet<void>(
+) => showAppSheet<void>(
   context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
   builder: (_) => ListenableBuilder(
     listenable: controller,
     builder: (context, _) {
@@ -269,6 +271,7 @@ Future<void> showRiskDetails(
           children: [
             AppSheetHeading(
               title: '时间评估',
+              closeLabel: '关闭时间评估',
               subtitle: '${current['title']}',
               leading: const Icon(Icons.calculate_outlined),
               padding: EdgeInsets.zero,

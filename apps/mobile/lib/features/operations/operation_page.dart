@@ -18,6 +18,8 @@ import '../planning/plan_change_confirmation.dart';
 import '../planning/proposal_page.dart';
 import '../planning/risk_widgets.dart';
 import '../media/drafts.dart';
+import '../agent/agent_motion.dart';
+import '../agent/agent_widgets.dart';
 
 String operationValue(dynamic field, dynamic value) {
   if (value == null) return '移除此项设置';
@@ -603,7 +605,16 @@ class _OperationPageState extends State<OperationPage> {
                   if (error != null) SoftNotice(error!, warning: true),
                   if (p != null) ...[
                     if (!editing || applied)
-                      DocumentPanel(title: '修改要求', text: p['source_text']),
+                      AppDisclosure(
+                        tilePadding: EdgeInsets.zero,
+                        title: const Text('查看修改要求'),
+                        children: [
+                          SelectableText(
+                            '${p['source_text'] ?? ''}',
+                            style: const TextStyle(fontSize: 16, height: 1.5),
+                          ),
+                        ],
+                      ),
                     for (final q in p['suggestion']['questions'] ?? [])
                       SoftNotice('$q'),
                     if (p['clarification'] != null && editing)
@@ -611,8 +622,8 @@ class _OperationPageState extends State<OperationPage> {
                     if (stale && !applied)
                       const SoftNotice('事项或提醒已有更新，请重新查看修改内容。', warning: true),
                     if (applied)
-                      SoftNotice(
-                        intent == 'request_plan'
+                      AssistantSavedAction(
+                        text: intent == 'request_plan'
                             ? '已确认规划范围。请查看生成的方案，满意后再保存到日程。'
                             : '修改已保存',
                       ),
@@ -627,7 +638,15 @@ class _OperationPageState extends State<OperationPage> {
                         ].contains(intent))
                       ...editor(),
                     if (!editing && preview != null)
-                      ...previewWidgets(Map<String, dynamic>.from(preview)),
+                      AssistantArrival(
+                        revision: '${p['id']}:${p['version']}:${p['phase']}',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: previewWidgets(
+                            Map<String, dynamic>.from(preview),
+                          ),
+                        ),
+                      ),
                     if (p['phase'] == 'ready' && !editing && !applied && !stale)
                       AppButton(
                         onPressed: busy ? null : apply,
@@ -636,15 +655,21 @@ class _OperationPageState extends State<OperationPage> {
                         ),
                       ),
                     if (!applied && !rejected) ...[
-                      AppTextButton(
-                        onPressed: busy
-                            ? null
-                            : () => setState(() => editing = true),
-                        child: const Text('调整修改内容'),
-                      ),
-                      AppTextButton(
-                        onPressed: busy ? null : reject,
-                        child: const Text('放弃这次修改'),
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        children: [
+                          AppTextButton(
+                            onPressed: busy
+                                ? null
+                                : () => setState(() => editing = true),
+                            child: const Text('调整修改内容'),
+                          ),
+                          AppTextButton(
+                            onPressed: busy ? null : reject,
+                            child: const Text('放弃这次修改'),
+                          ),
+                        ],
                       ),
                     ],
                     if (applied && p['receipt']?['planning_request'] != null)

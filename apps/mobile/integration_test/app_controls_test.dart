@@ -315,7 +315,7 @@ void main() {
         await tap(find.byTooltip('返回'));
 
         stage = 'plan-controls';
-        await textTap('计划');
+        await textTap('任务');
         await until(
           () =>
               find.text('设置可学习时间').evaluate().isNotEmpty ||

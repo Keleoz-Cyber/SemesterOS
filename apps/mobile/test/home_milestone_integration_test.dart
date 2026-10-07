@@ -11,6 +11,7 @@ import 'package:semester_os/ui/empty_scene.dart';
 import 'package:semester_os/ui/time_river.dart';
 import 'package:semester_os/ui/week_heatmap.dart';
 import 'package:semester_os/ui/accessibility.dart';
+import 'package:semester_os/ui/app_controls.dart';
 import 'controller_test.dart' show MemoryStore;
 import 'ui_polish_test.dart' show mount;
 
@@ -204,6 +205,7 @@ void main() {
     'Today remains available with empty agenda or only undated tasks',
     (tester) async {
       final now = DateTime.utc(2026, 10, 2);
+      final completed = <String>[];
       await mount(
         tester,
         Scaffold(
@@ -224,17 +226,22 @@ void main() {
                 day: now,
                 onEventTap: (_) {},
                 onTaskTap: (_) {},
+                onTaskComplete: (row) async => completed.add('${row['id']}'),
               ),
             ],
           ),
         ),
       );
       expect(find.text('待补充日期的事项'), findsOneWidget);
-      expect(find.text('日程'), findsOneWidget);
-      expect(find.text('待办'), findsOneWidget);
-      await tester.tap(find.text('日程'));
-      await tester.pumpAndSettle();
+      expect(find.text('今日日程'), findsOneWidget);
+      expect(find.text('待办任务'), findsOneWidget);
       expect(find.text('今天没有安排'), findsOneWidget);
+      final completion = find.widgetWithText(AppTextButton, '完成');
+      expect(completion, findsOneWidget);
+      expect(tester.getSize(completion).height, greaterThanOrEqualTo(48));
+      await tester.tap(completion);
+      await tester.pumpAndSettle();
+      expect(completed, ['undated']);
       expect(tester.takeException(), isNull);
       var openedAll = 0;
       final preferences = HomePreferences(
@@ -243,6 +250,7 @@ void main() {
         's',
         () => true,
       );
+      preferences.todayView = TodayViewMode.tasks;
       preferences.taskOrder = [for (var i = 0; i < 1000; i++) '$i', 'hidden'];
       await mount(
         tester,

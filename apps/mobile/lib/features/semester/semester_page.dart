@@ -323,6 +323,7 @@ class _SemesterPageState extends State<SemesterPage> {
           : AutovalidateMode.disabled,
       child: ListView(
         controller: scroll,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(20),
         children: [
           if (widget.existing == null && widget.pendingNoticeCount > 0)
@@ -337,6 +338,7 @@ class _SemesterPageState extends State<SemesterPage> {
                 enabled: !busy,
                 minLines: 1,
                 maxLines: 3,
+                textInputAction: TextInputAction.next,
                 validator: validateSemesterName,
                 decoration: const InputDecoration(labelText: '学期名称'),
               ),

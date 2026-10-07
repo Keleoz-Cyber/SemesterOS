@@ -5,9 +5,9 @@ import '../../core/api.dart' show userError;
 import '../../ui/app_controls.dart';
 import '../../ui/performance_widgets.dart';
 import '../../ui/time_urgency.dart';
-import '../../ui/empty_states.dart';
 import '../../ui/motion.dart';
 import '../../ui/app_sheet.dart';
+import '../../ui/assistant_scope.dart';
 import '../home/home_preferences.dart';
 import '../planning/progress_page.dart';
 import 'item_actions.dart';
@@ -26,6 +26,7 @@ import '../changes/changes_page.dart';
 class ItemsView extends StatefulWidget {
   final ItemsController controller;
   final VoidCallback onCreate;
+  final VoidCallback? onCapture;
   final void Function(String) onOpen;
   final void Function(Map<String, dynamic>)? onEdit;
   final bool sliver;
@@ -33,6 +34,7 @@ class ItemsView extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onCreate,
+    this.onCapture,
     required this.onOpen,
     this.onEdit,
     this.sliver = false,
@@ -298,43 +300,36 @@ class _ItemsViewState extends State<ItemsView> {
             builder: (_) => ProgressPage(controller: c, item: row),
           ),
         );
+      } else if (choice == 'complete') {
+        await completeItemWithUndo(context, c, row);
       } else {
-        final changed = await changeItemLifecycle(
-          context,
-          c,
-          row,
-          choice == 'complete' ? 'completed' : 'active',
-        );
-        if (changed && mounted && choice == 'complete') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('已完成'),
-              action: SnackBarAction(
-                label: '撤销',
-                onPressed: () async {
-                  try {
-                    final fresh = await c.get(id);
-                    if (mounted && generation == c.api.generation) {
-                      await changeItemLifecycle(context, c, fresh, 'active');
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(userError(e))));
-                    }
-                  }
-                },
-              ),
-            ),
-          );
-        }
+        await changeItemLifecycle(context, c, row, 'active');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userError(e))));
+      }
+    } finally {
+      processing.remove(id);
+    }
+  }
+
+  Future<void> completeRow(Map<String, dynamic> row) async {
+    final id = '${row['id']}';
+    if (processing.contains(id)) return;
+    final selectedController = c, generation = c.api.generation;
+    processing.add(id);
+    try {
+      await completeItemWithUndo(context, selectedController, row);
+    } catch (error) {
+      if (mounted &&
+          c == selectedController &&
+          generation == c.api.generation) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userError(error))));
       }
     } finally {
       processing.remove(id);
@@ -353,6 +348,9 @@ class _ItemsViewState extends State<ItemsView> {
       onOpen: () => widget.onOpen(row['id']),
       onEdit: widget.onEdit == null ? null : () => widget.onEdit!(row),
       onActions: () => actions(row),
+      onComplete: row['lifecycle'] == 'active' && row['kind'] != 'exam'
+          ? () => completeRow(row)
+          : null,
     );
     if (!sorting) return card;
     return Row(
@@ -421,18 +419,6 @@ class _ItemsViewState extends State<ItemsView> {
       Widget makeHeader(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PlanningEntry(controller: c),
-          const SizedBox(height: 8),
-          RiskOverview(
-            controller: c,
-            onSettings: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AvailabilityPage(controller: c),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
           LayoutBuilder(
             builder: (context, box) {
               final actions = <Widget>[
@@ -451,7 +437,7 @@ class _ItemsViewState extends State<ItemsView> {
                     (c.itemsRevision == null && c.busy) ||
                     filter != 'active')
                   AppIconButton(
-                    tooltip: '添加事项',
+                    tooltip: '新建任务',
                     onPressed: widget.onCreate,
                     icon: const Icon(Icons.add_rounded),
                   ),
@@ -471,7 +457,7 @@ class _ItemsViewState extends State<ItemsView> {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       const Text(
-                        '任务清单',
+                        '任务',
                         softWrap: false,
                         style: TextStyle(
                           fontSize: 19,
@@ -519,7 +505,50 @@ class _ItemsViewState extends State<ItemsView> {
               );
             },
           ),
-          const SizedBox(height: 10),
+          if (filter == 'active' && rows.isNotEmpty)
+            Wrap(
+              spacing: 4,
+              children: [
+                AppTextButton.icon(
+                  key: const ValueKey('learning-plan-action'),
+                  onPressed: () => AssistantScope.open(
+                    context,
+                    initialText: '请结合现有日程和任务，帮我安排接下来的学习时间；有冲突的安排请一起调整，先给我方案。',
+                    autoSubmit: true,
+                  ),
+                  icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                  label: const Text('安排任务'),
+                ),
+                AppTextButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AvailabilityPage(controller: c),
+                    ),
+                  ),
+                  icon: const Icon(Icons.tune_rounded, size: 18),
+                  label: const Text('学习时间'),
+                ),
+                if (widget.onCapture != null)
+                  AppTextButton.icon(
+                    onPressed: widget.onCapture,
+                    icon: const Icon(Icons.edit_note_rounded, size: 18),
+                    label: const Text('整理通知'),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 6),
+          if (filter == 'active')
+            RiskOverview(
+              controller: c,
+              showSettings: false,
+              onSettings: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AvailabilityPage(controller: c),
+                ),
+              ),
+            ),
           AppSegmentedControl<String>(
             value: filter,
             options: const {
@@ -538,16 +567,44 @@ class _ItemsViewState extends State<ItemsView> {
             const SizedBox(height: 12),
           ],
           if (rows.isEmpty && (c.itemsRevision != null || !c.busy))
-            EmptyItems(
-              title: filter == 'active'
-                  ? '暂时没有待办'
-                  : filter == 'completed'
-                  ? '还没有完成的任务'
-                  : '没有已取消的任务',
-              customMessage: filter == 'active'
-                  ? '把作业、考试或想做的事记下来。'
-                  : '切换到待处理，继续安排接下来的事。',
-              onAddItem: filter == 'active' ? widget.onCreate : null,
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    filter == 'active'
+                        ? '暂无任务'
+                        : filter == 'completed'
+                        ? '暂无完成记录'
+                        : '没有已取消的任务',
+                    style: const TextStyle(
+                      color: CampusColors.muted,
+                      fontSize: 16,
+                    ),
+                  ),
+                  if (filter == 'active') ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        AppButton.icon(
+                          onPressed: widget.onCreate,
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('新建任务'),
+                        ),
+                        if (widget.onCapture != null)
+                          AppTextButton.icon(
+                            onPressed: widget.onCapture,
+                            icon: const Icon(Icons.edit_note_rounded, size: 18),
+                            label: const Text('整理通知'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
             ),
         ],
       );
@@ -562,29 +619,56 @@ class _ItemsViewState extends State<ItemsView> {
           identityHashCode(c.analysis),
           c.notice,
           c.busy,
+          c.riskBusy,
+          c.riskNotice,
           preferences.taskOrder,
         ]),
         builder: makeHeader,
       );
       final footer = Padding(
         padding: const EdgeInsets.only(top: 16),
-        child: AppDisclosure(
-          title: const Text('提醒与变更'),
-          childrenPadding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SoftNotice(c.notificationStatus ?? '同步事项后更新本机提醒'),
-            AppTextButton.icon(
-              onPressed: () => c.syncNotifications(requestPermission: true),
-              icon: const Icon(Icons.notifications_outlined),
-              label: const Text('开启或检查系统通知'),
-            ),
-            AppTextButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => ChangesPage(controller: c)),
-              ),
-              icon: const Icon(Icons.published_with_changes),
-              label: const Text('记录调课或停课'),
+            if (filter == 'active') ...[
+              if (rows.isEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppTextButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AvailabilityPage(controller: c),
+                      ),
+                    ),
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: const Text('学习时间'),
+                  ),
+                ),
+              PlanningEntry(controller: c, showAction: false),
+              const SizedBox(height: 12),
+            ],
+            AppDisclosure(
+              title: const Text('提醒与变更'),
+              childrenPadding: const EdgeInsets.all(12),
+              children: [
+                SoftNotice(c.notificationStatus ?? '同步事项后更新本机提醒'),
+                AppTextButton.icon(
+                  onPressed: () => c.syncNotifications(requestPermission: true),
+                  icon: const Icon(Icons.notifications_outlined),
+                  label: const Text('开启或检查系统通知'),
+                ),
+                AppTextButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChangesPage(controller: c),
+                    ),
+                  ),
+                  icon: const Icon(Icons.published_with_changes),
+                  label: const Text('记录调课或停课'),
+                ),
+              ],
             ),
           ],
         ),
@@ -637,6 +721,7 @@ class _TaskRow extends StatelessWidget {
   final ItemsController controller;
   final VoidCallback onOpen, onActions;
   final VoidCallback? onEdit;
+  final Future<void> Function()? onComplete;
   const _TaskRow({
     super.key,
     required this.item,
@@ -644,6 +729,7 @@ class _TaskRow extends StatelessWidget {
     required this.onOpen,
     required this.onActions,
     this.onEdit,
+    this.onComplete,
   });
   @override
   Widget build(BuildContext context) {
@@ -653,6 +739,7 @@ class _TaskRow extends StatelessWidget {
       onTap: onOpen,
       onDoubleTap: onEdit,
       onLongPress: onActions,
+      onComplete: onComplete,
       riskFooter:
           item['lifecycle'] == 'active' &&
               item['kind'] != 'exam' &&

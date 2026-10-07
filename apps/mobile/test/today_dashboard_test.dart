@@ -4,7 +4,6 @@ import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/features/home/today_dashboard.dart';
 import 'package:semester_os/features/calendar/time_track.dart';
 import 'package:semester_os/features/home/home_preferences.dart';
-import 'package:semester_os/ui/app_selection.dart';
 import 'schedule_flow_test.dart' show ScheduleFixture;
 import 'calendar_flow_test.dart' show semester;
 import 'controller_test.dart' show MemoryStore;
@@ -16,7 +15,7 @@ void main() {
   setUpAll(loadPreviewFonts);
   for (final populated in [false, true]) {
     testWidgets(
-      'Today switch keeps its anchor for ${populated ? 'urgent and next-day content' : 'empty views'}',
+      'Today overview and stored views keep the date anchor for ${populated ? 'urgent and next-day content' : 'empty views'}',
       (tester) async {
         final f = ScheduleFixture();
         final old = f.api.dio.httpClientAdapter as ControlledTransport;
@@ -100,23 +99,52 @@ void main() {
           () => Future<void>.delayed(const Duration(milliseconds: 80)),
         );
         await tester.pumpAndSettle();
-        final selector = find.byType(AppSegmentedControl<TodayViewMode>);
-        final anchor = tester.getRect(selector);
+        final dashboard = tester.state<TodayDashboardState>(
+          find.byType(TodayDashboard),
+        );
         final dateHeader = tester.getRect(find.byTooltip('调整首页内容'));
+        expect(find.byKey(const Key('today-events-action')), findsOneWidget);
+        expect(find.byKey(const Key('today-tasks-action')), findsOneWidget);
+        if (populated) {
+          expect(find.text('课后报告'), findsOneWidget);
+          expect(find.text('晚间课程'), findsOneWidget);
+          expect(
+            tester.getTopLeft(find.text('次日课程')).dy,
+            greaterThan(tester.getTopLeft(find.text('课后报告')).dy),
+          );
+        }
         if (!populated) await capture(tester, 'today-empty-agenda');
+        if (!populated) {
+          await tester.tap(find.byTooltip('调整首页内容'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('日程与待办'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('仅待办'));
+          await tester.pumpAndSettle();
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 80)),
+          );
+          expect(dashboard.preferences.todayView, TodayViewMode.tasks);
+          await tester.tap(find.text('完成').hitTestable());
+          await tester.pumpAndSettle();
+          expect(find.byKey(const Key('today-events-action')), findsNothing);
+        }
         if (populated) expect(find.text('次日课程'), findsOneWidget);
-        for (final label in ['待办', '日程', '待办']) {
-          await tester.tap(find.text(label));
+        for (final mode in [
+          TodayViewMode.tasks,
+          TodayViewMode.schedule,
+          TodayViewMode.tasks,
+        ]) {
+          await tester.runAsync(
+            () => dashboard.preferences.change(todayView: mode),
+          );
           await tester.pump(const Duration(milliseconds: 55));
-          expect(tester.getRect(selector).top, closeTo(anchor.top, .001));
-          expect(tester.getRect(selector).bottom, closeTo(anchor.bottom, .001));
           expect(
             tester.getRect(find.byTooltip('调整首页内容')).top,
             closeTo(dateHeader.top, .001),
           );
         }
         await tester.pumpAndSettle();
-        expect(tester.getRect(selector).top, closeTo(anchor.top, .001));
         if (!populated) await capture(tester, 'today-empty-tasks');
         expect(find.text('次日课程'), findsNothing);
         expect(find.text(populated ? '课后报告' : '暂无待办事项'), findsOneWidget);
@@ -124,12 +152,17 @@ void main() {
         await tester.pumpAndSettle();
         expect(taskOpens, 1);
         expect(calendarOpens, 0);
-        await tester.tap(find.text('日程'));
+        await tester.runAsync(
+          () => dashboard.preferences.change(todayView: TodayViewMode.schedule),
+        );
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('today-secondary-action')));
         await tester.pumpAndSettle();
         expect(calendarOpens, 1);
-        expect(tester.getRect(selector).top, closeTo(anchor.top, .001));
+        expect(
+          tester.getRect(find.byTooltip('调整首页内容')).top,
+          closeTo(dateHeader.top, .001),
+        );
         if (populated) expect(find.text('次日课程'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
@@ -279,6 +312,13 @@ void main() {
     expect(tester.getRect(find.text('大学英语')).bottom, lessThan(710));
     expect(find.byTooltip('调整首页内容'), findsOneWidget);
     await capture(tester, 'today-course-first');
+    final dashboard = tester.state<TodayDashboardState>(
+      find.byType(TodayDashboard),
+    );
+    await tester.runAsync(
+      () => dashboard.preferences.change(todayView: TodayViewMode.schedule),
+    );
+    await tester.pumpAndSettle();
     current = DateTime.utc(2026, 9, 21, 8, 55);
     await tester.pump(const Duration(minutes: 1));
     await tester.pumpAndSettle();

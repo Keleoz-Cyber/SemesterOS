@@ -329,6 +329,7 @@ class _InsightsPageState extends State<InsightsPage> {
               if (c.category != null || c.tags.isNotEmpty)
                 Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   children: [
                     if (c.category != null)
                       AppInputChip(
@@ -413,7 +414,7 @@ class _InsightsPageState extends State<InsightsPage> {
       const SizedBox(height: 12),
       Text(
         '重叠时段只计一次 · ${summary['entry_count'] ?? 0}条记录',
-        style: const TextStyle(fontSize: 12, color: CampusColors.muted),
+        style: const TextStyle(fontSize: 14, color: CampusColors.muted),
       ),
       if ((summary['unknown_duration_count'] as num? ?? 0) > 0 ||
           (summary['undated_count'] as num? ?? 0) > 0)
@@ -426,7 +427,7 @@ class _InsightsPageState extends State<InsightsPage> {
               if ((summary['undated_count'] as num? ?? 0) > 0)
                 '${summary['undated_count']}条未定日期',
             ].join(' · '),
-            style: const TextStyle(color: CampusColors.warning, fontSize: 12),
+            style: const TextStyle(color: CampusColors.warning, fontSize: 14),
           ),
         ),
       const SizedBox(height: 24),

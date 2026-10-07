@@ -98,8 +98,14 @@ void main() {
       await mount(
         tester,
         AssistantScope(
-          onOpen: (context, {initialText, mediaKind, autoSubmit = false}) =>
-              openAssistantSheet(
+          onOpen:
+              (
+                context, {
+                initialText,
+                mediaKind,
+                autoSubmit = false,
+                browsingContext,
+              }) => openAssistantSheet(
                 context,
                 controller: f.c,
                 semester: app.semester!,

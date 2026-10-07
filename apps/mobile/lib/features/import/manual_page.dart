@@ -204,6 +204,7 @@ class _ManualPageState extends State<ManualPage> {
     ),
     body: ListView(
       padding: const EdgeInsets.all(20),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         AcademicEditorSection(
           title: '课程信息',
@@ -215,18 +216,25 @@ class _ManualPageState extends State<ManualPage> {
               enabled: !busy,
               minLines: 1,
               maxLines: 3,
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(labelText: '课程名称'),
             ),
             const SizedBox(height: 4),
             AppField(
               controller: teacher,
               enabled: !busy,
+              textInputAction: TextInputAction.next,
+              minLines: 1,
+              maxLines: 2,
               decoration: const InputDecoration(labelText: '教师'),
             ),
             const SizedBox(height: 4),
             AppField(
               controller: location,
               enabled: !busy,
+              textInputAction: TextInputAction.done,
+              minLines: 1,
+              maxLines: 2,
               decoration: const InputDecoration(labelText: '上课地点'),
             ),
           ],

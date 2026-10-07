@@ -5,7 +5,6 @@ import 'package:semester_os/features/items/items_view.dart';
 import 'package:semester_os/features/items/item_widgets.dart';
 import 'package:semester_os/features/items/item_actions.dart';
 import 'package:semester_os/ui/app_controls.dart';
-import 'package:semester_os/ui/empty_states.dart';
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'schedule_flow_test.dart' show ScheduleFixture;
 import 'centers_flow_test.dart' show settleIo;
@@ -62,14 +61,11 @@ void main() {
       await tester.pumpAndSettle();
       for (final filter in ['已完成', '已取消']) {
         await ioTap(tester, find.text(filter));
-        expect(find.byType(EmptyItems), findsOneWidget);
         expect(
-          find.descendant(
-            of: find.byType(EmptyItems),
-            matching: find.text('添加事项'),
-          ),
-          findsNothing,
+          find.text(filter == '已完成' ? '暂无完成记录' : '没有已取消的任务'),
+          findsOneWidget,
         );
+        expect(find.widgetWithText(AppButton, '新建任务'), findsNothing);
       }
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

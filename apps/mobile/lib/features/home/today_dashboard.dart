@@ -1,11 +1,14 @@
 import '../../ui/app_controls.dart';
 import '../../ui/app_loading.dart';
 import '../../ui/app_sheet.dart';
+import '../../ui/app_picker_field.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/controller.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
+import '../items/item_actions.dart';
+import '../../core/api.dart' show userError;
 import '../calendar/calendar_repository.dart';
 import '../calendar/time_track.dart';
 import '../../ui/campus_theme.dart';
@@ -277,6 +280,19 @@ class TodayDashboardState extends State<TodayDashboard>
             : null);
   }
 
+  Future<void> completeTask(Map<String, dynamic> item) async {
+    if (!mounted || !sameSemester) return;
+    try {
+      await completeItemWithUndo(context, widget.items, item);
+    } catch (error) {
+      if (mounted && sameSemester) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userError(error))));
+      }
+    }
+  }
+
   bool upcoming(Map<String, dynamic> item) {
     final exact = deadline(item), until = day.add(const Duration(days: 8));
     if (exact != null) return !exact.isBefore(day) && exact.isBefore(until);
@@ -304,9 +320,14 @@ class TodayDashboardState extends State<TodayDashboard>
   Future<void> savePreferences({
     List<String>? order,
     Set<String>? enabled,
+    TodayViewMode? todayView,
   }) async {
     try {
-      await preferences.change(order: order, enabled: enabled);
+      await preferences.change(
+        order: order,
+        enabled: enabled,
+        todayView: todayView,
+      );
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -322,88 +343,128 @@ class TodayDashboardState extends State<TodayDashboard>
       heightFactor: .82,
       builder: (context) => AnimatedBuilder(
         animation: preferences,
-        builder: (context, _) => Column(
-          children: [
-            AppSheetHeading(
-              title: '首页内容',
-              subtitle: '拖动排序，选择要显示的内容',
-              showClose: false,
-              trailing: AppTextButton(
-                guardAsync: false,
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('完成'),
+        builder: (context, _) {
+          final visibleOrder = preferences.order
+              .where(
+                (id) =>
+                    preferences.todayView == TodayViewMode.schedule ||
+                    id != 'deadlines',
+              )
+              .toList();
+          return Column(
+            children: [
+              AppSheetHeading(
+                title: '首页内容',
+                subtitle: '拖动排序，选择要显示的内容',
+                showClose: false,
+                trailing: AppTextButton(
+                  guardAsync: false,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('完成'),
+                ),
               ),
-            ),
-            Expanded(
-              child: ReorderableListView(
-                buildDefaultDragHandles: false,
-                onReorderItem: (oldIndex, newIndex) {
-                  final next = [...preferences.order];
-                  final id = next.removeAt(oldIndex);
-                  next.insert(newIndex, id);
-                  savePreferences(order: next);
-                },
-                children: [
-                  for (var i = 0; i < preferences.order.length; i++)
-                    Row(
-                      key: ValueKey(preferences.order[i]),
-                      children: [
-                        ReorderableDragStartListener(
-                          index: i,
-                          child: const SizedBox(
-                            width: 48,
-                            height: 48,
-                            child: Tooltip(
-                              message: '拖动排序',
-                              child: Icon(
-                                Icons.drag_indicator_rounded,
-                                size: 20,
-                                color: CampusColors.muted,
+              Padding(
+                key: const Key('home-view-setting'),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: AppPickerField<TodayViewMode>(
+                  initialValue: preferences.todayView ?? TodayViewMode.overview,
+                  decoration: const InputDecoration(labelText: '首页视图'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: TodayViewMode.overview,
+                      child: Text('日程与待办'),
+                    ),
+                    DropdownMenuItem(
+                      value: TodayViewMode.schedule,
+                      child: Text('仅日程'),
+                    ),
+                    DropdownMenuItem(
+                      value: TodayViewMode.tasks,
+                      child: Text('仅待办'),
+                    ),
+                  ],
+                  onChanged: (value) => savePreferences(todayView: value),
+                ),
+              ),
+              Expanded(
+                child: ReorderableListView(
+                  buildDefaultDragHandles: false,
+                  onReorderItem: (oldIndex, newIndex) {
+                    final reordered = [...visibleOrder];
+                    final id = reordered.removeAt(oldIndex);
+                    reordered.insert(newIndex, id);
+                    final next = preferences.order
+                        .map(
+                          (id) => visibleOrder.contains(id)
+                              ? reordered.removeAt(0)
+                              : id,
+                        )
+                        .toList();
+                    savePreferences(order: next);
+                  },
+                  children: [
+                    for (var i = 0; i < visibleOrder.length; i++)
+                      Row(
+                        key: ValueKey(visibleOrder[i]),
+                        children: [
+                          ReorderableDragStartListener(
+                            index: i,
+                            child: const SizedBox(
+                              width: 48,
+                              height: 48,
+                              child: Tooltip(
+                                message: '拖动排序',
+                                child: Icon(
+                                  Icons.drag_indicator_rounded,
+                                  size: 20,
+                                  color: CampusColors.muted,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        Expanded(
-                          child: AppSwitchRow(
-                            contentPadding: const EdgeInsets.fromLTRB(
-                              0,
-                              10,
-                              20,
-                              10,
+                          Expanded(
+                            child: AppSwitchRow(
+                              contentPadding: const EdgeInsets.fromLTRB(
+                                0,
+                                10,
+                                20,
+                                10,
+                              ),
+                              title: Text(homeModules[visibleOrder[i]]!),
+                              value: preferences.enabled.contains(
+                                visibleOrder[i],
+                              ),
+                              onChanged: (value) {
+                                final enabled = {...preferences.enabled};
+                                value
+                                    ? enabled.add(visibleOrder[i])
+                                    : enabled.remove(visibleOrder[i]);
+                                savePreferences(enabled: enabled);
+                              },
                             ),
-                            title: Text(homeModules[preferences.order[i]]!),
-                            value: preferences.enabled.contains(
-                              preferences.order[i],
-                            ),
-                            onChanged: (value) {
-                              final enabled = {...preferences.enabled};
-                              value
-                                  ? enabled.add(preferences.order[i])
-                                  : enabled.remove(preferences.order[i]);
-                              savePreferences(enabled: enabled);
-                            },
                           ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: AppTextButton(
-                  onPressed: () => savePreferences(
-                    order: homeModules.keys.toList(),
-                    enabled: {...defaultHomeModules},
-                  ),
-                  child: const Text('恢复默认'),
+                        ],
+                      ),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppTextButton(
+                    onPressed: () => savePreferences(
+                      todayView: TodayViewMode.overview,
+                      order: homeModules.keys.toList(),
+                      enabled: {...defaultHomeModules},
+                    ),
+                    child: const Text('恢复默认'),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -525,7 +586,7 @@ class TodayDashboardState extends State<TodayDashboard>
           events: timeline.length + otherDay.length,
           tasks: tasks.length,
         );
-    final tomorrowVisible = showTomorrow && viewMode == TodayViewMode.schedule;
+    final tomorrowVisible = showTomorrow && viewMode != TodayViewMode.tasks;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -620,67 +681,72 @@ class TodayDashboardState extends State<TodayDashboard>
               ],
             ),
           ),
-        ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: LayoutBuilder(
-            builder: (context, box) {
-              final title = viewMode == TodayViewMode.tasks ? '待办任务' : '全天安排';
-              const titleStyle = TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              );
-              const actionStyle = TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                height: 1.25,
-              );
-              double width(String value, TextStyle style) {
-                final text = TextPainter(
-                  text: TextSpan(text: value, style: style),
-                  textScaler: MediaQuery.textScalerOf(context),
-                  textDirection: Directionality.of(context),
-                )..layout();
-                final result = text.width;
-                text.dispose();
-                return result;
-              }
+        if (viewMode != TodayViewMode.overview)
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final title = switch (viewMode) {
+                  TodayViewMode.overview => '今日总览',
+                  TodayViewMode.tasks => '待办任务',
+                  TodayViewMode.schedule => '全天安排',
+                };
+                const titleStyle = TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                );
+                const actionStyle = TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  height: 1.25,
+                );
+                double width(String value, TextStyle style) {
+                  final text = TextPainter(
+                    text: TextSpan(text: value, style: style),
+                    textScaler: MediaQuery.textScalerOf(context),
+                    textDirection: Directionality.of(context),
+                  )..layout();
+                  final result = text.width;
+                  text.dispose();
+                  return result;
+                }
 
-              final compact =
-                  width(title, titleStyle) + width('查看全部', actionStyle) + 64 >
-                  box.maxWidth;
-              final onOpen = viewMode == TodayViewMode.tasks
-                  ? widget.onAllTasks
-                  : widget.onCalendar;
-              return Row(
-                children: [
-                  Expanded(child: Text(title, style: titleStyle)),
-                  const SizedBox(width: 12),
-                  if (compact)
-                    AppIconButton(
-                      key: const Key('today-secondary-action'),
-                      tooltip: '查看全部',
-                      onPressed: onOpen,
-                      color: CampusColors.muted,
-                      icon: const Icon(Icons.arrow_forward_rounded, size: 20),
-                    )
-                  else
-                    AppTextButton.icon(
-                      key: const Key('today-secondary-action'),
-                      onPressed: onOpen,
-                      iconAlignment: IconAlignment.end,
-                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                      style: AppTextButton.styleFrom(
-                        foregroundColor: CampusColors.muted,
-                        textStyle: actionStyle,
+                final compact =
+                    width(title, titleStyle) + width('查看全部', actionStyle) + 64 >
+                    box.maxWidth;
+                final onOpen = viewMode == TodayViewMode.tasks
+                    ? widget.onAllTasks
+                    : widget.onCalendar;
+                return Row(
+                  children: [
+                    Expanded(child: Text(title, style: titleStyle)),
+                    const SizedBox(width: 12),
+                    if (compact)
+                      AppIconButton(
+                        key: const Key('today-secondary-action'),
+                        tooltip: '查看全部',
+                        onPressed: onOpen,
+                        color: CampusColors.muted,
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                      )
+                    else
+                      AppTextButton.icon(
+                        key: const Key('today-secondary-action'),
+                        onPressed: onOpen,
+                        iconAlignment: IconAlignment.end,
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                        style: AppTextButton.styleFrom(
+                          foregroundColor: CampusColors.muted,
+                          textStyle: actionStyle,
+                        ),
+                        label: const Text('查看全部'),
                       ),
-                      label: const Text('查看全部'),
-                    ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
+        if (viewMode != TodayViewMode.overview) const SizedBox(height: 8),
         TodayViewSwitch(
           timeline: timeline,
           tasks: tasks,
@@ -699,19 +765,22 @@ class TodayDashboardState extends State<TodayDashboard>
                   padding: const EdgeInsets.only(bottom: 12),
                   child: urgentRow(urgent),
                 ),
-              if (showTomorrow) tomorrowPreview(tomorrow, tomorrowTasks),
             ],
           ),
           onEventTap: open,
           onTaskTap: open,
+          onTaskComplete: completeTask,
           onTaskEdit: widget.onTaskEdit,
           onAllTasks: widget.onAllTasks,
+          onAllEvents: widget.onCalendar,
+          priorityTaskId: urgent?['id'],
         ),
         for (final id
             in preferences.order
                 .where(preferences.enabled.contains)
                 .where(
-                  (id) => viewMode != TodayViewMode.tasks || id != 'deadlines',
+                  (id) =>
+                      viewMode == TodayViewMode.schedule || id != 'deadlines',
                 ))
           module(
             id,
@@ -724,6 +793,7 @@ class TodayDashboardState extends State<TodayDashboard>
                 : tasks,
             urgent,
           ),
+        if (tomorrowVisible) tomorrowPreview(tomorrow, tomorrowTasks),
       ],
     );
   }

@@ -66,11 +66,13 @@ class StudentInsightSummary extends StatelessWidget {
                 ),
               ])
                 Expanded(
+                  key: ValueKey('task-summary-${e.$1}'),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${tasks[e.$1] ?? 0}',
+                        '${tasks[e.$1] ?? '—'}',
+                        semanticsLabel: tasks[e.$1] == null ? '数量未提供' : null,
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.w800,

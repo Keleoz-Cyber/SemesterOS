@@ -16,6 +16,54 @@ Future<void> io(WidgetTester tester) async {
 void main() {
   setUpAll(loadPreviewFonts);
   testWidgets(
+    'streamed additions stay readable without fading the whole reply again',
+    (tester) async {
+      final f = ScheduleFixture();
+      final previous = f.api.dio.httpClientAdapter as ControlledTransport;
+      var phase = 0;
+      Map<String, dynamic> run() => {
+        'id': 'stream',
+        'thread_id': 't',
+        'sequence': phase + 1,
+        'text': '今天有什么课？',
+        'status': 'running',
+        'stage': '正在查询日程',
+        'answer_streaming': true,
+        'answer': phase == 0 ? '已查到课程。' : '已查到课程。上午有三门课。',
+        'cards': [],
+      };
+      f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.path.endsWith('/agent/threads/t')) {
+          return body({
+            'runs': [run()],
+          });
+        }
+        if (r.path.endsWith('/agent/runs/stream')) return body(run());
+        return previous.respond(r);
+      });
+      await tester.runAsync(() => f.c.bind('s'));
+      await mount(
+        tester,
+        AgentPage(controller: f.c, semester: {'id': 's'}, initialThreadId: 't'),
+      );
+      await io(tester);
+      await tester.pump(const Duration(milliseconds: 300));
+      phase = 1;
+      await tester.pump(const Duration(seconds: 2));
+      await io(tester);
+      final response = find
+          .descendant(
+            of: find.byKey(const ValueKey('agent-response-stream')),
+            matching: find.byType(FadeTransition),
+          )
+          .first;
+      expect(tester.widget<FadeTransition>(response).opacity.value, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+    },
+  );
+  testWidgets(
     'a real poll reveals the complete reply once and old history stays static',
     (tester) async {
       final f = ScheduleFixture();

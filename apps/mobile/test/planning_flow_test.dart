@@ -9,6 +9,9 @@ import 'package:semester_os/features/items/reminder_sync.dart';
 import 'package:semester_os/features/planning/availability_page.dart';
 import 'package:semester_os/features/planning/progress_page.dart';
 import 'package:semester_os/features/planning/risk_widgets.dart';
+import 'package:semester_os/features/planning/plan_list.dart';
+import 'package:semester_os/app/controller.dart' show schoolTime;
+import 'package:semester_os/ui/date_labels.dart' show studentDate;
 import 'api_session_test.dart' show ControlledTransport, account, body;
 import 'controller_test.dart' show MemoryStore;
 import 'reminder_sync_test.dart' show FakeNotifications;
@@ -191,6 +194,55 @@ Future<void> route(WidgetTester tester, Widget page) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
+  testWidgets(
+    'learning blocks group by the displayed UTC+08 date across UTC midnight',
+    (tester) async {
+      final f = PlanningFixture();
+      final previous = f.api.dio.httpClientAdapter as ControlledTransport;
+      f.api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.path.endsWith('/plans')) {
+          return body({
+            'semester_id': 's',
+            'revision': f.revision,
+            'blocks': [
+              {
+                'id': 'before-utc-midnight',
+                'item_id': 'a',
+                'title': '早间报告',
+                'start_at': '2099-09-21T23:20:00Z',
+                'end_at': '2099-09-21T23:50:00Z',
+                'minutes': 30,
+              },
+              {
+                'id': 'after-utc-midnight',
+                'item_id': 'a',
+                'title': '上午报告',
+                'start_at': '2099-09-22T01:00:00Z',
+                'end_at': '2099-09-22T01:30:00Z',
+                'minutes': 30,
+              },
+            ],
+          });
+        }
+        return previous.respond(request);
+      });
+      await bind(tester, f);
+      await route(tester, PlanListPage(controller: f.c));
+      expect(
+        find.text(
+          studentDate(schoolTime('2099-09-21T23:20:00Z'), weekday: true),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('07:20'), findsOneWidget);
+      expect(find.text('09:00'), findsOneWidget);
+      expect(f.puts, 0);
+      expect(f.progressSaves, 0);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+    },
+  );
   testWidgets(
     'exam end is preserved and can explicitly be cleared back to unknown',
     (tester) async {

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
 
 import 'motion.dart';
@@ -128,7 +129,6 @@ class _AppOptionalChoiceStripState<T> extends State<AppOptionalChoiceStrip<T>> {
             decoration: BoxDecoration(
               color: scheme.surfaceContainerHighest.withValues(alpha: .55),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: scheme.outlineVariant),
             ),
             child: Padding(
               padding: const EdgeInsets.all(4),
@@ -158,32 +158,20 @@ class _AppOptionalChoiceStripState<T> extends State<AppOptionalChoiceStrip<T>> {
                             child: DecoratedBox(
                               key: const Key('choice-strip-surface'),
                               decoration: BoxDecoration(
-                                color: scheme.primaryContainer,
+                                color: scheme.surface,
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: scheme.primary.withValues(alpha: .25),
+                                  color: scheme.primary.withValues(alpha: .18),
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: scheme.primary.withValues(alpha: .1),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 3),
+                                    color: scheme.onSurface.withValues(
+                                      alpha: .05,
+                                    ),
+                                    blurRadius: 5,
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
-                              ),
-                              child: Align(
-                                alignment: Alignment.bottomCenter,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Container(
-                                    width: 18,
-                                    height: 2,
-                                    decoration: BoxDecoration(
-                                      color: scheme.primary,
-                                      borderRadius: BorderRadius.circular(1),
-                                    ),
-                                  ),
-                                ),
                               ),
                             ),
                           ),
@@ -213,11 +201,14 @@ class _AppOptionalChoiceStripState<T> extends State<AppOptionalChoiceStrip<T>> {
                               ]),
                             ),
                             onPress: widget.enabled
-                                ? () => widget.onChanged(
-                                    widget.value == entry.key
-                                        ? null
-                                        : entry.key,
-                                  )
+                                ? () {
+                                    HapticFeedback.selectionClick();
+                                    widget.onChanged(
+                                      widget.value == entry.key
+                                          ? null
+                                          : entry.key,
+                                    );
+                                  }
                                 : null,
                             child: Builder(
                               builder: (context) {

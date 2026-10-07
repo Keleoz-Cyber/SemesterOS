@@ -77,6 +77,16 @@ String noticeTime(dynamic value, {bool task = false}) {
 
 bool noticeTimePresent(dynamic value) => noticeTime(value).isNotEmpty;
 
+/// Presentation only: original notification text and editable fields stay intact.
+String noticeDisplayText(dynamic value) {
+  final text = '${value ?? ''}'.trim();
+  if (RegExp(r'^[@＠]所有人$').hasMatch(text)) return '所有人';
+  final suffix = RegExp(r'\s*[（(]\s*[@＠]所有人\s*[）)]$');
+  if (!suffix.hasMatch(text)) return text;
+  final audience = text.replaceFirst(suffix, '').trim();
+  return audience.isEmpty ? '所有人' : audience;
+}
+
 List<({String label, String value})> noticeDetailRows(
   dynamic value, {
   String? location,
@@ -101,8 +111,12 @@ List<({String label, String value})> noticeDetailRows(
       }
     }
     var text = raw is List
-        ? raw.where((v) => '$v'.trim().isNotEmpty).join('、')
-        : '${raw ?? ''}'.trim();
+        ? raw
+              .map(noticeDisplayText)
+              .where((v) => v.isNotEmpty)
+              .toSet()
+              .join('、')
+        : noticeDisplayText(raw);
     if (key == 'submission_channel' &&
         location != null &&
         location.trim().isNotEmpty) {
@@ -124,7 +138,7 @@ List<({String label, String value})> noticeDetailRows(
         title.contains(text)) {
       return;
     }
-    if (key == 'audience' &&
+    if ({'audience', 'applicability'}.contains(key) &&
         {
           '所有人',
           '全体同学',

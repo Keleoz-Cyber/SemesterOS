@@ -315,7 +315,7 @@ void main() {
           expect(await imported, isTrue);
           await pump();
           await passed('import-confirm');
-          for (final tab in ['日程', '计划', '学期', '今日']) {
+          for (final tab in ['日程', '任务', '学期', '今日']) {
             stage = 'tab-$tab';
             await tabTap(tab);
             await pump(800);
@@ -346,7 +346,7 @@ void main() {
             );
           }
           await app.openSession(null, sid);
-          for (final tab in ['日程', '计划', '学期', '今日']) {
+          for (final tab in ['日程', '任务', '学期', '今日']) {
             await tabTap(tab);
             await pump(800);
           }
@@ -592,7 +592,7 @@ void main() {
             });
           }
           stage = 'release-learning-window';
-          await tabTap('计划');
+          await tabTap('任务');
           await textTap('学习时间');
           await textTap('快速设置：每天19:00—21:00');
           await textTap('核对并保存学习时间');
@@ -834,7 +834,7 @@ void main() {
 
           // Learning time and personal scheduling through the normal controls.
           stage = 'availability-save';
-          await textTap('计划');
+          await textTap('任务');
           await until(
             () =>
                 find.text('设置可学习时间').evaluate().isNotEmpty ||

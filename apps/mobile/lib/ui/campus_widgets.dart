@@ -75,7 +75,7 @@ class SectionHeading extends StatelessWidget {
     padding: const EdgeInsets.only(top: 24, bottom: 12),
     child: OverflowBar(
       alignment: MainAxisAlignment.spaceBetween,
-      overflowAlignment: OverflowBarAlignment.end,
+      overflowAlignment: OverflowBarAlignment.start,
       spacing: 12,
       overflowSpacing: 8,
       children: [

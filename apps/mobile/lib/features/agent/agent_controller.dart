@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/api.dart';
+import '../../ui/assistant_scope.dart' show AssistantBrowsingContext;
 import '../items/items_controller.dart';
 
 List<Map<String, dynamic>> rows(dynamic value) => value is List
@@ -287,6 +288,7 @@ class AgentController extends ChangeNotifier {
     String inputKind = 'message',
     Map<String, dynamic>? source,
     bool detachSource = false,
+    AssistantBrowsingContext? browsingContext,
   }) async {
     if (busy || processing || !active || text.trim().isEmpty) return false;
     final stamp = ++_epoch;
@@ -296,7 +298,7 @@ class AgentController extends ChangeNotifier {
     emit();
     try {
       final signature =
-          'revise:${run['id']}:$text:${source?['id']}:${source?['version']}:$detachSource:$inputKind';
+          'revise:${run['id']}:$text:${source?['id']}:${source?['version']}:$detachSource:$inputKind:${jsonEncode(browsingContext?.toJson())}';
       if (_pendingText != signature || _pendingId == null) {
         _pendingText = signature;
         _pendingId = List.generate(
@@ -311,6 +313,9 @@ class AgentController extends ChangeNotifier {
           data: {
             'text': text.trim(),
             'request_id': _pendingId,
+            'input_kind': inputKind,
+            if (browsingContext != null)
+              'browsing_context': browsingContext.toJson(),
             if (source != null) 'source_id': source['id'],
             if (source != null) 'source_version': source['version'],
             if (detachSource) 'detach_source': true,
@@ -473,7 +478,10 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  Future<bool> retryMedia() async {
+  Future<bool> retryMedia({
+    AssistantBrowsingContext? browsingContext,
+    bool useCurrentContext = false,
+  }) async {
     if (busy || !active || mediaRun == null || processing) return false;
     final stamp = _epoch, id = mediaRun!['id'];
     final source = mediaRun!['source'];
@@ -486,7 +494,11 @@ class AgentController extends ChangeNotifier {
         await request(
           'POST',
           '/agent/media-runs/$id/retry',
-          data: {'expected_version': source['version']},
+          data: {
+            'expected_version': source['version'],
+            if (useCurrentContext)
+              'browsing_context': browsingContext?.toJson(),
+          },
         ),
       );
       check(stamp);
@@ -509,6 +521,7 @@ class AgentController extends ChangeNotifier {
     List<String> paths, {
     String instruction = '',
     String? clientRequestId,
+    AssistantBrowsingContext? browsingContext,
   }) async {
     if (busy || processing || !active || paths.isEmpty) return false;
     final stamp = _epoch;
@@ -516,7 +529,8 @@ class AgentController extends ChangeNotifier {
     error = null;
     emit();
     try {
-      final signature = 'images:${paths.join('\u0000')}:$instruction';
+      final signature =
+          'images:${paths.join('\u0000')}:$instruction:${jsonEncode(browsingContext?.toJson())}';
       if (_pendingText != signature || _pendingId == null) {
         _pendingText = signature;
         _pendingId =
@@ -542,6 +556,8 @@ class AgentController extends ChangeNotifier {
         if (threadId != null) MapEntry('thread_id', threadId!),
         if (instruction.trim().isNotEmpty)
           MapEntry('instruction', instruction.trim()),
+        if (browsingContext != null)
+          MapEntry('browsing_context', jsonEncode(browsingContext.toJson())),
       ]);
       payload.files.addAll(files);
       final value = Map<String, dynamic>.from(
@@ -600,6 +616,7 @@ class AgentController extends ChangeNotifier {
     List<String> selectedRecordIds = const [],
     List<String> contextRecordIds = const [],
     bool detachSource = false,
+    AssistantBrowsingContext? browsingContext,
   }) async {
     if (busy || processing || !active || text.trim().isEmpty) return false;
     final stamp = _epoch;
@@ -617,7 +634,7 @@ class AgentController extends ChangeNotifier {
         threadId = t['id'];
       }
       final signature =
-          '$text\u0000${source?['id'] ?? ''}:${source?['version'] ?? ''}:${selectedRecordIds.join(',')}:${contextRecordIds.join(',')}:$detachSource:$inputKind';
+          '$text\u0000${source?['id'] ?? ''}:${source?['version'] ?? ''}:${selectedRecordIds.join(',')}:${contextRecordIds.join(',')}:$detachSource:$inputKind:${jsonEncode(browsingContext?.toJson())}';
       if (_pendingText != signature || _pendingId == null) {
         _pendingText = signature;
         _pendingId = List.generate(
@@ -633,6 +650,8 @@ class AgentController extends ChangeNotifier {
             'text': text,
             'request_id': _pendingId,
             'input_kind': inputKind,
+            if (browsingContext != null)
+              'browsing_context': browsingContext.toJson(),
             if (source != null) 'source_id': source['id'],
             if (source != null) 'source_version': source['version'],
             if (selectedRecordIds.isNotEmpty)

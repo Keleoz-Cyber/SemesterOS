@@ -31,7 +31,6 @@ class SemesterView extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: AppTile(
           contentPadding: const EdgeInsets.all(20),
-          onTap: () => onSelect(current),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -143,7 +142,7 @@ class SemesterView extends StatelessWidget {
         children: [
           AppTile(
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 18,
+              horizontal: 0,
               vertical: 8,
             ),
             leading: const Icon(
@@ -154,14 +153,14 @@ class SemesterView extends StatelessWidget {
               '重新导入教务课表',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
-            subtitle: const Text('先核对差异，再确认保存', style: TextStyle(fontSize: 12)),
+            subtitle: const Text('先核对差异，再确认保存', style: TextStyle(fontSize: 13)),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: onImport,
           ),
-          const Divider(height: 1, indent: 58, endIndent: 18),
+          const Divider(height: 1, indent: 36),
           AppTile(
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 18,
+              horizontal: 0,
               vertical: 8,
             ),
             leading: const Icon(
@@ -172,7 +171,7 @@ class SemesterView extends StatelessWidget {
               '手工补充课程',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
-            subtitle: const Text('设置周次、节次和地点', style: TextStyle(fontSize: 12)),
+            subtitle: const Text('设置周次、节次和地点', style: TextStyle(fontSize: 13)),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: onManual,
           ),

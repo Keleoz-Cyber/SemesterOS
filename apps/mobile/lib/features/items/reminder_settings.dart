@@ -120,7 +120,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
       '已设置准时提醒' || '已设置系统提醒；未开启准时提醒权限，系统可能延迟' => '提醒已同步',
       final message => message,
     };
-    final choices = {15, 30, 60, settings.classLeadMinutes}.toList()..sort();
+    final choices = {0, 15, 30, 60, settings.classLeadMinutes}.toList()..sort();
     return Scaffold(
       appBar: AppBar(title: const Text('提醒设置')),
       body: AppLoadingOverlay(
@@ -199,7 +199,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                     : CampusColors.muted,
               ),
               subtitle: notificationAllowed == null
-                  ? null
+                  ? Text(error == null ? '正在检查通知权限' : '暂未读取到权限状态')
                   : Text(notificationAllowed! ? '已允许' : '未开启'),
               trailing: AppTextButton(
                 onPressed: busy ? null : () => _run(_openNotifications),
@@ -223,7 +223,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                   ? const Text('先开启系统通知')
                   : preciseAllowed == false
                   ? const Text('未开启时，系统可能延迟提醒')
-                  : null,
+                  : Text(error == null ? '正在检查准时提醒权限' : '暂未读取到权限状态'),
               trailing: preciseAllowed == true
                   ? const Icon(Icons.check_circle_outline)
                   : AppTextButton(
@@ -252,7 +252,8 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
               Text(
                 status,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 14,
+                  height: 1.4,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),

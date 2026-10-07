@@ -23,6 +23,93 @@ class AppMotion {
       reduced(context) ? Duration.zero : const Duration(milliseconds: 260);
 }
 
+/// Moves new content in place while retaining its scroll and input state.
+/// Only the incoming content paints, so dense text never overlaps mid-change.
+class AppContentTransition extends StatefulWidget {
+  final Object value;
+  final Widget child;
+  final AxisDirection direction;
+  const AppContentTransition({
+    super.key,
+    required this.value,
+    required this.child,
+    this.direction = AxisDirection.right,
+  });
+  @override
+  State<AppContentTransition> createState() => _AppContentTransitionState();
+}
+
+class _AppContentTransitionState extends State<AppContentTransition>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    value: 1,
+  );
+  bool _foreground = true;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!AppMotion.allowed(context)) _finish();
+  }
+
+  void _finish() {
+    _controller.stop();
+    _controller.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(covariant AppContentTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_foreground || !AppMotion.allowed(context)) {
+      _finish();
+    } else if (oldWidget.value != widget.value) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) _finish();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    child: widget.child,
+    builder: (context, child) {
+      final t = Curves.easeOutCubic.transform(_controller.value);
+      final distance = 14 * (1 - t);
+      final offset = switch (widget.direction) {
+        AxisDirection.left => Offset(-distance, 0),
+        AxisDirection.right => Offset(distance, 0),
+        AxisDirection.up => Offset(0, -distance),
+        AxisDirection.down => Offset(0, distance),
+      };
+      return ClipRect(
+        child: Transform.translate(
+          offset: offset,
+          child: Opacity(opacity: .35 + .65 * t, child: child),
+        ),
+      );
+    },
+  );
+}
+
 /// Reveals content at its natural size, without shrinking its text.
 /// Closed fields are mounted only when opened unless state retention is needed.
 class AppExpandRegion extends StatefulWidget {
@@ -241,24 +328,27 @@ class _TabEntranceState extends _MotionState<TabEntrance> {
   }
 
   Offset get offset => switch (widget.direction) {
-    AxisDirection.left => const Offset(-.1, 0),
-    AxisDirection.right => const Offset(.1, 0),
-    AxisDirection.up => const Offset(0, -.1),
-    AxisDirection.down => const Offset(0, .1),
+    AxisDirection.left => const Offset(-.04, 0),
+    AxisDirection.right => const Offset(.04, 0),
+    AxisDirection.up => const Offset(0, -.04),
+    AxisDirection.down => const Offset(0, .04),
   };
   @override
   Widget build(BuildContext context) => TickerMode(
     enabled: widget.active,
-    child: FadeTransition(
-      opacity: controller.drive(CurveTween(curve: motionEaseOut)),
-      child: SlideTransition(
-        position: controller.drive(
-          Tween(
-            begin: offset,
-            end: Offset.zero,
-          ).chain(CurveTween(curve: motionEaseOut)),
+    child: ExcludeFocus(
+      excluding: !widget.active,
+      child: FadeTransition(
+        opacity: controller.drive(CurveTween(curve: motionEaseOut)),
+        child: SlideTransition(
+          position: controller.drive(
+            Tween(
+              begin: offset,
+              end: Offset.zero,
+            ).chain(CurveTween(curve: motionEaseOut)),
+          ),
+          child: widget.child,
         ),
-        child: widget.child,
       ),
     ),
   );

@@ -12,14 +12,14 @@ const homeModules = {
   'breathing_exercise': '呼吸练习',
 };
 
-enum TodayViewMode { schedule, tasks }
+enum TodayViewMode { overview, schedule, tasks }
 
 const defaultHomeModules = {'deadlines', 'plans', 'windows', 'exams'};
 
-/// With no explicit choice, dated arrangements select the agenda. A day with
-/// only tasks opens the task list, including tasks whose time is still unknown.
+/// New users see both kinds of work. Explicit agenda/task choices from older
+/// versions remain account-and-semester-scoped preferences.
 TodayViewMode defaultTodayViewMode({required int events, required int tasks}) =>
-    events > 0 || tasks == 0 ? TodayViewMode.schedule : TodayViewMode.tasks;
+    TodayViewMode.overview;
 
 class HomePreferences extends ChangeNotifier {
   final CalendarStore cache;
@@ -54,6 +54,7 @@ class HomePreferences extends ChangeNotifier {
           .toSet();
     }
     todayView = switch (data['today_view']) {
+      'overview' => TodayViewMode.overview,
       'schedule' => TodayViewMode.schedule,
       'tasks' => TodayViewMode.tasks,
       _ => null,

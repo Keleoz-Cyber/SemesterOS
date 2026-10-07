@@ -1,8 +1,55 @@
 import 'package:flutter/material.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/accessibility.dart';
+import '../../core/api.dart' show userError;
 import '../planning/plan_change_confirmation.dart';
 import 'items_controller.dart';
+
+/// Shared list/home feedback around the same preview-and-consent lifecycle path.
+Future<bool> completeItemWithUndo(
+  BuildContext context,
+  ItemsController controller,
+  Map<String, dynamic> item,
+) async {
+  final generation = controller.api.generation;
+  final owner = controller.owner, semester = controller.semesterId;
+  bool same() =>
+      context.mounted &&
+      generation == controller.api.generation &&
+      owner == controller.owner &&
+      semester == controller.semesterId;
+  final changed = await changeItemLifecycle(
+    context,
+    controller,
+    item,
+    'completed',
+  );
+  if (!changed || !context.mounted || !same()) return changed;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: const Text('已完成'),
+      action: SnackBarAction(
+        label: '撤销',
+        onPressed: () async {
+          try {
+            if (!context.mounted || !same()) return;
+            final fresh = await controller.get('${item['id']}');
+            if (context.mounted && same()) {
+              await changeItemLifecycle(context, controller, fresh, 'active');
+            }
+          } catch (error) {
+            if (context.mounted && same()) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(userError(error))));
+            }
+          }
+        },
+      ),
+    ),
+  );
+  return true;
+}
 
 /// One business path for detail buttons and list shortcuts. Related plans still
 /// require the same explicit choices, revision and lock confirmation.
@@ -27,8 +74,8 @@ Future<bool> changeItemLifecycle(
   );
   final label = switch (state) {
     'completed' => '确认已完成',
-    'cancelled' => '确认取消事项',
-    _ => '恢复这条事项',
+    'cancelled' => '确认取消任务',
+    _ => '恢复这条任务',
   };
   Map<String, dynamic>? selection;
   if (blocks.isNotEmpty) {

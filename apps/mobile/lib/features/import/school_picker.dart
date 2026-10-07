@@ -36,14 +36,26 @@ class _SchoolPickerPageState extends State<SchoolPickerPage> {
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
             const AcademicStepRail(steps: ['选择学校', '登录教务', '核对课表'], current: 0),
             AppField(
               controller: queryController,
-              decoration: const InputDecoration(
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
                 labelText: '学校名称',
                 hintText: '搜索学校名称',
-                prefixIcon: Icon(Icons.search_rounded),
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: query.isEmpty
+                    ? null
+                    : AppIconButton(
+                        tooltip: '清空学校搜索',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () {
+                          queryController.clear();
+                          setState(() => query = '');
+                        },
+                      ),
               ),
               onChanged: (value) => setState(() => query = value),
             ),
@@ -131,7 +143,10 @@ class _SchoolPickerPageState extends State<SchoolPickerPage> {
                         size: 20,
                         color: CampusColors.muted,
                       ),
-                      onTap: () => widget.onSelect(school),
+                      onTap: () {
+                        FocusManager.instance.primaryFocus?.unfocus();
+                        widget.onSelect(school);
+                      },
                     ),
                   ),
                 )

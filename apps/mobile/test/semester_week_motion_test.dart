@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/features/centers/semester_centers.dart';
+import 'package:semester_os/features/centers/semester_timeline.dart'
+    show semesterActivityTimeLabel;
 
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'centers_flow_test.dart' show fixture, hub, settleIo;
@@ -12,6 +14,35 @@ import 'ui_polish_test.dart' show mount, capture, loadPreviewFonts;
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
+  test(
+    'semester activity clock labels preserve cross-day and window meaning',
+    () {
+      final sameDay = <String, dynamic>{
+        'start_at': '2026-10-04T17:00:00+08:00',
+        'end_at': '2026-10-04T18:00:00+08:00',
+      };
+      expect(semesterActivityTimeLabel(sameDay), '17:00—18:00');
+      expect(semesterActivityTimeLabel({...sameDay, 'end_at': null}), '17:00');
+      expect(
+        semesterActivityTimeLabel({
+          ...sameDay,
+          'end_at': '2026-10-05T01:00:00+08:00',
+        }),
+        '10/4 17:00—10/5 01:00',
+      );
+      expect(
+        semesterActivityTimeLabel({
+          ...sameDay,
+          'time': {
+            'meaning': 'window',
+            'at': sameDay['start_at'],
+            'end_at': sameDay['end_at'],
+          },
+        }),
+        '办理窗口：10/4 17:00—10/4 18:00',
+      );
+    },
+  );
   testWidgets(
     'hidden semester updates keep new records readable without a layout error',
     (tester) async {

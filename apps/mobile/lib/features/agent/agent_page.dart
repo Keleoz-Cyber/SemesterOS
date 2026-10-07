@@ -1,4 +1,5 @@
 import '../../ui/app_controls.dart';
+import '../../ui/assistant_scope.dart' show AssistantBrowsingContext;
 import '../../core/api.dart' show userError, ApiFailure;
 import '../../ui/performance_widgets.dart';
 import '../../ui/empty_states.dart';
@@ -47,6 +48,7 @@ class AgentPage extends StatefulWidget {
   final bool embedded, autoSubmit, autofocus;
   final bool initialNotice;
   final MediaInput? voiceInput, imageInput;
+  final AssistantBrowsingContext? browsingContext;
   const AgentPage({
     super.key,
     required this.controller,
@@ -64,6 +66,7 @@ class AgentPage extends StatefulWidget {
     this.initialNotice = false,
     this.voiceInput,
     this.imageInput,
+    this.browsingContext,
   });
   @override
   State<AgentPage> createState() => _AgentPageState();
@@ -118,6 +121,8 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   final Set<String> partialAcknowledged = {};
   final Set<String> expandedResults = {};
   final Set<String> _seenTurns = {}, _unshownArrivals = {};
+  late AssistantBrowsingContext? browsingContext = widget.browsingContext;
+  bool browsingContextRemoved = false;
   bool _receivingHistory = false;
   @override
   void initState() {
@@ -214,6 +219,17 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     if (!mounted || !c.active) return;
     _seenTurns.addAll(c.runs.map((run) => '${run['id']}'));
     if (saved != null) {
+      if (widget.browsingContext == null || editingRun != null) {
+        browsingContext = AssistantBrowsingContext.fromJson(
+          saved['browsing_context'],
+        );
+        browsingContextRemoved = saved['browsing_context_removed'] == true;
+      } else if (saved['browsing_context_removed'] == true &&
+          jsonEncode(saved['browsing_context_origin']) ==
+              jsonEncode(widget.browsingContext?.toJson())) {
+        browsingContext = null;
+        browsingContextRemoved = true;
+      }
       input.text = saved['text'] ?? '';
       attachment = saved['source'] is Map
           ? Map<String, dynamic>.from(saved['source'])
@@ -370,6 +386,9 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     final value = {
       'text': input.text,
       'notice_input': noticeDraft,
+      'browsing_context': browsingContext?.toJson(),
+      'browsing_context_origin': widget.browsingContext?.toJson(),
+      'browsing_context_removed': browsingContextRemoved,
       'source': attachment,
       'detached': detachedSource,
       'thread_id': c.threadId,
@@ -467,7 +486,12 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     try {
       if (pendingImages.isNotEmpty) {
         final paths = pendingImages.toList();
-        final signature = jsonEncode([paths, value, c.threadId]);
+        final signature = jsonEncode([
+          paths,
+          value,
+          c.threadId,
+          browsingContext?.toJson(),
+        ]);
         if (imageRequestSignature != signature || imageRequestId == null) {
           imageRequestSignature = signature;
           imageRequestId =
@@ -478,6 +502,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           paths,
           instruction: value,
           clientRequestId: imageRequestId,
+          browsingContext: browsingContext,
         );
         if (accepted && mounted && c.active) {
           pendingImages.removeWhere(paths.contains);
@@ -530,6 +555,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             detachSource: detachedSource,
             selectedRecordIds: selectedRecordIds,
             contextRecordIds: widget.initialRecordIds,
+            browsingContext: browsingContext,
           )
         : await c.revise(
             editingRun!,
@@ -537,6 +563,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             inputKind: noticeDraft ? 'notice' : 'message',
             source: source,
             detachSource: detachedSource,
+            browsingContext: browsingContext,
           );
     if (accepted && mounted) {
       noticeDraft = false;
@@ -863,6 +890,12 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     if (!mounted || c.threadId != id) return;
     setState(() {
       input.text = saved?['text'] ?? '';
+      if (saved != null && saved.containsKey('browsing_context')) {
+        browsingContext = AssistantBrowsingContext.fromJson(
+          saved['browsing_context'],
+        );
+        browsingContextRemoved = saved['browsing_context_removed'] == true;
+      }
       pendingImages
         ..clear()
         ..addAll((saved?['image_paths'] as List? ?? []).whereType<String>());
@@ -896,6 +929,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     setState(() {
       editingRun = null;
       session.editBackup = null;
+      browsingContext = browsingContextRemoved ? null : widget.browsingContext;
       showingHistory = false;
       input.clear();
       pendingImages.clear();
@@ -929,9 +963,15 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       'detached': detachedSource,
       'media_reference_override': mediaReferenceOverride,
       'media_transcript_ack': transcriptAck,
+      'browsing_context': browsingContext?.toJson(),
+      'browsing_context_removed': browsingContextRemoved,
     };
     setState(() {
       editingRun = run;
+      browsingContext = AssistantBrowsingContext.fromJson(
+        run['browsing_context'],
+      );
+      browsingContextRemoved = false;
       noticeDraft = run['input_kind'] == 'notice';
       input.text = run['text'] ?? '';
       attachment = run['source'] is Map
@@ -950,6 +990,10 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       editingRun = null;
       input.text = old?['text'] ?? '';
       noticeDraft = old?['notice_input'] == true;
+      browsingContext = AssistantBrowsingContext.fromJson(
+        old?['browsing_context'],
+      );
+      browsingContextRemoved = old?['browsing_context_removed'] == true;
       attachment = old?['source'] is Map
           ? Map<String, dynamic>.from(old!['source'])
           : null;
@@ -1114,6 +1158,48 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                   ],
                 ),
               ),
+            if (!showingHistory && browsingContext != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 18, right: 8),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.date_range_outlined,
+                      size: 16,
+                      color: CampusColors.muted,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '浏览：${browsingContext!.label}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: CampusColors.muted,
+                        ),
+                      ),
+                    ),
+                    AppIconButton(
+                      tooltip: '移除浏览日期',
+                      onPressed:
+                          c.loading ||
+                              c.busy ||
+                              sendingMedia ||
+                              mediaWorking ||
+                              pickingImage ||
+                              voiceRecording
+                          ? null
+                          : () {
+                              setState(() {
+                                browsingContext = null;
+                                browsingContextRemoved = true;
+                              });
+                              scheduleDraft();
+                            },
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ],
+                ),
+              ),
             if (!showingHistory) composer(),
           ],
         ),
@@ -1215,7 +1301,10 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               else
                 AssistantInlineError(
                   text: '图片识别未完成，可以重试或输入通知文字',
-                  onRetry: () => c.retryMedia(),
+                  onRetry: () => c.retryMedia(
+                    browsingContext: browsingContext,
+                    useCurrentContext: true,
+                  ),
                 ),
             ],
           );
@@ -1571,7 +1660,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
         {'applied', 'cancelled', 'superseded'}.contains(run['status']);
     final responseRevision = hasResponse
         ? jsonEncode([
-            answer,
+            answer.isNotEmpty,
             p is Map ? p['token'] : null,
             '${run['status']}',
             for (final card in rows(run['cards']))
@@ -1596,6 +1685,21 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 ? null
                 : () => editMessage(run),
           ),
+          if (AssistantBrowsingContext.fromJson(run['browsing_context'])
+              case final pageContext?)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '浏览：${pageContext.label}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: CampusColors.muted,
+                  ),
+                ),
+              ),
+            ),
           if (working)
             AssistantActivity(
               stage: run['stage'] ?? '正在整理',
@@ -1710,7 +1814,15 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     final source = run['source'] is Map
         ? Map<String, dynamic>.from(run['source'])
         : null;
-    if (await c.revise(run, '${run['text'] ?? ''}', source: source) &&
+    if (await c.revise(
+          run,
+          '${run['text'] ?? ''}',
+          source: source,
+          inputKind: run['input_kind'] == 'notice' ? 'notice' : 'message',
+          browsingContext: AssistantBrowsingContext.fromJson(
+            run['browsing_context'],
+          ),
+        ) &&
         mounted) {
       followLatest = true;
       await saveDraft();
@@ -2398,7 +2510,11 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           if (p['_hide_title'] != true)
             Text(
               title,
-              style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontSize: p['_compact'] == true ? 17 : 19,
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
             ),
           if (create &&
               after['certainty'] == 'tentative' &&
@@ -2497,6 +2613,9 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                           await c.revise(
                             run,
                             '保留刚才核对的安排，加上提前${r['lead_minutes']}分钟提醒。',
+                            browsingContext: AssistantBrowsingContext.fromJson(
+                              run['browsing_context'],
+                            ),
                           );
                         },
                   icon: const Icon(Icons.notifications_none_rounded, size: 18),
@@ -2518,7 +2637,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     dynamic action,
   }) => LayoutBuilder(
     builder: (context, size) {
-      final cancel = AppOutlineButton(
+      final cancel = AppTextButton(
         onPressed: c.busy ? null : () => c.decide(run, false),
         child: Text(
           create
@@ -2705,6 +2824,28 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     final missing = result['unarranged_minutes'] as num? ?? 0;
     final pending = run['status'] == 'needs_confirmation';
     final partial = missing > 0;
+    Widget blockRow(Map<String, dynamic> b) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${b['title'] ?? tasks[b['item_id']] ?? '个人任务'}',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          if (replan && previous[b['id']] != null)
+            Text(
+              entryTime(previous[b['id']]!),
+              style: const TextStyle(
+                color: CampusColors.muted,
+                decoration: TextDecoration.lineThrough,
+                fontSize: 14,
+              ),
+            ),
+          Text(entryTime(b), style: const TextStyle(fontSize: 15)),
+        ],
+      ),
+    );
     return panel(
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2738,38 +2879,13 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             replan ? '${changed.length}段计划将调整时间' : '新增${blocks.length}段个人计划',
           ),
           for (final warning in rows(result['uncertainty_warnings']))
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '${warning['message']}',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: CampusColors.warning,
-                ),
-              ),
-            ),
-          for (final b in changed)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${b['title'] ?? tasks[b['item_id']] ?? '个人任务'}',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  if (replan && previous[b['id']] != null)
-                    Text(
-                      entryTime(previous[b['id']]!),
-                      style: const TextStyle(
-                        color: CampusColors.muted,
-                        decoration: TextDecoration.lineThrough,
-                        fontSize: 12,
-                      ),
-                    ),
-                  Text(entryTime(b), style: const TextStyle(fontSize: 13)),
-                ],
-              ),
+            PlanWarningNote(message: '${warning['message']}'),
+          for (final b in changed.take(4)) blockRow(b),
+          if (changed.length > 4)
+            AppDisclosure(
+              tilePadding: EdgeInsets.zero,
+              title: Text('查看其余 ${changed.length - 4} 段安排'),
+              children: [for (final b in changed.skip(4)) blockRow(b)],
             ),
           if (partial)
             Container(
@@ -2796,7 +2912,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           if (pending)
             LayoutBuilder(
               builder: (context, constraints) {
-                final cancel = AppOutlineButton(
+                final cancel = AppTextButton(
                   onPressed: c.busy ? null : () => c.decide(run, false),
                   child: const Text('暂不安排'),
                 );

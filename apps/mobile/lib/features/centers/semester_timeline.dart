@@ -18,6 +18,21 @@ import '../tags/tag_management_page.dart';
 import '../../ui/date_labels.dart';
 import 'semester_centers.dart' show CourseHubPage, openHubItem, changeCard;
 
+String semesterActivityTimeLabel(Map<String, dynamic> row) {
+  if (row['start_at'] == null || calendarMeaning(row) == 'window') {
+    return calendarTimeLabel(row);
+  }
+  final start = schoolTime(row['start_at']);
+  if (row['end_at'] == null) return hhmm(start);
+  final end = schoolTime(row['end_at']);
+  if (start.year == end.year &&
+      start.month == end.month &&
+      start.day == end.day) {
+    return '${hhmm(start)}—${hhmm(end)}';
+  }
+  return calendarTimeLabel(row);
+}
+
 class SemesterHome extends StatefulWidget {
   final ItemsController controller;
   final VoidCallback onManage;
@@ -340,9 +355,9 @@ class SemesterHomeState extends State<SemesterHome>
 
   Widget _semesterCaption(String name) {
     const style = TextStyle(
-      fontSize: 14,
-      color: CampusColors.primary,
-      fontWeight: FontWeight.w600,
+      fontSize: 20,
+      color: CampusColors.ink,
+      fontWeight: FontWeight.w700,
     );
     final standard = RegExp(
       r'^(.*?)(第[一二三四五六七八九十\d]+学期|[春秋夏冬]季?学期)$',
@@ -386,13 +401,17 @@ class SemesterHomeState extends State<SemesterHome>
       final current = _currentWeek(semester);
       final total = semester['total_weeks'] as int;
       final selected = weeks.where((w) => w['week'] == _selected).firstOrNull;
+      final weekItems = widget.controller.rows(selected?['items']);
+      final weekChanges = widget.controller.rows(selected?['changes']);
+      final exams = weekItems.where((item) => item['kind'] == 'exam').length;
+      final otherItems = weekItems.length - exams;
       final animate = _foreground && AppMotion.allowed(context);
       final undatedEvents = _calendar.undated
           .where((e) => e['resource_type'] == 'event')
           .toList();
       final events =
           <Map<String, dynamic>>[
-            for (final item in widget.controller.rows(selected?['items']))
+            for (final item in weekItems)
               {
                 'type': 'item',
                 'row': item,
@@ -425,23 +444,14 @@ class SemesterHomeState extends State<SemesterHome>
                 _semesterCaption('${semester['name']}'),
                 const SizedBox(height: 4),
                 Text(
-                  current < 1
+                  '${current < 1
                       ? '学期尚未开始'
                       : current > total
                       ? '本学期已结束'
-                      : '第$current周',
-                  style: TextStyle(
-                    fontSize: current < 1 || current > total ? 24 : 32,
-                    fontWeight: FontWeight.w700,
-                    color: CampusColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '共 $total 周 · ${studentDate(DateTime.parse(semester['first_monday']))} 开始',
+                      : '现在第$current周'} · 共$total周',
                   style: const TextStyle(
                     color: CampusColors.muted,
-                    fontSize: 13,
+                    fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -459,7 +469,7 @@ class SemesterHomeState extends State<SemesterHome>
               ],
             ),
           ),
-          const SectionHeading('学期周次'),
+          const SizedBox(height: 16),
           SingleChildScrollView(
             controller: _weekStrip,
             scrollDirection: Axis.horizontal,
@@ -495,10 +505,26 @@ class SemesterHomeState extends State<SemesterHome>
                   Text(
                     '${studentDate(DateTime.parse(selected['start_date']))}—${studentDate(DateTime.parse(selected['end_date']))}',
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       color: CampusColors.muted,
                     ),
                   ),
+                  if (weekItems.isNotEmpty || weekChanges.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        [
+                          if (exams > 0) '考试 $exams 场',
+                          if (otherItems > 0) '待办 $otherItems 项',
+                          if (weekChanges.isNotEmpty)
+                            '课程变更 ${weekChanges.length} 项',
+                        ].join(' · '),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 12),
                   if (_calendar.error != null ||
                       (_calendar.revision != null &&
@@ -544,7 +570,7 @@ class SemesterHomeState extends State<SemesterHome>
                           _node(
                             at: e['at'],
                             title: e['row']['title'],
-                            time: calendarTimeLabel(e['row']),
+                            time: semesterActivityTimeLabel(e['row']),
                             label:
                                 '${e['row']['reserve_time'] == false ? '仅作参考' : '固定活动'}${e['row']['certainty'] == 'tentative' ? ' · 暂定' : ''}',
                             warning: e['row']['certainty'] == 'tentative',

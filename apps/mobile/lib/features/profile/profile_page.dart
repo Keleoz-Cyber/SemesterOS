@@ -202,6 +202,9 @@ class _ProfilePageState extends State<ProfilePage> {
     key: Key('profile-$id'),
     controller: controller,
     enabled: !c.busy && validOwner,
+    textInputAction: TextInputAction.next,
+    minLines: 1,
+    maxLines: 2,
     decoration: InputDecoration(labelText: label, hintText: hint),
     validator: textLength,
   );
@@ -227,7 +230,10 @@ class _ProfilePageState extends State<ProfilePage> {
           ],
         ),
         const Divider(height: 24, color: CampusColors.line),
-        ...children,
+        for (var index = 0; index < children.length; index++) ...[
+          if (index > 0) const SizedBox(height: 8),
+          children[index],
+        ],
       ],
     ),
   );
@@ -353,6 +359,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         controller: year,
                         enabled: !c.busy && validOwner,
                         keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                           LengthLimitingTextInputFormatter(4),

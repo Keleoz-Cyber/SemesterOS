@@ -87,7 +87,7 @@ class TaskActionRail extends StatelessWidget {
   const TaskActionRail({super.key, required this.actions});
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 14),
+    padding: const EdgeInsets.symmetric(vertical: 10),
     child: LayoutBuilder(
       builder: (context, size) {
         Widget action(TaskQuickAction item) => AppTile(
@@ -148,6 +148,7 @@ class WorkMinuteField extends StatelessWidget {
         controller: controller,
         enabled: enabled,
         keyboardType: TextInputType.number,
+        textInputAction: TextInputAction.next,
         decoration: InputDecoration(
           labelText: label,
           helperText: helper,
@@ -179,6 +180,11 @@ class WorkMinuteField extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                 ),
                 child: Text(minutesLabel(minutes)),
+              ),
+            if (value.text.isNotEmpty)
+              AppTextButton(
+                onPressed: enabled ? controller.clear : null,
+                child: const Text('清空'),
               ),
           ],
         ),

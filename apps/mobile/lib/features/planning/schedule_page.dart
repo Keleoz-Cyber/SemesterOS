@@ -3,6 +3,7 @@ import '../../ui/app_time_range_picker.dart';
 import 'package:flutter/material.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/app_selection.dart';
+import '../../ui/detail_widgets.dart';
 import '../../ui/campus_theme.dart';
 import '../../core/api.dart' show userError;
 import '../items/items_controller.dart';
@@ -188,26 +189,20 @@ class _SchedulePageState extends State<SchedulePage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('安排任务')),
-    bottomNavigationBar: SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: AppButton(
-          onPressed: loading || busy || setup == null ? null : generate,
-          child: Text(
-            busy
-                ? '正在安排…'
-                : needsHours
-                ? '确认时段并生成安排'
-                : '生成安排',
-          ),
-        ),
-      ),
+    bottomNavigationBar: ActionFooter(
+      onPressed: loading || busy || setup == null ? null : generate,
+      icon: Icons.auto_awesome_outlined,
+      label: busy
+          ? '正在安排…'
+          : needsHours
+          ? '确认时段并生成安排'
+          : '生成安排',
     ),
     body: AppLoadingOverlay(
       loading: loading,
       label: '正在读取',
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),
         children: [
           if (error != null)
@@ -303,33 +298,18 @@ class _SchedulePageState extends State<SchedulePage> {
                       if (selected.contains('${t['id']}'))
                         Padding(
                           padding: const EdgeInsets.only(left: 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  t['remaining_minutes'] == null
-                                      ? '建议用时'
-                                      : '剩余用时',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: CampusColors.muted,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 86,
-                                child: AppField(
-                                  controller: estimates['${t['id']}'],
-                                  enabled: !busy,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    isDense: true,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text('分钟'),
-                            ],
+                          child: AppField(
+                            controller: estimates['${t['id']}'],
+                            enabled: !busy,
+                            textInputAction: TextInputAction.next,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: t['remaining_minutes'] == null
+                                  ? '建议用时'
+                                  : '剩余用时',
+                              suffixText: '分钟',
+                              isDense: true,
+                            ),
                           ),
                         ),
                       if (t['start_policy'] == 'at')

@@ -58,6 +58,7 @@ class ReminderEditor extends StatefulWidget {
 class _ReminderEditorState extends State<ReminderEditor> {
   late String mode, purpose;
   late bool enabled;
+  late bool customLead;
   late final TextEditingController lead;
   DateTime? date;
   TimeOfDay? clock;
@@ -74,6 +75,7 @@ class _ReminderEditorState extends State<ReminderEditor> {
     lead = TextEditingController(
       text: '${r?['lead_minutes'] ?? (widget.kind == 'event' ? 30 : 1440)}',
     );
+    customLead = !presets.contains(int.tryParse(lead.text));
     if (mode == 'absolute' && r?['trigger_at'] != null) {
       final local = schoolTime(r!['trigger_at']);
       date = DateTime(local.year, local.month, local.day);
@@ -196,10 +198,8 @@ class _ReminderEditorState extends State<ReminderEditor> {
           children: [
             if (mode == 'relative') ...[
               AppPickerField<int>(
-                key: ValueKey('lead-${lead.text}'),
-                initialValue: presets.contains(int.tryParse(lead.text))
-                    ? int.parse(lead.text)
-                    : -1,
+                key: ValueKey('lead-$customLead-${lead.text}'),
+                initialValue: customLead ? -1 : int.tryParse(lead.text),
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: '提醒时间'),
                 items: [
@@ -211,14 +211,17 @@ class _ReminderEditorState extends State<ReminderEditor> {
                   const DropdownMenuItem(value: -1, child: Text('自定义')),
                 ],
                 onChanged: (value) => setState(() {
+                  customLead = value == -1;
                   lead.text = value == -1 ? '' : '$value';
                 }),
               ),
-              if (!presets.contains(int.tryParse(lead.text))) ...[
+              if (customLead) ...[
                 const SizedBox(height: 16),
                 AppField(
                   controller: lead,
                   keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => save(),
                   decoration: const InputDecoration(
                     labelText: '提前多久',
                     suffixText: '分钟',

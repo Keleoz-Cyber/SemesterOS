@@ -226,27 +226,65 @@ class _TagManagementPageState extends State<TagManagementPage> {
   }
 
   Future<void> merge(Map<String, dynamic> tag) async {
+    var query = '';
     final target = await showDialog<String>(
       context: context,
       builder: (context) => AppDialog(
         title: Text('将“${tag['name']}”合并到'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: Column(
+        content: StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            final matches = c.tags
+                .where(
+                  (other) =>
+                      other['id'] != tag['id'] &&
+                      '${other['name']}'.toLowerCase().contains(
+                        query.trim().toLowerCase(),
+                      ),
+                )
+                .toList();
+            return Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final other in c.tags)
-                  if (other['id'] != tag['id'])
-                    AppTile(
-                      onTap: () => Navigator.pop(context, other['id']),
-                      leading: const Icon(Icons.label_outline),
-                      title: Text(other['name']),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                    ),
+                AppField(
+                  decoration: const InputDecoration(
+                    labelText: '搜索合并目标',
+                    prefixIcon: Icon(Icons.search_rounded),
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onChanged: (value) => setDialogState(() => query = value),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.maxFinite,
+                  height:
+                      (matches.length *
+                              72.0 *
+                              MediaQuery.textScalerOf(dialogContext).scale(1))
+                          .clamp(80.0, 240.0)
+                          .toDouble(),
+                  child: ListView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    children: [
+                      for (final other in matches)
+                        AppTile(
+                          onTap: () => Navigator.pop(context, other['id']),
+                          leading: const Icon(Icons.label_outline),
+                          title: Text(other['name']),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                        ),
+                      if (matches.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Text('没有匹配的标签，请修改搜索词。'),
+                        ),
+                    ],
+                  ),
+                ),
               ],
-            ),
-          ),
+            );
+          },
         ),
         actions: [
           AppTextButton(

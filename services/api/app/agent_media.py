@@ -13,6 +13,7 @@ from .models import User,MediaSource,AgentThread,AgentRun,new_id
 from .media import owned_source,value,version,SourceVersion
 from .media_files import sanitize,path_for
 from .reminder_rules import utcnow
+from .agent_api import BrowsingContext
 
 router=APIRouter(prefix='/agent')
 
@@ -42,6 +43,11 @@ async def submit_media(request:Request,user:User=Depends(current_user),db:Sessio
     sid=str(form.get('semester_id') or '')
     key=str(form.get('client_request_id') or '')
     instruction=str(form.get('instruction') or '').strip()
+    browsing_context=None
+    if form.get('browsing_context'):
+        from pydantic import ValidationError
+        try:browsing_context=BrowsingContext.model_validate_json(str(form['browsing_context'])).model_dump(mode='json')
+        except (ValidationError,ValueError):error(422,'INVALID_INPUT','请核对当前浏览日期')
     kind=str(form.get('kind') or 'image')
     tid=str(form.get('thread_id') or '')
     if not sid or not 1<=len(key)<=100 or len(instruction)>10000 or kind not in ('image','audio'):
@@ -61,7 +67,9 @@ async def submit_media(request:Request,user:User=Depends(current_user),db:Sessio
         clean_total+=len(clean)
         if clean_total>120*1024*1024:error(413,'MEDIA_TOO_LARGE','图片解码后超过存储限制，请压缩后整体重新发送')
         parts.append((digest,clean,mime,ext,metadata))
-    signature=fingerprint({'images':hashes,'kind':kind,'instruction':instruction,'thread_id':tid})
+    signature_data={'images':hashes,'kind':kind,'instruction':instruction,'thread_id':tid}
+    if browsing_context is not None:signature_data['browsing_context']=browsing_context
+    signature=fingerprint(signature_data)
     thread=owned_thread(db,user,tid,True) if tid else None
     if thread and thread.semester_id!=sid:error(404,'NOT_FOUND','对话不属于当前学期')
     s=owned_semester(db,user,sid,lock=True)
@@ -84,7 +92,7 @@ async def submit_media(request:Request,user:User=Depends(current_user),db:Sessio
     now=utcnow().isoformat()
     run=AgentRun(user_id=user.id,thread_id=thread.id,request_id='media:'+key,
         text=instruction or '请整理这份通知，生成需要我确认的安排。',status='recognizing',created_at=now,
-        state={'stage':'正在识别通知','progress':[],'sequence':0})
+        state={'stage':'正在识别通知','progress':[],'sequence':0,'browsing_context':browsing_context})
     db.add(run);db.flush()
     metadata={'image_count':len(parts),'same_notice':True,'thread_id':thread.id,'agent_run_id':run.id,
         'stage':'等待识别','progress':[]}
@@ -141,8 +149,12 @@ def cancel_media_run(id:str,user:User=Depends(current_user),db:Session=Depends(g
     db.commit();return result(db,user,source)
 
 
+class MediaRetryInput(SourceVersion):
+    browsing_context: BrowsingContext | None = None
+
+
 @router.post('/media-runs/{id}/retry',status_code=202)
-def retry_media_run(id:str,body:SourceVersion,request:Request,user:User=Depends(current_user),db:Session=Depends(get_db)):
+def retry_media_run(id:str,body:MediaRetryInput,request:Request,user:User=Depends(current_user),db:Session=Depends(get_db)):
     from .agent_api import owned_run,owned_thread
     source=owned_source(db,user,id)
     metadata=source.metadata_json
@@ -161,11 +173,13 @@ def retry_media_run(id:str,body:SourceVersion,request:Request,user:User=Depends(
     from .capture import admission
     admission(request,user)
     now=utcnow().isoformat()
+    browsing_context=(body.browsing_context.model_dump(mode='json') if body.browsing_context is not None else None) if 'browsing_context' in body.model_fields_set else run.state.get('browsing_context')
     source.status='queued';source.version+=1;source.lease_token=None;source.lease_until=0;source.attempts=0;source.error_code=None
     source.metadata_json={**metadata,'stage':'等待重新识别','progress':[
         {'stage':'recognition','message':'等待重新识别','at':now}]}
     run.status='recognizing';run.lease_token=None;run.lease_until=0;run.attempts=0
     run.state={'stage':'等待重新识别','media_source_id':source.id,'progress':[],
+        'browsing_context':browsing_context,
         'source':{'id':source.id,'version':source.version,'kind':source.kind,'text':source.text,
             'original_text':source.original_text,'reference_at':source.reference_at},
         'sequence':run.state.get('sequence',0)+1}
@@ -190,6 +204,8 @@ def publish_recognized_turn(db,source):
     state=initial_state(db,user,thread,run.text,utcnow().isoformat(),exclude_run_id=run.id,input_kind='notice')
     message={'role':'user','content':json.dumps({'request':run.text,'notice_data':ref},ensure_ascii=False)}
     state['messages'][-1]=message;state['turn_messages'][-1]=message
+    from .agent_api import attach_browsing_context
+    attach_browsing_context(state,run.state.get('browsing_context'),run.text)
     state.update(run_id=run.id,source=ref,draft_source=source.text,
         media_source_id=source.id,
         progress=metadata.get('progress',[]),stage='识别完成，正在理解通知')

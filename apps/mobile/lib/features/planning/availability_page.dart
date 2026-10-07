@@ -253,7 +253,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('可学习时间')),
+    appBar: AppBar(title: const Text('学习时间')),
     bottomNavigationBar: version == null
         ? null
         : ActionFooter(
@@ -276,12 +276,6 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
         : ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              const RecordHeading(
-                title: '每周学习时间',
-                label: '',
-                icon: Icons.event_available_outlined,
-                subtitle: '选择每周可用于学习的时段，已排课程会自动避开。',
-              ),
               AppTextButton(
                 onPressed: busy
                     ? null
@@ -300,7 +294,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
               EditorSection(
                 title: '每周学习时段',
                 icon: Icons.view_week_outlined,
-                subtitle: '${weekly.length}段每周时段',
+                subtitle: '${weekly.length}段 · 已排课程会自动避开',
                 children: [
                   AppSegmentedControl<int>(
                     value: selectedDay,
@@ -395,6 +389,10 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                   child: CampusPanel(
                     padding: EdgeInsets.zero,
                     child: AppTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       title: Text(
                         displayInterval(row['start_at'], row['end_at']),
                       ),
@@ -412,7 +410,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                     ),
                   ),
                 ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
               if (error != null) ...[
                 SoftNotice(error!, warning: true),
                 const SizedBox(height: 12),

@@ -101,4 +101,28 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+  testWidgets('custom lead stays editable after entering a preset value', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      const ReminderEditor(
+        kind: 'event',
+        initial: {'mode': 'relative', 'lead_minutes': 7, 'enabled': true},
+      ),
+    );
+    await tester.enterText(find.byType(EditableText), '30');
+    await tester.tap(find.text('更多设置'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('启用这条提醒'));
+    await tester.tap(find.text('启用这条提醒'));
+    await tester.pumpAndSettle();
+    expect(find.byType(EditableText), findsOneWidget);
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      '30',
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

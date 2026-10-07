@@ -48,9 +48,9 @@ void main() {
     );
     await settle(tester);
     expect(find.text('标记完成'), findsOneWidget);
-    expect(find.text('取消事项'), findsNothing);
+    expect(find.text('取消任务'), findsNothing);
     expect(find.text('修改历史'), findsNothing);
-    expect(find.byTooltip('编辑事项'), findsOneWidget);
+    expect(find.byTooltip('编辑任务'), findsOneWidget);
     final deadline = displayInstant(itemRecord()['time']['at']);
     expect(find.text(deadline), findsOneWidget);
     expect(find.text('$deadline 截止'), findsNothing);
@@ -122,9 +122,9 @@ void main() {
     await settle(tester);
     await tester.tap(find.byTooltip('更多操作'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('取消事项'));
+    await tester.tap(find.text('取消任务'));
     await settle(tester);
-    expect(find.text('确认取消事项'), findsOneWidget);
+    expect(find.text('确认取消任务'), findsOneWidget);
     expect(writes, 0);
     await tester.tap(find.text('返回'));
     await tester.pumpAndSettle();

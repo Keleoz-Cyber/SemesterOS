@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import '../../ui/app_controls.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/breathing_card.dart';
@@ -10,7 +12,7 @@ import 'task_state_glyph.dart';
 String kindLabel(String? kind) => switch (kind) {
   'exam' => '考试',
   'assignment' => '作业',
-  _ => '个人任务',
+  _ => '任务',
 };
 String itemTimeLabel(Map<String, dynamic> item, {bool includeMissing = true}) {
   final t = Map<String, dynamic>.from(item['time'] ?? {});
@@ -117,6 +119,7 @@ class ItemCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onTap;
   final VoidCallback? onDoubleTap, onLongPress;
+  final FutureOr<void> Function()? onComplete;
   final Widget? riskFooter;
   final bool animateUrgency;
   const ItemCard({
@@ -125,6 +128,7 @@ class ItemCard extends StatelessWidget {
     required this.onTap,
     this.onDoubleTap,
     this.onLongPress,
+    this.onComplete,
     this.riskFooter,
     this.animateUrgency = false,
   });
@@ -220,8 +224,10 @@ class ItemCard extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 '${item['title']}',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                maxLines: onComplete == null ? 2 : null,
+                                overflow: onComplete == null
+                                    ? TextOverflow.ellipsis
+                                    : TextOverflow.clip,
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
@@ -231,11 +237,22 @@ class ItemCard extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Icon(
-                              Icons.chevron_right_rounded,
-                              size: 18,
-                              color: CampusColors.muted,
-                            ),
+                            if (onComplete != null && active && !exam)
+                              AppTextButton.icon(
+                                guardAsync: true,
+                                onPressed: onComplete,
+                                icon: const Icon(
+                                  Icons.check_circle_outline_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('完成'),
+                              )
+                            else
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                size: 18,
+                                color: CampusColors.muted,
+                              ),
                           ],
                         ),
                         Padding(

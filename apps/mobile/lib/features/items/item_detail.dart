@@ -4,6 +4,7 @@ import '../../ui/app_sheet.dart';
 import '../../ui/empty_states.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
+import '../../ui/time_urgency.dart' show itemDeadline;
 import 'package:go_router/go_router.dart';
 import '../media/source_view.dart';
 import '../../ui/campus_theme.dart';
@@ -381,16 +382,14 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
       );
       final time = Map<String, dynamic>.from(data?['time'] ?? {});
       final overdue =
-          active &&
-          data?['anchor_at'] != null &&
-          DateTime.parse(data!['anchor_at']).isBefore(DateTime.now());
+          active && itemDeadline(data ?? {})?.isBefore(DateTime.now()) == true;
       return Scaffold(
         appBar: AppBar(
-          title: Text(exam ? '考试详情' : '事项详情'),
+          title: Text(exam ? '考试详情' : '任务详情'),
           actions: [
             if (data != null && active)
               AppIconButton(
-                tooltip: '编辑事项',
+                tooltip: '编辑任务',
                 onPressed: busy ? null : () => edit(data),
                 icon: const Icon(Icons.edit_outlined),
               ),
@@ -418,7 +417,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                   if (active)
                     const RecordMenuAction(
                       'cancel',
-                      '取消事项',
+                      '取消任务',
                       Icons.delete_outline_rounded,
                       destructive: true,
                     ),
@@ -443,7 +442,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                       onPressed: busy ? null : () => changeState('completed'),
                     )
             : ActionFooter(
-                label: '恢复事项',
+                label: '恢复任务',
                 icon: Icons.undo_rounded,
                 onPressed: busy ? null : () => changeState('active'),
               ),
@@ -517,30 +516,28 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                         icon: Icons.place_outlined,
                       ),
                     if (active && !exam) ...[
-                      if (data['remaining_minutes'] != null ||
-                          data['review_exam_id'] != null)
-                        TaskActionRail(
-                          actions: [
-                            TaskQuickAction(
-                              data['remaining_minutes'] == null
-                                  ? '更新任务进度'
-                                  : '还需 ${minutesLabel(data['remaining_minutes'])}',
-                              Icons.timelapse_rounded,
-                              busy ? null : () => progress(data),
-                            ),
-                            TaskQuickAction(
-                              reminders.isEmpty
-                                  ? '添加提醒'
-                                  : '提醒 · ${reminders.length}条',
-                              Icons.notifications_outlined,
-                              busy
-                                  ? null
-                                  : () => reminders.isEmpty
-                                        ? reminder()
-                                        : showReminders(data),
-                            ),
-                          ],
-                        ),
+                      TaskActionRail(
+                        actions: [
+                          TaskQuickAction(
+                            data['remaining_minutes'] == null
+                                ? '补充预计用时'
+                                : '还需 ${minutesLabel(data['remaining_minutes'])}',
+                            Icons.timelapse_rounded,
+                            busy ? null : () => progress(data),
+                          ),
+                          TaskQuickAction(
+                            reminders.isEmpty
+                                ? '添加提醒'
+                                : '提醒 · ${reminders.length}条',
+                            Icons.notifications_outlined,
+                            busy
+                                ? null
+                                : () => reminders.isEmpty
+                                      ? reminder()
+                                      : showReminders(data),
+                          ),
+                        ],
+                      ),
                       if (data['remaining_minutes'] != null ||
                           data['review_exam_id'] != null ||
                           const [
@@ -559,11 +556,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                         child: OperationFailed(operation: '操作', reason: error!),
                       ),
                     const SizedBox(height: 16),
-                    if ((active || reminders.isNotEmpty) &&
-                        !(active &&
-                            !exam &&
-                            (data['remaining_minutes'] != null ||
-                                data['review_exam_id'] != null)))
+                    if ((active || reminders.isNotEmpty) && !(active && !exam))
                       RecordActionTile(
                         title: reminders.isEmpty
                             ? '添加提醒'

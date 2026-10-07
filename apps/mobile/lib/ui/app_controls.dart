@@ -1023,22 +1023,25 @@ class _AppDisclosureState extends State<AppDisclosure> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      AppTile(
-        title: widget.title,
-        subtitle: widget.subtitle,
-        leading: widget.leading,
-        contentPadding: widget.tilePadding,
-        trailing: AnimatedRotation(
-          turns: open ? .5 : 0,
-          duration: AppMotion.change(context),
-          child: const Icon(Icons.expand_more_rounded, size: 20),
+      Semantics(
+        expanded: open,
+        child: AppTile(
+          title: widget.title,
+          subtitle: widget.subtitle,
+          leading: widget.leading,
+          contentPadding: widget.tilePadding,
+          trailing: AnimatedRotation(
+            turns: open ? .5 : 0,
+            duration: AppMotion.change(context),
+            child: const Icon(Icons.expand_more_rounded, size: 20),
+          ),
+          onTap: widget.enabled
+              ? () {
+                  setState(() => open = !open);
+                  widget.onExpansionChanged?.call(open);
+                }
+              : null,
         ),
-        onTap: widget.enabled
-            ? () {
-                setState(() => open = !open);
-                widget.onExpansionChanged?.call(open);
-              }
-            : null,
       ),
       AppExpandRegion(
         visible: open,

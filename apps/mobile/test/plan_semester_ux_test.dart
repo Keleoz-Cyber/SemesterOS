@@ -277,6 +277,7 @@ void main() {
                     context, {
                     initialText,
                     mediaKind,
+                    browsingContext,
                     autoSubmit = false,
                   }) async {
                     assistantRequests++;
@@ -313,7 +314,9 @@ void main() {
       expect(find.text('学习时间'), findsOneWidget);
       expect(find.text('设置可学习时间'), findsNothing);
       request = null;
-      await tester.tap(find.text('全部安排'));
+      await tester.ensureVisible(find.text('全部安排'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('全部安排').hitTestable());
       await settleIo(tester);
       expect(find.text('生成新的计划方案'), findsNothing);
       expect(find.text('尽量少改动，重排已有计划'), findsNothing);

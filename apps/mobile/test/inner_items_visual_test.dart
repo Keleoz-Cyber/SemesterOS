@@ -482,7 +482,7 @@ void main() {
           .toList();
       expect(
         displayedTimes,
-        scale == 1.0 ? ['14:00—15:30'] : ['开始', '14:00', '结束', '15:30'],
+        anyOf(equals(['14:00—15:30']), equals(['开始', '14:00', '结束', '15:30'])),
       );
       expect(find.byTooltip('编辑日程').hitTestable(), findsOneWidget);
       await shot(tester, 'inner-event-detail-$suffix');

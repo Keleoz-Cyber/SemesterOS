@@ -14,6 +14,24 @@ import 'ui_polish_test.dart' show loadPreviewFonts, mount, capture;
 void main() {
   setUpAll(loadPreviewFonts);
   test(
+    'repeated broad mentions are presentation-only and keep specific conditions',
+    () {
+      final original = {
+        'recipient': '所有人(@所有人)',
+        'applicability': '所有人（@所有人）',
+        'conditions': ['尚未申请的同学', '尚未申请的同学'],
+      };
+      final rows = noticeDetailRows(original);
+      expect(rows.map((row) => row.value), ['所有人', '尚未申请的同学']);
+      expect(original['recipient'], '所有人(@所有人)');
+      expect(original['conditions'], ['尚未申请的同学', '尚未申请的同学']);
+      expect(noticeDisplayText('负责人（@所有人）'), '负责人');
+      expect(noticeDisplayText('全体成员（@所有人）'), '全体成员');
+      expect(noticeDisplayText('@所有人'), '所有人');
+      expect(noticeDisplayText('所有人（@负责人）'), '所有人（@负责人）');
+    },
+  );
+  test(
     'vague time of day survives without inventing an hour; other channels keep context',
     () {
       final time = noticeTime({

@@ -10,12 +10,14 @@ import 'motion.dart';
 class AppNavigation extends StatelessWidget {
   final int selected;
   final ValueChanged<int> onSelected;
+  final bool showAssistant;
   const AppNavigation({
     super.key,
     required this.selected,
     required this.onSelected,
+    this.showAssistant = true,
   });
-  static const labels = ['今日', '日程', '计划', '学期'];
+  static const labels = ['今日', '日程', '任务', '学期'];
   static const outlined = [
     Icons.today_outlined,
     Icons.calendar_view_week_outlined,
@@ -42,7 +44,10 @@ class AppNavigation extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const AssistantDock(),
+            AppExpandRegion(
+              visible: showAssistant,
+              child: const AssistantDock(),
+            ),
             FBottomNavigationBar(
               index: selected,
               onChange: (value) {

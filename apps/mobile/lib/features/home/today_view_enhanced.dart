@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../ui/app_controls.dart';
-import '../../ui/app_selection.dart';
 import '../../ui/breathing_card.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/empty_scene.dart';
@@ -20,8 +19,11 @@ class TodayViewSwitch extends StatefulWidget {
   final DateTime day;
   final ValueChanged<Map<String, dynamic>> onEventTap;
   final ValueChanged<Map<String, dynamic>> onTaskTap;
+  final Future<void> Function(Map<String, dynamic>)? onTaskComplete;
   final ValueChanged<Map<String, dynamic>>? onTaskEdit;
   final VoidCallback? onAllTasks;
+  final VoidCallback? onAllEvents;
+  final String? priorityTaskId;
   final HomePreferences? preferences;
   final bool dayFinished;
   final bool scheduleAvailable;
@@ -36,8 +38,11 @@ class TodayViewSwitch extends StatefulWidget {
     required this.day,
     required this.onEventTap,
     required this.onTaskTap,
+    this.onTaskComplete,
     this.onTaskEdit,
     this.onAllTasks,
+    this.onAllEvents,
+    this.priorityTaskId,
     this.preferences,
     this.dayFinished = false,
     this.scheduleAvailable = true,
@@ -50,7 +55,7 @@ class TodayViewSwitch extends StatefulWidget {
 
 class _TodayViewSwitchState extends State<TodayViewSwitch>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  TodayViewMode? _localChoice;
+  late TodayViewMode _shownMode;
   List<String> _localOrder = [];
   late final AnimationController _contentMotion;
   late final CurvedAnimation _contentCurve;
@@ -71,6 +76,7 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
       curve: Curves.easeOutCubic,
     );
     WidgetsBinding.instance.addObserver(this);
+    _shownMode = _mode;
   }
 
   bool get _canAnimate =>
@@ -84,6 +90,20 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
     super.didChangeDependencies();
     if (!_canAnimate) {
       _contentMotion.stop();
+      _contentMotion.value = 1;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant TodayViewSwitch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_shownMode == _mode) return;
+    _slideFrom = _mode.index > _shownMode.index ? .035 : -.035;
+    _shownMode = _mode;
+    _ordering = false;
+    if (_canAnimate) {
+      _contentMotion.forward(from: 0);
+    } else {
       _contentMotion.value = 1;
     }
   }
@@ -107,32 +127,14 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
 
   TodayViewMode get _mode =>
       widget.preferences?.todayView ??
-      _localChoice ??
       defaultTodayViewMode(
         events: widget.timeline.length + widget.otherEntries.length,
         tasks: widget.tasks.length,
       );
-  Future<void> _save({TodayViewMode? mode, List<String>? order}) async {
-    final changingMode = mode != null && mode != _mode;
-    setState(() {
-      if (mode != null) {
-        _localChoice = mode;
-        _ordering = false;
-      }
-      if (order != null) _localOrder = order;
-      if (changingMode) {
-        _slideFrom = mode == TodayViewMode.tasks ? .035 : -.035;
-      }
-    });
-    if (changingMode) {
-      if (_canAnimate) {
-        _contentMotion.forward(from: 0);
-      } else {
-        _contentMotion.value = 1;
-      }
-    }
+  Future<void> _save({required List<String> order}) async {
+    setState(() => _localOrder = order);
     try {
-      await widget.preferences?.change(todayView: mode, taskOrder: order);
+      await widget.preferences?.change(taskOrder: order);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.maybeOf(
@@ -143,46 +145,187 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      AppSegmentedControl<TodayViewMode>(
-        value: _mode,
-        options: const {
-          TodayViewMode.schedule: '日程',
-          TodayViewMode.tasks: '待办',
-        },
-        onChanged: (mode) => _save(mode: mode),
+  Widget build(BuildContext context) => ClipRect(
+    child: FadeTransition(
+      opacity: _contentCurve,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset(_slideFrom, 0),
+          end: Offset.zero,
+        ).animate(_contentCurve),
+        child: KeyedSubtree(
+          key: ValueKey(_mode),
+          child: _mode == TodayViewMode.overview
+              ? _overview()
+              : _mode == TodayViewMode.schedule
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (widget.scheduleLeading != null) widget.scheduleLeading!,
+                    _schedule(),
+                  ],
+                )
+              : _tasks(),
+        ),
       ),
-      const SizedBox(height: 8),
-      // Only the incoming body moves. The control and the dashboard header
-      // retain their place; rapid taps never stack outgoing interactive views.
-      ClipRect(
-        child: FadeTransition(
-          opacity: _contentCurve,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: Offset(_slideFrom, 0),
-              end: Offset.zero,
-            ).animate(_contentCurve),
-            child: KeyedSubtree(
-              key: ValueKey(_mode),
-              child: _mode == TodayViewMode.schedule
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (widget.scheduleLeading != null)
-                          widget.scheduleLeading!,
-                        _schedule(),
-                      ],
-                    )
-                  : _tasks(),
+    ),
+  );
+
+  Widget _summaryHeading(String title, VoidCallback? onOpen, Key key) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+      ),
+      if (onOpen != null)
+        AppTextButton(key: key, onPressed: onOpen, child: const Text('查看全部')),
+    ],
+  );
+
+  Widget _overview() {
+    final upcoming = widget.timeline.where((row) {
+      final start = schoolTime(row['start_at']);
+      final end = row['end_at'] == null ? null : schoolTime(row['end_at']);
+      return end == null ||
+          end.isAfter(widget.now) ||
+          !start.isBefore(widget.now);
+    }).toList();
+    final nextId = upcoming.where((row) {
+      final start = schoolTime(row['start_at']);
+      final end = row['end_at'] == null ? null : schoolTime(row['end_at']);
+      return calendarReservesTime(row) &&
+          (!start.isBefore(widget.now) || end?.isAfter(widget.now) == true);
+    }).firstOrNull?['id'];
+    final tasks = [...widget.tasks];
+    final priorityIndex = tasks.indexWhere(
+      (row) => row['id'] == widget.priorityTaskId,
+    );
+    if (priorityIndex > 0) tasks.insert(0, tasks.removeAt(priorityIndex));
+    final otherEntries = widget.otherEntries
+        .where(
+          (row) =>
+              !const [
+                'deadline',
+                'task',
+                'item',
+                'assignment',
+              ].contains(row['resource_type']) ||
+              !widget.tasks.any(
+                (task) => task['id'] == (row['resource_id'] ?? row['id']),
+              ),
+        )
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _summaryHeading(
+          '今日日程',
+          widget.onAllEvents,
+          const Key('today-events-action'),
+        ),
+        if (!widget.scheduleAvailable && widget.timeline.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              widget.scheduleLoading ? '正在读取今日安排…' : '暂时无法读取今日安排',
+              style: const TextStyle(color: CampusColors.muted),
             ),
+          )
+        else if (widget.timeline.isEmpty && widget.otherEntries.isEmpty)
+          const _TodayEmptyView(kind: EmptySceneKind.agenda, title: '今天没有安排')
+        else if (upcoming.isEmpty && widget.timeline.isNotEmpty)
+          AppDisclosure(
+            title: Text('今天已结束 · ${widget.timeline.length}项'),
+            children: [for (final row in widget.timeline) _agendaRow(row)],
+          )
+        else
+          for (var i = 0; i < upcoming.length && i < 3; i++)
+            _agendaRow(upcoming[i], next: upcoming[i]['id'] == nextId),
+        for (final row in otherEntries.take(2))
+          AppTile(
+            contentPadding: const EdgeInsets.symmetric(vertical: 6),
+            onTap: () => widget.onEventTap(row),
+            title: Text('${row['title'] ?? ''}'),
+            subtitle: calendarTimeLabel(row, includeMissing: false).isEmpty
+                ? null
+                : Text(calendarTimeLabel(row, includeMissing: false)),
+            trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+          ),
+        const SizedBox(height: 8),
+        _summaryHeading(
+          '待办任务',
+          widget.onAllTasks,
+          const Key('today-tasks-action'),
+        ),
+        if (widget.tasks.isEmpty)
+          const _TodayEmptyView(kind: EmptySceneKind.tasks, title: '暂无待办事项')
+        else
+          for (final task in tasks.take(2))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ItemCard(
+                item: task,
+                onTap: () => widget.onTaskTap(task),
+                onComplete: widget.onTaskComplete == null
+                    ? null
+                    : () => widget.onTaskComplete!(task),
+                animateUrgency: task['id'] == widget.priorityTaskId,
+                onDoubleTap: widget.onTaskEdit == null
+                    ? null
+                    : () => widget.onTaskEdit!(task),
+              ),
+            ),
+      ],
+    );
+  }
+
+  Widget _agendaRow(Map<String, dynamic> row, {bool next = false}) {
+    final start = schoolTime(row['start_at']);
+    final end = row['end_at'] == null ? null : schoolTime(row['end_at']);
+    final ongoing =
+        !start.isAfter(widget.now) && end?.isAfter(widget.now) == true;
+    final status = ongoing
+        ? '正在进行'
+        : next && !start.isBefore(widget.now)
+        ? '下一项'
+        : '';
+    final location = '${row['location'] ?? ''}'.trim();
+    final endLabel = end == null
+        ? ''
+        : '至 ${DateUtils.isSameDay(start, end) ? hhmm(end) : '${end.month}/${end.day} ${hhmm(end)}'}';
+    return AppTile(
+      key: ValueKey('today-summary-${row['id']}'),
+      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      onTap: () => widget.onEventTap(row),
+      leading: SizedBox(
+        width: 56,
+        child: Text(
+          hhmm(start),
+          style: const TextStyle(
+            color: CampusColors.teal,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
-    ],
-  );
+      title: Text(
+        '${row['title']}',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: location.isEmpty && status.isEmpty && endLabel.isEmpty
+          ? null
+          : Text(
+              [
+                if (status.isNotEmpty) status,
+                if (endLabel.isNotEmpty) endLabel,
+                if (location.isNotEmpty) location,
+              ].join(' · '),
+            ),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+    );
+  }
 
   Widget _schedule() {
     if (!widget.scheduleAvailable &&
@@ -291,6 +434,9 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
                 child: ItemCard(
                   item: task,
                   onTap: () => widget.onTaskTap(task),
+                  onComplete: widget.onTaskComplete == null
+                      ? null
+                      : () => widget.onTaskComplete!(task),
                   onDoubleTap: widget.onTaskEdit == null
                       ? null
                       : () => widget.onTaskEdit!(task),
@@ -357,18 +503,25 @@ class _TodayEmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 20),
-    child: Column(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    child: Row(
       children: [
-        AppEmptyScene(kind: kind),
-        const SizedBox(height: 8),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: CampusColors.muted,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+        Icon(
+          kind == EmptySceneKind.tasks
+              ? Icons.checklist_rounded
+              : Icons.event_available_outlined,
+          size: 20,
+          color: CampusColors.muted,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: CampusColors.muted,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

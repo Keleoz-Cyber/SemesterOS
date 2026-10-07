@@ -9,6 +9,7 @@ import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import '../items/task_surfaces.dart';
 import 'risk_widgets.dart';
+import '../agent/agent_widgets.dart' show PlanWarningNote;
 
 String proposalStatus(String? status) => switch (status) {
   'FEASIBLE_COMPLETE' => '已安排好这次的任务',
@@ -177,6 +178,10 @@ class _ProposalPageState extends State<ProposalPage> {
               '仍有 ${minutesLabel(missing)}的工作还没安排。保存这部分计划后，剩余工作仍需另行安排。',
               warning: true,
             ),
+          for (final warning in widget.controller.rows(
+            p['uncertainty_warnings'],
+          ))
+            PlanWarningNote(message: '${warning['message']}'),
           if (p['optimal'] == false && '${p['status']}'.startsWith('FEASIBLE'))
             const Text(
               '这份方案符合当前时间要求，但可能还有更合适的安排。',
@@ -197,7 +202,7 @@ class _ProposalPageState extends State<ProposalPage> {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: const BoxDecoration(
                   border: Border(bottom: BorderSide(color: CampusColors.line)),
                 ),
@@ -211,7 +216,7 @@ class _ProposalPageState extends State<ProposalPage> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     TaskDurationBalance(
                       target: task['target_minutes'] as num?,
                       existing: task['existing_minutes'] as num? ?? 0,
@@ -248,9 +253,9 @@ class _ProposalPageState extends State<ProposalPage> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(36, 0, 0, 20),
+                  padding: const EdgeInsets.fromLTRB(30, 0, 0, 16),
                   child: Container(
-                    padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+                    padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
                     decoration: const BoxDecoration(
                       border: Border(
                         bottom: BorderSide(color: CampusColors.line),

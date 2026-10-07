@@ -93,9 +93,9 @@ void main() {
       final selectedWeek = panel.currentState!.week;
       final selectedDay = panel.currentState!.selectedDay;
       await capture(tester, 'calendar-phone-grid-large');
-      await tester.tap(find.text('日程列表'));
+      await tester.tap(find.text('列表'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('周时间表'));
+      await tester.tap(find.text('周课表'));
       await tester.pumpAndSettle();
       expect(
         tester.state<ScrollableState>(gridScroll()).position.pixels,
@@ -103,7 +103,7 @@ void main() {
       );
       expect(panel.currentState!.week, selectedWeek);
       expect(panel.currentState!.selectedDay, selectedDay);
-      await tester.tap(find.text('日程列表'));
+      await tester.tap(find.text('列表'));
       await tester.pumpAndSettle();
       final weekAgenda = find.byKey(const ValueKey('calendar-week-agenda'));
       expect(weekAgenda, findsOneWidget);
@@ -148,7 +148,7 @@ void main() {
 
       panel.currentState!.selectDay(DateTime.utc(2026, 9, 27));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('日程列表').first);
+      await tester.tap(find.text('列表').first);
       await tester.pumpAndSettle();
       final sunday = find.byKey(const ValueKey('calendar-day-2026-09-27'));
       await tester.ensureVisible(sunday);
@@ -156,13 +156,10 @@ void main() {
       expect(sunday.hitTestable(), findsOneWidget);
       expect(tester.getRect(sunday).right, lessThanOrEqualTo(320));
 
-      final fade = find.byType(AnimatedCrossFade).first;
       await tester.tap(sunday);
       await tester.pumpAndSettle();
-      expect(
-        tester.widget<AnimatedCrossFade>(fade).crossFadeState,
-        CrossFadeState.showSecond,
-      );
+      expect(panel.currentState!.grid, isFalse);
+      expect(find.byKey(const ValueKey('calendar-week-agenda')), findsNothing);
       final day = tester
           .state<CalendarPanelState>(find.byType(CalendarPanel))
           .selectedDay!;
@@ -180,9 +177,10 @@ void main() {
       expect(wholeWeek.hitTestable(), findsOneWidget);
       await tester.tap(wholeWeek);
       await tester.pumpAndSettle();
+      expect(panel.currentState!.grid, isTrue);
       expect(
-        tester.widget<AnimatedCrossFade>(fade).crossFadeState,
-        CrossFadeState.showFirst,
+        find.byKey(const ValueKey('calendar-week-agenda')),
+        findsOneWidget,
       );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

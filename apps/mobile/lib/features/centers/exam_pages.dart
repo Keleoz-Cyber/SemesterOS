@@ -89,7 +89,8 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
                   label: const Text('记录考试'),
                 ),
               ],
-              if (rows.isEmpty) const CampusPanel(child: Text('这里还没有考试记录')),
+              if (rows.isEmpty)
+                CampusPanel(child: Text(cancelled ? '没有已取消的考试' : '这里还没有考试记录')),
               for (final row in rows) ...[
                 const SizedBox(height: 12),
                 _ExamRecord(
@@ -377,6 +378,7 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
       appBar: AppBar(title: const Text('复习目标')),
       body: ListView(
         padding: const EdgeInsets.all(20),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         children: [
           AcademicRecordHeading(
             label: '',
@@ -455,6 +457,7 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
                   controller: minutes,
                   onChanged: (_) => setState(() {}),
                   keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
                   decoration: const InputDecoration(labelText: '预计还需复习多久（分钟）'),
                 ),
               ],
@@ -486,13 +489,17 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
                 ),
                 if (mode == 'custom')
                   AppTextButton(
-                    onPressed: () async {
-                      final d = await pickSchoolDateTime(
-                        context,
-                        initial: deadline,
-                      );
-                      if (d != null && mounted) setState(() => deadline = d);
-                    },
+                    onPressed: busy
+                        ? null
+                        : () async {
+                            final d = await pickSchoolDateTime(
+                              context,
+                              initial: deadline,
+                            );
+                            if (d != null && mounted) {
+                              setState(() => deadline = d);
+                            }
+                          },
                     child: Text(
                       deadline == null
                           ? '选择复习截止'

@@ -174,9 +174,20 @@ class _PickerSheetState<T> extends State<_PickerSheet<T>> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: AppField(
                 controller: search,
-                decoration: const InputDecoration(
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
                   hintText: '搜索选项',
-                  prefixIcon: Icon(Icons.search_rounded),
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '清除搜索',
+                          onPressed: () {
+                            search.clear();
+                            setState(() => query = '');
+                          },
+                          icon: const Icon(Icons.close_rounded, size: 20),
+                        ),
                 ),
                 onChanged: (value) => setState(() => query = value.trim()),
               ),
@@ -198,6 +209,7 @@ class _PickerSheetState<T> extends State<_PickerSheet<T>> {
           Flexible(
             child: ListView(
               shrinkWrap: true,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
               children: [
                 if (filtered.isEmpty)

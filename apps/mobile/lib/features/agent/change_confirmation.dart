@@ -189,7 +189,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                   ),
                 ),
             ] else ...[
-              widget.details(p),
+              widget.details({...p, '_compact': true}),
               for (final review in rows(p['reviews']))
                 Text(
                   '${review['title']}：${review['will_align'] == true ? '复习截止跟随考试调整' : '保留原复习截止'}',
@@ -210,6 +210,20 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                   child: Text(
                     '${(conflict['titles'] as List? ?? []).join(' / ')}\n${displayInstant(conflict['start_at'])} — ${displayInstant(conflict['end_at'])}',
                   ),
+                ),
+              if (conflicts.length > 6)
+                AppDisclosure(
+                  tilePadding: EdgeInsets.zero,
+                  title: Text('查看其余 ${conflicts.length - 6} 处冲突'),
+                  children: [
+                    for (final conflict in conflicts.skip(6))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          '${(conflict['titles'] as List? ?? []).join(' / ')}\n${displayInstant(conflict['start_at'])} — ${displayInstant(conflict['end_at'])}',
+                        ),
+                      ),
+                  ],
                 ),
               if (pending)
                 AppCheckRow(
@@ -250,7 +264,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                 spacing: 12,
                 runSpacing: 8,
                 children: [
-                  AppOutlineButton(
+                  AppTextButton(
                     onPressed: c.busy
                         ? null
                         : () => c.decide(widget.run, false),

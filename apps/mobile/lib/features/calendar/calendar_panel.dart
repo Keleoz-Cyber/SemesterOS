@@ -13,6 +13,8 @@ import 'calendar_repository.dart';
 import 'day_context_panel.dart';
 import 'event_form.dart';
 import '../../ui/empty_states.dart';
+import '../../ui/assistant_scope.dart';
+import '../../ui/motion.dart';
 
 class CalendarPanel extends StatefulWidget {
   final AppController app;
@@ -37,6 +39,42 @@ class CalendarPanelState extends State<CalendarPanel>
   String? dayStripAnchor;
   late int week;
   bool grid = true, weekList = false, active = true, foreground = true;
+  bool _viewChosen = false;
+  AxisDirection _direction = AxisDirection.right;
+  String get _viewKey => 'calendar-view:${widget.app.user['id']}';
+
+  Future<void> restoreView() async {
+    final key = _viewKey;
+    try {
+      final saved = await widget.app.cache.read(key);
+      if (!mounted || _viewChosen || key != _viewKey || widget.todayOnly) {
+        return;
+      }
+      if (saved?['mode'] == 'list') setState(() => weekList = true);
+    } catch (_) {
+      // A view preference must never prevent access to the timetable.
+    }
+  }
+
+  Future<void> chooseView(String value) async {
+    setState(() {
+      _viewChosen = true;
+      _direction = value == 'list' ? AxisDirection.right : AxisDirection.left;
+      grid = true;
+      weekList = value == 'list';
+    });
+    try {
+      await widget.app.cache.write(_viewKey, {'mode': value});
+    } catch (_) {}
+  }
+
+  Future<void> askAssistant() => AssistantScope.open(
+    context,
+    browsingContext: AssistantBrowsingContext(
+      startDate: grid ? first : selectedDay ?? first,
+      endDate: grid ? first.add(const Duration(days: 6)) : selectedDay ?? first,
+    ),
+  );
   MinuteClock? clock;
   DateTime get now => widget.now?.call() ?? schoolNow();
   bool get hasSemester => widget.app.semester != null;
@@ -146,6 +184,7 @@ class CalendarPanelState extends State<CalendarPanel>
         ? today
         : first;
     reload();
+    restoreView();
   }
 
   void itemsChanged() {
@@ -228,6 +267,7 @@ class CalendarPanelState extends State<CalendarPanel>
     if (next == week || next < 1 || next > semester['total_weeks']) return;
     final weekday = selectedDay?.weekday ?? 1;
     setState(() {
+      _direction = next > week ? AxisDirection.right : AxisDirection.left;
       week = next;
       selectedDay = first.add(Duration(days: weekday - 1));
     });
@@ -247,6 +287,10 @@ class CalendarPanelState extends State<CalendarPanel>
     if (date.isBefore(start) || date.isAfter(end)) return;
     final changed = week != next;
     setState(() {
+      _viewChosen = true;
+      _direction = date.isBefore(selectedDay ?? first)
+          ? AxisDirection.left
+          : AxisDirection.right;
       week = next;
       selectedDay = date;
       grid = false;
@@ -1074,26 +1118,12 @@ class CalendarPanelState extends State<CalendarPanel>
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Wrap(
-                            runSpacing: 2,
-                            children: [
-                              Text(
-                                '${first.month}月${first.day}日',
-                                softWrap: false,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: CampusColors.muted,
-                                ),
-                              ),
-                              Text(
-                                '—${last.month}月${last.day}日',
-                                softWrap: false,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: CampusColors.muted,
-                                ),
-                              ),
-                            ],
+                          Text(
+                            '${first.month}/${first.day}—${last.month}/${last.day}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: CampusColors.muted,
+                            ),
                           ),
                         ],
                       ),
@@ -1128,15 +1158,12 @@ class CalendarPanelState extends State<CalendarPanel>
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 6),
         if (spaciousControls)
           AppSegmentedControl<String>(
             value: listMode ? 'list' : 'table',
-            options: const {'table': '周时间表', 'list': '日程列表'},
-            onChanged: (value) => setState(() {
-              grid = true;
-              weekList = value == 'list';
-            }),
+            options: const {'table': '周课表', 'list': '列表'},
+            onChanged: chooseView,
           ),
         Row(
           children: [
@@ -1144,11 +1171,8 @@ class CalendarPanelState extends State<CalendarPanel>
               Expanded(
                 child: AppSegmentedControl<String>(
                   value: listMode ? 'list' : 'table',
-                  options: const {'table': '周时间表', 'list': '日程列表'},
-                  onChanged: (value) => setState(() {
-                    grid = true;
-                    weekList = value == 'list';
-                  }),
+                  options: const {'table': '周课表', 'list': '列表'},
+                  onChanged: chooseView,
                 ),
               ),
             if (spaciousControls) ...[
@@ -1171,19 +1195,26 @@ class CalendarPanelState extends State<CalendarPanel>
                     : CampusColors.primary,
               ),
             ),
+            AppIconButton(
+              key: const Key('calendar-assistant'),
+              tooltip: '询问这段日程',
+              guardAsync: false,
+              onPressed: askAssistant,
+              icon: const Icon(Icons.auto_awesome_outlined, size: 21),
+            ),
           ],
         ),
-        if (listMode || kind != 'all')
+        if (listMode && !weekList || kind != 'all')
           Row(
             children: [
-              if (listMode)
+              if (listMode && !weekList)
                 AppTextButton(
                   key: const ValueKey('calendar-whole-week'),
                   onPressed: () => setState(() {
                     grid = true;
                     weekList = true;
                   }),
-                  child: Text(weekList ? '整周' : '查看整周'),
+                  child: const Text('查看整周'),
                 ),
               if (kind != 'all')
                 Text(
@@ -1234,9 +1265,18 @@ class CalendarPanelState extends State<CalendarPanel>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         calendarToolbar(now),
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
         if (!weekMode || phoneWeek) dateStrip(date, now, duration),
-        const SizedBox(height: 12),
+        if (weekMode && !phoneWeek)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              '点日期查看当天',
+              style: TextStyle(fontSize: 12, color: CampusColors.muted),
+            ),
+          )
+        else
+          const SizedBox(height: 8),
         if (!repository.busy &&
             repository.data != null &&
             widget.items.courses.isEmpty &&
@@ -1274,67 +1314,69 @@ class CalendarPanelState extends State<CalendarPanel>
               ),
             ],
           ),
-        AnimatedCrossFade(
-          key: ValueKey('calendar-view-$sid'),
-          duration: duration,
-          alignment: Alignment.topCenter,
-          crossFadeState: weekMode
-              ? CrossFadeState.showFirst
-              : CrossFadeState.showSecond,
-          firstChild: Column(
-            children: [
-              Offstage(
-                offstage: phoneWeek,
-                child: TickerMode(
-                  enabled: weekMode && !phoneWeek,
-                  child: SizedBox(
-                    height: (MediaQuery.sizeOf(context).height * .68).clamp(
-                      320.0,
-                      660.0,
-                    ),
-                    child: NotificationListener<OverscrollNotification>(
-                      onNotification: (n) {
-                        if (n.metrics.axis == Axis.vertical) {
-                          final outer = Scrollable.maybeOf(context)?.position;
-                          if (outer != null) {
-                            outer.jumpTo(
-                              (outer.pixels + n.overscroll).clamp(
-                                outer.minScrollExtent,
-                                outer.maxScrollExtent,
+        AppContentTransition(
+          key: ValueKey('calendar-body-$sid'),
+          value: '$week:$weekMode:$phoneWeek:${calendarDate(date)}:$kind',
+          direction: _direction,
+          child: weekMode
+              ? Column(
+                  children: [
+                    Offstage(
+                      offstage: phoneWeek,
+                      child: ExcludeFocus(
+                        excluding: phoneWeek,
+                        child: TickerMode(
+                          enabled: weekMode && !phoneWeek,
+                          child: SizedBox(
+                            height: (MediaQuery.sizeOf(context).height * .68)
+                                .clamp(320.0, 660.0),
+                            child: NotificationListener<OverscrollNotification>(
+                              onNotification: (n) {
+                                if (n.metrics.axis == Axis.vertical) {
+                                  final outer = Scrollable.maybeOf(
+                                    context,
+                                  )?.position;
+                                  if (outer != null) {
+                                    outer.jumpTo(
+                                      (outer.pixels + n.overscroll).clamp(
+                                        outer.minScrollExtent,
+                                        outer.maxScrollExtent,
+                                      ),
+                                    );
+                                  }
+                                }
+                                return false;
+                              },
+                              child: ScheduleGrid(
+                                key: ValueKey('week-grid-$sid'),
+                                firstDay: first,
+                                minDay: start,
+                                maxDay: end,
+                                entries: repository.entries,
+                                periods: widget.items.rows(semester['periods']),
+                                loading: repository.busy,
+                                resourceFilter: kind,
+                                revision: currentRevision,
+                                showHeader: true,
+                                selectedDay: date,
+                                visible: weekMode && !phoneWeek,
+                                now: widget.now,
+                                refreshClock: false,
+                                onOpen: open,
+                                onDay: selectDay,
+                                onWeek: (d) => changeWeek(
+                                  d.difference(start).inDays ~/ 7 + 1,
+                                ),
                               ),
-                            );
-                          }
-                        }
-                        return false;
-                      },
-                      child: ScheduleGrid(
-                        key: ValueKey('week-grid-$sid'),
-                        firstDay: first,
-                        minDay: start,
-                        maxDay: end,
-                        entries: repository.entries,
-                        periods: widget.items.rows(semester['periods']),
-                        loading: repository.busy,
-                        resourceFilter: kind,
-                        revision: currentRevision,
-                        showHeader: true,
-                        selectedDay: date,
-                        visible: weekMode && !phoneWeek,
-                        now: widget.now,
-                        refreshClock: false,
-                        onOpen: open,
-                        onDay: selectDay,
-                        onWeek: (d) =>
-                            changeWeek(d.difference(start).inDays ~/ 7 + 1),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              if (phoneWeek) weekAgenda(entries, date),
-            ],
-          ),
-          secondChild: agenda(entries, date),
+                    if (phoneWeek) weekAgenda(entries, date),
+                  ],
+                )
+              : agenda(entries, date),
         ),
         if (weekMode &&
             !phoneWeek &&

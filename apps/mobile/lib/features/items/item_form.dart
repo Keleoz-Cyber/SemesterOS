@@ -512,6 +512,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
     body: Form(
       key: form,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
           const SizedBox(height: 12),
@@ -553,7 +554,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
             const SizedBox(height: 16),
           ],
           EditorSection(
-            title: '事项内容',
+            title: '任务内容',
             icon: Icons.edit_note_rounded,
             children: [
               AppSegmentedControl<String>(
@@ -578,11 +579,11 @@ class _ItemFormPageState extends State<ItemFormPage> {
                 controller: title,
                 maxLength: 120,
                 decoration: const InputDecoration(
-                  labelText: '事项标题',
+                  labelText: '任务标题',
                   hintText: '要完成什么？',
                   counterText: '',
                 ),
-                validator: (v) => v!.trim().isEmpty ? '请输入事项标题' : null,
+                validator: (v) => v!.trim().isEmpty ? '请输入任务标题' : null,
               ),
               AppPickerField<String>(
                 initialValue: course,

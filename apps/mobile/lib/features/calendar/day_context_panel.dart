@@ -6,6 +6,7 @@ import '../items/items_controller.dart';
 import '../home/day_brief_controller.dart';
 import '../../ui/assistant_scope.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/app_loading.dart';
 
 class DayContextPanel extends StatefulWidget {
   final ItemsController items;
@@ -92,7 +93,10 @@ class _DayContextPanelState extends State<DayContextPanel>
 
   @override
   Widget build(BuildContext context) {
-    if (!fresh) {
+    final sameDay =
+        c.data?['semester_id'] == widget.semesterId &&
+        c.data?['date'] == calendarDate(widget.day);
+    if (!fresh && !sameDay) {
       return c.error != null
           ? Align(
               alignment: Alignment.centerLeft,
@@ -109,9 +113,34 @@ class _DayContextPanelState extends State<DayContextPanel>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '${widget.day.month}月${widget.day.day}日 · 当天建议',
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${widget.day.month}月${widget.day.day}日 · 当天建议',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              SizedBox.square(
+                dimension: 48,
+                child: c.error != null
+                    ? AppIconButton(
+                        tooltip: '重新更新建议',
+                        onPressed: reload,
+                        icon: const Icon(Icons.refresh_rounded, size: 20),
+                      )
+                    : Center(
+                        child: AppLoadingIndicator(
+                          compact: true,
+                          visible: c.busy,
+                          label: '正在更新建议',
+                        ),
+                      ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           for (final r in c.suggestions.take(3))
@@ -170,11 +199,17 @@ class _DayContextPanelState extends State<DayContextPanel>
                   Align(
                     alignment: Alignment.centerRight,
                     child: AppTextButton.icon(
-                      onPressed: () => AssistantScope.open(
-                        context,
-                        initialText: r['request'],
-                        autoSubmit: true,
-                      ),
+                      onPressed: !fresh
+                          ? null
+                          : () => AssistantScope.open(
+                              context,
+                              initialText: r['request'],
+                              autoSubmit: true,
+                              browsingContext: AssistantBrowsingContext(
+                                startDate: widget.day,
+                                endDate: widget.day,
+                              ),
+                            ),
                       icon: const Icon(Icons.arrow_forward_rounded, size: 18),
                       label: Text(r['action_label']),
                     ),

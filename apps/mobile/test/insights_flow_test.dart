@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:semester_os/features/insights/insights_page.dart';
 import 'package:semester_os/features/insights/insights_controller.dart';
+import 'package:semester_os/features/insights/student_insight_summary.dart';
 import 'schedule_flow_test.dart' show ScheduleFixture;
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'planning_flow_test.dart' show ioTap;
@@ -109,6 +110,34 @@ Map<String, dynamic> insightData(String from, String to, {String? category}) =>
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
+  testWidgets('task counts distinguish a real zero from missing statistics', (
+    tester,
+  ) async {
+    final data = insightData('2026-10-05', '2026-10-11');
+    data['task_activity'] = {'completed_in_range': 6, 'active_current': 0};
+    Future<void> render() => mount(
+      tester,
+      Scaffold(
+        body: SingleChildScrollView(
+          child: StudentInsightSummary(data: data, onDate: (_) {}),
+        ),
+      ),
+    );
+    await render();
+    Finder count(String name, String value) => find.descendant(
+      of: find.byKey(ValueKey('task-summary-$name')),
+      matching: find.text(value),
+    );
+    expect(count('completed_in_range', '6'), findsOneWidget);
+    expect(count('active_current', '0'), findsOneWidget);
+    expect(count('overdue_current', '—'), findsOneWidget);
+    (data['task_activity'] as Map).remove('active_current');
+    await render();
+    expect(count('active_current', '—'), findsOneWidget);
+    expect(count('active_current', '0'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
   test(
     'late filter results are ignored and failed new scope cannot display old totals',
     () async {

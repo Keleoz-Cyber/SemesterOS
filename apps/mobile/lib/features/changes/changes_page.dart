@@ -1,4 +1,5 @@
 import '../../ui/app_controls.dart';
+import '../agent/agent_widgets.dart';
 import '../../ui/app_picker_field.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/foundation.dart' show setEquals;
@@ -668,8 +669,17 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
               child: const Text('保存修改'),
             ),
           if (applied) ...[
-            const SoftNotice('新安排已保存。接下来可以调整受影响的个人计划，查看方案后再确认。'),
-            AppButton(
+            const AssistantSavedAction(text: '调整已保存'),
+            if (blocks.isNotEmpty)
+              Text(
+                '${blocks.length} 段个人计划受影响，可查看调整方案。',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: CampusColors.muted,
+                  height: 1.5,
+                ),
+              ),
+            AppTextButton(
               onPressed: busy || !same ? null : () => act(true),
               child: const Text('查看个人计划调整方案'),
             ),

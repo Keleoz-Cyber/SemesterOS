@@ -7,6 +7,7 @@ import 'package:semester_os/features/calendar/calendar_panel.dart';
 import 'package:semester_os/features/calendar/event_form.dart';
 import 'package:semester_os/features/calendar/event_overview.dart';
 import 'package:semester_os/features/timetable/shell_page.dart';
+import 'package:semester_os/ui/assistant_scope.dart';
 import 'schedule_flow_test.dart' show ScheduleFixture;
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'controller_test.dart' show MemoryStore;
@@ -34,6 +35,66 @@ class ClockedCalendarApp extends AppController {
 }
 
 void main() {
+  testWidgets(
+    'calendar restores the view and sends the visible date range to assistant',
+    (tester) async {
+      final fixture = ScheduleFixture();
+      final store = MemoryStore();
+      final app =
+          AppController(fixture.api, store, clearSchoolSession: () async {})
+            ..semester = semester()
+             ..week = 4;
+      final preferenceKey = 'calendar-view:${app.user['id']}';
+      store.data[preferenceKey] = {'mode': 'list'};
+      final panel = GlobalKey<CalendarPanelState>();
+      AssistantBrowsingContext? received;
+      await mount(
+        tester,
+        AssistantScope(
+          onOpen:
+              (
+                context, {
+                initialText,
+                mediaKind,
+                autoSubmit = false,
+                browsingContext,
+              }) async {
+                received = browsingContext;
+              },
+          child: Scaffold(
+            body: SingleChildScrollView(
+              child: CalendarPanel(key: panel, app: app, items: fixture.c),
+            ),
+          ),
+        ),
+      );
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 80)),
+      );
+      await tester.pumpAndSettle();
+      expect(panel.currentState!.weekList, isTrue);
+      await tester.tap(find.byTooltip('询问这段日程'));
+      await tester.pumpAndSettle();
+      expect(received?.toJson(), {
+        'start_date': '2026-09-21',
+        'end_date': '2026-09-27',
+      });
+      panel.currentState!.selectDay(DateTime.utc(2026, 9, 23));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('询问这段日程'));
+      await tester.pumpAndSettle();
+      expect(received?.toJson(), {
+        'start_date': '2026-09-23',
+        'end_date': '2026-09-23',
+      });
+      await panel.currentState!.chooseView('table');
+      await tester.pumpAndSettle();
+      expect(store.data[preferenceKey], {'mode': 'table'});
+      await tester.pumpWidget(const SizedBox());
+      fixture.c.dispose();
+      app.dispose();
+    },
+  );
   testWidgets(
     'start-only event shows its clock and keeps classification secondary',
     (tester) async {
@@ -250,7 +311,7 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 80)),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('日程列表'));
+      await tester.tap(find.text('列表'));
       await tester.pumpAndSettle();
       expect(find.text('课题组组会'), findsOneWidget);
       expect(find.text('提交材料'), findsOneWidget);

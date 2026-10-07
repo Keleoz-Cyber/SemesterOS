@@ -160,6 +160,7 @@ void main() {
               String? initialText,
               String? mediaKind,
               bool autoSubmit = false,
+              AssistantBrowsingContext? browsingContext,
             }) async {
               modes.add(mediaKind);
             },

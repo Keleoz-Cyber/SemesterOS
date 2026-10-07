@@ -51,6 +51,7 @@ Future<AppDateTimeRange?> pickSchoolDateTimeRange(
   bool showLabel = false,
 }) async {
   final start = _schoolWall(initialStart);
+  FocusManager.instance.primaryFocus?.unfocus();
   final selected = await showAppDateTimeRangePicker(
     context: context,
     initialStart: start,

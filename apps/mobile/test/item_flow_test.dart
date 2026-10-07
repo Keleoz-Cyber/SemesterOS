@@ -189,7 +189,7 @@ void main() {
         ItemDetailPage(controller: f.c, semester: semester, id: 'created'),
       );
       expect(
-        find.byTooltip('编辑事项'),
+        find.byTooltip('编辑任务'),
         findsOneWidget,
         reason: tester
             .widgetList<Text>(find.byType(Text))

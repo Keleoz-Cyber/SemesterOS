@@ -323,7 +323,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byType(AppNavigation),
-          matching: find.text('计划'),
+          matching: find.text('任务'),
         ),
       );
       await tester.pumpAndSettle();
@@ -359,7 +359,13 @@ void main() {
         tester,
         AssistantScope(
           onOpen:
-              (context, {initialText, mediaKind, autoSubmit = false}) async {
+              (
+                context, {
+                initialText,
+                mediaKind,
+                autoSubmit = false,
+                browsingContext,
+              }) async {
                 opened = true;
               },
           child: ShellPage(controller: controller, items: items),
@@ -380,7 +386,7 @@ void main() {
       expect(find.text('高等数学'), findsWidgets);
       expect(tester.takeException(), isNull);
       await capture(tester, 'large-text');
-      await tester.tap(find.byKey(const Key('assistant-dock-input')));
+      await tester.tap(find.byTooltip('询问这段日程'));
       await tester.pumpAndSettle();
       expect(opened, isTrue);
       expect(find.byType(FloatingActionButton), findsNothing);

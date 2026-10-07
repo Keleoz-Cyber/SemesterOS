@@ -64,6 +64,24 @@ void main() {
         'category_id': 'study',
         'tags': ['实验报告'],
       };
+      final due = schoolTime(f.item['time']['at']);
+      final dueDay = DateTime.utc(due.year, due.month, due.day);
+      final itemWeek =
+          dueDay.difference(monday.subtract(const Duration(days: 21))).inDays ~/
+              7 +
+          1;
+      List<Map<String, dynamic>> calendarRows(String fromDate, String toDate) {
+        final from = DateTime.parse('${fromDate}T00:00:00Z');
+        final until = DateTime.parse(
+          '${toDate}T00:00:00Z',
+        ).add(const Duration(days: 1));
+        return <Map<String, dynamic>>[...courses, activity].where((row) {
+          final start = schoolTime(row['start_at']);
+          final end = schoolTime(row['end_at']);
+          return start.isBefore(until) && end.isAfter(from);
+        }).toList();
+      }
+
       data['semester'] = s;
       data['weeks'] = [
         for (var w = 1; w <= 20; w++)
@@ -71,7 +89,7 @@ void main() {
             'week': w,
             'start_date': date(monday.add(Duration(days: (w - 4) * 7))),
             'end_date': date(monday.add(Duration(days: (w - 4) * 7 + 6))),
-            'items': w == 4 ? [f.item] : [],
+            'items': w == itemWeek ? [f.item] : [],
             'changes': [],
           },
       ];
@@ -85,7 +103,10 @@ void main() {
           return body({
             'semester_id': 's',
             'revision': 1,
-            'entries': [...courses, activity],
+            'entries': calendarRows(
+              r.uri.queryParameters['from_date']!,
+              r.uri.queryParameters['to_date']!,
+            ),
             'undated': [],
           });
         }
@@ -95,7 +116,10 @@ void main() {
             'revision': 1,
             'date': r.uri.queryParameters['day'],
             'valid_until': '2099-01-01T00:00:00Z',
-            'entries': [...courses, activity],
+            'entries': calendarRows(
+              r.uri.queryParameters['day']!,
+              r.uri.queryParameters['day']!,
+            ),
             'suggestions': [
               {
                 'kind': 'free_window',
@@ -119,8 +143,14 @@ void main() {
       await mount(
         tester,
         AssistantScope(
-          onOpen: (context, {initialText, mediaKind, autoSubmit = false}) =>
-              openAssistantSheet(
+          onOpen:
+              (
+                context, {
+                initialText,
+                mediaKind,
+                autoSubmit = false,
+                browsingContext,
+              }) => openAssistantSheet(
                 context,
                 controller: f.c,
                 semester: s,
@@ -150,7 +180,7 @@ void main() {
         expect(find.text('大学英语').last.hitTestable(), findsOneWidget);
       }
       await capture(tester, 'integrated-today-${layout.label}');
-      for (final page in ['日程', '计划', '学期']) {
+      for (final page in ['日程', '任务', '学期']) {
         await ioTap(tester, find.text(page).last);
         await settleIo(tester);
         expect(
@@ -170,7 +200,7 @@ void main() {
         await tester.pumpAndSettle();
         await ioTap(tester, find.byTooltip('调整首页内容'));
         await capture(tester, 'integrated-home-settings-${layout.label}');
-        await ioTap(tester, find.text('完成'));
+        await ioTap(tester, find.text('完成').hitTestable());
       }
       await tester.tap(find.byKey(const Key('assistant-dock-input')));
       await settleIo(tester);

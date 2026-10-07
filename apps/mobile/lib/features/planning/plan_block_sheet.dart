@@ -10,10 +10,8 @@ Future<String?> showPlanBlock(
   BuildContext context,
   Map<String, dynamic> block, {
   bool conflict = false,
-}) => showModalBottomSheet<String>(
+}) => showAppSheet<String>(
   context: context,
-  useSafeArea: true,
-  isScrollControlled: true,
   builder: (sheet) => SafeArea(
     child: SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
@@ -21,7 +19,11 @@ Future<String?> showPlanBlock(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AppSheetHeading(title: '${block['title']}', padding: EdgeInsets.zero),
+          AppSheetHeading(
+            title: '${block['title']}',
+            closeLabel: '关闭安排详情',
+            padding: EdgeInsets.zero,
+          ),
           const SizedBox(height: 8),
           TaskFactStrip(
             label: block['locked'] == true ? '已固定时间' : '学习时间',
@@ -59,9 +61,14 @@ Future<String?> showPlanBlock(
               onTap: () => Navigator.pop(sheet, 'lock'),
             ),
             AppTile(
-              title: const Text('取消这段安排'),
-              leading: const Icon(Icons.event_busy_outlined),
-              tileColor: CampusColors.error.withValues(alpha: .035),
+              title: const Text(
+                '取消这段安排',
+                style: TextStyle(color: CampusColors.error),
+              ),
+              leading: const Icon(
+                Icons.event_busy_outlined,
+                color: CampusColors.error,
+              ),
               onTap: () => Navigator.pop(sheet, 'cancel'),
             ),
           ],

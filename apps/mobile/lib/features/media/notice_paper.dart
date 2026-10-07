@@ -13,7 +13,9 @@ class NoticePaper extends StatelessWidget {
     decoration: BoxDecoration(
       color: CampusColors.surface,
       borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: CampusColors.line),
+      border: const Border(
+        left: BorderSide(color: CampusColors.line, width: 2),
+      ),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -43,7 +45,7 @@ class NoticePaper extends StatelessWidget {
           text,
           style: const TextStyle(
             fontSize: 16,
-            height: 1.65,
+            height: 1.55,
             color: CampusColors.ink,
           ),
         ),

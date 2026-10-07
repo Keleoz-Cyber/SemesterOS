@@ -52,7 +52,7 @@ class OnboardingGuide extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           AppTile(
-            title: const Text('待办与计划'),
+            title: const Text('任务与学习安排'),
             subtitle: const Text('查看待办与截止日期，按需要安排学习时间。'),
             leading: const Icon(Icons.checklist_rounded),
             onTap: onPlanning,

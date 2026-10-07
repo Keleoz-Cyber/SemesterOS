@@ -420,6 +420,7 @@ class _EventFormPageState extends State<EventFormPage> {
         key: form,
         child: ListView(
           padding: const EdgeInsets.all(20),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
             if ((widget.candidate?['questions'] as List? ?? []).isNotEmpty)
               Padding(
@@ -428,199 +429,225 @@ class _EventFormPageState extends State<EventFormPage> {
               ),
             AbsorbPointer(
               absorbing: busy || submitted != null,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  AcademicEditorSection(
-                    title: '日程内容',
-                    icon: Icons.event_note_outlined,
-                    children: [
-                      AppFormField(
-                        controller: title,
-                        maxLength: 120,
-                        decoration: const InputDecoration(
-                          labelText: '日程名称',
-                          hintText: '例如：课题组组会',
-                        ),
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty ? '请填写日程名称' : null,
-                      ),
-                      const SizedBox(height: 12),
-                      AppFormField(
-                        controller: location,
-                        maxLength: 120,
-                        decoration: const InputDecoration(labelText: '地点（选填）'),
-                      ),
-                    ],
-                  ),
-                  AcademicEditorSection(
-                    title: '时间安排',
-                    icon: Icons.schedule_rounded,
-                    children: [
-                      if (!['unknown', 'week'].contains(precision)) ...[
-                        const SizedBox(height: 12),
-                        AcademicMomentControl(
-                          label: precision.startsWith('exact') ? '开始' : '日期',
-                          value:
-                              '${studentDate(start, weekday: true)}${precision.startsWith('exact') ? ' ${hhmm(start)}' : ''}',
-                          onTap: () => pick(false),
-                        ),
-                        if (precision == 'exact' || precision == 'range')
-                          AcademicMomentControl(
-                            label: '结束',
-                            ending: true,
-                            value:
-                                '${studentDate(end, weekday: true)}${precision == 'exact' ? ' ${hhmm(end)}' : ''}',
-                            onTap: () => pick(true),
+              child: ExcludeFocus(
+                excluding: busy || submitted != null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AppFormField(
+                          controller: title,
+                          maxLength: 120,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: '日程名称',
+                            hintText: '例如：课题组组会',
                           ),
+                          validator: (v) =>
+                              v == null || v.trim().isEmpty ? '请填写日程名称' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        AppFormField(
+                          controller: location,
+                          maxLength: 120,
+                          textInputAction: TextInputAction.done,
+                          decoration: const InputDecoration(
+                            labelText: '地点（选填）',
+                          ),
+                        ),
                       ],
-                      if (precision == 'week')
-                        AppPickerField<int>(
-                          initialValue: week,
-                          decoration: const InputDecoration(labelText: '周次'),
-                          items: List.generate(
-                            widget.semester['total_weeks'],
-                            (i) => DropdownMenuItem(
-                              value: i + 1,
-                              child: Text('第${i + 1}周'),
+                    ),
+                    AcademicEditorSection(
+                      title: '时间安排',
+                      icon: Icons.schedule_rounded,
+                      children: [
+                        if (!['unknown', 'week'].contains(precision)) ...[
+                          AcademicMomentControl(
+                            label: precision == 'exact_start'
+                                ? '时间'
+                                : precision == 'exact'
+                                ? '开始'
+                                : '日期',
+                            value:
+                                '${studentDate(start, weekday: true)}${precision.startsWith('exact') ? ' ${hhmm(start)}' : ''}',
+                            onTap: () => pick(false),
+                          ),
+                          if (precision == 'exact' || precision == 'range')
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: AcademicMomentControl(
+                                    label: '结束',
+                                    ending: true,
+                                    value:
+                                        '${studentDate(end, weekday: true)}${precision == 'exact' ? ' ${hhmm(end)}' : ''}',
+                                    onTap: () => pick(true),
+                                  ),
+                                ),
+                                if (precision == 'exact')
+                                  AppIconButton(
+                                    tooltip: '移除结束时间',
+                                    onPressed: () => setState(
+                                      () => precision = 'exact_start',
+                                    ),
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      size: 20,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                        ],
+                        if (precision == 'week')
+                          AppPickerField<int>(
+                            initialValue: week,
+                            decoration: const InputDecoration(labelText: '周次'),
+                            items: List.generate(
+                              widget.semester['total_weeks'],
+                              (i) => DropdownMenuItem(
+                                value: i + 1,
+                                child: Text('第${i + 1}周'),
+                              ),
+                            ),
+                            onChanged: (v) => setState(() => week = v!),
+                          ),
+                        if (precision == 'exact_start')
+                          AppTextButton.icon(
+                            onPressed: () async {
+                              final value = await pickEnd();
+                              if (value != null && mounted) {
+                                setState(() {
+                                  end = value;
+                                  hasEnd = true;
+                                  precision = 'exact';
+                                });
+                              }
+                            },
+                            guardAsync: false,
+                            icon: const Icon(Icons.add),
+                            label: const Text('添加结束时间'),
+                          ),
+                        TimeInputOptions(
+                          precision: precision,
+                          exactValue: 'exact_start',
+                          onChanged: selectPrecision,
+                        ),
+                        if (precision == 'unknown')
+                          AppFormField(
+                            key: const Key('event-time-expression'),
+                            controller: expression,
+                            maxLength: 500,
+                            decoration: const InputDecoration(
+                              labelText: '时间说明（选填）',
+                              hintText: '例如：等老师通知',
+                              counterText: '',
                             ),
                           ),
-                          onChanged: (v) => setState(() => week = v!),
+                        TentativeSwitch(
+                          certainty: certainty,
+                          onChanged: (value) =>
+                              setState(() => certainty = value),
                         ),
-                      if (precision == 'exact_start')
-                        AppTextButton.icon(
-                          onPressed: () async {
-                            final value = await pickEnd();
-                            if (value != null && mounted) {
-                              setState(() {
-                                end = value;
-                                hasEnd = true;
-                                precision = 'exact';
-                              });
-                            }
-                          },
-                          guardAsync: false,
-                          icon: const Icon(Icons.add),
-                          label: const Text('添加结束时间'),
-                        ),
-                      if (precision == 'exact')
-                        AppTextButton(
-                          onPressed: () =>
-                              setState(() => precision = 'exact_start'),
-                          child: const Text('移除结束时间'),
-                        ),
-                      TimeInputOptions(
-                        precision: precision,
-                        exactValue: 'exact_start',
-                        onChanged: selectPrecision,
+                        if (!reserveTime ||
+                            details['participation_status'] != null &&
+                                details['participation_status'] !=
+                                    'unspecified')
+                          AppSwitchRow(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('安排到我的日程'),
+                            value: reserveTime,
+                            onChanged: (value) =>
+                                setState(() => reserveTime = value),
+                          ),
+                      ],
+                    ),
+                    NoticeDetailsEditor(
+                      value: details,
+                      onChanged: (value) => details = value,
+                      notesController: notes,
+                    ),
+                    AcademicEditorSection(
+                      title: '提醒',
+                      icon: Icons.notifications_outlined,
+                      accent: CampusColors.teal,
+                      trailing: AppIconButton.filledTonal(
+                        tooltip: '添加提醒',
+                        icon: const Icon(Icons.add_rounded),
+                        color: CampusColors.teal,
+                        onPressed: () => editEventReminder(),
                       ),
-                      if (precision == 'unknown')
+                      children: [
+                        for (var i = 0; i < reminders.length; i++)
+                          AppTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              '${reminderLabel({'mode': 'relative', 'lead_minutes': reminders[i]})}提醒',
+                            ),
+                            trailing: AppIconButton(
+                              tooltip: '删除这条提醒',
+                              icon: const Icon(Icons.close),
+                              onPressed: () =>
+                                  setState(() => reminders.removeAt(i)),
+                            ),
+                            onTap: () => editEventReminder(i),
+                          ),
+                        if (reminders.isNotEmpty &&
+                            !precision.startsWith('exact'))
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text('补全开始时间后，这些提醒才会生效。'),
+                          ),
+                      ],
+                    ),
+                    AppDisclosure(
+                      leading: const Icon(Icons.tune_rounded),
+                      title: const Text('分类与更多设置'),
+                      childrenPadding: const EdgeInsets.only(top: 12),
+                      children: [
+                        AppPickerField<String>(
+                          initialValue: category ?? '',
+                          decoration: const InputDecoration(labelText: '分类'),
+                          items: [
+                            const DropdownMenuItem(
+                              value: '',
+                              child: Text('未分类'),
+                            ),
+                            for (final c in eventCategories.entries)
+                              DropdownMenuItem(
+                                value: c.key,
+                                child: Text(c.value),
+                              ),
+                          ],
+                          onChanged: (v) =>
+                              setState(() => category = v == '' ? null : v),
+                        ),
+                        const SizedBox(height: 12),
+                        TagPickerField(
+                          key: const Key('event-tags'),
+                          controller: widget.controller,
+                          values: tags,
+                          enabled: !busy && same,
+                          onChanged: (values) => setState(() => tags = values),
+                        ),
+                        const SizedBox(height: 12),
                         AppFormField(
-                          key: const Key('event-time-expression'),
-                          controller: expression,
-                          maxLength: 500,
+                          controller: source,
+                          readOnly:
+                              widget.candidate != null ||
+                              widget.original != null,
+                          maxLines: 3,
+                          maxLength: 10000,
                           decoration: const InputDecoration(
-                            labelText: '时间说明（选填）',
-                            hintText: '例如：等老师通知',
+                            labelText: '通知原文（选填）',
                             counterText: '',
                           ),
                         ),
-                      TentativeSwitch(
-                        certainty: certainty,
-                        onChanged: (value) => setState(() => certainty = value),
-                      ),
-                    ],
-                  ),
-                  NoticeDetailsEditor(
-                    value: details,
-                    onChanged: (value) => details = value,
-                    notesController: notes,
-                  ),
-                  AcademicEditorSection(
-                    title: '提醒',
-                    icon: Icons.notifications_outlined,
-                    accent: CampusColors.teal,
-                    trailing: AppIconButton.filledTonal(
-                      tooltip: '添加提醒',
-                      icon: const Icon(Icons.add_rounded),
-                      color: CampusColors.teal,
-                      onPressed: () => editEventReminder(),
+                      ],
                     ),
-                    children: [
-                      if (!reserveTime ||
-                          details['participation_status'] != null &&
-                              details['participation_status'] != 'unspecified')
-                        AppSwitchRow(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('安排到我的日程'),
-                          value: reserveTime,
-                          onChanged: (value) =>
-                              setState(() => reserveTime = value),
-                        ),
-                      for (var i = 0; i < reminders.length; i++)
-                        AppTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            '${reminderLabel({'mode': 'relative', 'lead_minutes': reminders[i]})}提醒',
-                          ),
-                          trailing: AppIconButton(
-                            tooltip: '删除这条提醒',
-                            icon: const Icon(Icons.close),
-                            onPressed: () =>
-                                setState(() => reminders.removeAt(i)),
-                          ),
-                          onTap: () => editEventReminder(i),
-                        ),
-                      if (reminders.isNotEmpty &&
-                          !precision.startsWith('exact'))
-                        const Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Text('补全开始时间后，这些提醒才会生效。'),
-                        ),
-                    ],
-                  ),
-                  AppDisclosure(
-                    leading: const Icon(Icons.tune_rounded),
-                    title: const Text('分类与更多设置'),
-                    childrenPadding: const EdgeInsets.only(top: 12),
-                    children: [
-                      AppPickerField<String>(
-                        initialValue: category ?? '',
-                        decoration: const InputDecoration(labelText: '分类'),
-                        items: [
-                          const DropdownMenuItem(value: '', child: Text('未分类')),
-                          for (final c in eventCategories.entries)
-                            DropdownMenuItem(
-                              value: c.key,
-                              child: Text(c.value),
-                            ),
-                        ],
-                        onChanged: (v) =>
-                            setState(() => category = v == '' ? null : v),
-                      ),
-                      const SizedBox(height: 12),
-                      TagPickerField(
-                        key: const Key('event-tags'),
-                        controller: widget.controller,
-                        values: tags,
-                        enabled: !busy && same,
-                        onChanged: (values) => setState(() => tags = values),
-                      ),
-                      const SizedBox(height: 12),
-                      AppFormField(
-                        controller: source,
-                        readOnly:
-                            widget.candidate != null || widget.original != null,
-                        maxLines: 3,
-                        maxLength: 10000,
-                        decoration: const InputDecoration(
-                          labelText: '通知原文（选填）',
-                          counterText: '',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             if (!ready && error != null)

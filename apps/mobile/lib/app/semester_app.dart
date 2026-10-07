@@ -641,6 +641,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
                   initialText,
                   mediaKind,
                   autoSubmit = false,
+                  browsingContext,
                 }) async {
                   final semester = controller.semester;
                   if (semester == null) {
@@ -654,6 +655,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
                     initialText: initialText,
                     mediaKind: mediaKind,
                     autoSubmit: autoSubmit,
+                    browsingContext: browsingContext,
                   );
                 },
             child: entryFrame(context, child ?? const SizedBox()),

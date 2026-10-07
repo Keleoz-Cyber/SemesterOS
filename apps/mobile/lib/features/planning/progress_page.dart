@@ -209,6 +209,7 @@ class _ProgressPageState extends State<ProgressPage> {
     body: Form(
       key: form,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(20),
         children: [
           RecordHeading(

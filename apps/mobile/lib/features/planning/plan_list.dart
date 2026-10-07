@@ -19,10 +19,12 @@ import '../../ui/date_labels.dart';
 class PlanningEntry extends StatelessWidget {
   final ItemsController controller;
   final bool today;
+  final bool showAction;
   const PlanningEntry({
     super.key,
     required this.controller,
     this.today = false,
+    this.showAction = true,
   });
   @override
   Widget build(BuildContext context) {
@@ -122,7 +124,7 @@ class PlanningEntry extends StatelessWidget {
               style: const TextStyle(fontSize: 14, color: CampusColors.muted),
             ),
           ),
-        if (hasPendingTask || blocks.isNotEmpty)
+        if (showAction && (hasPendingTask || blocks.isNotEmpty))
           Align(
             alignment: Alignment.centerLeft,
             child: AppTextButton.icon(
@@ -159,6 +161,7 @@ class _CompactPlanBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final start = schoolTime(block['start_at']);
+    final end = schoolTime(block['end_at']);
     final scaled = MediaQuery.textScalerOf(context).scale(16) > 22;
     return Material(
       key: ValueKey('learning-plan-${block['id']}'),
@@ -188,7 +191,9 @@ class _CompactPlanBlock extends StatelessWidget {
                       ),
                       Text(
                         grouped
-                            ? hhmm(schoolTime(block['end_at']))
+                            ? DateUtils.isSameDay(start, end)
+                                  ? hhmm(end)
+                                  : '${end.month}/${end.day}\n${hhmm(end)}'
                             : today
                             ? minutesLabel(block['minutes'])
                             : '${start.month}/${start.day}',
@@ -431,8 +436,10 @@ class _PlanListPageState extends State<PlanListPage> {
               if (error != null) SoftNotice(error!, warning: true),
               for (var i = 0; i < blocks.length; i++) ...[
                 if (i == 0 ||
-                    '${blocks[i]['start_at']}'.substring(0, 10) !=
-                        '${blocks[i - 1]['start_at']}'.substring(0, 10))
+                    !DateUtils.isSameDay(
+                      schoolTime(blocks[i]['start_at']),
+                      schoolTime(blocks[i - 1]['start_at']),
+                    ))
                   Padding(
                     padding: const EdgeInsets.only(top: 16, bottom: 8),
                     child: Text(

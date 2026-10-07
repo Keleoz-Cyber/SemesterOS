@@ -116,11 +116,39 @@ class _ShellPageState extends State<ShellPage> {
       context: context,
       builder: (dialog) => AppDialog(
         title: Text('删除“${preview['name']}”？'),
-        content: Text(
-          '将一并删除 ${preview['courses']} 门课程、${preview['items']} 条事项、'
-          '${preview['events']} 条日程、${preview['plans']} 段计划和'
-          '${preview['sources']} 份来源记录，以及 ${preview['conversations']} 段助手对话与相关历史。'
-          '删除后无法恢复。',
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('该学期的以下内容将一并删除：'),
+            const SizedBox(height: 12),
+            for (final entry in {
+              '课程': preview['courses'],
+              '任务': preview['items'],
+              '日程': preview['events'],
+              '学习安排': preview['plans'],
+              '通知来源': preview['sources'],
+              '助手对话': preview['conversations'],
+            }.entries)
+              if ((entry.value as num? ?? 0) > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(entry.key)),
+                      Text(
+                        '${entry.value}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ),
+            const SizedBox(height: 12),
+            const Text(
+              '相关历史也会删除，无法恢复。',
+              style: TextStyle(color: CampusColors.error),
+            ),
+          ],
         ),
         actions: [
           AppTextButton(
@@ -129,6 +157,10 @@ class _ShellPageState extends State<ShellPage> {
           ),
           AppButton(
             onPressed: () => Navigator.pop(dialog, true),
+            style: AppButton.styleFrom(
+              backgroundColor: CampusColors.error,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('确认删除'),
           ),
         ],
@@ -154,9 +186,9 @@ class _ShellPageState extends State<ShellPage> {
       if (mounted) Navigator.pop(context);
       if (mounted &&
           (receipt['media_files_pending_cleanup'] as int? ?? 0) > 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('学期已删除，旧图片或录音已从App移除，服务器下次启动会继续清理')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('学期已删除，附件正在清理')));
       }
     } catch (e) {
       if (mounted) {
@@ -214,7 +246,18 @@ class _ShellPageState extends State<ShellPage> {
       context.push('/semester/new');
       return;
     }
-    await AssistantScope.open(context);
+    final semester = c.semester!;
+    final generation = widget.items.api.generation;
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            ItemFormPage(controller: widget.items, semester: semester),
+      ),
+    );
+    if (saved == true && mounted && generation == widget.items.api.generation) {
+      await widget.items.refresh();
+    }
   }
 
   Future<void> account() => showAppSheet<void>(
@@ -394,6 +437,7 @@ class _ShellPageState extends State<ShellPage> {
       2 => ItemsView(
         controller: widget.items,
         onCreate: add,
+        onCapture: () => AssistantScope.open(context),
         onOpen: (id) => context.push('/items/$id'),
         onEdit: editTask,
         sliver: true,
@@ -448,7 +492,7 @@ class _ShellPageState extends State<ShellPage> {
                       tab == 0
                           ? appName
                           : tab == 2
-                          ? '任务与安排'
+                          ? '任务'
                           : '学期',
                       style: TextStyle(
                         fontSize: 20,
@@ -563,6 +607,7 @@ class _ShellPageState extends State<ShellPage> {
         bottomNavigationBar: AppNavigation(
           selected: tab,
           onSelected: switchTab,
+          showAssistant: tab != 1,
         ),
       );
     },

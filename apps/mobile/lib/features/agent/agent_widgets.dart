@@ -1,9 +1,54 @@
 import 'package:flutter/material.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/campus_theme.dart';
-import '../../ui/motion.dart' show SuccessCheckmark;
+import '../../ui/motion.dart' show SuccessCheckmark, AppMotion;
 import '../../ui/app_loading.dart';
 import 'agent_motion.dart';
+
+/// Keep the practical risk visible; the complete server explanation stays available.
+class PlanWarningNote extends StatelessWidget {
+  final String message;
+  const PlanWarningNote({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final unknownEnd = message.contains('结束时间未知') || message.contains('结束时间未定');
+    final subject = RegExp(r'^[「“](.+?)[」”]').firstMatch(message)?.group(1);
+    final summary = unknownEnd
+        ? '${subject == null ? '' : '“$subject”'}结束时间未定，后续安排需核对'
+        : message;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            summary,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: CampusColors.warning,
+            ),
+          ),
+          if (summary != message)
+            AppDisclosure(
+              tilePadding: EdgeInsets.zero,
+              title: const Text(
+                '查看完整说明',
+                style: TextStyle(fontSize: 13, color: CampusColors.muted),
+              ),
+              children: [
+                SelectableText(
+                  message,
+                  style: const TextStyle(fontSize: 14, height: 1.5),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Animate a receipt only when this visible turn has just been saved. Loading
 /// history, reopening the assistant and recycling offscreen rows stay static.
@@ -154,31 +199,38 @@ class _AssistantUserMessageState extends State<AssistantUserMessage> {
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (longMessage && !expanded)
-                    Text(
-                      widget.text,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 16, height: 1.45),
-                    )
-                  else
-                    SelectableText(
-                      widget.text,
-                      style: const TextStyle(fontSize: 16, height: 1.45),
-                    ),
-                  if (longMessage)
-                    AppTextButton(
-                      onPressed: () => setState(() => expanded = !expanded),
-                      child: Text(
-                        expanded ? '收起' : '展开消息',
-                        style: const TextStyle(fontSize: 13),
+              child: AnimatedSize(
+                duration: AppMotion.allowed(context)
+                    ? const Duration(milliseconds: 220)
+                    : Duration.zero,
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topRight,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (longMessage && !expanded)
+                      Text(
+                        widget.text,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 16, height: 1.45),
+                      )
+                    else
+                      SelectableText(
+                        widget.text,
+                        style: const TextStyle(fontSize: 16, height: 1.45),
                       ),
-                    ),
-                ],
+                    if (longMessage)
+                      AppTextButton(
+                        onPressed: () => setState(() => expanded = !expanded),
+                        child: Text(
+                          expanded ? '收起' : '展开消息',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -186,7 +238,7 @@ class _AssistantUserMessageState extends State<AssistantUserMessage> {
             Wrap(
               alignment: WrapAlignment.end,
               crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 4,
+              spacing: 8,
               children: [
                 if (widget.attachment != null)
                   AppTextButton.icon(
@@ -343,14 +395,22 @@ class AssistantSavedAction extends StatelessWidget {
             children: [
               status,
               if (actions.isNotEmpty)
-                Wrap(alignment: WrapAlignment.end, children: actions),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: actions,
+                ),
             ],
           );
         }
         return Row(
           children: [
             Expanded(child: status),
-            ...actions,
+            for (var i = 0; i < actions.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              actions[i],
+            ],
           ],
         );
       },
