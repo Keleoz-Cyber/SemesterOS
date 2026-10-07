@@ -8,6 +8,7 @@ import '../../ui/time_river.dart';
 import '../calendar/calendar_repository.dart';
 import '../items/item_widgets.dart';
 import 'home_preferences.dart';
+import '../../ui/motion_task_list.dart';
 
 /// Live Today modes share the same event/task data. Explicit choices and task
 /// ordering persist through the parent's owner-and-semester-scoped store.
@@ -29,6 +30,7 @@ class TodayViewSwitch extends StatefulWidget {
   final bool scheduleAvailable;
   final bool scheduleLoading;
   final Widget? scheduleLeading;
+  final Map<String, String> removedTaskStates;
   const TodayViewSwitch({
     super.key,
     required this.timeline,
@@ -48,6 +50,7 @@ class TodayViewSwitch extends StatefulWidget {
     this.scheduleAvailable = true,
     this.scheduleLoading = false,
     this.scheduleLeading,
+    this.removedTaskStates = const {},
   });
   @override
   State<TodayViewSwitch> createState() => _TodayViewSwitchState();
@@ -97,6 +100,7 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
   @override
   void didUpdateWidget(covariant TodayViewSwitch oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.tasks.isEmpty) _ordering = false;
     if (_shownMode == _mode) return;
     _slideFrom = _mode.index > _shownMode.index ? .035 : -.035;
     _shownMode = _mode;
@@ -259,24 +263,28 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
           widget.onAllTasks,
           const Key('today-tasks-action'),
         ),
-        if (widget.tasks.isEmpty)
-          const _TodayEmptyView(kind: EmptySceneKind.tasks, title: '暂无待办事项')
-        else
-          for (final task in tasks.take(2))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: ItemCard(
-                item: task,
-                onTap: () => widget.onTaskTap(task),
-                onComplete: widget.onTaskComplete == null
-                    ? null
-                    : () => widget.onTaskComplete!(task),
-                animateUrgency: task['id'] == widget.priorityTaskId,
-                onDoubleTap: widget.onTaskEdit == null
-                    ? null
-                    : () => widget.onTaskEdit!(task),
-              ),
+        MotionTaskList(
+          empty: const _TodayEmptyView(
+            kind: EmptySceneKind.tasks,
+            title: '暂无待办事项',
+          ),
+          removedStates: widget.removedTaskStates,
+          items: tasks.take(2).toList(),
+          builder: (context, task, index) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: ItemCard(
+              item: task,
+              onTap: () => widget.onTaskTap(task),
+              onComplete: widget.onTaskComplete == null
+                  ? null
+                  : () => widget.onTaskComplete!(task),
+              animateUrgency: task['id'] == widget.priorityTaskId,
+              onDoubleTap: widget.onTaskEdit == null
+                  ? null
+                  : () => widget.onTaskEdit!(task),
             ),
+          ),
+        ),
       ],
     );
   }
@@ -386,9 +394,6 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
   }
 
   Widget _tasks() {
-    if (widget.tasks.isEmpty) {
-      return const _TodayEmptyView(kind: EmptySceneKind.tasks, title: '暂无待办事项');
-    }
     final order = widget.preferences?.taskOrder ?? _localOrder;
     final rank = {for (var i = 0; i < order.length; i++) order[i]: i};
     final sourceIndex = {
@@ -410,7 +415,7 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
             : sourceIndex['${a['id']}']!.compareTo(sourceIndex['${b['id']}']!);
       });
     final previewCount = tasks.length < 8 ? tasks.length : 8;
-    final list = ReorderableListView.builder(
+    final reorderList = ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
@@ -469,6 +474,26 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
         );
       },
     );
+    final list = _ordering
+        ? reorderList
+        : MotionTaskList(
+            empty: const _TodayEmptyView(
+              kind: EmptySceneKind.tasks,
+              title: '暂无待办事项',
+            ),
+            removedStates: widget.removedTaskStates,
+            items: tasks.take(previewCount).toList(),
+            builder: (context, task, index) => ItemCard(
+              item: task,
+              onTap: () => widget.onTaskTap(task),
+              onComplete: widget.onTaskComplete == null
+                  ? null
+                  : () => widget.onTaskComplete!(task),
+              onDoubleTap: widget.onTaskEdit == null
+                  ? null
+                  : () => widget.onTaskEdit!(task),
+            ),
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

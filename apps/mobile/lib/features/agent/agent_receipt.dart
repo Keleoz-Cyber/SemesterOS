@@ -29,7 +29,7 @@ String savedActionMessage(Map<String, dynamic> run) {
     final verb = action == 'add' ? '已添加补课' : '已调整课程';
     return title == null || '$title'.isEmpty ? verb : '$verb · $title';
   }
-  if (kind == 'plan') return action == 'replan' ? '已调整个人计划' : '已保存个人计划';
+  if (kind == 'plan') return action == 'replan' ? '已调整学习安排' : '已保存学习安排';
   if (action == 'restore') {
     return '已恢复 ${noticeMap(preview['after'])['title'] ?? preview['title'] ?? '日程'}';
   }

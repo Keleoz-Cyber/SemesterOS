@@ -656,7 +656,7 @@ class _InsightsPageState extends State<InsightsPage> {
               CampusColors.ink,
             ),
             subtotal(
-              '个人计划',
+              '学习安排',
               summary['personal_planned_minutes'],
               CampusColors.teal,
             ),
@@ -858,7 +858,7 @@ class _InsightsPageState extends State<InsightsPage> {
         const SizedBox(height: 10),
         if (mode == 'scheduled')
           const Text(
-            '蓝色：固定安排　青色：个人计划',
+            '蓝色：固定安排　青色：学习安排',
             style: TextStyle(color: CampusColors.muted, fontSize: 11),
           ),
         // Text controls are also keyboard/screen-reader accessible and cover zero-height bars.

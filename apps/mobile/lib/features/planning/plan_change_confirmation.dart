@@ -46,23 +46,22 @@ Future<Map<String, dynamic>?> confirmPlanChange(
                 Text(message),
                 if (blocks.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: CampusColors.blueSoft,
-                      borderRadius: BorderRadius.circular(12),
+                  if (!cancelAll || keptCount > 0)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: CampusColors.blueSoft,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: TaskFactStrip(
+                        label: '修改后保留的安排',
+                        value: '$keptCount段 · ${minutesLabel(kept)}',
+                        icon: Icons.event_available_outlined,
+                      ),
                     ),
-                    child: TaskFactStrip(
-                      label: '修改后保留的安排',
-                      value: '$keptCount段 · ${minutesLabel(kept)}',
-                      icon: Icons.event_available_outlined,
-                    ),
-                  ),
                   const SizedBox(height: 12),
-                  Text(
-                    cancelAll ? '以下未来计划将一并取消' : '选择要取消的未来计划；保留的总时长不能超过剩余所需时间',
-                  ),
+                  Text(cancelAll ? '将取消的学习安排' : '选择要取消的学习安排；保留时长不能超过剩余所需时间'),
                   for (final block in blocks)
                     AppCheckRow(
                       contentPadding: EdgeInsets.zero,

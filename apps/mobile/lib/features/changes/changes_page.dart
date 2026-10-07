@@ -596,13 +596,13 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
             ),
           if (blocks.isNotEmpty || risks.isNotEmpty)
             EditorSection(
-              title: '相关个人计划',
+              title: '相关学习安排',
               icon: Icons.event_note_outlined,
               children: [
-                if (blocks.isNotEmpty) Text('${blocks.length} 段个人计划需要调整'),
+                if (blocks.isNotEmpty) Text('${blocks.length} 段学习安排需要调整'),
                 for (final b in blocks)
                   RecordFact(
-                    label: b['locked'] == true ? '已锁定的个人计划' : '个人计划',
+                    label: b['locked'] == true ? '已锁定的学习安排' : '学习安排',
                     value: '${b['title']} · ${displayInstant(b['start_at'])}',
                     icon: b['locked'] == true
                         ? Icons.lock_outline_rounded
@@ -672,7 +672,7 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
             const AssistantSavedAction(text: '调整已保存'),
             if (blocks.isNotEmpty)
               Text(
-                '${blocks.length} 段个人计划受影响，可查看调整方案。',
+                '${blocks.length} 段学习安排受影响，可查看调整方案。',
                 style: const TextStyle(
                   fontSize: 14,
                   color: CampusColors.muted,
@@ -681,7 +681,7 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
               ),
             AppTextButton(
               onPressed: busy || !same ? null : () => act(true),
-              child: const Text('查看个人计划调整方案'),
+              child: const Text('查看学习安排调整方案'),
             ),
           ],
         ],

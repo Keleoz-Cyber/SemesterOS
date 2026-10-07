@@ -637,7 +637,7 @@ class ItemsController extends ChangeNotifier {
     } catch (_) {
       if (valid(epoch, generation) && request == _planRequest) {
         planFeed = null;
-        planNotice = '个人计划同步未完成，请重试';
+        planNotice = '学习安排同步未完成，请重试';
       }
     }
     if (valid(epoch, generation) && request == _planRequest) changed();

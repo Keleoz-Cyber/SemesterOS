@@ -370,7 +370,7 @@ class _EventFormPageState extends State<EventFormPage> {
       final affected = (result['affected_plan_ids'] as List? ?? []).length;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(affected == 0 ? '日程已保存' : '日程已保存，$affected段个人计划需要核对'),
+          content: Text(affected == 0 ? '日程已保存' : '日程已保存，$affected段学习安排需要核对'),
         ),
       );
       Navigator.pop(context, true);
@@ -704,7 +704,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       context: context,
       builder: (c) => AppDialog(
         title: const Text('取消这条日程？'),
-        content: const Text('取消后将停止提醒并释放占用时间。已有个人计划不会自动移动。'),
+        content: const Text('取消后将停止提醒并释放占用时间。已有学习安排不会自动移动。'),
         actions: [
           AppTextButton(
             onPressed: () => Navigator.pop(c, false),

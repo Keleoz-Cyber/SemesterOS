@@ -10,7 +10,8 @@ const Curve motionEaseOut = Curves.easeOutCubic;
 
 class AppMotion {
   static bool reduced(BuildContext context) =>
-      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      (MediaQuery.maybeOf(context)?.disableAnimations ?? false) ||
+      (MediaQuery.maybeOf(context)?.accessibleNavigation ?? false);
   static bool allowed(BuildContext context) =>
       !reduced(context) && TickerMode.valuesOf(context).enabled;
   static Duration change(BuildContext context) =>

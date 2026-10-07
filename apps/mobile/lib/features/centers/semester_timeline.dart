@@ -497,16 +497,11 @@ class SemesterHomeState extends State<SemesterHome>
                     label: '正在更新',
                     padding: const EdgeInsets.only(right: 2),
                     child: Text(
-                      '第${selected['week']}周安排',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${studentDate(DateTime.parse(selected['start_date']))}—${studentDate(DateTime.parse(selected['end_date']))}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: CampusColors.muted,
+                      '${studentDate(DateTime.parse(selected['start_date']))}—${studentDate(DateTime.parse(selected['end_date']))}',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   if (weekItems.isNotEmpty || weekChanges.isNotEmpty)
@@ -546,16 +541,8 @@ class SemesterHomeState extends State<SemesterHome>
                     children: [
                       for (final e in events)
                         if (e['type'] == 'item')
-                          _node(
-                            at: e['at'],
-                            title: e['row']['title'],
-                            time: itemTimeLabel(e['row']),
-                            label:
-                                '${kindLabel(e['row']['kind'])}${e['row']['certainty'] == 'tentative' ? ' · 暂定' : ''}',
-                            icon: e['row']['kind'] == 'exam'
-                                ? Icons.school_outlined
-                                : Icons.flag_outlined,
-                            warning: e['row']['certainty'] == 'tentative',
+                          ItemCard(
+                            item: Map<String, dynamic>.from(e['row']),
                             onTap: () async {
                               await openHubItem(
                                 context,
@@ -600,7 +587,13 @@ class SemesterHomeState extends State<SemesterHome>
                         ),
                       if (events.isEmpty &&
                           widget.controller.rows(selected['changes']).isEmpty)
-                        const CampusPanel(child: Text('这一周还没有记录截止事项、考试或活动')),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            '这一周还没有记录截止事项、考试或活动',
+                            style: TextStyle(color: CampusColors.muted),
+                          ),
+                        ),
                     ],
                   ),
                 ],

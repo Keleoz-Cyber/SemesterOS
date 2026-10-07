@@ -255,7 +255,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                 0)
               const Padding(
                 padding: EdgeInsets.only(top: 12),
-                child: Text('部分个人计划可能受影响。保存后可再调整个人计划。'),
+                child: Text('部分学习安排可能受影响。保存后可再调整学习安排。'),
               ),
             if (pending) ...[
               const SizedBox(height: 16),

@@ -8,6 +8,7 @@ import '../../ui/accessibility.dart';
 import '../notices/notice_fields.dart';
 import '../../ui/date_labels.dart';
 import 'task_state_glyph.dart';
+import '../../ui/motion.dart';
 
 String kindLabel(String? kind) => switch (kind) {
   'exam' => '考试',
@@ -136,6 +137,7 @@ class ItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = item['lifecycle'] == 'active';
     final exam = item['kind'] == 'exam';
+    if (!exam) return _TaskChecklistRow(card: this);
     final deadline = itemDeadline(item);
     final minutesToDeadline = deadline?.difference(DateTime.now()).inMinutes;
     final overdue = active && deadline?.isBefore(DateTime.now()) == true;
@@ -323,6 +325,144 @@ class ItemCard extends StatelessWidget {
             minutesToDeadline < 4320,
         remainingMinutes: minutesToDeadline,
         child: card,
+      ),
+    );
+  }
+}
+
+class _TaskChecklistRow extends StatelessWidget {
+  final ItemCard card;
+  const _TaskChecklistRow({required this.card});
+  @override
+  Widget build(BuildContext context) {
+    final item = card.item, active = item['lifecycle'] == 'active';
+    final completed = item['lifecycle'] == 'completed';
+    final time = _compactTimeLabel(item);
+    final deadline = itemDeadline(item);
+    final overdue = active && deadline?.isBefore(DateTime.now()) == true;
+    final accent = overdue ? CampusColors.error : CampusColors.primary;
+    final meta = [
+      if (item['kind'] == 'assignment') '作业',
+      if ('${item['course_title'] ?? ''}'.trim().isNotEmpty)
+        '${item['course_title']}',
+      if (item['remaining_minutes'] is num && active)
+        '还需${item['remaining_minutes']}分钟',
+      if (item['certainty'] == 'tentative') '暂定',
+      if (active && item['priority'] == 'high') '优先',
+      if (!active) completed ? '已完成' : '已取消',
+    ].join(' · ');
+    return SemanticCard(
+      label: '${item['title']}，${kindLabel(item['kind'])}',
+      value: meta,
+      onTap: card.onTap,
+      childHandlesInput: true,
+      child: Container(
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: CampusColors.line)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: card.onTap,
+                onLongPress: card.onLongPress,
+                onDoubleTap: card.onDoubleTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (card.onComplete != null && active)
+                        AppIconButton(
+                          tooltip: '标记完成：${item['title']}',
+                          onPressed: card.onComplete,
+                          icon: const Icon(
+                            Icons.radio_button_unchecked_rounded,
+                          ),
+                          guardAsync: true,
+                        )
+                      else
+                        SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: AnimatedSwitcher(
+                            duration: AppMotion.feedback(context),
+                            child: TaskStateGlyph(
+                              key: ValueKey(item['lifecycle']),
+                              state: '${item['lifecycle']}',
+                              color: active ? accent : CampusColors.muted,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${item['title']}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                height: 1.35,
+                                color: active
+                                    ? CampusColors.ink
+                                    : CampusColors.muted,
+                                decoration: completed
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                            if (meta.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  meta,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: CampusColors.muted,
+                                  ),
+                                ),
+                              ),
+                            if (time.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 5),
+                                child: Text(
+                                  '${overdue ? '已逾期 · ' : ''}$time',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: overdue
+                                        ? CampusColors.error
+                                        : CampusColors.muted,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (card.onComplete == null)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 18,
+                            color: CampusColors.muted,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (card.riskFooter != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 54, bottom: 8),
+                child: card.riskFooter!,
+              ),
+          ],
+        ),
       ),
     );
   }

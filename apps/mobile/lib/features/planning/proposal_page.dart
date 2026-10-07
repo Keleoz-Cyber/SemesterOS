@@ -12,8 +12,8 @@ import 'risk_widgets.dart';
 import '../agent/agent_widgets.dart' show PlanWarningNote;
 
 String proposalStatus(String? status) => switch (status) {
-  'FEASIBLE_COMPLETE' => '已安排好这次的任务',
-  'FEASIBLE_PARTIAL' => '目前只能安排一部分',
+  'FEASIBLE_COMPLETE' => '可以安排这次的任务',
+  'FEASIBLE_PARTIAL' => '可以先安排一部分',
   'INFEASIBLE' => '现有时间安排不下',
   'CHUNKING_LIMITED' => '单次学习时间太长，试试缩短一些',
   'TIMEOUT' => '暂时没算出合适的方案',
@@ -119,6 +119,14 @@ class _ProposalPageState extends State<ProposalPage> {
     final partial = p['status'] == 'FEASIBLE_PARTIAL',
         missing = p['unarranged_minutes'] ?? 0;
     final blocks = List<Map<String, dynamic>>.from(p['blocks'] ?? []);
+    final taskRows = widget.controller.rows(p['tasks']);
+    final simple =
+        !replan &&
+        !partial &&
+        blocks.length == 1 &&
+        taskRows.length == 1 &&
+        (taskRows.single['existing_minutes'] ?? 0) == 0 &&
+        (taskRows.single['later_minutes'] ?? 0) == 0;
     final expired =
         p['phase'] == 'expired' ||
         (p['valid_until'] != null &&
@@ -134,14 +142,14 @@ class _ProposalPageState extends State<ProposalPage> {
         !stale &&
         same;
     return Scaffold(
-      appBar: AppBar(title: Text(replan ? '查看调整方案' : '查看计划方案')),
+      appBar: AppBar(title: Text(replan ? '调整安排' : '安排预览')),
       bottomNavigationBar: canApply
           ? ActionFooter(
               label: partial
                   ? '保存已安排部分'
                   : replan
-                  ? '确认调整计划'
-                  : '确认保存计划',
+                  ? '确认调整'
+                  : '保存学习安排',
               icon: Icons.check_rounded,
               onPressed: busy || (partial && !partialConfirmed) ? null : accept,
             )
@@ -151,19 +159,34 @@ class _ProposalPageState extends State<ProposalPage> {
         children: [
           RecordHeading(
             icon: Icons.fact_check_outlined,
-            label: p['phase'] == 'ready' ? '待确认' : '历史方案',
-            title: replan && p['status'] == 'FEASIBLE_COMPLETE'
+            label: p['phase'] == 'ready'
+                ? '待确认'
+                : p['phase'] == 'applied'
+                ? '已保存'
+                : p['phase'] == 'undone'
+                ? '已撤销'
+                : '历史方案',
+            title: simple
+                ? '${blocks.single['title']}'
+                : replan && p['status'] == 'FEASIBLE_COMPLETE'
                 ? (p['moved_tasks'] == 0 ? '现有安排无需移动' : '已生成调整方案')
                 : proposalStatus(p['status']),
-            subtitle:
-                '${displayInstant(p['window_start'])}\n至 ${displayInstant(p['window_end'])}',
+            subtitle: simple
+                ? null
+                : '${displayInstant(p['window_start'])}\n至 ${displayInstant(p['window_end'])}',
           ),
           if (expired) const SoftNotice('方案中的时间已经过去，请重新生成。', warning: true),
           if (p['phase'] == 'stale' || stale)
             const SoftNotice('你的安排已有变化，请重新生成计划。', warning: true),
           if (p['phase'] == 'applied' || p['phase'] == 'undone')
             SoftNotice(p['phase'] == 'applied' ? '这个方案已保存到日程' : '这个方案已撤销'),
-          for (final message in p['messages'] ?? [])
+          for (final message in (p['messages'] as List? ?? []).where(
+            (m) =>
+                m != '保留已有计划，只为尚未安排的工作补充时间' &&
+                !widget.controller
+                    .rows(p['uncertainty_warnings'])
+                    .any((w) => w['message'] == m),
+          ))
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: SoftNotice(
@@ -193,12 +216,12 @@ class _ProposalPageState extends State<ProposalPage> {
             ),
             for (final b in p['locked_conflicts'] ?? [])
               SoftNotice(
-                '${b['title'] ?? '个人计划'} · ${displayInstant(b['start_at'])}\n这段计划目前不能移动：可能已固定、即将开始，或不在本次选择范围内。请到计划详情处理。',
+                '${b['title'] ?? '学习安排'} · ${displayInstant(b['start_at'])}\n这段计划目前不能移动：可能已固定、即将开始，或不在本次选择范围内。请到计划详情处理。',
                 warning: true,
               ),
-          ] else
+          ] else if (!simple)
             const SectionHeading('任务安排'),
-          for (final task in p['tasks'] ?? [])
+          for (final task in simple ? [] : taskRows)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Container(
@@ -232,7 +255,8 @@ class _ProposalPageState extends State<ProposalPage> {
                 ),
               ),
             ),
-          SectionHeading('${replan ? '调整前后' : '新增安排'}（${blocks.length}段）'),
+          if (!simple)
+            SectionHeading('${replan ? '调整前后' : '新增安排'}（${blocks.length}段）'),
           for (final b in blocks)
             Stack(
               children: [
@@ -273,13 +297,14 @@ class _ProposalPageState extends State<ProposalPage> {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        Text(
-                          b['title'],
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
+                        if (!simple)
+                          Text(
+                            b['title'],
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
                         const SizedBox(height: 6),
                         Text(
                           minutesLabel(b['minutes']),
@@ -350,10 +375,11 @@ class _ProposalPageState extends State<ProposalPage> {
                   : () => regenerate(p['request']['allow_partial'] == true),
               child: const Text('重新生成方案'),
             ),
-          AppTextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('返回修改要求'),
-          ),
+          if (!simple || !canApply)
+            AppTextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('返回修改要求'),
+            ),
         ],
       ),
     );

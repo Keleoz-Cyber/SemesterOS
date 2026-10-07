@@ -392,7 +392,7 @@ void main() {
           textScale: scale,
         );
         await _shot(tester, 'exam-preview-$size');
-        await _show(tester, find.text('个人计划影响'));
+        await _show(tester, find.text('学习安排影响'));
         await _shot(tester, 'exam-preview-impact-$size');
         final submit = find.widgetWithText(AppButton, '确认考试新安排');
         await _show(tester, find.text('确认考试新安排'));
@@ -451,7 +451,7 @@ void main() {
           textScale: scale,
         );
         await _shot(tester, 'course-preview-$size');
-        await _show(tester, find.text('相关个人计划'));
+        await _show(tester, find.text('相关学习安排'));
         await _shot(tester, 'course-preview-impact-$size');
         final submit = find.widgetWithText(AppButton, '保存修改');
         await _show(tester, find.text('保存修改'));

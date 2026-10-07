@@ -144,7 +144,7 @@ void main() {
         'after': {'blocks': []},
       },
       {},
-      '已保存个人计划',
+      '已保存学习安排',
     ),
     (
       {
@@ -154,7 +154,7 @@ void main() {
         'after': {'blocks': []},
       },
       {},
-      '已调整个人计划',
+      '已调整学习安排',
     ),
     (
       {'kind': 'batch', 'action': 'batch', 'groups': []},

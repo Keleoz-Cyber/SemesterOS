@@ -18,6 +18,7 @@ import '../../ui/campus_theme.dart';
 import '../../ui/app_selection.dart';
 import 'items_controller.dart';
 import 'item_widgets.dart';
+import '../../ui/motion_task_list.dart';
 import '../planning/risk_widgets.dart';
 import '../planning/availability_page.dart';
 import '../planning/plan_list.dart';
@@ -456,16 +457,8 @@ class _ItemsViewState extends State<ItemsView> {
                     spacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      const Text(
-                        '任务',
-                        softWrap: false,
-                        style: TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
                       Text(
-                        '${rows.length}',
+                        '${rows.length}项',
                         style: const TextStyle(
                           fontSize: 14,
                           color: CampusColors.muted,
@@ -670,10 +663,16 @@ class _ItemsViewState extends State<ItemsView> {
                 onReorderItem: (a, b) => reorder(rows, a, b, adjusted: true),
               )
             else
-              VirtualizedSliverList<Map<String, dynamic>>(
+              MotionTaskList(
+                key: ValueKey('task-motion-${c.owner}-${c.semesterId}-$filter'),
+                sliver: true,
+                removedStates: {
+                  for (final r in c.items)
+                    if (r['lifecycle'] != 'active')
+                      '${r['id']}': '${r['lifecycle']}',
+                },
                 items: rows,
-                itemKey: (r) => ValueKey('virtual-task-${r['id']}'),
-                itemBuilder: (context, r, i) => taskRow(r, i, rows),
+                builder: (context, r, i) => taskRow(r, i, rows),
               ),
             SliverToBoxAdapter(child: footer),
           ],
@@ -693,7 +692,16 @@ class _ItemsViewState extends State<ItemsView> {
               onReorderItem: (a, b) => reorder(rows, a, b, adjusted: true),
             )
           else
-            for (var i = 0; i < rows.length; i++) taskRow(rows[i], i, rows),
+            MotionTaskList(
+              key: ValueKey('task-motion-${c.owner}-${c.semesterId}-$filter'),
+              items: rows,
+              removedStates: {
+                for (final r in c.items)
+                  if (r['lifecycle'] != 'active')
+                    '${r['id']}': '${r['lifecycle']}',
+              },
+              builder: (context, r, i) => taskRow(r, i, rows),
+            ),
           footer,
         ],
       );

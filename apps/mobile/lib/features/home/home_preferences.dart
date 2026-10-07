@@ -3,8 +3,8 @@ import '../../core/cache.dart';
 
 const homeModules = {
   'deadlines': '近期截止',
-  'plans': '个人计划',
-  'windows': '安排建议',
+  'plans': '学习安排',
+  'windows': '空档与待办',
   'exams': '近期考试',
   'week_heatmap': '本周忙闲',
   'semester_progress': '学期进度',

@@ -20,6 +20,8 @@ import 'today_view_enhanced.dart';
 import 'week_heatmap.dart';
 import 'semester_progress.dart';
 import 'time_stats_card.dart';
+import 'study_opportunity_card.dart';
+import '../planning/proposal_page.dart';
 import '../../ui/breathing_exercise_card.dart';
 import '../../ui/time_urgency.dart';
 
@@ -51,6 +53,7 @@ class TodayDashboardState extends State<TodayDashboard>
   late final CalendarRepository weekly;
   late final HomePreferences preferences;
   MinuteClock? clock;
+  bool arrangingOpportunity = false;
   late final String semesterId;
   late final String owner;
   late final int generation;
@@ -248,7 +251,8 @@ class TodayDashboardState extends State<TodayDashboard>
         : row['resource_id'] ?? row['id'];
     if (id == null) return;
     await context.push(switch (row['resource_type']) {
-      'course' => '/courses/$id',
+      'course' =>
+        '/courses/$id?occurrence=${Uri.encodeQueryComponent('${row['id']}')}',
       'event' => '/events/$id',
       'exam' => '/exams/$id',
       _ => '/items/$id',
@@ -290,6 +294,41 @@ class TodayDashboardState extends State<TodayDashboard>
           context,
         ).showSnackBar(SnackBar(content: Text(userError(error))));
       }
+    }
+  }
+
+  Future<void> arrangeOpportunity(Map<String, dynamic> opportunity) async {
+    if (arrangingOpportunity || !sameSemester) return;
+    setState(() => arrangingOpportunity = true);
+    try {
+      final p = await widget.items.generateSchedule(
+        {
+          'days': 1,
+          'lead_minutes': 0,
+          'tasks': [
+            {'item_id': opportunity['item_id']},
+          ],
+          'window_start_at': opportunity['start_at'],
+          'window_end_at': opportunity['end_at'],
+        },
+        idempotencyKey: 'opportunity-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      if (!mounted || !sameSemester) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProposalPage(controller: widget.items, proposal: p),
+        ),
+      );
+      if (mounted && sameSemester) await reload();
+    } catch (error) {
+      if (mounted && sameSemester) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userError(error))));
+      }
+    } finally {
+      if (mounted && sameSemester) setState(() => arrangingOpportunity = false);
     }
   }
 
@@ -546,9 +585,17 @@ class TodayDashboardState extends State<TodayDashboard>
         timeline.every(
           (r) => at(r['end_at']) != null && !at(r['end_at'])!.isAfter(now),
         );
-    final tomorrow = briefRows(
-      brief.data?['next_day']?['entries'],
-    ).map(calendarDisplayEntry).toList();
+    final tomorrow = briefRows(brief.data?['next_day']?['entries'])
+        .where(
+          (r) => const [
+            'course',
+            'event',
+            'exam',
+            'plan',
+          ].contains(r['resource_type']),
+        )
+        .map(calendarDisplayEntry)
+        .toList();
     final nextDate = day.add(const Duration(days: 1));
     final tomorrowTasks = tasks.where((t) {
       final due = deadline(t);
@@ -586,7 +633,25 @@ class TodayDashboardState extends State<TodayDashboard>
           events: timeline.length + otherDay.length,
           tasks: tasks.length,
         );
-    final tomorrowVisible = showTomorrow && viewMode != TodayViewMode.tasks;
+    final overviewTasks = [...tasks];
+    final urgentIndex = overviewTasks.indexWhere(
+      (t) => t['id'] == urgent?['id'],
+    );
+    if (urgentIndex > 0) {
+      overviewTasks.insert(0, overviewTasks.removeAt(urgentIndex));
+    }
+    final visibleTaskIds = {
+      if (viewMode == TodayViewMode.overview)
+        ...overviewTasks.take(2).map((t) => t['id']),
+      if (viewMode == TodayViewMode.schedule && urgent != null) urgent['id'],
+    };
+    final tomorrowPreviewTasks = tomorrowTasks
+        .where((t) => !visibleTaskIds.contains(t['id']))
+        .toList();
+    final tomorrowVisible =
+        showTomorrow &&
+        viewMode != TodayViewMode.tasks &&
+        (tomorrow.isNotEmpty || tomorrowPreviewTasks.isNotEmpty);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -774,6 +839,10 @@ class TodayDashboardState extends State<TodayDashboard>
           onAllTasks: widget.onAllTasks,
           onAllEvents: widget.onCalendar,
           priorityTaskId: urgent?['id'],
+          removedTaskStates: {
+            for (final r in widget.items.items)
+              if (r['lifecycle'] != 'active') '${r['id']}': '${r['lifecycle']}',
+          },
         ),
         for (final id
             in preferences.order
@@ -793,7 +862,7 @@ class TodayDashboardState extends State<TodayDashboard>
                 : tasks,
             urgent,
           ),
-        if (tomorrowVisible) tomorrowPreview(tomorrow, tomorrowTasks),
+        if (tomorrowVisible) tomorrowPreview(tomorrow, tomorrowPreviewTasks),
       ],
     );
   }
@@ -1015,7 +1084,7 @@ class TodayDashboardState extends State<TodayDashboard>
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          section('个人计划', icon: Icons.event_note_outlined),
+          section('学习安排', icon: Icons.event_note_outlined),
           for (final r in rows) recordRow(r),
         ],
       );
@@ -1023,12 +1092,27 @@ class TodayDashboardState extends State<TodayDashboard>
     if (id == 'windows') {
       if (!brief.fresh(revision ?? 0)) return const SizedBox();
       final suggestions = brief.suggestions;
-      if (suggestions.isEmpty) return const SizedBox();
+      final opportunity = brief.data?['study_opportunity'];
+      final warnings = suggestions
+          .where((s) => s['kind'] != 'free_window')
+          .toList();
+      if (warnings.isEmpty && opportunity is! Map) return const SizedBox();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          section('安排建议', icon: Icons.auto_awesome_outlined),
-          for (final suggestion in suggestions.take(2))
+          if (opportunity is Map)
+            StudyOpportunityCard(
+              value: Map<String, dynamic>.from(opportunity),
+              now: now,
+              ready: brief.fresh(revision ?? 0),
+              busy: arrangingOpportunity,
+              onArrange: () =>
+                  arrangeOpportunity(Map<String, dynamic>.from(opportunity)),
+              onOpen: () => context.push('/items/${opportunity['item_id']}'),
+            ),
+          if (warnings.isNotEmpty)
+            section('需要留意', icon: Icons.info_outline_rounded),
+          for (final suggestion in warnings.take(2))
             Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.only(left: 14),

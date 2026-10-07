@@ -417,7 +417,8 @@ class CalendarPanelState extends State<CalendarPanel>
     if (id == null) return;
     await context.push(switch (row['resource_type']) {
       'event' => '/events/$id',
-      'course' => '/courses/$id',
+      'course' =>
+        '/courses/$id?occurrence=${Uri.encodeQueryComponent('${row['id']}')}',
       'exam' => '/exams/$id',
       _ => '/items/$id',
     });

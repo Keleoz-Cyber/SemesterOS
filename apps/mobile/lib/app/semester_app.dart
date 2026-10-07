@@ -184,6 +184,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
           builder: (_, state) => CourseHubPage(
             controller: items,
             courseId: state.pathParameters['id']!,
+            occurrenceId: state.uri.queryParameters['occurrence'],
           ),
         ),
         GoRoute(

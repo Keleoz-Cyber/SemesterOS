@@ -76,10 +76,12 @@ Widget hubItem(
 class CourseHubPage extends StatelessWidget {
   final ItemsController controller;
   final String courseId;
+  final String? occurrenceId;
   const CourseHubPage({
     super.key,
     required this.controller,
     required this.courseId,
+    this.occurrenceId,
   });
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -92,6 +94,14 @@ class CourseHubPage extends StatelessWidget {
         builder: (context, data, fresh, reload) {
           final course = data['course'];
           final all = controller.rows(data['items']);
+          final occurrences = controller.rows(data['occurrences']);
+          final selected = occurrences
+              .where((e) => e['id'] == occurrenceId)
+              .firstOrNull;
+          final next = occurrences
+              .where((e) => DateTime.parse(e['end_at']).isAfter(DateTime.now()))
+              .firstOrNull;
+          final focus = selected ?? next ?? occurrences.lastOrNull;
           Future<void> add(String kind) async {
             await Navigator.push(
               context,
@@ -294,6 +304,35 @@ class CourseHubPage extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (focus != null) ...[
+                      const Divider(height: 24),
+                      Text(
+                        selected != null
+                            ? '这次上课'
+                            : next != null
+                            ? '下次上课'
+                            : '最近一次上课',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: CampusColors.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        displayInterval(focus['start_at'], focus['end_at']),
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if ('${focus['location'] ?? ''}'.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          '${focus['location']}',
+                          style: const TextStyle(fontSize: 15),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
               ),
@@ -336,7 +375,7 @@ class CourseHubPage extends StatelessWidget {
                   if (kind != null && context.mounted) await add(kind);
                 },
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('添加事项'),
+                label: const Text('添加作业或考试'),
               ),
               const SizedBox(height: 8),
               AppTextButton.icon(

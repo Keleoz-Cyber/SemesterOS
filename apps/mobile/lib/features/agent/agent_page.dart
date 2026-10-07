@@ -1949,7 +1949,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                   ),
                 if (summary['personal_planned_minutes'] is num)
                   metric(
-                    '个人计划',
+                    '学习安排',
                     insightHours(summary['personal_planned_minutes']),
                   ),
                 if (summary['actual_minutes'] is num)
@@ -2207,7 +2207,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 if (d['occupied_union_minutes'] is num)
                   metric('占用时间', insightHours(d['occupied_union_minutes'])),
                 if (d['personal_planned_minutes'] is num)
-                  metric('个人计划', insightHours(d['personal_planned_minutes'])),
+                  metric('学习安排', insightHours(d['personal_planned_minutes'])),
               ],
             ),
           ],
@@ -2666,7 +2666,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             Text(
               p['kind'] == 'item_state'
                   ? '同时取消 ${rows(p['affected_blocks']).length} 段后续计划'
-                  : '涉及 ${rows(p['affected_blocks']).length} 段个人计划',
+                  : '涉及 ${rows(p['affected_blocks']).length} 段学习安排',
             ),
             for (final block in rows(p['affected_blocks']).take(3))
               Text(
@@ -2949,10 +2949,10 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               Expanded(
                 child: Text(
                   run['status'] == 'applied'
-                      ? '已保存个人计划'
+                      ? '已保存学习安排'
                       : replan
-                      ? '调整个人计划'
-                      : '个人计划预览',
+                      ? '调整学习安排'
+                      : '学习安排预览',
                   style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -2963,7 +2963,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 12),
           Text(
-            replan ? '${changed.length}段计划将调整时间' : '新增${blocks.length}段个人计划',
+            replan ? '${changed.length}段计划将调整时间' : '新增${blocks.length}段学习安排',
           ),
           for (final update in rows(result['remaining_updates']))
             Padding(

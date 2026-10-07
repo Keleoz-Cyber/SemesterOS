@@ -231,7 +231,7 @@ class _SemesterPageState extends State<SemesterPage> {
         if ((saved['affected_plan_count'] as num? ?? 0) > 0) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('设置已保存，${saved['affected_plan_count']} 段个人计划需要调整'),
+              content: Text('设置已保存，${saved['affected_plan_count']} 段学习安排需要调整'),
             ),
           );
         }

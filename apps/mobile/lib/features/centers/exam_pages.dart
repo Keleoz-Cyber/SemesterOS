@@ -1015,7 +1015,7 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
               reviewReminders.isNotEmpty ||
               riskChanges.isNotEmpty)
             AcademicEditorSection(
-              title: '个人计划影响',
+              title: '学习安排影响',
               icon: Icons.event_note_outlined,
               children: [
                 for (final r in reviewReminders)
@@ -1024,7 +1024,7 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
                   ),
                 for (final b in affectedBlocks)
                   RecordFact(
-                    label: b['locked'] == true ? '已锁定的个人计划' : '个人计划',
+                    label: b['locked'] == true ? '已锁定的学习安排' : '学习安排',
                     value: '${b['title']} · ${displayInstant(b['start_at'])}',
                     icon: b['locked'] == true
                         ? Icons.lock_outline_rounded
@@ -1073,7 +1073,7 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
                   builder: (_) => PlanListPage(controller: widget.controller),
                 ),
               ),
-              child: const Text('查看个人计划并按需重排'),
+              child: const Text('查看学习安排并按需重排'),
             ),
             AppButton(
               onPressed: () => Navigator.pop(context, true),

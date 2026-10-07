@@ -64,6 +64,8 @@ def day_brief(sid: str, day: date | None = Query(default=None),
         suggestions.append({'kind':'free_window','title':f"{a:%H:%M}—{b:%H:%M} 可安排任务",'detail':detail,
             'source_ids':[], 'action_label':'安排一下','request':f'请查看我未完成的任务，建议如何利用{day} {a:%H:%M}至{b:%H:%M}这段空闲时间，先给我预览。'})
     tomorrow=day+timedelta(days=1)
+    from .study_opportunity import study_opportunity
+    opportunity=study_opportunity(source,context,now,begin,end,data['entries'])
     next_day=calendar(sid,tomorrow,tomorrow,user,db) if tomorrow<date.max else {'entries':[]}
     tomorrow_deadlines=[r for r in next_day['entries'] if r.get('resource_type')=='deadline']
     exams=[i for i in source[3] if i.get('kind')=='exam' and i.get('lifecycle')=='active']
@@ -80,6 +82,7 @@ def day_brief(sid: str, day: date | None = Query(default=None),
     return {**data,'date':str(day),'generated_at':now.isoformat(),'valid_until':(now+timedelta(minutes=5)).isoformat(),
             'available_windows':windows[:6],'needs_availability':not configured,'uncertain_count':len(uncertain),
             'plan_impacts':overlaps,'suggestions':suggestions,
+            'study_opportunity':opportunity,
             'uncertainty_warnings':warnings,
             'next_day':{'date':str(tomorrow),'entries':next_day['entries']},
             'tomorrow_deadlines':tomorrow_deadlines,'upcoming_exams':exams}

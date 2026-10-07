@@ -113,7 +113,7 @@ void main() {
             'moved_tasks': 1,
             'moved_blocks': 3,
             'shift_minutes': 180,
-            'messages': ['重排范围为本学期全部已有的未来个人计划。'],
+            'messages': ['重排范围为本学期全部已有的未来学习安排。'],
             'request': {'mode': 'replan', 'lead_minutes': 5},
             'blocks': [
               for (final b in p['blocks'])
@@ -155,25 +155,25 @@ void main() {
       // Applying expands the confirmation area; reveal its next action before
       // tapping so this still exercises the two independent requests.
       await tester.scrollUntilVisible(
-        find.text('查看个人计划调整方案'),
+        find.text('查看学习安排调整方案'),
         240,
         scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
-      expect(find.text('查看个人计划调整方案').hitTestable(), findsOneWidget);
-      await ioTap(tester, find.text('查看个人计划调整方案'));
+      expect(find.text('查看学习安排调整方案').hitTestable(), findsOneWidget);
+      await ioTap(tester, find.text('查看学习安排调整方案'));
       expect(replans, 1);
       expect(f.applied, 0);
       expect(find.byType(ProposalPage), findsOneWidget);
       await capture(tester, 'replan-preview');
       await tester.scrollUntilVisible(
-        find.text('确认调整计划'),
+        find.text('确认调整'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
-      expect(find.text('确认调整计划').hitTestable(), findsOneWidget);
-      await ioTap(tester, find.text('确认调整计划'));
+      expect(find.text('确认调整').hitTestable(), findsOneWidget);
+      await ioTap(tester, find.text('确认调整'));
       expect(f.applied, 1);
       await tester.pumpWidget(const SizedBox());
       f.c.dispose();
