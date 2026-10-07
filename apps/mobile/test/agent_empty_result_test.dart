@@ -7,11 +7,77 @@ import 'ui_polish_test.dart' show mount, capture, loadPreviewFonts;
 
 void main() {
   setUpAll(loadPreviewFonts);
+  for (final detail in [false, true]) {
+    testWidgets(
+      'free query ${detail ? 'preserves requested detail' : 'shows one verified overview'}',
+      (tester) async {
+        final f = ScheduleFixture();
+        final prior = f.api.dio.httpClientAdapter as ControlledTransport;
+        const original = '这是模型可能输出的完整列表。';
+        const overview = '已查到周四、周五有一小时空档。';
+        f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+          if (r.path.endsWith('/agent/threads/t')) {
+            return body({
+              'runs': [
+                {
+                  'id': 'r',
+                  'status': 'completed',
+                  'text': '这周哪天有一小时空闲？',
+                  'answer': original,
+                  'cards': [
+                    {
+                      'kind': 'windows',
+                      'data': {
+                        'scope': 'calendar',
+                        'answer_style': detail ? 'detail' : 'summary',
+                        'overview_answer': overview,
+                        'windows': [
+                          {
+                            'start_at': '2026-10-08T08:00:00+08:00',
+                            'end_at': '2026-10-08T09:00:00+08:00',
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ],
+            });
+          }
+          return prior.respond(r);
+        });
+        await tester.runAsync(() => f.c.bind('s'));
+        await mount(
+          tester,
+          AgentPage(
+            controller: f.c,
+            semester: {'id': 's'},
+            initialThreadId: 't',
+          ),
+        );
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 80)),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(original), detail ? findsOneWidget : findsNothing);
+        expect(find.text(overview), detail ? findsNothing : findsOneWidget);
+        if (!detail) {
+          await tester.tap(find.text('更多说明'));
+          await tester.pumpAndSettle();
+          expect(find.text(original), findsOneWidget);
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        f.c.dispose();
+      },
+    );
+  }
   testWidgets(
     'completed empty queries avoid duplicate cards but preserve facts and diagnostics',
     (tester) async {
       for (final mode in [
         'empty',
+        'windows',
         'records',
         'occurrences',
         'nonempty',
@@ -25,7 +91,9 @@ void main() {
         final previous = f.api.dio.httpClientAdapter as ControlledTransport;
         final card = {
           'card_id': 'q',
-          'kind': mode == 'records'
+          'kind': mode == 'windows'
+              ? 'windows'
+              : mode == 'records'
               ? 'records'
               : mode == 'occurrences'
               ? 'course_occurrences'
@@ -48,6 +116,7 @@ void main() {
             'undated': [],
             'records': [],
             'occurrences': [],
+            'windows': [],
             'fixed_conflicts': [],
             'categories': [
               {'id': 'study', 'name': '学习'},
@@ -86,7 +155,13 @@ void main() {
           () => Future<void>.delayed(const Duration(milliseconds: 80)),
         );
         await tester.pumpAndSettle();
-        final cleanEmpty = {'empty', 'records', 'occurrences'}.contains(mode);
+        final cleanEmpty = {
+          'empty',
+          'records',
+          'occurrences',
+          'windows',
+        }.contains(mode);
+        if (mode == 'windows') expect(find.text('可用时段'), findsNothing);
         if (mode != 'no-answer') expect(find.text('明天没有安排。'), findsOneWidget);
         expect(find.text('相关安排'), cleanEmpty ? findsNothing : findsOneWidget);
         expect(
@@ -96,7 +171,10 @@ void main() {
               : findsOneWidget,
         );
         if (!cleanEmpty) {
-          expect(find.text('10月4日'), mode == 'nonempty' ? findsNWidgets(2) : findsOneWidget);
+          expect(
+            find.text('10月4日'),
+            mode == 'nonempty' ? findsNWidgets(2) : findsOneWidget,
+          );
           expect(find.text('10月4日 — 10月4日'), findsNothing);
         }
         if (mode == 'nonempty') expect(find.text('组会'), findsOneWidget);

@@ -83,11 +83,13 @@ void main() {
           ),
         ),
       );
-      double top() => tester
-          .widget<Positioned>(
-            find.byKey(const ValueKey('schedule-current-time')),
-          )
-          .top!;
+      double top() {
+        final marker = tester.widget<Positioned>(
+          find.byKey(const ValueKey('schedule-current-time')),
+        );
+        return marker.top! + marker.height! / 2;
+      }
+
       expect(top(), closeTo(85.5, .01));
       now = DateTime.utc(2026, 9, 21, 9, 31);
       await tester.pump(const Duration(seconds: 58));

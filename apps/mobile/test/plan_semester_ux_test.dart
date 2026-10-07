@@ -301,7 +301,7 @@ void main() {
       );
       expect(find.text('重新计算'), findsNothing);
       expect(find.text('生成计划'), findsNothing);
-      expect(find.text('学习时间'), findsOneWidget);
+      expect(find.text('设置时段'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('learning-plan-action')));
       await tester.pumpAndSettle();
       expect(request, contains('任务'));
@@ -311,7 +311,7 @@ void main() {
       f.c.analysis!['summary']['configured'] = false;
       f.c.changed();
       await tester.pumpAndSettle();
-      expect(find.text('学习时间'), findsOneWidget);
+      expect(find.text('设置时段'), findsOneWidget);
       expect(find.text('设置可学习时间'), findsNothing);
       request = null;
       await tester.ensureVisible(find.text('全部安排'));

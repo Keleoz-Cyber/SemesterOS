@@ -593,8 +593,9 @@ void main() {
           }
           stage = 'release-learning-window';
           await tabTap('任务');
-          await textTap('学习时间');
-          await textTap('快速设置：每天19:00—21:00');
+          await tap(find.byKey(const Key('learning-time-settings')));
+          await tap(find.byKey(const Key('availability-bulk')));
+          await tap(find.byKey(const Key('bulk-apply')));
           await textTap('核对并保存学习时间');
           await textTap('确认保存学习时间');
           await until(() => find.text('可学习时间').evaluate().isEmpty);
@@ -835,15 +836,9 @@ void main() {
           // Learning time and personal scheduling through the normal controls.
           stage = 'availability-save';
           await textTap('任务');
-          await until(
-            () =>
-                find.text('设置可学习时间').evaluate().isNotEmpty ||
-                find.text('学习时间设置').evaluate().isNotEmpty,
-          );
-          await textTap(
-            find.text('设置可学习时间').evaluate().isNotEmpty ? '设置可学习时间' : '学习时间设置',
-          );
-          await textTap('快速设置：每天19:00—21:00');
+          await tap(find.byKey(const Key('learning-time-settings')));
+          await tap(find.byKey(const Key('availability-bulk')));
+          await tap(find.byKey(const Key('bulk-apply')));
           await textTap('核对并保存学习时间');
           await textTap('确认保存学习时间');
           await until(() => find.text('可学习时间').evaluate().isEmpty);

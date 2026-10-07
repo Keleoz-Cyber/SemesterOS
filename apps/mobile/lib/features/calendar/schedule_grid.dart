@@ -345,7 +345,8 @@ class _ScheduleGridState extends State<ScheduleGrid>
     builder: (context, box) {
       final entries = parts(),
           scaled = MediaQuery.textScalerOf(context).scale(1);
-      final compact = box.maxWidth < 540, timeWidth = compact ? 40.0 : 52.0;
+      final compact = box.maxWidth < 540;
+      final timeWidth = (compact ? 40.0 : 52.0) + 12 * scaled;
       final minuteHeight = scaled > 1.3 ? 1.4 : .95;
       final markerHeight = scaled > 1.3 ? 72.0 : 44.0;
       final current = now;
@@ -444,8 +445,8 @@ class _ScheduleGridState extends State<ScheduleGrid>
         )
           Positioned(
             top: scale.at(hour * 60) + 2,
-            left: 0,
-            width: timeWidth - 4,
+            left: 12,
+            width: timeWidth - 16,
             child: Text(
               scaled > 1.3 ? '$hour时' : '${hour.toString().padLeft(2, '0')}:00',
               textAlign: TextAlign.right,
@@ -459,8 +460,8 @@ class _ScheduleGridState extends State<ScheduleGrid>
           if (period['start'] is String)
             Positioned(
               top: scale.at(_clockMinute(period['start'])) + 2,
-              left: 0,
-              width: timeWidth - 3,
+              left: 12,
+              width: timeWidth - 15,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -531,15 +532,37 @@ class _ScheduleGridState extends State<ScheduleGrid>
       if (today >= 0 && minute >= first && minute < last) {
         children.add(
           Positioned(
+            top: 0,
+            left: 5,
+            width: 2,
+            height: scale.at(minute),
+            child: IgnorePointer(
+              child: ColoredBox(
+                color: CampusColors.teal.withValues(alpha: .28),
+              ),
+            ),
+          ),
+        );
+        children.add(
+          Positioned(
             key: const ValueKey('schedule-current-time'),
-            top: scale.at(minute),
-            left: timeWidth + offsets[today],
-            width: widths[today],
-            height: 2,
+            top: (scale.at(minute) - 5).clamp(0.0, math.max(0.0, height - 10)),
+            left: 1,
+            width: 10,
+            height: 10,
             child: IgnorePointer(
               child: Semantics(
                 label: '现在 ${hhmm(current)}',
-                child: Container(color: CampusColors.teal),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: CampusColors.teal,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: CampusColors.background,
+                      width: 2,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -556,14 +579,36 @@ class _ScheduleGridState extends State<ScheduleGrid>
                   children: [
                     SizedBox(
                       width: timeWidth,
-                      child: const Center(
-                        child: Text(
-                          '时间',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: CampusColors.muted,
-                          ),
-                        ),
+                      child: Center(
+                        child: today < 0
+                            ? const Text(
+                                '时间',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: CampusColors.muted,
+                                ),
+                              )
+                            : Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    '现在',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: CampusColors.teal,
+                                    ),
+                                  ),
+                                  Text(
+                                    hhmm(current),
+                                    key: const Key('schedule-current-clock'),
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: CampusColors.teal,
+                                    ),
+                                  ),
+                                ],
+                              ),
                       ),
                     ),
                     for (var i = 0; i < 7; i++)

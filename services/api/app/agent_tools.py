@@ -113,6 +113,16 @@ class ItemChange(Input):
 
 class FreeWindows(Range):
     duration_minutes: int = Field(ge=15, le=480)
+    scope: Literal['calendar', 'study'] = Field(default='calendar', description='普通空闲、约时间、哪天有空用calendar；用户明确在学习时段内找学习时间用study。')
+    answer_style: Literal['summary','detail'] = Field(default='summary', description='普通哪天有空用summary，App按结构化结果显示简短结论。用户明确要求比较、解释原因、详细文字列表时用detail保留完整回复。')
+    day_start_minutes: int = Field(default=480, ge=0, le=1439, description='calendar每天查询开始分钟；未指定按08:00起查并说明范围，全天用0。study忽略。')
+    day_end_minutes: int = Field(default=1320, ge=1, le=1440, description='calendar每天查询结束分钟；未指定按22:00止查并说明范围，全天用1440。study忽略。')
+
+    @model_validator(mode='after')
+    def day_window(self):
+        if self.scope == 'calendar' and self.day_end_minutes <= self.day_start_minutes:
+            raise ValueError('请检查每日查询时段')
+        return self
 
 
 class InsightQuery(Input):
@@ -224,7 +234,7 @@ SCHEMAS = {
     'prepare_plan': (PlanRequest, '用求解器准备个人计划，确认前不写入时间块。先find_records查询任务。新增用schedule；重排用replan，只传mode/task_ids/lead_minutes。普通任务可立即开始，明确等待条件或未来开始保持原样；缺耗时或学习时间用get_schedule_setup给可修改建议并确认，不猜成事实，不要求没有截止的任务先补精确期限。不改固定课程考试活动。'),
     'analyze_schedule': (Range, '计算安排数量、已安排时长、重叠时间的并集、截止事项和缺失信息；不是实际投入或效率评分。'),
     'query_insights': (InsightQuery, '读取与统计页面一致的汇总。全学期使用scope=semester，指定日期用scope=range+from_date/to_date；可按主分类、已查到的稳定标签ID筛选。明确区分安排时长、重叠去重占用、实际进度记录和未知值，不能生成效率评分。'),
-    'find_free_windows': (FreeWindows, '查找用户学习时间设置内的连续空闲时段，扣除固定安排与个人计划。信息不完整时返回待补充。'),
+    'find_free_windows': (FreeWindows, '查询连续空闲。普通日程问题默认calendar，扣除课程、考试、已预留活动、个人计划和临时不可用时段，不限于学习偏好；默认08:00—22:00，用户指定全天/其他钟点时改每日查询范围。明确查询可学习时间才用study，遵循已保存学习时段。按天返回真实空档，未知结束保留核对提示。'),
     'prepare_event': (EventChange, '准备一般日程或参考通知的新增/修改/取消预览。fields可含title,time,certainty,reserve_time,details,location,notes,category_id,tags,reminder_minutes。仅作参考、自愿尚未报名、条件未确定或另选他人时reserve_time=false；details.participation_status用optional/conditional/other。本人已确定参加时confirmed及reserve_time=true，不从formal或时间完整推断参加。time遵循precision=exact/date/week/range/unknown；exact用含时区的at,end_at，不猜结束时间。修改时仅传需要改变的完整字段。分类study/research/affairs/life；建议1到3标签。不能改课程或考试；不能擅自移动固定安排。'),
     'prepare_item': (ItemNew, '准备新增作业、个人任务或学校考试通知的确认预览。fields含kind(task或assignment或exam),title,time，可含course_id,remaining_minutes,priority,notes,reminders。日期只有天时precision=date，勿推断23:59；未说耗时不猜。'),
     'prepare_item_change': (ItemChange, '按用户请求更新已有任务/作业的截止、地点、材料、渠道、条件，以及start_policy/earliest_start_at。明确“从现在可以安排”用now，指定最早时刻用at。先find_records定位；fields只传修改字段，details合并其余细节。考试走prepare_exam_change，课程走prepare_course_change。'),
@@ -370,17 +380,48 @@ def execute_tool(name, raw, db, user, thread, state, source):
         from .schedule_api import snapshot
         from .capacity import calendar_context
         from .reminder_rules import utcnow
-        snap = snapshot(db,user,s); context=calendar_context(*snap[:4],utcnow())
+        snap = snapshot(db,user,s)
+        availability=snap[1]
+        if args.scope == 'calendar':
+            def clock(minutes):return f'{minutes//60:02d}:{minutes%60:02d}'
+            availability={**availability,'weekly':[{'weekday':day,'start':clock(args.day_start_minutes),
+                'end':clock(args.day_end_minutes)} for day in range(1,8)]}
+        context=calendar_context(snap[0],availability,snap[2],snap[3],utcnow())
         range_start=local_day(args.from_date.isoformat()).timestamp()
         range_end=local_day((args.to_date+timedelta(days=1)).isoformat()).timestamp()
         begin=max(range_start,utcnow().timestamp());end=range_end
         occupied=[(instant(p['start_at']).timestamp(),instant(p['end_at']).timestamp()) for p in snap[4] if p['status']=='active']
         windows=subtract(context['free'].spans,merge(occupied))
-        spans=[(max(a,begin),min(b,end)) for a,b in windows if min(b,end)-max(a,begin)>=args.duration_minutes*60]
+        spans=[]
+        for day in range((args.to_date-args.from_date).days+1):
+            start=local_day((args.from_date+timedelta(days=day)).isoformat()).timestamp()
+            stop=start+86400
+            for a,b in windows:
+                left,right=max(a,begin,start),min(b,end,stop)
+                if right-left>=args.duration_minutes*60:spans.append((left,right))
         warnings=[w for w in context['uncertainty_warnings'] if uncertainty_affects_window(w,begin,end)]
         result={'windows':[{'start_at':iso(a),'end_at':iso(b)} for a,b in spans[:30]],'truncated':len(spans)>30,
                 'revision':s.revision,'uncertainty_warnings':warnings,'needs_input':[],
-                'basis':'仅使用你设置的学习时间，已避开已知固定安排、个人计划，以及时间不全事项的已知日期范围；日期未明事项单独提示，不封锁全部时段'}
+                'scope':args.scope,
+                'daily_search':None if args.scope=='study' else {'start':clock(args.day_start_minutes),'end':clock(args.day_end_minutes)},
+                'basis':'按已保存的学习时段查询' if args.scope=='study' else f'按已记录日程查询，每天{clock(args.day_start_minutes)}—{clock(args.day_end_minutes)}；已避开固定安排、个人计划与临时不可用时段'}
+        days=sorted({datetime.fromtimestamp(a,SHANGHAI).date() for a,b in spans})
+        hours,minutes=divmod(args.duration_minutes,60)
+        duration=(f'{hours}小时' if hours else '')+(f'{minutes}分钟' if minutes else '')
+        if args.scope=='study' and not snap[1].get('configured'):
+            overview='还没有保存每周学习时段，暂时无法按学习偏好查询。'
+        elif not days:
+            overview=f'在本次查询范围内，没有找到**{duration}**的连续'+('日程空档。' if args.scope=='calendar' else '学习空闲。')
+        else:
+            year=utcnow().astimezone(SHANGHAI).year
+            def label(day):return (f'{day.year}年' if day.year!=year else '')+f'{day.month}月{day.day}日'
+            if (days[-1]-days[0]).days+1==len(days) and len(days)>1:
+                date_label=((f'{days[0].year}年' if days[0].year!=year else '')+f'{days[0].month}月{days[0].day}—{days[-1].day}日' if days[0].month==days[-1].month and days[0].year==days[-1].year else label(days[0])+'—'+label(days[-1]))
+            elif len(days)<=6:date_label='、'.join(label(day) for day in days)
+            else:date_label=f'本次查询中有{len(days)}天'
+            overview=f'按已记录安排，**{date_label}**有至少**{duration}**'+('日程空档' if args.scope=='calendar' else '学习空闲')+'。时段见下方。'
+        if any(w.get('could_affect_occupancy') for w in warnings):overview+='\n有时间不完整的安排，后续时段需核对。'
+        result.update(answer_style=args.answer_style,overview_answer=overview,duration_minutes=args.duration_minutes)
         append_card(state, 'windows', {**result, 'total_count':len(result['windows']),
             'navigation_query':{'semester_id':sid, **args.model_dump(mode='json')}})
         return result

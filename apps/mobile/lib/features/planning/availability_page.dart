@@ -12,6 +12,7 @@ import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'date_time_picker.dart';
+import 'availability_bulk_sheet.dart';
 
 class AvailabilityPage extends StatefulWidget {
   final ItemsController controller;
@@ -48,7 +49,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
     }
     try {
       final data = await widget.controller.getAvailability();
-      if (mounted) {
+      if (mounted && sameContext) {
         setState(() {
           version = data['version'];
           weekly = List<Map<String, dynamic>>.from(data['weekly']);
@@ -89,6 +90,50 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
       );
       error = null;
     });
+  }
+
+  Future<void> bulkSet() async {
+    if (!sameContext || busy) return;
+    final key = 'weekly-time-pattern:$openedOwner';
+    WeeklyTimePattern? remembered;
+    try {
+      remembered = WeeklyTimePattern.fromJson(
+        await widget.controller.cache.read(key),
+      );
+    } catch (_) {}
+    if (!mounted || !sameContext) return;
+    final dayWindows = weekly
+        .where((row) => row['weekday'] == selectedDay)
+        .map(
+          (row) => AppClockRange(
+            startMinutes: minuteOf(row['start']),
+            endMinutes: minuteOf(row['end']),
+          ),
+        )
+        .toList();
+    final selected = await showWeeklyTimePattern(
+      context,
+      remembered ??
+          WeeklyTimePattern(
+            days: {1, 2, 3, 4, 5, 6, 7},
+            windows: dayWindows.isEmpty
+                ? [
+                    const AppClockRange(
+                      startMinutes: 19 * 60,
+                      endMinutes: 21 * 60,
+                    ),
+                  ]
+                : dayWindows,
+          ),
+    );
+    if (selected == null || !mounted || !sameContext) return;
+    setState(() {
+      weekly = applyWeeklyPattern(weekly, selected);
+      error = null;
+    });
+    try {
+      await widget.controller.cache.write(key, selected.toJson());
+    } catch (_) {}
   }
 
   Future<void> editExclusion([Map<String, dynamic>? original]) async {
@@ -275,26 +320,18 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
           )
         : ListView(
             padding: const EdgeInsets.all(20),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             children: [
-              AppTextButton(
-                onPressed: busy
-                    ? null
-                    : () => setState(
-                        () => weekly = List.generate(
-                          7,
-                          (i) => {
-                            'weekday': i + 1,
-                            'start': '19:00',
-                            'end': '21:00',
-                          },
-                        ),
-                      ),
-                child: const Text('快速设置：每天19:00—21:00'),
-              ),
               EditorSection(
                 title: '每周学习时段',
                 icon: Icons.view_week_outlined,
-                subtitle: '${weekly.length}段 · 已排课程会自动避开',
+                subtitle: '每周重复 · 已排课程会自动避开',
+                action: AppTextButton.icon(
+                  key: const Key('availability-bulk'),
+                  onPressed: busy ? null : bulkSet,
+                  icon: const Icon(Icons.done_all_rounded, size: 18),
+                  label: const Text('批量设置'),
+                ),
                 children: [
                   AppSegmentedControl<int>(
                     value: selectedDay,

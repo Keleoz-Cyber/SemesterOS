@@ -20,11 +20,13 @@ class PlanningEntry extends StatelessWidget {
   final ItemsController controller;
   final bool today;
   final bool showAction;
+  final VoidCallback? onSettings;
   const PlanningEntry({
     super.key,
     required this.controller,
     this.today = false,
     this.showAction = true,
+    this.onSettings,
   });
   @override
   Widget build(BuildContext context) {
@@ -85,7 +87,26 @@ class PlanningEntry extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                if (compact)
+                if (onSettings != null)
+                  compact
+                      ? AppIconButton(
+                          key: const Key('learning-time-settings'),
+                          tooltip: '学习时间',
+                          onPressed: onSettings,
+                          guardAsync: false,
+                          icon: const Icon(Icons.tune_rounded, size: 20),
+                        )
+                      : AppTextButton.icon(
+                          key: const Key('learning-time-settings'),
+                          onPressed: onSettings,
+                          guardAsync: false,
+                          icon: const Icon(Icons.tune_rounded, size: 18),
+                          label: const Text('设置时段'),
+                          style: AppTextButton.styleFrom(
+                            textStyle: const TextStyle(fontSize: 13),
+                          ),
+                        )
+                else if (compact)
                   AppIconButton(
                     onPressed: openAll,
                     guardAsync: false,
@@ -114,14 +135,39 @@ class PlanningEntry extends StatelessWidget {
               today: today,
               onTap: () => context.push('/items/${b['item_id']}'),
             )
-        else if (!controller.hasCurrentPlans || hasPendingTask)
+        else
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               controller.hasCurrentPlans
-                  ? (today ? '今天还没有学习安排' : '任务还没有安排到具体时间')
+                  ? (today
+                        ? '今天还没有学习安排'
+                        : hasPendingTask
+                        ? '任务还没有安排到具体时间'
+                        : '还没有学习安排')
                   : controller.planNotice ?? '安排正在同步',
               style: const TextStyle(fontSize: 14, color: CampusColors.muted),
+            ),
+          ),
+        if (onSettings != null &&
+            (hasPendingTask ||
+                controller.rows(controller.planFeed?['blocks']).isNotEmpty))
+          Align(
+            alignment: Alignment.centerRight,
+            child: AppTextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PlanListPage(controller: controller),
+                ),
+              ),
+              guardAsync: false,
+              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+              iconAlignment: IconAlignment.end,
+              label: const Text('全部安排'),
+              style: AppTextButton.styleFrom(
+                textStyle: const TextStyle(fontSize: 13),
+              ),
             ),
           ),
         if (showAction && (hasPendingTask || blocks.isNotEmpty))

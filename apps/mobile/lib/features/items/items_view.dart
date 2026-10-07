@@ -519,16 +519,6 @@ class _ItemsViewState extends State<ItemsView> {
                   icon: const Icon(Icons.auto_awesome_outlined, size: 18),
                   label: const Text('安排任务'),
                 ),
-                AppTextButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AvailabilityPage(controller: c),
-                    ),
-                  ),
-                  icon: const Icon(Icons.tune_rounded, size: 18),
-                  label: const Text('学习时间'),
-                ),
                 if (widget.onCapture != null)
                   AppTextButton.icon(
                     onPressed: widget.onCapture,
@@ -631,21 +621,16 @@ class _ItemsViewState extends State<ItemsView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (filter == 'active') ...[
-              if (rows.isEmpty)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppTextButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AvailabilityPage(controller: c),
-                      ),
-                    ),
-                    icon: const Icon(Icons.tune_rounded, size: 18),
-                    label: const Text('学习时间'),
+              PlanningEntry(
+                controller: c,
+                showAction: false,
+                onSettings: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AvailabilityPage(controller: c),
                   ),
                 ),
-              PlanningEntry(controller: c, showAction: false),
+              ),
               const SizedBox(height: 12),
             ],
             AppDisclosure(

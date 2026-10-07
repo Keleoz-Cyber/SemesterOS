@@ -1651,7 +1651,25 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     final message = shortSource
         ? (source['kind'] == 'image' ? '整理这张通知' : '整理这段录音')
         : '${run['text'] ?? ''}';
-    final answer = '${run['answer'] ?? ''}';
+    final originalAnswer = '${run['answer'] ?? ''}';
+    final cards = rows(run['cards']);
+    final pureWindows =
+        p is! Map &&
+        cards.isNotEmpty &&
+        cards.every((card) => card['kind'] == 'windows');
+    final overviewData = pureWindows && cards.last['data'] is Map
+        ? cards.last['data'] as Map
+        : null;
+    final overview = overviewData?['answer_style'] != 'detail'
+        ? '${overviewData?['overview_answer'] ?? ''}'
+        : '';
+    final answer = overview.isEmpty
+        ? originalAnswer
+        : working
+        ? ''
+        : run['status'] == 'completed'
+        ? overview
+        : originalAnswer;
     final hasResponse =
         answer.isNotEmpty ||
         p is Map ||
@@ -1717,6 +1735,19 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: AgentAnswer(answer),
+                  ),
+                if (overview.isNotEmpty &&
+                    !working &&
+                    run['status'] == 'completed' &&
+                    originalAnswer.isNotEmpty &&
+                    originalAnswer != overview)
+                  AppDisclosure(
+                    tilePadding: EdgeInsets.zero,
+                    title: const Text(
+                      '更多说明',
+                      style: TextStyle(fontSize: 13, color: CampusColors.muted),
+                    ),
+                    children: [AgentAnswer(originalAnswer)],
                   ),
                 if (applied)
                   AssistantSavedAction(
@@ -2173,6 +2204,30 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     }
     if (kind == 'windows') {
       final windows = rows(d['windows']);
+      if (windows.isEmpty &&
+          const {'queued', 'running'}.contains(run['status'])) {
+        return const SizedBox.shrink();
+      }
+      if (windows.isEmpty &&
+          run['status'] == 'completed' &&
+          '${run['answer'] ?? ''}'.trim().isNotEmpty) {
+        if (rows(d['uncertainty_warnings']).isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return AppDisclosure(
+          tilePadding: EdgeInsets.zero,
+          title: const Text(
+            '查询范围与需核对信息',
+            style: TextStyle(fontSize: 13, color: CampusColors.muted),
+          ),
+          children: [
+            if ('${d['basis'] ?? ''}'.isNotEmpty)
+              Text('${d['basis']}', style: const TextStyle(fontSize: 13)),
+            for (final warning in rows(d['uncertainty_warnings']))
+              PlanWarningNote(message: '${warning['message']}'),
+          ],
+        );
+      }
       final key = '${run['id']}:${card['card_id'] ?? kind}';
       final shown = expandedResults.contains(key)
           ? windows
@@ -2181,10 +2236,19 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '可用时段',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+            Text(
+              d['scope'] == 'calendar'
+                  ? '日程空档'
+                  : d['scope'] == 'study'
+                  ? '可学习时段'
+                  : '可用时段',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
             ),
+            if (d['daily_search'] is Map)
+              Text(
+                '查询 ${d['daily_search']['start']}—${d['daily_search']['end']}',
+                style: const TextStyle(fontSize: 12, color: CampusColors.muted),
+              ),
             for (final e in shown)
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -2229,7 +2293,9 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               Text(
                 rows(d['needs_input']).isNotEmpty
                     ? '部分安排没有完整时间，可按已知安排继续查看。'
-                    : '当前学习时间设置内没有找到足够长的空闲时段。',
+                    : d['scope'] == 'calendar'
+                    ? '这段查询范围内没有足够长的空闲时段。'
+                    : '已设置的学习时段内没有足够长的空闲。',
               ),
           ],
         ),

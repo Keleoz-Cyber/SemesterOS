@@ -212,7 +212,7 @@ def test_free_windows_respect_known_day_and_keep_unknown_end_warning(client, mon
     e=create_event(client,h,s['id'],time={'precision':'exact','at':start_at}).json()['event']
     tid=thread(client,h,s['id']);req=turn(client,h,tid,'9月21日有没有一小时空闲')
     def model(m,t):
-        if m[-1]['role']=='user':return call('find_free_windows',{'from_date':'2026-09-21','to_date':'2026-09-21','duration_minutes':60})
+        if m[-1]['role']=='user':return call('find_free_windows',{'from_date':'2026-09-21','to_date':'2026-09-21','duration_minutes':60,'scope':'study'})
         return {'role':'assistant','content':'这些候选时段按已知日期避让；活动结束时间仍需核对。'}
     run(client,model)
     value=client.get('/api/v1/agent/runs/'+req['id'],headers=h).json()
@@ -224,6 +224,39 @@ def test_free_windows_respect_known_day_and_keep_unknown_end_warning(client, mon
     assert warning['exclusion_applied'] and warning['end_unknown'] and '结束时间' in warning['message']
     assert result['needs_input']==[]
     assert client.get('/api/v1/events/'+e['id'],headers=h).json()['time']['end_at'] is None
+
+
+@pytest.mark.parametrize('configured',[False,True])
+def test_general_free_time_is_not_restricted_to_study_preferences(client,monkeypatch,configured):
+    from datetime import datetime
+    from app import reminder_rules
+    monkeypatch.setattr(reminder_rules,'utcnow',lambda:datetime.fromisoformat('2026-09-21T08:00:00+08:00'))
+    if configured:
+        from test_schedule_api import setup
+        h,s,_=setup(client,monkeypatch)
+    else:
+        _,h=register(client);s=semester(client,h)
+    before=client.get(f"/api/v1/semesters/{s['id']}/availability",headers=h).json()
+    for scope in ['calendar','study']:
+        tid=thread(client,h,s['id']);req=turn(client,h,tid,'查一小时空闲')
+        def model(messages,tools):
+            if messages[-1]['role']=='user':return call('find_free_windows',{
+                'from_date':'2026-09-21','to_date':'2026-09-22','duration_minutes':60,'scope':scope})
+            return {'role':'assistant','content':'已按查询范围列出空档。'}
+        run(client,model)
+        value=client.get('/api/v1/agent/runs/'+req['id'],headers=h).json()
+        result=value['cards'][0]['data']
+        assert value['status']=='completed' and result['scope']==scope
+        if scope=='calendar':
+            assert result['daily_search']=={'start':'08:00','end':'22:00'}
+            assert '9月21—22日' in result['overview_answer'] and '1小时' in result['overview_answer']
+            assert result['answer_style']=='summary'
+            assert result['windows']==[
+                {'start_at':'2026-09-21T00:00:00+00:00','end_at':'2026-09-21T14:00:00+00:00'},
+                {'start_at':'2026-09-22T00:00:00+00:00','end_at':'2026-09-22T14:00:00+00:00'}]
+        else:
+            assert result['windows']==([{'start_at':'2026-09-21T01:00:00+00:00','end_at':'2026-09-21T05:00:00+00:00'}] if configured else [])
+    assert client.get(f"/api/v1/semesters/{s['id']}/availability",headers=h).json()==before
 
 
 def test_apply_failure_rolls_back_both_business_data_and_agent_receipt(client,monkeypatch):

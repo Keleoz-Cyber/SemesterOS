@@ -362,7 +362,8 @@ void main() {
       final f = PlanningFixture();
       await bind(tester, f);
       await route(tester, AvailabilityPage(controller: f.c));
-      await tester.tap(find.text('快速设置：每天19:00—21:00'));
+      await ioTap(tester, find.byKey(const Key('availability-bulk')));
+      await ioTap(tester, find.byKey(const Key('bulk-apply')));
       await tester.pumpAndSettle();
       await capture(tester, 'learning-time');
       await tester.scrollUntilVisible(
