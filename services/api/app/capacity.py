@@ -6,6 +6,7 @@ from math import floor
 from .reminder_rules import SHANGHAI, anchor_at, instant, reservation_enabled
 from .plan_rules import classify, occupied_seconds, future_minutes
 from .task_readiness import start_policy
+from .course_participation import course_requires_attendance
 
 
 def merge(spans):
@@ -82,7 +83,7 @@ def uncertainty_affects_window(warning, start, end):
 def course_intervals(semester, courses):
     from .occurrences import expand
     return [(instant(e['start_at']).timestamp(),instant(e['end_at']).timestamp(),e['id'],e['title'])
-            for e in expand(semester,courses) if not e.get('attendance_exempt')]
+            for e in expand(semester,courses) if course_requires_attendance(e)]
 
 
 def exam_window(exam, semester_start, semester_end):

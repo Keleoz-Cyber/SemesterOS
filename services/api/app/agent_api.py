@@ -59,6 +59,7 @@ class Decision(Input):
     decision: Literal['confirm', 'reject']
     token: str = Field(min_length=1, max_length=64)
     confirm_fixed_conflicts: bool = False
+    course_leave_targets: list[str] = Field(default_factory=list, max_length=1000)
     selected_group_ids: list[str] | None = Field(default=None, max_length=8)
 
 
@@ -108,17 +109,23 @@ def context_records(db,user,sid,ids):
     return [records[id] for id in sorted(set(ids))]
 
 
-def owned_thread(db, user, tid, lock=False):
+def owned_thread(db, user, tid, lock=False, *, include_deleted=False):
     query = select(AgentThread).where(AgentThread.id == tid, AgentThread.user_id == user.id)
-    row = db.scalar(query.with_for_update() if lock else query)
-    if row is None: error(404, 'NOT_FOUND', '找不到这段对话')
+    row = db.scalar(query.with_for_update().execution_options(populate_existing=True) if lock else query)
+    if row is None or (row.deleted_at is not None and not include_deleted):
+        error(404, 'NOT_FOUND', '找不到这段对话')
     return row
 
 
-def owned_run(db, user, rid, lock=False):
+def owned_run(db, user, rid, lock=False, *, include_deleted=False):
     query = select(AgentRun).where(AgentRun.id == rid, AgentRun.user_id == user.id)
-    row = db.scalar(query.with_for_update().execution_options(populate_existing=True) if lock else query)
+    row = db.scalar(query)
     if row is None: error(404, 'NOT_FOUND', '找不到这条请求')
+    # Mutations serialize with delete/restore on thread -> run, so deletion
+    # cannot race an old confirmation or publish a new turn into hidden history.
+    owned_thread(db, user, row.thread_id, lock, include_deleted=include_deleted)
+    if lock:
+        row = db.scalar(query.with_for_update().execution_options(populate_existing=True))
     return row
 
 
@@ -160,8 +167,8 @@ def branch_runs(db, user, thread, *, before=None, limit=51):
         if len(result) >= limit: break
         context = thread.context or {}
         if not context.get('parent_thread_id'): break
-        parent = owned_thread(db, user, context['parent_thread_id'])
-        boundary = owned_run(db, user, context['before_run_id'])
+        parent = owned_thread(db, user, context['parent_thread_id'], include_deleted=True)
+        boundary = owned_run(db, user, context['before_run_id'], include_deleted=True)
         if parent.semester_id != thread.semester_id or boundary.thread_id != parent.id:
             error(409, 'CONTEXT_STALE', '这段对话的历史已变化，请打开原对话')
         if cursor is None or (boundary.created_at, boundary.id) < (cursor.created_at, cursor.id):
@@ -179,8 +186,8 @@ def branch_contains(db, user, thread, run):
             return boundary is None or (run.created_at, run.id) < (boundary.created_at, boundary.id)
         context = thread.context or {}
         if not context.get('parent_thread_id'): return False
-        parent = owned_thread(db, user, context['parent_thread_id'])
-        cutoff = owned_run(db, user, context['before_run_id'])
+        parent = owned_thread(db, user, context['parent_thread_id'], include_deleted=True)
+        cutoff = owned_run(db, user, context['before_run_id'], include_deleted=True)
         if cutoff.thread_id != parent.id or parent.semester_id != thread.semester_id: return False
         if boundary is None or (cutoff.created_at, cutoff.id) < (boundary.created_at, boundary.id):
             boundary = cutoff
@@ -231,32 +238,76 @@ def new_thread(body: ThreadInput, user: User = Depends(current_user), db: Sessio
 def threads(semester_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     owned_semester(db, user, semester_id)
     return [{'id': r.id, 'title': r.title, 'updated_at': r.updated_at} for r in db.scalars(
-        select(AgentThread).where(AgentThread.user_id == user.id, AgentThread.semester_id == semester_id)
+        select(AgentThread).where(AgentThread.user_id == user.id, AgentThread.semester_id == semester_id,
+                                 AgentThread.deleted_at.is_(None))
         .order_by(AgentThread.updated_at.desc(), AgentThread.id).limit(40))]
 
 
 @router.get('/history')
 def history(semester_id: str, limit: int = Query(default=20, ge=1, le=100),
-            before_thread_id: str | None = None,
+            before_thread_id: str | None = None, deleted: bool = False,
             user: User = Depends(current_user), db: Session = Depends(get_db)):
     owned_semester(db, user, semester_id)
     query = select(AgentThread).where(AgentThread.user_id == user.id, AgentThread.semester_id == semester_id)
+    query = query.where(AgentThread.deleted_at.is_not(None) if deleted else AgentThread.deleted_at.is_(None))
     if before_thread_id:
-        before = owned_thread(db, user, before_thread_id)
+        # A removed/restored cursor still denotes the same immutable position.
+        before = owned_thread(db, user, before_thread_id, include_deleted=True)
         if before.semester_id != semester_id: error(404, 'NOT_FOUND', '找不到当前学期的历史位置')
         query = query.where(earlier(AgentThread.created_at, AgentThread.id, before.created_at, before.id))
     rows = list(db.scalars(query.order_by(AgentThread.created_at.desc(), AgentThread.id.desc()).limit(limit + 1)))
     page = rows[:limit]; more = len(rows) > limit
     return {'threads': [{'id': r.id, 'semester_id': r.semester_id, 'title': r.title,
-                        'created_at': r.created_at, 'updated_at': r.updated_at} for r in page],
+                        'created_at': r.created_at, 'updated_at': r.updated_at,
+                        'deleted_at': r.deleted_at} for r in page],
             'has_more': more, 'next_cursor': page[-1].id if more else None}
+
+
+def history_thread(row):
+    return {'id': row.id, 'semester_id': row.semester_id, 'title': row.title,
+            'created_at': row.created_at, 'updated_at': row.updated_at, 'deleted_at': row.deleted_at}
+
+
+@router.delete('/threads/{tid}')
+def delete_thread(tid: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    row = owned_thread(db, user, tid, True, include_deleted=True)
+    if row.deleted_at is not None: return history_thread(row)
+    pending = list(db.scalars(select(AgentRun).where(AgentRun.thread_id == tid,
+        AgentRun.user_id == user.id,
+        AgentRun.status.in_(['queued', 'running', 'recognizing', 'needs_confirmation']))
+        .order_by(AgentRun.id).with_for_update().execution_options(populate_existing=True)))
+    for run in pending:
+        invalidate_preview(db, run)
+        run.status = 'cancelled'; run.lease_token = None; run.lease_until = 0
+        if run.state.get('media_source_id'):
+            from .media import owned_source
+            source = owned_source(db, user, run.state['media_source_id'], True)
+            if source.status in ('queued', 'running'):
+                source.status = 'cancelled'; source.version += 1
+                source.lease_token = None; source.lease_until = 0
+        run.state = {**run.state, 'stage': '对话已删除', 'answer_streaming': False,
+                     'sequence': run.state.get('sequence', 0) + 1}
+    row.deleted_at = utcnow().isoformat()
+    db.commit()
+    return history_thread(row)
+
+
+@router.post('/threads/{tid}/restore')
+def restore_thread(tid: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    row = owned_thread(db, user, tid, True, include_deleted=True)
+    if row.deleted_at is not None:
+        # Restore history only. Cancelled processing and confirmation authority
+        # remain revoked; applied receipts and business data never changed.
+        row.deleted_at = None
+        db.commit()
+    return history_thread(row)
 
 
 @router.get('/threads/{tid}')
 def get_thread(tid: str, limit: int = Query(default=50, ge=1, le=100), before_run_id: str | None = None,
                user: User = Depends(current_user), db: Session = Depends(get_db)):
     row = owned_thread(db, user, tid)
-    before = owned_run(db, user, before_run_id) if before_run_id else None
+    before = owned_run(db, user, before_run_id, include_deleted=True) if before_run_id else None
     if before is not None:
         # A cursor must occur in this branch or its included ancestor prefix.
         if not branch_contains(db, user, row, before):
@@ -294,10 +345,8 @@ def submit_command(tid, body, request, user, db, *, commit=True):
     pending_count = list(db.scalars(select(AgentRun.id).where(AgentRun.user_id == user.id,
         AgentRun.status.in_(['queued', 'running','recognizing'])).limit(3)))
     if len(pending_count) >= 3: error(429, 'RUN_LIMIT', '已有几条请求正在处理，请稍后再发')
-    # One pending preview per conversation: a follow-up supersedes it, but never applies it.
-    for pending in db.scalars(select(AgentRun).where(AgentRun.thread_id == tid, AgentRun.status == 'needs_confirmation').with_for_update()):
-        invalidate_preview(db, pending)
-        pending.status = 'superseded'
+    # A question or explanation keeps its pending preview. Replace it only when
+    # the worker has successfully prepared a new actionable preview.
     now = utcnow().isoformat()
     from .agent_runtime import initial_state
     state = initial_state(db, user, row, body.text, now,input_kind=body.input_kind)
@@ -432,17 +481,23 @@ def cancel(rid: str, user: User = Depends(current_user), db: Session = Depends(g
 
 @router.post('/runs/{rid}/decision')
 def decide(rid: str, body: Decision, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    current=owned_run(db,user,rid)
+    owned_thread(db,user,current.thread_id,True)
     row = owned_run(db, user, rid, True)
     preview = row.state.get('preview')
     if not preview or body.token != preview['token']: error(409, 'PREVIEW_STALE', '请重新打开当前修改预览')
     signature=fingerprint({'token':body.token,'groups':sorted(body.selected_group_ids or []),
-                           'confirm_fixed_conflicts':body.confirm_fixed_conflicts})
+                           'confirm_fixed_conflicts':body.confirm_fixed_conflicts,
+                           **({'course_leave_targets': sorted(body.course_leave_targets)} if body.course_leave_targets else {})})
     if row.status == 'applied' and body.decision == 'confirm':
         if row.state.get('decision_signature',signature)!=signature:
             error(409,'IDEMPOTENCY_CONFLICT','这次操作已按先前的选择保存，请查看结果')
         return public_run(row)
     if row.status == 'cancelled' and body.decision == 'reject': return public_run(row)
     if row.status != 'needs_confirmation': error(409, 'PREVIEW_STALE', '这次预览已失效，请重新描述修改')
+    if db.scalar(select(AgentRun.id).where(AgentRun.thread_id == row.thread_id,
+            AgentRun.id != row.id, AgentRun.status.in_(['queued','running','recognizing'])).limit(1)):
+        error(409, 'RUN_BUSY', '正在处理补充内容，请等待当前回复再确认')
     if body.decision == 'reject':
         invalidate_preview(db, row)
         row.status = 'cancelled'; db.commit(); return public_run(row)
@@ -453,7 +508,10 @@ def decide(rid: str, body: Decision, user: User = Depends(current_user), db: Ses
         error(422,'INVALID_SELECTION','这次操作不需要选择分组')
     owned_semester(db,user,preview['semester_id'],lock=True)
     before=capture(db,user,preview['semester_id']) if preview['kind']!='undo' else None
-    receipt = apply_preview(db, user, preview, confirm_fixed_conflicts=body.confirm_fixed_conflicts,selected_group_ids=body.selected_group_ids)
+    from .agent_attendance import apply_with_course_leave
+    receipt = apply_with_course_leave(db, user, preview, body.course_leave_targets, run_id=row.id,
+                                     confirm_fixed_conflicts=body.confirm_fixed_conflicts,
+                                     selected_group_ids=body.selected_group_ids)
     undo_data=changes(before,capture(db,user,preview['semester_id'])) if before is not None else None
     row.state = {**row.state, 'receipt': receipt, 'decision_signature':signature,'stage': '已保存', 'answer': '已保存。',
                  'undo_data':undo_data,

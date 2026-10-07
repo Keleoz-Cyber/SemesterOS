@@ -13,6 +13,7 @@ from .academics import fingerprint
 from .reminder_rules import instant, SHANGHAI
 from . import changes, exam_planning
 from .occurrences import effective_courses, expand
+from .course_participation import course_requires_attendance, course_attendance_label
 
 
 class OccurrenceQuery(Input):
@@ -29,10 +30,10 @@ class OccurrenceQuery(Input):
 
 
 class CourseChange(Input):
-    kind: Literal['move', 'cancel', 'suspend', 'add']
+    kind: Literal['move', 'cancel', 'suspend', 'add', 'leave', 'plan_leave', 'attend']
     targets: list[str] = Field(default_factory=list, max_length=1000)
     scope: OccurrenceQuery | None = Field(default=None,
-        description='范围停课可直接传已查询的from_date/to_date/query/course_id，包含该查询的全部课次，不必列出targets。')
+        description='范围停课或个人出席调整可直接传已查询的from_date/to_date/query/course_id，包含该查询的全部课次，不必列出targets。')
     title: str | None = Field(default=None, min_length=1, max_length=120)
     start_at: datetime | None = None
     end_at: datetime | None = None
@@ -47,6 +48,8 @@ class CourseChange(Input):
     def range_scope(self):
         if self.scope is not None and (self.kind == 'add' or self.targets):
             raise ValueError('课次修改使用scope或targets其中一种，补课不指定原课次范围')
+        if self.kind in ('leave', 'plan_leave', 'attend') and self.scope is None and not self.targets:
+            raise ValueError('请明确选择需要调整出席的课次或已查询范围')
         return self
 
 
@@ -67,7 +70,9 @@ def query_occurrences(db,user,s,state,args):
            args.from_date <= instant(e['start_at']).astimezone(SHANGHAI).date() <= args.to_date and
            (not args.course_id or e.get('course_id')==args.course_id) and q in ''.join(e['title'].casefold().split())]
     if len(found)>1000:error(422,'TOO_MANY_RESULTS','课次超过1000条，请缩小日期范围或补充课程名称')
-    records=[{**e,'resource_type':'course_occurrence','resource_id':e['id'],'queried_revision':s.revision} for e in found]
+    records=[{**e,'resource_type':'course_occurrence','resource_id':e['id'],'queried_revision':s.revision,
+        'attendance_status':e.get('attendance_status'),'attendance_reason':e.get('attendance_reason',''),
+        'attendance_label':course_attendance_label(e),'fixed':course_requires_attendance(e)} for e in found]
     known={**state.get('occurrence_records',{}),**{e['id']:e for e in records}}
     state['occurrence_records']=known
     state['occurrence_queries']=[*state.get('occurrence_queries',[]),[e['id'] for e in records]][-8:]
@@ -85,7 +90,7 @@ def query_occurrences(db,user,s,state,args):
         'navigation_query':{'semester_id':s.id, **args.model_dump(mode='json')}})
     return {**value, 'occurrences': records[:100], 'total_count': len(records),
             'truncated': len(records) > 100, 'query_scope': args.model_dump(mode='json'),
-            'next_step': '用户肯定陈述这个范围没课/停课时，直接准备scope范围停课预览，不再问是否生成；用户只是提问有无课程时只回答结论。'}
+            'next_step': '用户肯定陈述这个范围没课/停课时准备scope停课预览；用户已请假/自行确认不上课用leave，打算申请用plan_leave，恢复出席用attend。出席调整保留学校课次时间地点；只提问时回答结论。'}
 
 
 def prepare_course(db,user,s,state,args,source):
@@ -96,18 +101,19 @@ def prepare_course(db,user,s,state,args,source):
         if query is None: error(422, 'READ_FIRST', '请先查询这个范围的课程')
         if query['revision'] != s.revision: error(409, 'COURSE_QUERY_STALE', '课表已更新，请重新查询这个范围')
         targets = query['ids']
-        if not targets: error(422, 'NO_OCCURRENCES', '这个范围已经没有课次，无需停课')
+        if not targets: error(422, 'NO_OCCURRENCES', '这个范围没有可调整的课次')
         if args.kind in ('move', 'cancel') and len(targets) != 1:
             error(422, 'AMBIGUOUS_TARGET', '这个范围有多次课，请补充原上课日期，或使用范围停课')
     if not set(targets).issubset(known):error(422,'READ_FIRST','请先查询并核对具体日期的课次')
     if any(known[id].get('queried_revision')!=s.revision for id in targets):
         error(409,'COURSE_QUERY_STALE','查询后安排已有变化，请重新查询原课次再准备修改')
-    whole_group = args.kind == 'suspend' and len(targets) > 1 and any(
+    whole_group = args.kind in ('suspend', 'leave', 'plan_leave', 'attend') and len(targets) > 1 and any(
         set(targets) == set(group) for group in state.get('occurrence_queries', []))
     if args.scope is None and not whole_group and set(targets)&set(state.get('ambiguous_ids',[])):
         error(422,'AMBIGUOUS_TARGET','同名课程有多个课次，请让用户选择单次课或核对整组课次')
     old=[known[id] for id in targets]
-    title=old[0]['title'] if len(old)==1 else args.title or ('课程停课' if args.kind=='suspend' else '')
+    titles={'suspend':'课程停课','leave':'课程请假','plan_leave':'课程待请假','attend':'恢复课程出席'}
+    title=old[0]['title'] if len(old)==1 else args.title or titles.get(args.kind,'')
     if not title:error(422,'TITLE_REQUIRED','新增课程需要明确课程名称')
     location=args.location if args.location is not None else (old[0].get('location','') if len(old)==1 else '')
     end_at = args.end_at

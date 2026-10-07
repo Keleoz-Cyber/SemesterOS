@@ -24,6 +24,9 @@ const changeNames = {
   'suspend': '多次停课',
   'add': '补课',
   'block': '固定活动',
+  'plan_leave': '准备请假',
+  'leave': '已请假',
+  'attend': '恢复上课',
 };
 
 class ChangesPage extends StatefulWidget {
@@ -191,9 +194,19 @@ class _ChangesPageState extends State<ChangesPage> {
         ? '${selectedRows.first['title']}'
         : kind == 'suspend'
         ? '课程停课'
+        : {'leave', 'plan_leave', 'attend'}.contains(kind)
+        ? '课程听课状态'
         : '';
     if (name.isEmpty) throw Exception('请填写课程或活动名称');
-    if (['move', 'cancel', 'suspend'].contains(kind) && targets.isEmpty) {
+    if ([
+          'move',
+          'cancel',
+          'suspend',
+          'leave',
+          'plan_leave',
+          'attend',
+        ].contains(kind) &&
+        targets.isEmpty) {
       throw Exception('请选择实际受影响的课次');
     }
     if (['move', 'add', 'block'].contains(kind) &&
@@ -259,7 +272,14 @@ class _ChangesPageState extends State<ChangesPage> {
                     value: selected.contains(e['id']),
                     onChanged: (v) => update(() {
                       if (v == true) {
-                        if (kind != 'suspend') selected.clear();
+                        if (!{
+                          'suspend',
+                          'leave',
+                          'plan_leave',
+                          'attend',
+                        }.contains(kind)) {
+                          selected.clear();
+                        }
                         selected.add(e['id']);
                       } else {
                         selected.remove(e['id']);
@@ -369,7 +389,14 @@ class _ChangesPageState extends State<ChangesPage> {
               controller: title,
               decoration: const InputDecoration(labelText: '课程 / 活动标题'),
             ),
-            if (['move', 'cancel', 'suspend'].contains(kind)) ...[
+            if ([
+              'move',
+              'cancel',
+              'suspend',
+              'leave',
+              'plan_leave',
+              'attend',
+            ].contains(kind)) ...[
               const SizedBox(height: 12),
               AppOutlineButton(
                 onPressed: busy || feed == null ? null : chooseTargets,
@@ -554,9 +581,13 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
       appBar: AppBar(
         title: Text(
           applied
-              ? display.restoration
+              ? display.attendance
+                    ? '听课状态已保存'
+                    : display.restoration
                     ? '已恢复原安排'
                     : '调整已保存'
+              : display.attendance
+              ? '核对听课状态'
               : '核对课程调整',
         ),
       ),
@@ -666,10 +697,12 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
                   busy || !same || stale || (conflict && !confirmConflict)
                   ? null
                   : () => act(false),
-              child: const Text('保存修改'),
+              child: Text(display.attendance ? '保存听课状态' : '保存修改'),
             ),
           if (applied) ...[
-            const AssistantSavedAction(text: '调整已保存'),
+            AssistantSavedAction(
+              text: display.attendance ? '听课状态已保存' : '调整已保存',
+            ),
             if (blocks.isNotEmpty)
               Text(
                 '${blocks.length} 段学习安排受影响，可查看调整方案。',
@@ -679,10 +712,11 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
                   height: 1.5,
                 ),
               ),
-            AppTextButton(
-              onPressed: busy || !same ? null : () => act(true),
-              child: const Text('查看学习安排调整方案'),
-            ),
+            if (blocks.isNotEmpty || !display.attendance)
+              AppTextButton(
+                onPressed: busy || !same ? null : () => act(true),
+                child: const Text('查看学习安排调整方案'),
+              ),
           ],
         ],
       ),

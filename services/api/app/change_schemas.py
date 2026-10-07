@@ -6,7 +6,7 @@ from .item_schemas import ItemTime
 
 
 class ChangeInput(Input):
-    kind:Literal['move','cancel','suspend','add','block']
+    kind:Literal['move','cancel','suspend','add','block','leave','plan_leave','attend']
     targets:list[str]=Field(default_factory=list,max_length=1000)
     title:str=Field(min_length=1,max_length=160)
     source_text:str=Field(min_length=1,max_length=10000)
@@ -24,10 +24,11 @@ class ChangeInput(Input):
         if len(set(self.targets))!=len(self.targets):raise ValueError('课次不能重复')
         if self.kind in ('move','cancel') and len(self.targets)!=1:raise ValueError('请选择单次课次')
         if self.kind=='suspend' and not self.targets:raise ValueError('请明确选择放假停课范围')
+        if self.kind in ('leave','plan_leave','attend') and not self.targets:raise ValueError('请明确选择需要调整出席的课次')
         if self.kind in ('add','block') and self.targets:raise ValueError('新增事项不覆盖旧课次')
         if self.kind in ('move','add','block'):
             if not self.start_at or not self.end_at or self.end_at<=self.start_at:raise ValueError('需明确起止时刻')
-        elif self.start_at or self.end_at:raise ValueError('停课不填写新时刻')
+        elif self.start_at or self.end_at:raise ValueError('停课或出席调整不填写新时刻')
         return self
 
 

@@ -19,7 +19,9 @@ def impact(db,user,s):
     _,issues=classify(data[4],data[3],context['free'].spans,context['begin'])
     # No simulated IDs escape the savepoint as actionable records.
     conflicts=context['conflicts']
-    return {'fixed_conflicts':conflicts,'affected_plan_count':len({i['block_id'] for i in issues})}
+    from .agent_attendance import conflict_courses
+    return {'fixed_conflicts':conflicts,'affected_plan_count':len({i['block_id'] for i in issues}),
+            'course_conflicts':conflict_courses(data[0],data[2],conflicts)}
 
 
 def guard_dependencies(db,user,s,previews):

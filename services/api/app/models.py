@@ -356,6 +356,7 @@ class AgentThread(Base):
     created_at: Mapped[str] = mapped_column(String(40))
     updated_at: Mapped[str] = mapped_column(String(40))
     context: Mapped[dict] = mapped_column(JSON, default=dict)
+    deleted_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
 class AgentRun(Base):

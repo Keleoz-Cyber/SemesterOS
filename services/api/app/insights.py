@@ -13,6 +13,7 @@ from .event_store import CATEGORIES, classification_value, event_rows, canonical
 from .models import CalendarTag, CourseMeeting, ItemRevision, PlanBlock, ProgressEntry, StudyItem, User
 from .occurrences import effective_courses, expand
 from .reminder_rules import SHANGHAI, instant, utcnow, notice_arrival_at, reservation_enabled
+from .course_participation import course_requires_attendance, course_attendance_label
 
 router = APIRouter()
 
@@ -54,8 +55,10 @@ def source_records(db, user, semester):
                      effective_courses(db, user, semester))
     records = [record('course', c['id'], c['title'], resource_id=c.get('course_id'),
                       start_at=c['start_at'], end_at=c['end_at'], time_precision='exact',
-                      category_id='study', fixed=not c.get('attendance_exempt', False),
+                      category_id='study', fixed=course_requires_attendance(c),
                       attendance_exempt=bool(c.get('attendance_exempt')),
+                      attendance_status=c.get('attendance_status'), attendance_reason=c.get('attendance_reason', ''),
+                      attendance_label=course_attendance_label(c),
                       classification_basis='course_default') for c in courses]
     items = list(db.scalars(select(StudyItem).where(StudyItem.user_id == user.id,
         StudyItem.semester_id == semester.id)))

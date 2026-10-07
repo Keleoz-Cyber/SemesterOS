@@ -14,6 +14,7 @@ String? calendarMeaning(Map<String, dynamic> row) =>
     row['meaning'] ?? calendarTime(row)['meaning'];
 
 bool calendarReservesTime(Map<String, dynamic> row) =>
+    row['attendance_status'] != 'leave' &&
     row['attendance_exempt'] != true &&
     row['reserve_time'] != false &&
     calendarMeaning(row) != 'window';
@@ -22,6 +23,9 @@ Map<String, dynamic> calendarDisplayEntry(Map<String, dynamic> row) {
   final time = calendarTime(row);
   return {
     ...row,
+    if ({'leave', 'plan_leave'}.contains(row['attendance_status']))
+      'title':
+          '${row['attendance_status'] == 'leave' ? '已请假' : '待请假'} · ${row['title'] ?? ''}',
     if (row['attendance_exempt'] == true &&
         !'${row['title'] ?? ''}'.contains('免听'))
       'title': '免听 · ${row['title'] ?? ''}',
@@ -39,6 +43,8 @@ Map<String, dynamic> calendarDisplayEntry(Map<String, dynamic> row) {
 }
 
 String calendarParticipationLabel(Map<String, dynamic> row) {
+  if (row['attendance_status'] == 'leave') return '已请假';
+  if (row['attendance_status'] == 'plan_leave') return '待请假';
   if (row['attendance_exempt'] == true) {
     return '${row['title'] ?? ''}'.contains('免听') ? '' : '免听';
   }
@@ -65,7 +71,8 @@ List<Map<String, dynamic>> calendarGridEntries(
     if (entry['start_at'] == null ||
         entry['end_at'] == null ||
         calendarMeaning(entry) == 'window' ||
-        !calendarReservesTime(entry)) {
+        (!calendarReservesTime(entry) &&
+            entry['attendance_status'] != 'leave')) {
       continue;
     }
     final start = DateTime.parse(

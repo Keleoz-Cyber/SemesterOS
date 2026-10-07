@@ -417,6 +417,105 @@ class CourseHubPage extends StatelessWidget {
                 ),
               const Divider(height: 32),
               const SectionHeading('上课与变更记录'),
+              if (focus != null)
+                RecordActionTile(
+                  title: '本次听课',
+                  subtitle: focus['attendance_status'] == 'leave'
+                      ? '已请假 · 原课程保留'
+                      : focus['attendance_status'] == 'plan_leave'
+                      ? '准备请假 · 仍保留时间占用'
+                      : '正常上课',
+                  icon: Icons.person_outline_rounded,
+                  onTap: !fresh
+                      ? null
+                      : () async {
+                          final kind = await showAppSheet<String>(
+                            context: context,
+                            builder: (sheet) => Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                12,
+                                20,
+                                24,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    displayInterval(
+                                      focus['start_at'],
+                                      focus['end_at'],
+                                    ),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  for (final option in {
+                                    'plan_leave': (
+                                      '准备请假',
+                                      '先记录打算，继续保留课程占用',
+                                      Icons.pending_actions_rounded,
+                                    ),
+                                    'leave': (
+                                      '已请假',
+                                      '本次无需到课，其他课次保持原样',
+                                      Icons.event_available_outlined,
+                                    ),
+                                    'attend': (
+                                      '正常上课',
+                                      '撤销本次请假或请假打算',
+                                      Icons.school_outlined,
+                                    ),
+                                  }.entries)
+                                    RecordActionTile(
+                                      title: option.value.$1,
+                                      subtitle: option.value.$2,
+                                      icon: option.value.$3,
+                                      onTap: () =>
+                                          Navigator.pop(sheet, option.key),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                          if (kind == null || !context.mounted) return;
+                          try {
+                            final preview = await controller.changeRequest(
+                              'POST',
+                              '/semesters/${data['semester']['id']}/changes',
+                              data: {
+                                'kind': kind,
+                                'targets': [focus['id']],
+                                'title': course['title'],
+                                'source_text': kind == 'leave'
+                                    ? '用户确认本次课程已请假'
+                                    : kind == 'plan_leave'
+                                    ? '用户准备为本次课程请假'
+                                    : '用户恢复本次正常上课',
+                              },
+                            );
+                            if (!context.mounted) return;
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ChangePreviewPage(
+                                  controller: controller,
+                                  preview: preview,
+                                ),
+                              ),
+                            );
+                            await reload();
+                          } catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(userError(error))),
+                              );
+                            }
+                          }
+                        },
+                ),
               RecordActionTile(
                 title: '调课或停课',
                 icon: Icons.edit_calendar_outlined,
@@ -453,9 +552,13 @@ class CourseHubPage extends StatelessWidget {
                       title: Text(displayInstant(e['start_at'])),
                       subtitle:
                           '${e['location'] ?? ''}'.trim().isNotEmpty ||
-                              e['changed'] == true
+                              e['changed'] == true ||
+                              e['attendance_status'] != null
                           ? Text(
                               [
+                                if (e['attendance_status'] == 'leave') '已请假',
+                                if (e['attendance_status'] == 'plan_leave')
+                                  '待请假',
                                 if ('${e['location'] ?? ''}'.trim().isNotEmpty)
                                   '${e['location']}',
                                 if (e['changed'] == true) '已变更',

@@ -11,6 +11,8 @@ import 'timetable_layout.dart';
 
 String courseTitle(Map<String, dynamic> event) {
   final title = '${event['title'] ?? ''}';
+  if (event['attendance_status'] == 'leave') return '已请假 · $title';
+  if (event['attendance_status'] == 'plan_leave') return '待请假 · $title';
   return event['attendance_exempt'] == true && !title.contains('免听')
       ? '免听 · $title'
       : title;

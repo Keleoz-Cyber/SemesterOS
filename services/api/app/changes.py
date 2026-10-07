@@ -25,6 +25,16 @@ def make_patch(source,data,now):
     if not set(data['targets']).issubset(by_id):error(409,'TARGET_STALE','课次已改变或不属于本学期，请重新选择')
     before=[deepcopy(by_id[id]) for id in data['targets']]
     after=[]
+    if data['kind'] in ('leave','plan_leave','attend'):
+        if any(e.get('reality_kind')!='course' for e in before):
+            error(422,'COURSE_OCCURRENCE_REQUIRED','请假或恢复出席只能选择课程课次')
+        for old in before:
+            e=deepcopy(old)
+            for field in ('attendance_status','attendance_reason'):
+                e.pop(field,None)
+            if data['kind']!='attend':
+                e.update(attendance_status=data['kind'],attendance_reason=' '.join(data['source_text'].split())[:500])
+            after.append(e)
     if data['kind'] in ('move','add','block'):
         a,b=instant(data['start_at']),instant(data['end_at'])
         begin=local_day(calendar['first_monday']);end=begin+timedelta(weeks=calendar['total_weeks'])

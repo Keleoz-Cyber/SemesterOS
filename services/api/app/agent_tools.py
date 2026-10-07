@@ -572,6 +572,8 @@ def execute_tool(name, raw, db, user, thread, state, source):
         if set(fields)-allowed: error(422,'INVALID_FIELDS','请只填写日程本身的信息')
         if args.action=='create':
             if args.event_id: error(422,'INVALID_TARGET','新增日程不需要已有日程编号')
+            from .notice_event_time import normalize_notice_event_time
+            fields=normalize_notice_event_time(fields,source)
             body=EventFields.model_validate({**fields,'semester_id':sid,'expected_revision':s.revision,'source_text':source})
         else:
             row=events.owned_event(db,user,args.event_id)
@@ -637,6 +639,11 @@ def execute_tool(name, raw, db, user, thread, state, source):
     if preview['kind'] in ('event', 'item'):
         preview['provided_fields'] = provided_fields
     preview['token']=fingerprint({'run_id': state['run_id'], 'preview': preview})
+    if preview['kind'] == 'event' and preview['action'] in ('create', 'update'):
+        from .agent_batches import simulate
+        preview['impact'] = simulate(db, user, s,
+            [{'id': 'event-preview', 'title': preview['after']['title'], 'operations': [preview]}], s.revision)
+        preview['token']=fingerprint({'run_id': state['run_id'], 'preview': {k:v for k,v in preview.items() if k!='token'}})
     state['preview']=preview
     return {'status':'needs_confirmation','preview':preview,'message':'尚未保存，请用户核对预览后点击确认。'}
 
@@ -648,6 +655,11 @@ def apply_preview(db,user,preview,*,confirm_fixed_conflicts=False,prepared_base_
     if preview['kind']=='batch':
         from .agent_batches import apply_batch
         return apply_batch(db,user,s,preview,selected_group_ids,confirm_fixed_conflicts)
+    if preview['kind']=='event' and preview['action'] in ('create', 'update') and not confirm_fixed_conflicts:
+        from .agent_batches import simulate
+        summary=simulate(db,user,s,[{'id':'event-preview','title':preview['after']['title'],'operations':[preview]}],s.revision)
+        if summary['new_fixed_conflicts']:
+            error(422,'CONFIRM_FIXED_CONFLICTS','请核对课程请假或保留重叠安排后保存')
     if preview['kind']=='undo':
         from .agent_undo import apply_undo
         return apply_undo(db,user,preview)

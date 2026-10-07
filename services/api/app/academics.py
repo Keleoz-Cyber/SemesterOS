@@ -10,6 +10,7 @@ from .auth import current_user, error
 from .database import get_db
 from .models import CourseMeeting, IdempotencyRecord, ImportBatch, Semester, StudyItem, User
 from .schemas import ApplyInput, ImportInput, SemesterInput
+from .course_participation import course_requires_attendance, course_attendance_label
 
 router = APIRouter()
 
@@ -312,7 +313,9 @@ def timetable(sid: str, week: int = Query(ge=1, le=30), user: User = Depends(cur
         if instant(e['start_at'])<finish and instant(e['end_at'])>begin]
     events.sort(key=lambda e: (e["start_at"], e["title"], e["id"]))
     for e in events:
-        e["conflict"] = not e.get('attendance_exempt') and any(
-            o["id"] != e["id"] and not o.get('attendance_exempt') and
+        e['fixed'] = course_requires_attendance(e)
+        e['attendance_label'] = course_attendance_label(e)
+        e["conflict"] = course_requires_attendance(e) and any(
+            o["id"] != e["id"] and course_requires_attendance(o) and
             o["start_at"] < e["end_at"] and e["start_at"] < o["end_at"] for o in events)
     return {"semester_id": sid, "week": week, "revision": s.revision, "events": events}

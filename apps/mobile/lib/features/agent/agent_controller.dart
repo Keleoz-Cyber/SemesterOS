@@ -19,10 +19,12 @@ class AgentController extends ChangeNotifier {
   String? threadId, error;
   bool busy = false, loading = true, _closed = false;
   bool historyLoading = false, earlierLoading = false;
+  bool historyDeleted = false, historyChanging = false;
   bool hasMoreThreads = false, hasMoreRuns = false;
   String? threadCursor, runCursor;
   final Set<String> loadingCards = {};
   int _epoch = 0;
+  int _historyEpoch = 0;
   int get contextVersion => _epoch;
   Timer? _poll;
   String? _pendingText, _pendingId;
@@ -76,6 +78,7 @@ class AgentController extends ChangeNotifier {
   }) => items.api.request(method, path, data: data, queryParameters: query);
   Future<void> open({String? id, bool fresh = false}) async {
     final stamp = ++_epoch;
+    _historyEpoch++;
     _poll?.cancel();
     historyLoading = earlierLoading = false;
     loading = true;
@@ -142,9 +145,20 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadHistory({bool reset = false}) async {
-    if (historyLoading || !active || (!reset && !hasMoreThreads)) return;
+  Future<void> loadHistory({bool reset = false, bool? deleted}) async {
+    if (!active || (historyLoading && !reset) || (!reset && !hasMoreThreads)) {
+      return;
+    }
+    final mode = deleted ?? historyDeleted;
+    if (mode != historyDeleted) {
+      historyDeleted = mode;
+      threads = [];
+      hasMoreThreads = false;
+      threadCursor = null;
+      reset = true;
+    }
     final stamp = _epoch;
+    final pageStamp = reset ? ++_historyEpoch : _historyEpoch;
     historyLoading = true;
     error = null;
     emit();
@@ -155,10 +169,12 @@ class AgentController extends ChangeNotifier {
         query: {
           'semester_id': semesterId,
           'limit': 20,
+          'deleted': historyDeleted,
           if (!reset && threadCursor != null) 'before_thread_id': threadCursor,
         },
       );
       check(stamp);
+      if (pageStamp != _historyEpoch) return;
       final page = rows(value['threads']);
       threads = reset
           ? page
@@ -169,10 +185,77 @@ class AgentController extends ChangeNotifier {
       hasMoreThreads = value['has_more'] == true;
       threadCursor = value['next_cursor'] as String?;
     } catch (e) {
-      if (active && stamp == _epoch) error = userError(e);
+      if (active && stamp == _epoch && pageStamp == _historyEpoch) {
+        error = userError(e);
+      }
     } finally {
-      if (active && stamp == _epoch) {
+      if (active && stamp == _epoch && pageStamp == _historyEpoch) {
         historyLoading = false;
+        emit();
+      }
+    }
+  }
+
+  Future<bool> deleteThread(String id) async {
+    if (!active || historyChanging || busy) return false;
+    final stamp = _epoch;
+    historyChanging = true;
+    error = null;
+    emit();
+    try {
+      await request('DELETE', '/agent/threads/$id');
+      check(stamp);
+      _historyEpoch++;
+      historyLoading = false;
+      threads = threads.where((row) => row['id'] != id).toList();
+      if (threadId == id) {
+        _epoch++;
+        _poll?.cancel();
+        threadId = null;
+        runs = [];
+        mediaRun = null;
+        hasMoreRuns = false;
+        runCursor = null;
+        earlierLoading = loading = false;
+        _pendingId = _pendingText = null;
+      }
+      if (threads.isEmpty && hasMoreThreads) await loadHistory();
+      return true;
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+      return false;
+    } finally {
+      if (active) {
+        historyChanging = false;
+        emit();
+      }
+    }
+  }
+
+  Future<bool> restoreThread(String id) async {
+    if (!active || historyChanging) return false;
+    final stamp = _epoch;
+    historyChanging = true;
+    error = null;
+    emit();
+    try {
+      await request('POST', '/agent/threads/$id/restore');
+      check(stamp);
+      _historyEpoch++;
+      historyLoading = false;
+      if (historyDeleted) {
+        threads = threads.where((row) => row['id'] != id).toList();
+        if (threads.isEmpty && hasMoreThreads) await loadHistory();
+      } else {
+        await loadHistory(reset: true);
+      }
+      return true;
+    } catch (e) {
+      if (active && stamp == _epoch) error = userError(e);
+      return false;
+    } finally {
+      if (active) {
+        historyChanging = false;
         emit();
       }
     }
@@ -404,13 +487,6 @@ class AgentController extends ChangeNotifier {
     if (run is Map) {
       final row = Map<String, dynamic>.from(run);
       threadId = row['thread_id'] as String? ?? threadId;
-      runs = [
-        for (final old in runs)
-          if (old['status'] == 'needs_confirmation')
-            {...old, 'status': 'superseded'}
-          else
-            old,
-      ];
       replace(row);
       error = null;
     } else if (value['status'] == 'failed') {
@@ -605,7 +681,20 @@ class AgentController extends ChangeNotifier {
         return;
       }
       if (old['status'] == 'applied' && value['status'] != 'applied') return;
+      if (old['status'] == 'superseded' &&
+          value['status'] == 'needs_confirmation') {
+        return;
+      }
       runs = [...runs]..[index] = value;
+    }
+    if (value['status'] == 'needs_confirmation' && value['preview'] != null) {
+      runs = [
+        for (final row in runs)
+          if (row['id'] != value['id'] && row['status'] == 'needs_confirmation')
+            {...row, 'status': 'superseded'}
+          else
+            row,
+      ];
     }
   }
 
@@ -663,13 +752,6 @@ class AgentController extends ChangeNotifier {
         ),
       );
       check(stamp);
-      runs = [
-        for (final row in runs)
-          if (row['status'] == 'needs_confirmation')
-            {...row, 'status': 'superseded'}
-          else
-            row,
-      ];
       replace(value);
       _pendingText = _pendingId = null;
       return true;
@@ -689,9 +771,10 @@ class AgentController extends ChangeNotifier {
     Map<String, dynamic> run,
     bool confirm, {
     List<String>? selectedGroupIds,
+    List<String> courseLeaveTargets = const [],
     bool confirmFixedConflicts = false,
   }) async {
-    if (busy || !active) return;
+    if (busy || processing || !active) return;
     final stamp = _epoch;
     busy = true;
     error = null;
@@ -706,6 +789,8 @@ class AgentController extends ChangeNotifier {
             'token': run['preview']['token'],
             'selected_group_ids': ?selectedGroupIds,
             if (confirmFixedConflicts) 'confirm_fixed_conflicts': true,
+            if (courseLeaveTargets.isNotEmpty)
+              'course_leave_targets': courseLeaveTargets,
           },
         ),
       );

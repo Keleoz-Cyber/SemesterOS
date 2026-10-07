@@ -77,14 +77,30 @@ def replay_course_patch(events, patch, courses, *, original_monday=None, current
         # If the source recurrence was removed, its moved exception is removed
         # as well. Independent additions (course_id=None) remain independent.
         if course_id and saved['id'] in old_rows and saved['id'] not in mapped: continue
+        previous = old_rows.get(saved['id'])
+        attendance_fields = ('attendance_status', 'attendance_reason')
+        # Attendance is an overlay on the current occurrence. Reuse corrected
+        # school times or an earlier move instead of replaying its old snapshot.
+        attendance_only = previous is not None and (
+            {k: v for k, v in saved.items() if k not in attendance_fields} ==
+            {k: v for k, v in previous.items() if k not in attendance_fields})
+        if attendance_only and saved['id'] in mapped:
+            after = dict(mapped[saved['id']])
+            for field in attendance_fields:
+                after.pop(field, None)
+                if field in saved: after[field] = saved[field]
+            rows[after['id']] = after
+            continue
         # An undo can restore an ordinary base occurrence. Keep its relationship
         # to the base timetable rather than freezing an old date/time snapshot.
         restored = matching(base_events, saved) if course_id and not saved.get('changed') else None
         if course_id and not saved.get('changed') and restored is None: continue
         after = dict(restored or saved)
+        if restored is not None:
+            for field in attendance_fields:
+                if field in saved: after[field] = saved[field]
         if restored is None and saved['id'] in mapped: after['id'] = mapped[saved['id']]['id']
         base = courses.get(course_id)
-        previous = old_rows.get(saved['id'])
         if saved.get('changed') and course_id:
             after['origin_occurrence_id'] = saved.get('origin_occurrence_id') or (previous or {}).get('origin_occurrence_id') or saved['id']
         if base and previous:

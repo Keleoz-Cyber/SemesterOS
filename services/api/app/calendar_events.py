@@ -9,6 +9,7 @@ from .event_schemas import EventFields, EventEdit, EventCancel
 from .event_store import CATEGORIES, tag_ids, event_rows, event_value, classification_value, classification_request
 from .models import CalendarEvent, CalendarEventRevision, CalendarTag, StudyItem, TextCandidate, User
 from .reminder_rules import utcnow, instant, notice_arrival_at, reservation_enabled
+from .course_participation import course_requires_attendance, course_attendance_label
 
 router = APIRouter()
 
@@ -224,7 +225,9 @@ def calendar(sid: str, from_date: date = Query(), to_date: date = Query(),
         add({'id': e['id'], 'resource_id': e.get('course_id'), 'resource_type': 'course', 'title': e['title'],
              'start_at': e['start_at'], 'end_at': e['end_at'], 'location': e.get('location', ''),
              'category_id': 'study', 'tags': [], 'time_precision': 'exact',
-             'attendance_exempt': bool(e.get('attendance_exempt')), 'fixed': not e.get('attendance_exempt', False)},
+             'attendance_exempt': bool(e.get('attendance_exempt')), 'fixed': course_requires_attendance(e),
+             'attendance_status': e.get('attendance_status'), 'attendance_reason': e.get('attendance_reason', ''),
+             'attendance_label': course_attendance_label(e)},
             instant(e['start_at']).timestamp(), instant(e['end_at']).timestamp())
     term_start = local_day(s.first_monday).timestamp(); term_end = term_start + s.total_weeks * 7 * 86400
     facts = [('event', event_value(db, r)) for r in event_rows(db, user, sid)]

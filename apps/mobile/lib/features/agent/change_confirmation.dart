@@ -23,6 +23,7 @@ class ChangeConfirmation extends StatefulWidget {
 
 class _ChangeConfirmationState extends State<ChangeConfirmation> {
   final Set<String> selected = {};
+  final Set<String> leaveTargets = {};
   bool conflictAcknowledged = false;
   bool checking = false;
   String? selectionError;
@@ -43,6 +44,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
       selectionError = null;
       selectedImpact = {};
       conflictAcknowledged = false;
+      leaveTargets.clear();
     });
     if (selected.isEmpty) return;
     try {
@@ -76,6 +78,22 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
     final conflicts = rows(
       impact['new_fixed_conflicts'] ?? impact['fixed_conflicts'],
     );
+    final conflictIds = conflicts
+        .expand((r) => r['item_ids'] as List? ?? [])
+        .toSet();
+    final courses = rows(
+      impact['course_conflicts'],
+    ).where((r) => conflictIds.contains(r['occurrence_id'])).toList();
+    final unresolved = conflicts
+        .where(
+          (r) =>
+              (r['item_ids'] as List? ?? []).isEmpty ||
+              (r['item_ids'] as List? ?? [])
+                      .where((id) => !leaveTargets.contains(id))
+                      .length >=
+                  2,
+        )
+        .toList();
     final saved = rows(
       widget.run['receipt']?['groups'],
     ).map((g) => g['id']).toSet();
@@ -122,6 +140,8 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                         ? '选择要保存的安排'
                         : p['action'] == 'restore'
                         ? '恢复日程'
+                        : p['kind'] == 'event' && p['action'] == 'create'
+                        ? '新增日程'
                         : '修改预览',
                     style: const TextStyle(
                       fontSize: 18,
@@ -149,7 +169,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                   value: applied
                       ? saved.contains(group['id'])
                       : selected.contains(group['id']),
-                  onChanged: pending && !c.busy
+                  onChanged: pending && !c.busy && !c.processing
                       ? (v) {
                           setState(() {
                             if (v == true) {
@@ -197,10 +217,14 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
             ],
             if (conflicts.isNotEmpty) ...[
               const Divider(height: 28),
-              const Text(
-                '有时间冲突',
+              Text(
+                unresolved.isEmpty && leaveTargets.isNotEmpty
+                    ? '已选请假处理'
+                    : '有时间冲突',
                 style: TextStyle(
-                  color: CampusColors.warning,
+                  color: unresolved.isEmpty && leaveTargets.isNotEmpty
+                      ? CampusColors.teal
+                      : CampusColors.warning,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -226,14 +250,62 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                   ],
                 ),
               if (pending)
+                if (courses.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    '课程请假',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const Text(
+                    '仅勾选已请假的课次；准备请假的课程仍保留占用。',
+                    style: TextStyle(fontSize: 13, color: CampusColors.muted),
+                  ),
+                  for (final course in courses)
+                    AppCheckRow(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text('${course['title']} · 我已请假'),
+                      subtitle: Text(
+                        displayInterval(course['start_at'], course['end_at']),
+                      ),
+                      value: leaveTargets.contains(course['occurrence_id']),
+                      onChanged: c.busy || c.processing
+                          ? null
+                          : (v) => setState(() {
+                              if (v == true) {
+                                leaveTargets.add(course['occurrence_id']);
+                              } else {
+                                leaveTargets.remove(course['occurrence_id']);
+                              }
+                              conflictAcknowledged = false;
+                            }),
+                    ),
+                  if (leaveTargets.isNotEmpty)
+                    const Text(
+                      '保存时一并标记本次请假；原课程和其他周次保留。',
+                      style: TextStyle(fontSize: 13, color: CampusColors.teal),
+                    ),
+                ],
+              if (pending && unresolved.isNotEmpty)
                 AppCheckRow(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('保留这些重叠安排'),
                   value: conflictAcknowledged,
-                  onChanged: c.busy
+                  onChanged: c.busy || c.processing
                       ? null
                       : (v) => setState(() => conflictAcknowledged = v == true),
                 ),
+            ],
+            if (applied &&
+                rows(
+                  widget.run['receipt']?['course_attendance'],
+                ).isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                '已记录 ${rows(widget.run['receipt']?['course_attendance']).length} 次课程请假',
+                style: const TextStyle(color: CampusColors.teal),
+              ),
+              const Text('原课程保留，本次不再占用时间。', style: TextStyle(fontSize: 13)),
             ],
             if (checking)
               const Padding(
@@ -265,7 +337,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                 runSpacing: 8,
                 children: [
                   AppTextButton(
-                    onPressed: c.busy
+                    onPressed: c.busy || c.processing
                         ? null
                         : () => c.decide(widget.run, false),
                     child: const Text('暂不处理'),
@@ -273,16 +345,18 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                   AppButton(
                     onPressed:
                         c.busy ||
+                            c.processing ||
                             checking ||
                             selectionError != null ||
                             (batch && selected.isEmpty) ||
-                            (conflicts.isNotEmpty && !conflictAcknowledged)
+                            (unresolved.isNotEmpty && !conflictAcknowledged)
                         ? null
                         : () => c.decide(
                             widget.run,
                             true,
                             selectedGroupIds: batch ? selected.toList() : null,
                             confirmFixedConflicts: conflictAcknowledged,
+                            courseLeaveTargets: leaveTargets.toList(),
                           ),
                     child: Text(
                       undo
@@ -299,8 +373,17 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                           : p['kind'] == 'course_change' &&
                                 {'suspend', 'cancel'}.contains(p['action'])
                           ? '确认停课'
+                          : p['kind'] == 'course_change' &&
+                                {
+                                  'leave',
+                                  'plan_leave',
+                                  'attend',
+                                }.contains(p['action'])
+                          ? '保存听课状态'
                           : p['action'] == 'restore'
                           ? '确认恢复'
+                          : p['kind'] == 'event' && p['action'] == 'create'
+                          ? '保存日程'
                           : '确认修改',
                     ),
                   ),

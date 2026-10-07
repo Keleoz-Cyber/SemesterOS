@@ -7,6 +7,7 @@ from sqlalchemy import select
 from .models import Semester
 from .occurrences import effective_courses, expand
 from .reminder_rules import instant, utcnow
+from .course_participation import course_requires_attendance
 
 
 def course_reminders(db, user, lead_minutes, now=None):
@@ -17,7 +18,7 @@ def course_reminders(db, user, lead_minutes, now=None):
         for event in expand(calendar, effective_courses(db, user, semester)):
             # Independent change additions have no persisted course details to
             # navigate to; their own fixed-event reminders remain authoritative.
-            if not event.get('course_id') or event.get('attendance_exempt'):
+            if not event.get('course_id') or not course_requires_attendance(event):
                 continue
             start = instant(event['start_at'])
             trigger = start - timedelta(minutes=lead_minutes)

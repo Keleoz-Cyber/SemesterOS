@@ -22,10 +22,14 @@ class CourseChangeDisplay {
 
   bool get suspension => kind == 'suspend' || kind == 'cancel';
   bool get restoration => kind == 'undo' || kind == 'restore';
+  bool get attendance => {'leave', 'plan_leave', 'attend'}.contains(kind);
   String get action => switch (kind) {
     'suspend' || 'cancel' => '停课',
     'move' => '调课',
     'add' => '补课',
+    'leave' => '已请假',
+    'plan_leave' => '准备请假',
+    'attend' => '恢复上课',
     'undo' || 'restore' => '恢复原安排',
     'block' => '活动调整',
     _ => '安排调整',
@@ -39,7 +43,9 @@ class CourseChangeDisplay {
     final title = '${request['title'] ?? ''}'
         .replaceFirst(RegExp(r'^撤销[：:]\s*'), '')
         .trim();
-    return {'课程停课', '停课', '课程变更', '课次调整'}.contains(title) ? '' : title;
+    return {'课程停课', '停课', '课程变更', '课次调整', '已请假课程', '课程听课状态'}.contains(title)
+        ? ''
+        : title;
   }
 
   String get source => '${request['source_text'] ?? ''}'.trim();
@@ -62,6 +68,12 @@ class CourseChangeDisplay {
   String get countLabel => suspension
       ? '停课 ${before.length} 次'
       : restoration
+      ? '恢复 ${after.length} 次课'
+      : kind == 'leave'
+      ? '已请假 ${after.length} 次课'
+      : kind == 'plan_leave'
+      ? '待请假 ${after.length} 次课'
+      : kind == 'attend'
       ? '恢复 ${after.length} 次课'
       : '涉及 ${before.isNotEmpty ? before.length : after.length} 次';
 }
@@ -156,7 +168,7 @@ class CourseChangeSummary extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          if (data.suspension || many)
+          if (data.suspension || many || data.attendance)
             Wrap(
               spacing: 12,
               runSpacing: 4,
@@ -183,6 +195,17 @@ class CourseChangeSummary extends StatelessWidget {
             )
           else
             CourseChangeComparison(data: data),
+          if (data.attendance) ...[
+            const SizedBox(height: 8),
+            Text(
+              data.kind == 'leave'
+                  ? '原课程保留，本次不再占用时间。'
+                  : data.kind == 'plan_leave'
+                  ? '尚未请假，课程继续占用时间。'
+                  : '恢复本次课程的时间占用。',
+              style: const TextStyle(fontSize: 14, color: CampusColors.muted),
+            ),
+          ],
           if (hasDetails)
             AppDisclosure(
               tilePadding: EdgeInsets.zero,
@@ -230,6 +253,13 @@ class CourseChangeComparison extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
+    if (data.attendance) {
+      return CourseChangeOccurrences(
+        entries: data.after,
+        label: data.action,
+        showCourse: showCourse,
+      );
+    }
     if (data.before.length == 1 &&
         data.after.length == 1 &&
         !showCourse &&

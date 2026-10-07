@@ -11,7 +11,6 @@ import '../features/agent/agent_page.dart';
 import '../features/insights/insights_page.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -403,18 +402,15 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
   void routeChanged() {
     if (currentPath != '/assistant') openedDraftId = null;
     if (!mounted) return;
-    // Router restoration can notify while descendants are being built.
-    if (SchedulerBinding.instance.schedulerPhase ==
-        SchedulerPhase.persistentCallbacks) {
-      if (routeRebuildScheduled) return;
-      routeRebuildScheduled = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        routeRebuildScheduled = false;
-        if (mounted) setState(() {});
-      });
-    } else {
-      setState(() {});
-    }
+    // Initial router restoration can also build while the scheduler is idle.
+    // Coalesce notifications after that build instead of testing its phase.
+    if (routeRebuildScheduled) return;
+    routeRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      routeRebuildScheduled = false;
+      if (mounted) setState(() {});
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   void incomingChanged() {

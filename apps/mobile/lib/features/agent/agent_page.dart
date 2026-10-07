@@ -89,6 +89,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       !readyForDraft ||
       c.loading ||
       c.busy ||
+      c.historyChanging ||
       sendingMedia ||
       mediaWorking ||
       pickingImage ||
@@ -879,7 +880,91 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     await saveDraft();
     if (!mounted) return;
     setState(() => showingHistory = true);
-    await c.loadHistory(reset: true);
+    await c.loadHistory(reset: true, deleted: false);
+  }
+
+  Future<void> deleteHistoryThread(Map<String, dynamic> thread) async {
+    if (!c.active || c.historyChanging) return;
+    final stamp = c.contextVersion;
+    final id = thread['id'] as String;
+    final title = '${thread['title'] ?? '对话'}';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AppDialog(
+        title: const Text('删除这段对话？'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 12),
+            const Text(
+              '处理和待确认操作会停止。已保存的日程、待办和后续对话保留，可在“已删除对话”中恢复。',
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.5,
+                color: CampusColors.muted,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          AppTextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('保留'),
+          ),
+          AppTextButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            style: AppButton.styleFrom(foregroundColor: CampusColors.error),
+            child: const Text('删除对话'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || !c.active || stamp != c.contextVersion) {
+      return;
+    }
+    final wasCurrent = c.threadId == id;
+    if (wasCurrent && !await saveDraft()) return;
+    if (!await c.deleteThread(id) || !mounted || !c.active) return;
+    if (wasCurrent && c.threadId == null) {
+      draftTimer?.cancel();
+      setState(() {
+        editingRun = null;
+        session.editBackup = null;
+        input.clear();
+        pendingImages.clear();
+        imageRequestId = imageRequestSignature = null;
+        noticeDraft = false;
+        attachment = null;
+        detachedSource = false;
+        mediaReferenceOverride = null;
+        transcriptAck = null;
+        browsingContext = browsingContextRemoved
+            ? null
+            : widget.browsingContext;
+      });
+      await saveDraft();
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('对话已删除'),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => restoreHistoryThread(id),
+        ),
+      ),
+    );
+  }
+
+  Future<void> restoreHistoryThread(String id) async {
+    if (!await c.restoreThread(id) || !mounted || !c.active) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(const SnackBar(content: Text('对话已恢复')));
   }
 
   Future<void> openHistory(String id) async {
@@ -1034,8 +1119,16 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             : 60,
         leading: showingHistory
             ? AppIconButton(
-                tooltip: '返回对话',
-                onPressed: () => setState(() => showingHistory = false),
+                tooltip: c.historyDeleted ? '返回历史对话' : '返回对话',
+                onPressed: c.historyChanging
+                    ? null
+                    : () {
+                        if (c.historyDeleted) {
+                          c.loadHistory(reset: true, deleted: false);
+                        } else {
+                          setState(() => showingHistory = false);
+                        }
+                      },
                 icon: const Icon(Icons.arrow_back_rounded),
               )
             : widget.embedded
@@ -1054,7 +1147,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              showingHistory ? '历史对话' : '助手',
+              showingHistory ? (c.historyDeleted ? '已删除对话' : '历史对话') : '助手',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             if ('${widget.semester['name'] ?? ''}'.isNotEmpty)
@@ -1314,7 +1407,32 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget historyList() {
+  Widget historyList() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: AppTextButton.icon(
+            onPressed: c.historyChanging
+                ? null
+                : () => c.loadHistory(reset: true, deleted: !c.historyDeleted),
+            icon: Icon(
+              c.historyDeleted
+                  ? Icons.history_rounded
+                  : Icons.restore_from_trash_outlined,
+              size: 19,
+            ),
+            label: Text(c.historyDeleted ? '返回历史对话' : '已删除对话'),
+          ),
+        ),
+      ),
+      Expanded(child: historyRows()),
+    ],
+  );
+
+  Widget historyRows() {
     if (c.historyLoading && c.threads.isEmpty) {
       return ListView(
         children: [
@@ -1332,16 +1450,16 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           child: DataLoadError(onRetry: () => c.loadHistory(reset: true)),
         );
       }
-      return const Center(
+      return Center(
         child: EmptyState(
-          title: '还没有历史对话',
+          title: c.historyDeleted ? '没有已删除的对话' : '还没有历史对话',
           icon: Icons.chat_bubble_outline_rounded,
         ),
       );
     }
     return LazyLoadList<Map<String, dynamic>>(
       pagingKey:
-          '${widget.controller.owner}:${widget.semester['id']}:${widget.controller.api.generation}',
+          '${widget.controller.owner}:${widget.semester['id']}:${widget.controller.api.generation}:${c.historyDeleted}',
       items: c.threads,
       hasMore: c.hasMoreThreads,
       itemKey: (row) => ValueKey('history-${row['id']}'),
@@ -1359,7 +1477,8 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       itemBuilder: (context, thread, index) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (historyDay(thread).isNotEmpty &&
+          if (!c.historyDeleted &&
+              historyDay(thread).isNotEmpty &&
               (index == 0 ||
                   historyDay(c.threads[index - 1]) != historyDay(thread)))
             Padding(
@@ -1388,7 +1507,15 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            subtitle: thread['updated_at'] == null
+            subtitle: c.historyDeleted
+                ? Text(
+                    '删除于 ${noticeClock(thread['deleted_at'])}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: CampusColors.muted,
+                    ),
+                  )
+                : thread['updated_at'] == null
                 ? null
                 : Text(
                     noticeClock(thread['updated_at'], clockOnly: true),
@@ -1397,8 +1524,23 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                       color: CampusColors.muted,
                     ),
                   ),
-            trailing: const Icon(Icons.chevron_right_rounded, size: 19),
-            onTap: () => openHistory(thread['id']),
+            trailing: c.historyDeleted
+                ? AppTextButton(
+                    onPressed: c.historyChanging
+                        ? null
+                        : () => restoreHistoryThread(thread['id'] as String),
+                    child: const Text('恢复'),
+                  )
+                : AppIconButton(
+                    tooltip: '删除对话',
+                    onPressed: c.historyChanging
+                        ? null
+                        : () => deleteHistoryThread(thread),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                  ),
+            onTap: c.historyDeleted || c.historyChanging
+                ? null
+                : () => openHistory(thread['id']),
           ),
         ],
       ),
@@ -1784,6 +1926,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                               'exam_change',
                               'item_state',
                               'batch',
+                              'event',
                               'undo',
                             }.contains(p['kind']) ||
                             p['kind'] == 'event' && p['action'] == 'restore'
