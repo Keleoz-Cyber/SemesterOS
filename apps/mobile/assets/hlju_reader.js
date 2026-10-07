@@ -109,15 +109,22 @@ async function hljuRead(nonce) {
     } finally { clearTimeout(timer); }
   }
   function applyTimes(rows, data) {
-    if (!Array.isArray(data)) return [];
+    if (!data || data.code !== 200 || !Array.isArray(data.content)) return [];
     const periods = [];
-    for (let i = 0; i < data.length; i++) {
-      const p = data[i];
+    const seen = new Set();
+    for (let i = 0; i < data.content.length; i++) {
+      const p = data.content[i];
       if (!p || typeof p !== 'object') continue;
-      const day = +p.XQJ, section = +p.XJ;
-      const start = String(p.KSSJ || '').trim(), end = String(p.JSSJ || '').trim();
-      if (!(day >= 1 && day <= 7 && section >= 1 && section <= 30) || !/^\d{1,2}:\d{2}$/.test(start) || !/^\d{1,2}:\d{2}$/.test(end)) continue;
-      periods.push({weekday: day, section, start, end});
+      const section = +p.xj;
+      const start = String(p.kssj || '').trim(), end = String(p.jssj || '').trim();
+      const clock = /^([01]\d|2[0-3]):[0-5]\d$/;
+      if (!Number.isInteger(section) || section < 1 || section > 30 || !clock.test(start) || !clock.test(end) || end <= start) continue;
+      const existing = periods.find(row => row.section === section);
+      if (existing && (existing.start !== start || existing.end !== end)) return [];
+      if (seen.has(section)) continue;
+      seen.add(section);
+      periods.push({section, start, end,
+        ...(typeof p.djms === 'string' && p.djms.trim() ? {group_label: p.djms.trim().slice(0, 80)} : {})});
     }
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -127,7 +134,6 @@ async function hljuRead(nonce) {
       const last = +(row.section_end || (section && (section[2] || section[1])));
       let start = null, end = null;
       for (let j = 0; j < periods.length; j++) {
-        if (periods[j].weekday !== row.weekday) continue;
         if (periods[j].section === first) start = periods[j].start;
         if (periods[j].section === last) end = periods[j].end;
       }
@@ -148,13 +154,14 @@ async function hljuRead(nonce) {
       // the verified visible table as primary data; auxiliary requests only
       // supplement its metadata, concurrently within one bounded wait.
       const metadata = await Promise.allSettled([
-        query('/component/queryJieCiInfoXqj'),
+        query('/component/queryKbjg', {xn: result.year, xq: result.term, pylx: '1'}),
         query('/component/queryRlZcSj', {xn: result.year, xq: result.term, djz: '1'}),
       ]);
       const periods = metadata[0].status === 'fulfilled'
         ? applyTimes(result.rows, metadata[0].value) : [];
       if (periods.length) {
         result.metadata.periods = periods;
+        result.metadata.periods_scope = 'shared_week';
         result.metadata.source = 'dom_with_metadata';
       } else {
         result.warnings.push('未读取到完整节次时间，请核对作息时间');

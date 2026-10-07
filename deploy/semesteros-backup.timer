@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily SemesterOS backup at 03:30 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Asia/Shanghai
+Persistent=true
+AccuracySec=1min
+Unit=semesteros-backup.service
+
+[Install]
+WantedBy=timers.target

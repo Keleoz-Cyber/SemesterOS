@@ -32,6 +32,7 @@ class TodayDashboard extends StatefulWidget {
   final ValueChanged<DateTime>? onCalendarDay;
   final ValueChanged<Map<String, dynamic>>? onTaskEdit;
   final VoidCallback? onAllTasks;
+  final Future<void> Function()? onRetry;
   final DateTime Function()? now;
   const TodayDashboard({
     super.key,
@@ -41,6 +42,7 @@ class TodayDashboard extends StatefulWidget {
     this.onCalendarDay,
     this.onTaskEdit,
     this.onAllTasks,
+    this.onRetry,
     this.now,
   });
   @override
@@ -228,6 +230,8 @@ class TodayDashboardState extends State<TodayDashboard>
       ]);
     }
   }
+
+  Future<void> retry() => widget.onRetry?.call() ?? reload(forceWeek: true);
 
   @override
   void dispose() {
@@ -740,7 +744,7 @@ class TodayDashboardState extends State<TodayDashboard>
                   ),
                 ),
                 AppTextButton(
-                  onPressed: brief.busy ? null : reload,
+                  onPressed: brief.busy ? null : retry,
                   child: const Text('重试'),
                 ),
               ],
@@ -1019,7 +1023,7 @@ class TodayDashboardState extends State<TodayDashboard>
           available: completeWeek,
           loading: weekly.busy || _weekRefreshQueued,
           offline: weekly.offline,
-          onRetry: () => reload(forceWeek: true),
+          onRetry: retry,
           onDayTap: (date) {
             if (widget.onCalendarDay != null) {
               widget.onCalendarDay!(date);

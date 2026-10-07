@@ -455,6 +455,7 @@ class _ShellPageState extends State<ShellPage> {
         onCalendarDay: showCalendarDay,
         onTaskEdit: editTask,
         onAllTasks: () => switchTab(2),
+        onRetry: refresh,
       ),
     };
   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -94,6 +95,107 @@ void main() {
           ),
         ),
       );
+      api.dio.close();
+    },
+  );
+  test(
+    'transport failures retain safe timeout, DNS, TLS and connection categories',
+    () async {
+      const privateDetail = 'https://private.invalid/path?token=secret';
+      final cases = [
+        (
+          type: DioExceptionType.connectionTimeout,
+          error: privateDetail,
+          code: 'NETWORK_TIMEOUT',
+          message: '等待时间',
+        ),
+        (
+          type: DioExceptionType.connectionError,
+          error: const SocketException('Failed host lookup: $privateDetail'),
+          code: 'NETWORK_DNS',
+          message: '解析',
+        ),
+        (
+          type: DioExceptionType.unknown,
+          error: const HandshakeException(privateDetail),
+          code: 'NETWORK_TLS',
+          message: '安全连接',
+        ),
+        (
+          type: DioExceptionType.badCertificate,
+          error: privateDetail,
+          code: 'NETWORK_TLS',
+          message: '安全连接',
+        ),
+        (
+          type: DioExceptionType.connectionError,
+          error: const SocketException('Connection refused: $privateDetail'),
+          code: 'NETWORK_CONNECTION',
+          message: '检查网络',
+        ),
+      ];
+      for (final failure in cases) {
+        final api = SemesterApi()..session = account('preview');
+        var requests = 0;
+        api.dio.httpClientAdapter = ControlledTransport((r) async {
+          requests++;
+          throw DioException(
+            requestOptions: r,
+            type: failure.type,
+            error: failure.error,
+            message: privateDetail,
+          );
+        });
+        await expectLater(
+          api.request('GET', '/items'),
+          throwsA(
+            isA<ApiFailure>()
+                .having((e) => e.code, 'code', failure.code)
+                .having(
+                  (e) => userError(e),
+                  'message',
+                  contains(failure.message),
+                )
+                .having(
+                  (e) => e.toString(),
+                  'safe message',
+                  isNot(contains('private')),
+                )
+                .having(
+                  (e) => e.toString(),
+                  'safe token',
+                  isNot(contains('secret')),
+                )
+                .having((e) => e.unauthorized, 'unauthorized', false)
+                .having((e) => e.statusCode, 'statusCode', isNull),
+          ),
+        );
+        expect(requests, 1);
+        api.dio.close();
+      }
+    },
+  );
+  test(
+    'refresh transport failure retains its category without expiring the account',
+    () async {
+      final api = SemesterApi()..session = account('preview');
+      api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (!r.path.endsWith('/refresh')) return body({}, 401);
+        throw DioException(
+          requestOptions: r,
+          type: DioExceptionType.connectionError,
+          error: const SocketException('Failed host lookup: private.invalid'),
+        );
+      });
+      await expectLater(
+        api.request('GET', '/me'),
+        throwsA(
+          isA<ApiFailure>()
+              .having((e) => e.code, 'code', 'NETWORK_DNS')
+              .having((e) => e.unauthorized, 'unauthorized', false),
+        ),
+      );
+      expect(api.session!['user']['id'], 'preview');
       api.dio.close();
     },
   );

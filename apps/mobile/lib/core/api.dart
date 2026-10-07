@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiFailure implements Exception {
@@ -38,6 +40,40 @@ String userError(Object error) {
   return '暂时没能完成，请重试。如果仍有问题，可以返回后重新打开。';
 }
 
+bool _isTimeout(DioExceptionType type) =>
+    type == DioExceptionType.connectionTimeout ||
+    type == DioExceptionType.receiveTimeout ||
+    type == DioExceptionType.sendTimeout;
+
+ApiFailure _transportFailure(DioException error) {
+  if (_isTimeout(error.type)) {
+    return ApiFailure('等待时间有点长，请稍后重试。已保存的内容不受影响。', code: 'NETWORK_TIMEOUT');
+  }
+  final cause = error.error;
+  if (error.type == DioExceptionType.badCertificate || cause is TlsException) {
+    return ApiFailure(
+      '无法建立安全连接，请检查设备日期时间与网络后重试。已保存的课表仍可查看。',
+      code: 'NETWORK_TLS',
+    );
+  }
+  // Inspect only the native failure category; never expose its host or details.
+  if (cause is SocketException &&
+      cause.message.toLowerCase().startsWith('failed host lookup')) {
+    return ApiFailure(
+      '无法解析服务地址，请检查网络或切换网络后重试。已保存的课表仍可查看。',
+      code: 'NETWORK_DNS',
+    );
+  }
+  if (error.type == DioExceptionType.connectionError ||
+      cause is SocketException) {
+    return ApiFailure(
+      '暂时无法连接服务，请检查网络后重试。已保存的课表仍可查看。',
+      code: 'NETWORK_CONNECTION',
+    );
+  }
+  return ApiFailure('暂时连接不上，请检查网络后重试。已保存的课表仍可查看。', code: 'NETWORK_UNAVAILABLE');
+}
+
 class SemesterApi {
   final Dio dio;
   final FlutterSecureStorage storage;
@@ -53,7 +89,9 @@ class SemesterApi {
               baseUrl ??
               const String.fromEnvironment(
                 'API_BASE_URL',
-                defaultValue: 'http://10.0.2.2:8871',
+                defaultValue: kDebugMode
+                    ? 'http://10.0.2.2:8871'
+                    : 'https://semesteros.keleoz.com',
               ),
           connectTimeout: const Duration(seconds: 12),
           receiveTimeout: const Duration(seconds: 15),
@@ -122,6 +160,7 @@ class SemesterApi {
       if (e.response?.statusCode == 401) {
         throw ApiFailure('登录已过期，请重新登录', unauthorized: true);
       }
+      if (e.response == null) throw _transportFailure(e);
       throw ApiFailure('暂时无法验证登录状态，请稍后重试。本机课表仍可查看。');
     }
   }
@@ -179,16 +218,14 @@ class SemesterApi {
           }
           continue;
         }
+        if (e.response == null) throw _transportFailure(e);
         final response = e.response?.data;
         throw ApiFailure(
           response is Map && response['message'] is String
               ? response['message'] as String
-              : e.type == DioExceptionType.receiveTimeout ||
-                    e.type == DioExceptionType.sendTimeout
+              : _isTimeout(e.type)
               ? '等待时间有点长，请稍后重试。已保存的内容不受影响。'
-              : e.response != null
-              ? '服务暂时不可用，请稍后重试。已保存的内容不受影响。'
-              : '暂时连接不上，请检查网络后重试。已保存的课表仍可查看。',
+              : '服务暂时不可用，请稍后重试。已保存的内容不受影响。',
           unauthorized: e.response?.statusCode == 401 && authenticated,
           statusCode: e.response?.statusCode,
           code: response is Map && response['code'] is String

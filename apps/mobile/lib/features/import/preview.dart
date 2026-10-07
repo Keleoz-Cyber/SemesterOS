@@ -73,6 +73,14 @@ class _ImportPreviewState extends State<ImportPreview> {
   bool confirmChanged = false;
   bool removeMissing = false;
   bool keepLocalCalendar = false;
+  List<Map<String, dynamic>> get schoolPeriods => [
+    for (final p in widget.metadata['periods'] as List? ?? [])
+      if (p is Map &&
+          p['section'] is int &&
+          p['start'] is String &&
+          p['end'] is String)
+        Map<String, dynamic>.from(p),
+  ];
   List<Map<String, dynamic>> get changedCourses =>
       List<Map<String, dynamic>>.from(batch?['changed_courses'] ?? []);
   List<Map<String, dynamic>> get changedExtras =>
@@ -336,6 +344,34 @@ class _ImportPreviewState extends State<ImportPreview> {
               for (final warning in widget.warnings) ...[
                 SoftNotice(warning, warning: true),
                 const SizedBox(height: 8),
+              ],
+              if (schoolPeriods.isNotEmpty) ...[
+                AppDisclosure(
+                  title: Text('校方作息 · ${schoolPeriods.length}个时段'),
+                  leading: const Icon(
+                    Icons.schedule_rounded,
+                    color: CampusColors.teal,
+                  ),
+                  subtitle: const Text('保留原始节次编号与课间间隔'),
+                  children: [
+                    for (final p in schoolPeriods)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        child: Row(
+                          children: [
+                            Expanded(child: Text('第${p['section']}节')),
+                            Text(
+                              '${p['start']}—${p['end']}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
               ],
               if (batch != null)
                 AcademicStatStrip(

@@ -1,0 +1,132 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- App tile -->
+    <linearGradient id="tileBg" x1="120" y1="110" x2="905" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8FCFF"/>
+      <stop offset="0.52" stop-color="#FFFEFC"/>
+      <stop offset="1" stop-color="#F0F8FF"/>
+    </linearGradient>
+
+    <radialGradient id="tileGlowTL" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(215 215) rotate(38) scale(420 420)">
+      <stop stop-color="#D9EBFA" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#D9EBFA" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="tileGlowBR" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(855 845) rotate(180) scale(390 390)">
+      <stop stop-color="#DCEEFF" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#DCEEFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="bottomWave1" x1="130" y1="820" x2="910" y2="820" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D5EFEA"/>
+      <stop offset="1" stop-color="#D8EAFB"/>
+    </linearGradient>
+    <linearGradient id="bottomWave2" x1="140" y1="860" x2="910" y2="860" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CFEDE9"/>
+      <stop offset="1" stop-color="#CDE2F8"/>
+    </linearGradient>
+
+    <!-- Mark gradients -->
+    <linearGradient id="markGrad" x1="300" y1="298" x2="505" y2="798" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4CA4FF"/>
+      <stop offset="0.50" stop-color="#63CFE9"/>
+      <stop offset="1" stop-color="#8DE0B2"/>
+    </linearGradient>
+
+    <linearGradient id="roofGrad" x1="528" y1="458" x2="833" y2="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6BC8F0"/>
+      <stop offset="0.46" stop-color="#58ADF6"/>
+      <stop offset="1" stop-color="#67D5CF"/>
+    </linearGradient>
+
+    <linearGradient id="sunGrad" x1="642" y1="318" x2="795" y2="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFEBA6"/>
+      <stop offset="1" stop-color="#F6C86B"/>
+    </linearGradient>
+
+    <linearGradient id="calGrad" x1="550" y1="565" x2="804" y2="792" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E9F6FF"/>
+      <stop offset="0.58" stop-color="#D5ECFA"/>
+      <stop offset="1" stop-color="#D5F1EC"/>
+    </linearGradient>
+
+    <linearGradient id="tabGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#69B8F7"/>
+      <stop offset="1" stop-color="#408FF3"/>
+    </linearGradient>
+
+    <linearGradient id="line1Grad" x1="610" y1="0" x2="748" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9CE7C9"/>
+      <stop offset="1" stop-color="#60D2D2"/>
+    </linearGradient>
+
+    <linearGradient id="line2Grad" x1="610" y1="0" x2="727" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B9E8F7"/>
+      <stop offset="1" stop-color="#74B8F3"/>
+    </linearGradient>
+
+    <!-- Shadows / highlights -->
+    <filter id="tileShadow" x="30" y="30" width="964" height="964" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#AFC6DD" flood-opacity="0.22"/>
+    </filter>
+
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="tileClip">
+      <rect x="104" y="96" width="816" height="816" rx="180"/>
+    </clipPath>
+  </defs>
+
+  <!-- Tile -->
+  <g filter="url(#tileShadow)">
+    <rect x="104" y="96" width="816" height="816" rx="180" fill="url(#tileBg)"/>
+    <rect x="104" y="96" width="816" height="816" rx="180" fill="url(#tileGlowTL)"/>
+    <rect x="104" y="96" width="816" height="816" rx="180" fill="url(#tileGlowBR)"/>
+  </g>
+
+  <!-- iOS-style soft highlight -->
+  <path d="M170 198C242 142 330 123 417 131" stroke="white" stroke-opacity="0.58" stroke-width="18" stroke-linecap="round"/>
+  <path d="M770 124C840 138 885 180 902 247" stroke="white" stroke-opacity="0.24" stroke-width="12" stroke-linecap="round"/>
+
+  <!-- Bottom soft waves -->
+  <g clip-path="url(#tileClip)">
+    <path d="M104 730C194 698 293 709 392 754C488 798 585 823 673 805C764 786 839 736 920 726V912H104V730Z"
+          fill="url(#bottomWave1)" fill-opacity="0.82"/>
+    <path d="M104 803C210 744 335 752 457 800C544 835 629 860 719 848C807 836 872 792 920 779V912H104V803Z"
+          fill="url(#bottomWave2)" fill-opacity="0.88"/>
+  </g>
+
+  <!-- Main mark -->
+  <!-- Left stroke -->
+  <rect x="337" y="286" width="80" height="492" rx="40" fill="url(#markGrad)"/>
+  <rect x="230" y="444" width="272" height="76" rx="38" fill="url(#markGrad)"/>
+
+  <!-- Sun -->
+  <circle cx="708" cy="410" r="95" fill="url(#sunGrad)"/>
+  <line x1="635.2" y1="306.0" x2="603.0" y2="260.1" stroke="url(#sunGrad)" stroke-width="28" stroke-linecap="round"/><line x1="708.0" y1="283.0" x2="708.0" y2="227.0" stroke="url(#sunGrad)" stroke-width="28" stroke-linecap="round"/><line x1="780.8" y1="306.0" x2="813.0" y2="260.1" stroke="url(#sunGrad)" stroke-width="28" stroke-linecap="round"/>
+
+  <!-- White separating curve between sun and roof, like the reference -->
+  <path d="M607 396C635 372 675 370 708 392C741 414 771 438 796 460"
+        stroke="#FFFDF8" stroke-width="28" stroke-linecap="round"/>
+
+  <!-- Roof -->
+  <path d="M533 543L646 456C659 446 678 446 691 456L812 543"
+        stroke="url(#roofGrad)" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Calendar -->
+  <rect x="548" y="566" width="254" height="222" rx="58" fill="url(#calGrad)"/>
+  <rect x="601" y="546" width="32" height="64" rx="16" fill="url(#tabGrad)"/>
+  <rect x="738" y="546" width="32" height="64" rx="16" fill="url(#tabGrad)"/>
+
+  <rect x="584" y="622" width="182" height="128" rx="34" fill="#FBFEFF" fill-opacity="0.97"/>
+  <rect x="613" y="657" width="129" height="24" rx="12" fill="url(#line1Grad)"/>
+  <rect x="613" y="710" width="108" height="24" rx="12" fill="url(#line2Grad)"/>
+</svg>

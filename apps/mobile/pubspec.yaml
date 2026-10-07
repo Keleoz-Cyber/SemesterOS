@@ -46,6 +46,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/brand/brand_mark.png
     - assets/haut_reader.js
     - assets/hlju_reader.js
     - assets/hlju_browser_compat.js

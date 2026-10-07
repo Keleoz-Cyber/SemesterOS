@@ -1,0 +1,12 @@
+[Unit]
+Description=SemesterOS consistent database, media and private config backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/opt/semesteros/maintenance/backup_cloud.sh
+TimeoutStartSec=15min
+TimeoutStopSec=2min

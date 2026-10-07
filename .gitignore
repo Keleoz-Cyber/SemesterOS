@@ -18,6 +18,7 @@ local.properties
 .pub/
 build/
 .gradle/
+.kotlin/
 .cxx/
 captures/
 *.apk

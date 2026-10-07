@@ -64,8 +64,9 @@ test('metadata queries retain verified DOM content and restrict exported fields'
     fetch: async (url, options) => {
       calls.push({path: url.pathname, body: options.body});
       let data;
-      if (url.pathname.endsWith('queryJieCiInfoXqj')) {
-        data = [{XQJ: 2, XJ: 5, KSSJ: '13:35', JSSJ: '14:20', password: 'private', student_id: 'private'}, {XQJ: 2, XJ: 6, KSSJ: '14:30', JSSJ: '15:15'}];
+      if (url.pathname.endsWith('queryKbjg')) {
+        assert.equal(options.body, 'xn=2026-2027&xq=1&pylx=1');
+        data = {code: 200, content: [{xj:'5',kssj:'13:35',jssj:'14:20',djms:'第5-6节',password:'private',student_id:'private'}, {xj:'6',kssj:'14:30',jssj:'15:15'}, {xj:'14',kssj:'11:56',jssj:'13:29'}]};
       } else {
         assert.equal(url.pathname, '/component/queryRlZcSj');
         data = {content: [{xqj: 1, rq: '2026-08-24'}]};
@@ -87,6 +88,10 @@ test('metadata queries retain verified DOM content and restrict exported fields'
   assert.match(packet.value.rows[0].raw_text, /^（免听）/);
   assert.equal(packet.value.metadata.source, 'dom_with_metadata');
   assert.equal(packet.value.metadata.periods[0].start, '13:35');
+  assert.equal(packet.value.metadata.periods_scope, 'shared_week');
+  assert.equal(packet.value.metadata.periods[2].section, 14);
+  assert.equal(packet.value.metadata.periods[0].weekday, undefined);
+  assert.equal(packet.value.metadata.periods[0].password, undefined);
   assert.equal(JSON.stringify(packet).includes('private'), false);
   assert.equal(packet.value.rows.length, 3);
   assert.match(packet.value.rows[1].raw_text, /考试/);
