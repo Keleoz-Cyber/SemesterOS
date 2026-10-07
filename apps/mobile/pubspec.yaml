@@ -31,6 +31,7 @@ dependencies:
   sqlite3_flutter_libs: 0.5.39
   timezone: ^0.11.1
   webview_flutter: ^4.14.1
+  webview_flutter_android: 4.14.1
   forui: 0.25.0
   smooth_sheets: 1.2.0
 
@@ -47,3 +48,4 @@ flutter:
   assets:
     - assets/haut_reader.js
     - assets/hlju_reader.js
+    - assets/hlju_browser_compat.js

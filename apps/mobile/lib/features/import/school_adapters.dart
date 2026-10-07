@@ -36,6 +36,7 @@ class SchoolAdapter {
     required this.keywords,
     required this.parse,
     this.insecureLoginPaths = const [],
+    this.desktopBrowser = false,
   });
 
   final String id, name, source, readerAsset, loginUrl;
@@ -43,6 +44,7 @@ class SchoolAdapter {
   final List<String> origins, courseOrigins, httpsUpgradeHosts;
   final List<String> insecureLoginPaths;
   final SchoolImportParser parse;
+  final bool desktopBrowser;
 
   bool matches(String query) =>
       '$name $keywords'.toLowerCase().contains(query.trim().toLowerCase());
@@ -99,6 +101,8 @@ const hljuSchool = SchoolAdapter(
   description: '本科教务课表',
   keywords: 'hlju 黑大 哈尔滨',
   parse: _parseHlju,
+  // The portal explicitly rejects every mobile UA, regardless of version.
+  desktopBrowser: true,
 );
 
 const supportedSchools = [hautSchool, hljuSchool];

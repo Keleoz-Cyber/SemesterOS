@@ -26,6 +26,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        flutterEngine.plugins.add(SchoolBrowserCompatibility())
         incomingChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "cn.semesteros/incoming_notice")
         incomingChannel?.setMethodCallHandler { call, result ->
             when (call.method) {

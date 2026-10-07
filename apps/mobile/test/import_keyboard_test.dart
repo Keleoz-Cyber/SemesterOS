@@ -13,6 +13,8 @@ import 'ui_polish_test.dart' show mount, sampleController;
 class _SchoolWebPlatform extends WebViewPlatform {
   int mounts = 0, disposals = 0, controllerCreations = 0;
   bool failCleanup = false;
+  String? userAgent;
+  final loadedAgents = <String?>[];
   _SchoolSurfaceState? active;
   @override
   PlatformWebViewController createPlatformWebViewController(
@@ -43,6 +45,12 @@ class _SchoolWebController extends PlatformWebViewController {
   @override
   Future<void> setJavaScriptMode(JavaScriptMode mode) async {}
   @override
+  Future<String?> getUserAgent() async =>
+      'Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Version/4.0 Chrome/153.0.0.0 Mobile Safari/537.36';
+  @override
+  Future<void> setUserAgent(String? value) async => probe.userAgent = value;
+  @override
   Future<void> addJavaScriptChannel(JavaScriptChannelParams params) async {}
   @override
   Future<void> setPlatformNavigationDelegate(
@@ -53,6 +61,7 @@ class _SchoolWebController extends PlatformWebViewController {
 
   @override
   Future<void> loadRequest(LoadRequestParams params) async {
+    probe.loadedAgents.add(probe.userAgent);
     navigation?.started?.call(params.uri.toString());
     navigation?.finished?.call(params.uri.toString());
   }
@@ -206,6 +215,9 @@ void main() {
       await tester.pump();
       final original = platform.active!;
       expect(platform.mounts, 1);
+      expect(platform.loadedAgents.first, contains('Chrome/153.0.0.0'));
+      expect(platform.loadedAgents.first, isNot(contains('Mobile')));
+      expect(platform.loadedAgents.first, isNot(contains('Android')));
       expect(original.focus.hasFocus, true);
       try {
         for (final bottom in [280.0, 0.0]) {

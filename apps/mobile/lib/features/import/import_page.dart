@@ -13,6 +13,7 @@ import '../../app/controller.dart';
 import 'preview.dart';
 import 'school_adapters.dart';
 import 'school_navigation.dart';
+import 'school_browser.dart';
 
 class ImportPage extends StatefulWidget {
   final AppController controller;
@@ -119,8 +120,35 @@ class _ImportPageState extends State<ImportPage> {
 
   Future<void> open() async {
     redirectBudget.reset();
+    if (school.desktopBrowser) {
+      // Apply before the first request, including CAS redirects and reloads.
+      try {
+        final installedAgent = await web.getUserAgent();
+        if (!mounted || closing) return;
+        await web.setUserAgent(schoolBrowserAgent(school, installedAgent));
+        if (!mounted || closing) return;
+        await installSchoolBrowserCompatibility(web);
+        if (!mounted || closing) {
+          await removeSchoolBrowserCompatibility(web);
+          return;
+        }
+      } on PlatformException catch (error) {
+        if (mounted) {
+          setState(() {
+            loading = false;
+            notice = error.code == 'unsupported_webview'
+                ? '请更新系统 Android System WebView 后再打开黑大教务'
+                : '学校页面兼容设置未完成，请退出后重试';
+          });
+        }
+        return;
+      }
+    }
+    if (!mounted || closing) return;
     await WebViewCookieManager().clearCookies();
+    if (!mounted || closing) return;
     await web.clearLocalStorage();
+    if (!mounted || closing) return;
     await web.loadRequest(Uri.parse(school.loginUrl));
   }
 
@@ -222,6 +250,8 @@ class _ImportPageState extends State<ImportPage> {
         metadata: parsed.metadata,
       )) {
         await leave(home: true);
+      } else if (mounted && !closing) {
+        setState(() => notice = null);
       }
     } catch (e) {
       if (mounted) {
@@ -237,6 +267,7 @@ class _ImportPageState extends State<ImportPage> {
     Object? failure;
     StackTrace? failureStack;
     for (final action in <Future<dynamic> Function()>[
+      if (school.desktopBrowser) () => removeSchoolBrowserCompatibility(web),
       () => web.removeJavaScriptChannel('SemesterImport'),
       () => WebViewCookieManager().clearCookies(),
       web.clearLocalStorage,
