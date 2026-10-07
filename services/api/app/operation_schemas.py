@@ -56,9 +56,9 @@ class OperationResolve(Input):
     expected_reminder_version:int|None=Field(default=None,ge=1)
     plan_mode:Literal['schedule','replan']|None=None
     tasks:list[TaskTarget]=Field(default_factory=list,max_length=100)
-    days:Literal[7,14,28]=7
-    chunk_minutes:int=Field(default=45,ge=15,le=120)
-    lead_minutes:int=Field(default=5,ge=0,le=60)
+    days:int=Field(default=7,ge=1,le=210)
+    chunk_minutes:int=Field(default=45,ge=1,le=1440)
+    lead_minutes:int=Field(default=5,ge=0,le=1440)
     window_start_at:datetime|None=None
     window_end_at:datetime|None=None
     use_default_window:bool=False

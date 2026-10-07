@@ -12,9 +12,9 @@ class TaskTarget(Input):
 
 
 class ScheduleInput(Input):
-    days:Literal[7,14,28]=7
-    lead_minutes:int=Field(default=5,ge=0,le=60)
-    chunk_minutes:int=Field(default=45,ge=15,le=120)
+    days:int=Field(default=7,ge=1,le=210)
+    lead_minutes:int=Field(default=5,ge=0,le=1440)
+    chunk_minutes:int=Field(default=45,ge=1,le=1440)
     allow_partial:bool=False
     tasks:list[TaskTarget]=Field(min_length=1,max_length=100)
     window_start_at:datetime|None=None
@@ -27,7 +27,7 @@ class ScheduleInput(Input):
     def unique(self):
         if len({t.item_id for t in self.tasks})!=len(self.tasks):raise ValueError('不能重复选择任务')
         if bool(self.window_start_at)!=bool(self.window_end_at):raise ValueError('请同时明确起止时刻')
-        if self.window_start_at and not timedelta(0)<self.window_end_at-self.window_start_at<=timedelta(days=28):raise ValueError('规划窗口需为正且不超过28天')
+        if self.window_start_at and not timedelta(0)<self.window_end_at-self.window_start_at<=timedelta(days=210):raise ValueError('规划窗口需为正且不超过30周')
         return self
 
 
@@ -50,7 +50,7 @@ class BlockCancel(Input):
 
 class ReplanInput(Input):
     mode:Literal['replan']='replan'
-    lead_minutes:int=Field(default=5,ge=0,le=60)
+    lead_minutes:int=Field(default=5,ge=0,le=1440)
     task_ids:list[str]|None=Field(default=None,min_length=1,max_length=100)
     @model_validator(mode='after')
     def unique(self):

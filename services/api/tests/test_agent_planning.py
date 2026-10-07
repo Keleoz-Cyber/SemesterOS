@@ -14,6 +14,80 @@ def context(db, item, sid):
     return user, owned_semester(db, user, sid, lock=True)
 
 
+def test_remaining_correction_and_plan_are_atomic_replayable_and_undoable(client,monkeypatch):
+    from test_agent import call, thread, turn, run
+    from app.models import StudyItem, PlanBlock, ProgressEntry
+    h,s,item=setup(client,monkeypatch)
+    from app import agent_undo, schedule_api
+    monkeypatch.setattr(agent_undo,'utcnow',schedule_api.utcnow)
+    tid=thread(client,h,s['id']);sent=turn(client,h,tid,'还需要5分钟，安排时间')
+    def model(m,t):
+        if m[-1]['role']=='user':return call('find_records',{'query':item['title']})
+        return call('prepare_plan',{'mode':'schedule','task_ids':[item['id']], 'lead_minutes':0,
+            'remaining_updates':[{'item_id':item['id'],'remaining_minutes':5}]})
+    run(client,model)
+    url='/api/v1/agent/runs/'+sent['id'];value=client.get(url,headers=h).json()
+    assert value['status']=='needs_confirmation'
+    assert value['preview']['after']['remaining_updates'][0]['before_remaining_minutes']==120
+    assert client.get('/api/v1/items/'+item['id'],headers=h).json()['remaining_minutes']==120
+    from app.agent_planning import apply_agent_plan
+    with Session(client.app.state.engine) as db:
+        user,_=context(db,item,s['id']);apply_agent_plan(db,user,value['preview']);db.rollback()
+    with Session(client.app.state.engine) as db:
+        assert db.get(StudyItem,item['id']).payload['remaining_minutes']==120
+        assert db.scalar(select(func.count()).select_from(PlanBlock))==0
+        assert db.scalar(select(func.count()).select_from(ProgressEntry))==0
+    decision={'decision':'confirm','token':value['preview']['token']}
+    saved=client.post(url+'/decision',headers=h,json=decision)
+    assert saved.status_code==200,saved.text
+    assert client.post(url+'/decision',headers=h,json=decision).json()==saved.json()
+    assert client.get('/api/v1/items/'+item['id'],headers=h).json()['remaining_minutes']==5
+    with Session(client.app.state.engine) as db:
+        assert db.scalar(select(func.count()).select_from(ProgressEntry))==1
+    path=f"/api/v1/semesters/{s['id']}/plans"
+    assert sum(b['minutes'] for b in client.get(path,headers=h).json()['blocks'])==5
+    undo=turn(client,h,tid,'撤销刚才的更正和安排','undo')
+    def undo_model(m,t):
+        if m[-1]['role']=='user':return call('list_recent_actions',{})
+        return call('prepare_undo',{'run_id':sent['id']})
+    run(client,undo_model)
+    undo_url='/api/v1/agent/runs/'+undo['id'];v=client.get(undo_url,headers=h).json()
+    assert v['preview'],v
+    response=client.post(undo_url+'/decision',headers=h,json={'decision':'confirm','token':v['preview']['token']})
+    assert response.status_code==200,response.text
+    assert client.get('/api/v1/items/'+item['id'],headers=h).json()['remaining_minutes']==120
+    assert not any(b['status']=='active' for b in client.get(path,headers=h).json()['blocks'])
+
+
+def test_custom_days_and_small_sessions_preserve_the_full_requested_work(client,monkeypatch):
+    from app.scheduler import chunks, chunk_count
+    assert chunks(48,5)==[5]*9+[3] and chunk_count(48,5,True)==10
+    h,s,item=setup(client,monkeypatch,minutes=48)
+    with Session(client.app.state.engine) as db:
+        value=prepare(db,item,s['id'],days=3,chunk_minutes=5)
+        assert value['kind']=='plan'
+        assert sum(b['minutes'] for b in value['after']['blocks'])==48
+        assert max(b['minutes'] for b in value['after']['blocks'])<=5
+        from datetime import datetime
+        assert (datetime.fromisoformat(value['after']['window_end'])-datetime.fromisoformat(value['after']['window_start'])).days==3
+
+
+def test_infeasible_joint_plan_cannot_claim_the_correction_was_saved(client,monkeypatch):
+    from test_agent import call, thread, turn, run
+    h,s,item=setup(client,monkeypatch)
+    sent=turn(client,h,thread(client,h,s['id']),'更正为5小时，整段安排')
+    def model(m,t):
+        if m[-1]['role']=='user':return call('find_records',{'query':item['title']})
+        if 'records' in m[-1]['content']:return call('prepare_plan',{'mode':'schedule','task_ids':[item['id']],
+            'chunk_minutes':300,'remaining_updates':[{'item_id':item['id'],'remaining_minutes':300}]})
+        return {'content':'剩余量已保存为300分钟。'}
+    run(client,model)
+    value=client.get('/api/v1/agent/runs/'+sent['id'],headers=h).json()
+    assert value['status']=='completed' and value['preview'] is None
+    assert '都未保存' in value['answer'] and '已保存为' not in value['answer']
+    assert client.get('/api/v1/items/'+item['id'],headers=h).json()['remaining_minutes']==120
+
+
 def prepare(db, item, sid, **args):
     from app.agent_planning import PlanRequest, prepare_agent_plan
     user, s = context(db, item, sid)

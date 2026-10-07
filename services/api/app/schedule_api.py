@@ -129,9 +129,26 @@ def accept_proposal_command(db,user,id,body:ProposalAction):
     if result.get('mode')=='replan':return apply_replan(db,user,s,p,result)
     request={**p.payload['request'],'_window_start':floor(instant(result['window_start']).timestamp()/60),
              '_window_end':floor(instant(result['window_end']).timestamp()/60)}
-    now=utcnow();_,context=prepare(*snapshot(db,user,s),request,now)
+    source=snapshot(db,user,s)
+    updates=p.payload.get('remaining_updates',[])
+    if updates:
+        from .agent_planning import project_remaining
+        source=project_remaining(source,updates)
+    now=utcnow();_,context=prepare(*source,request,now)
     if context is None or not validate_result(context,result,p.payload['request']['allow_partial']):
         error(409,'PLAN_EXPIRED','这个方案已不适合当前安排，请重新生成')
+    for update in updates:
+        item=db.get(StudyItem,update['item_id'])
+        if (item is None or item.user_id!=user.id or item.semester_id!=s.id or
+                item.version!=update['expected_version'] or item.lifecycle!='active'):
+            error(409,'SNAPSHOT_STALE','任务已有变化，请重新生成方案')
+        old=item.payload.get('remaining_minutes')
+        item.payload={**item.payload,'remaining_minutes':update['remaining_minutes']}
+        item.version+=1;item.updated_at=now.isoformat()
+        from .models import ProgressEntry
+        db.add(ProgressEntry(user_id=user.id,item_id=item.id,payload={'before_remaining_minutes':old,
+            'remaining_minutes':update['remaining_minutes'],'actual_minutes':None,
+            'note':p.payload.get('change_reason',''),'item_version':item.version},created_at=item.updated_at))
     ids=[]
     for block in result['blocks']:
         row=PlanBlock(user_id=user.id,semester_id=s.id,item_id=block['item_id'],proposal_id=p.id,
@@ -140,6 +157,7 @@ def accept_proposal_command(db,user,id,body:ProposalAction):
     s.revision+=1;p.phase='applied';p.version+=1;p.applied_at=now.isoformat()
     p.receipt={'proposal_id':p.id,'proposal_version':p.version,'semester_id':s.id,'revision':s.revision,
                'block_ids':ids,'unarranged_minutes':result['unarranged_minutes']}
+    if updates:p.receipt['remaining_updates']=updates
     record(db,user,s.id,'apply_proposal',p.receipt,now);return p.receipt
 
 

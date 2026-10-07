@@ -97,18 +97,23 @@ def exam_window(exam, semester_start, semester_end):
     return semester_start, semester_end
 
 
-def calendar_context(semester, availability, courses, items, now):
+def calendar_context(semester, availability, courses, items, now, *, query_dates=None):
     from .reminder_rules import notice_arrival_at
     current = now.timestamp()
     semester_start = local_day(semester['first_monday']).timestamp()
     semester_end = semester_start + semester['total_weeks'] * 7 * 86400
-    begin = max(current, semester_start)
+    available_start, available_end = semester_start, semester_end
+    if query_dates is not None:
+        available_start = local_day(query_dates[0].isoformat()).timestamp()
+        available_end = local_day((query_dates[1] + timedelta(days=1)).isoformat()).timestamp()
+    begin = max(current, available_start)
     available = []
-    for day in range(semester['total_weeks'] * 7):
+    for day in range(round((available_end - available_start) / 86400)):
+        base = available_start + day * 86400
+        weekday = datetime.fromtimestamp(base, SHANGHAI).isoweekday()
         for w in availability.get('weekly', []):
-            if day % 7 + 1 == w['weekday']:
-                base = semester_start + day * 86400
-                available.append((max(begin, base + minute(w['start']) * 60), min(semester_end, base + minute(w['end']) * 60)))
+            if weekday == w['weekday']:
+                available.append((max(begin, base + minute(w['start']) * 60), min(available_end, base + minute(w['end']) * 60)))
     available = merge(available)
     school = course_intervals(semester, courses)
     exams = [i for i in items if i['kind'] == 'exam' and i['lifecycle'] == 'active']
@@ -126,7 +131,7 @@ def calendar_context(semester, availability, courses, items, now):
         if unbounded:
             message=f'「{record["title"]}」日期未说明，未据此封锁其他学习时段；具体时间明确后需核对已有计划。'
         elif end_unknown:
-            message=f'「{record["title"]}」结束时间未知，仅避开开始当天剩余时段；后续日期仍需核对，不能视为已在午夜结束。'
+            message=f'「{record["title"]}」缺少结束时间，开始当天的剩余时段暂不排学习；其他日期按已知安排核对。'
         elif missing:
             message=f'「{record["title"]}」起止时间未完整说明，排程只避开其已知日期范围，其他日期仍可安排。'
         else:message=f'「{record["title"]}」是参考或暂定安排，按已记录的预留选择计算。'
@@ -161,7 +166,7 @@ def calendar_context(semester, availability, courses, items, now):
             school.append((a, b, eid, event['title']))
         if not complete or event.get('certainty') != 'formal':
             note_uncertainty(event,a,b,not complete,eid)
-    school = sorted(r for r in school if r[1] > begin and r[0] < semester_end)
+    school = sorted(r for r in school if r[1] > begin and r[0] < available_end)
     conflicts, active = [], []
     for row in school:
         a, b, id, title = row

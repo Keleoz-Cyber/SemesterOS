@@ -16,7 +16,7 @@ def chunks(minutes, size=45, splittable=True):
     result=[size]*(minutes//size)
     tail=minutes%size
     if tail:
-        if tail<15 and result:result[-1]+=tail
+        if size>15 and tail<15 and result:result[-1]+=tail
         else:result.append(tail)
     return result
 
@@ -25,7 +25,7 @@ def chunk_count(minutes,size,splittable):
     if not minutes:return 0
     if not splittable:return 1
     q,r=divmod(minutes,size)
-    return q+(1 if r and (r>=15 or not q) else 0)
+    return q+(1 if r and (size<=15 or r>=15 or not q) else 0)
 
 
 def stamp(n):return datetime.fromtimestamp(n*60,timezone.utc).isoformat()

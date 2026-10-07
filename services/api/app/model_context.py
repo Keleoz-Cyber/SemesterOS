@@ -5,6 +5,9 @@ import json
 from .reminder_rules import SHANGHAI
 
 MODEL_TIME_RULE='日期和星期统一按Asia/Shanghai解释。today_local是对应reference_at的上海本地日期；“明天”是该本地日期的次日，不能使用UTC字符串的日期部分。通知原文明确的原始发布日期仍优先。'
+INSTANT_FIELDS = {'at', 'end_at', 'start_at', 'due_at', 'arrival_at', 'occupancy_start_at',
+                  'earliest_start_at', 'trigger_at', 'created_at', 'updated_at', 'applied_at',
+                  'window_start', 'window_end', 'window_start_at', 'window_end_at', 'valid_until'}
 
 
 def model_reference(value):
@@ -18,6 +21,12 @@ def localize_reference_data(value):
     if isinstance(value,list):return [localize_reference_data(part) for part in value]
     if not isinstance(value,dict):return value
     result={key:localize_reference_data(part) for key,part in value.items()}
+    for key in INSTANT_FIELDS & value.keys():
+        if isinstance(value[key], str):
+            try:
+                at = datetime.fromisoformat(value[key].replace('Z', '+00:00'))
+                if at.tzinfo is not None: result[key] = at.astimezone(SHANGHAI).isoformat()
+            except ValueError: pass
     if isinstance(value.get('reference_at'),str):
         try:result.update(model_reference(value['reference_at']))
         except (ValueError,TypeError):pass

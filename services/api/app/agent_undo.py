@@ -281,13 +281,33 @@ def apply_undo(db, user, preview):
     now = utcnow(); now_text = now.isoformat()
     plan_receipt = None
     if proposals:
-        if len(proposals) != 1 or any(e['table'] not in ('plans', 'proposals') for e in data['entries']):
+        extras=[e for e in data['entries'] if e['table'] not in ('plans','proposals')]
+        updates={u['item_id']:u for u in proposals[0]['after']['payload'].get('remaining_updates',[])}
+        def joint_remaining_entry(entry):
+            before,after=entry['before'],entry['after']
+            if entry['table']=='items' and before and after['id'] in updates:
+                update=updates[after['id']]
+                return (after['payload']=={**before['payload'],'remaining_minutes':update['remaining_minutes']}
+                        and before['payload'].get('remaining_minutes')==update['before_remaining_minutes'])
+            return (entry['table']=='progress' and before is None and after['item_id'] in updates
+                    and after['payload']['remaining_minutes']==updates[after['item_id']]['remaining_minutes'])
+        if len(proposals) != 1 or any(not joint_remaining_entry(e) for e in extras):
             error(409, 'UNDO_UNAVAILABLE', '这次混合操作需要逐项核对，不能自动撤销')
         from .schedule_api import undo_proposal_command
         from .schedule_schemas import ProposalAction
         p = proposals[0]['after']
         plan_receipt = undo_proposal_command(db, user, p['id'], ProposalAction(
             expected_version=p['version'], expected_revision=s.revision))
+        for entry in extras:
+            target=db.get(MODELS[entry['table']],entry['id'])
+            if entry['table']=='items':
+                target.payload=deepcopy(entry['before']['payload'])
+                target.version+=1;target.updated_at=now_text
+                from .items import audit
+                audit(db,target,'用户确认撤销剩余量更正及安排')
+            else:
+                target.payload={**target.payload,'undone':True,'undone_at':now_text,
+                    'undo_source_run_id':row.id,'undo_run_id':preview['undo_run_id']}
     else:
         changed_items, changed_events = set(), set()
         for entry in reversed(data['entries']):

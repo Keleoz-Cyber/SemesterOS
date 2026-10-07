@@ -126,6 +126,7 @@ def public_run(row):
     state = row.state
     return {'id': row.id, 'thread_id': row.thread_id, 'text': row.text, 'status': row.status,
             'created_at': row.created_at, 'answer': state.get('answer', ''),
+            'answer_detail':state.get('answer_detail'),
             'stage': state.get('stage', '等待处理'), 'cards': state.get('cards', []),
             'preview': state.get('preview'), 'receipt': state.get('receipt'),
             'source': state.get('source'),

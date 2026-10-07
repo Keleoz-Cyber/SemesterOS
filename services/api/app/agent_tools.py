@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 import re
 from typing import Literal, Annotated
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from sqlalchemy import select
 from .schemas import Input
 from .academics import owned_semester, fingerprint
@@ -112,16 +112,30 @@ class ItemChange(Input):
 
 
 class FreeWindows(Range):
-    duration_minutes: int = Field(ge=15, le=480)
+    duration_minutes: int = Field(ge=1, le=525600)
     scope: Literal['calendar', 'study'] = Field(default='calendar', description='普通空闲、约时间、哪天有空用calendar；用户明确在学习时段内找学习时间用study。')
     answer_style: Literal['summary','detail'] = Field(default='summary', description='普通哪天有空用summary，App按结构化结果显示简短结论。用户明确要求比较、解释原因、详细文字列表时用detail保留完整回复。')
     day_start_minutes: int = Field(default=480, ge=0, le=1439, description='calendar每天查询开始分钟；未指定按08:00起查并说明范围，全天用0。study忽略。')
     day_end_minutes: int = Field(default=1320, ge=1, le=1440, description='calendar每天查询结束分钟；未指定按22:00止查并说明范围，全天用1440。study忽略。')
+    window_start_at: datetime | None = Field(default=None, description='明确只查一个连续起止范围时提供含时区的开始，例如周五23点到周六2点；与window_end_at一起提供。')
+    window_end_at: datetime | None = None
+    include_past: bool = Field(default=False, description='用户明确复盘昨天/上周等已过日期时true；普通找接下来空闲保持false。')
+
+    @field_validator('window_start_at', 'window_end_at')
+    @classmethod
+    def aware_window(cls, value): return ItemTime.aware(value)
 
     @model_validator(mode='after')
     def day_window(self):
         if self.scope == 'calendar' and self.day_end_minutes <= self.day_start_minutes:
             raise ValueError('请检查每日查询时段')
+        if bool(self.window_start_at) != bool(self.window_end_at):
+            raise ValueError('具体查询范围需要两端时刻')
+        if self.window_start_at and not self.window_start_at < self.window_end_at:
+            raise ValueError('查询结束需要晚于开始')
+        if self.window_start_at and (self.window_start_at.astimezone(SHANGHAI).date() < self.from_date
+                or self.window_end_at.astimezone(SHANGHAI).date() > self.to_date + timedelta(days=1)):
+            raise ValueError('具体时刻需在本次查询日期范围内')
         return self
 
 
@@ -382,34 +396,63 @@ def execute_tool(name, raw, db, user, thread, state, source):
         from .reminder_rules import utcnow
         snap = snapshot(db,user,s)
         availability=snap[1]
+        explicit_window=args.window_start_at is not None
+        query_dates=(args.from_date, max(args.to_date, args.window_end_at.astimezone(SHANGHAI).date()) if explicit_window else args.to_date)
         if args.scope == 'calendar':
             def clock(minutes):return f'{minutes//60:02d}:{minutes%60:02d}'
-            availability={**availability,'weekly':[{'weekday':day,'start':clock(args.day_start_minutes),
-                'end':clock(args.day_end_minutes)} for day in range(1,8)]}
-        context=calendar_context(snap[0],availability,snap[2],snap[3],utcnow())
-        range_start=local_day(args.from_date.isoformat()).timestamp()
-        range_end=local_day((args.to_date+timedelta(days=1)).isoformat()).timestamp()
-        begin=max(range_start,utcnow().timestamp());end=range_end
+            a,b=(0,1440) if explicit_window else (args.day_start_minutes,args.day_end_minutes)
+            availability={**availability,'weekly':[{'weekday':day,'start':clock(a),
+                'end':clock(b)} for day in range(1,8)]}
+        range_start=args.window_start_at.timestamp() if explicit_window else local_day(args.from_date.isoformat()).timestamp()
+        range_end=args.window_end_at.timestamp() if explicit_window else local_day((args.to_date+timedelta(days=1)).isoformat()).timestamp()
+        now=utcnow() if not args.include_past else datetime.fromtimestamp(range_start,SHANGHAI)
+        context=calendar_context(snap[0],availability,snap[2],snap[3],now,
+            query_dates=query_dates if args.scope=='calendar' else None)
+        begin=max(range_start,now.timestamp());end=range_end
         occupied=[(instant(p['start_at']).timestamp(),instant(p['end_at']).timestamp()) for p in snap[4] if p['status']=='active']
         windows=subtract(context['free'].spans,merge(occupied))
         spans=[]
-        for day in range((args.to_date-args.from_date).days+1):
-            start=local_day((args.from_date+timedelta(days=day)).isoformat()).timestamp()
-            stop=start+86400
+        bounds=[(begin,end)] if explicit_window or args.duration_minutes>1440 else [
+            (local_day((args.from_date+timedelta(days=day)).isoformat()).timestamp(),
+             local_day((args.from_date+timedelta(days=day+1)).isoformat()).timestamp())
+            for day in range((args.to_date-args.from_date).days+1)]
+        for start,stop in bounds:
             for a,b in windows:
                 left,right=max(a,begin,start),min(b,end,stop)
                 if right-left>=args.duration_minutes*60:spans.append((left,right))
-        warnings=[w for w in context['uncertainty_warnings'] if uncertainty_affects_window(w,begin,end)]
-        result={'windows':[{'start_at':iso(a),'end_at':iso(b)} for a,b in spans[:30]],'truncated':len(spans)>30,
+        possible=[]
+        if args.scope=='calendar':
+            known_windows=subtract(context['known_free'].spans,merge(occupied))
+            for start,stop in bounds:
+                for a,b in known_windows:
+                    left,right=max(a,begin,start),min(b,end,stop)
+                    uncertain_parts=subtract([(left,right)],windows)
+                    if right-left>=args.duration_minutes*60 and uncertain_parts:
+                        usable=[(a,b) for a,b in uncertain_parts if b-a>=args.duration_minutes*60]
+                        possible.extend(usable or [(left,right)])
+        entries=[{'start_at':iso(a),'end_at':iso(b)} for a,b in spans]
+        entries += [{'start_at':iso(a),'end_at':iso(b),'needs_check':True} for a,b in possible]
+        # A missing end is not evidence that an ordinary event occupies every
+        # following date. Query warnings follow its known avoidance dates only.
+        warnings=[w for w in context['uncertainty_warnings'] if w['unbounded'] or
+            instant(w['start_at']).timestamp()<end and instant(w['end_at']).timestamp()>begin]
+        query_label=(args.window_start_at.astimezone(SHANGHAI).strftime('%m月%d日 %H:%M')+'—'+
+            args.window_end_at.astimezone(SHANGHAI).strftime('%m月%d日 %H:%M')) if explicit_window else None
+        result={'windows':entries[:200],'truncated':len(entries)>200,
+                'confirmed_count':len(spans),'needs_check_count':len(possible),
                 'revision':s.revision,'uncertainty_warnings':warnings,'needs_input':[],
                 'scope':args.scope,
-                'daily_search':None if args.scope=='study' else {'start':clock(args.day_start_minutes),'end':clock(args.day_end_minutes)},
-                'basis':'按已保存的学习时段查询' if args.scope=='study' else f'按已记录日程查询，每天{clock(args.day_start_minutes)}—{clock(args.day_end_minutes)}；已避开固定安排、个人计划与临时不可用时段'}
+                'daily_search':None if args.scope=='study' or explicit_window else {'start':clock(args.day_start_minutes),'end':clock(args.day_end_minutes)},
+                'query_label':query_label,
+                'basis':('按已保存的学习时段查询' if args.scope=='study' else '按已记录日程查询')+
+                    (f'，{query_label}' if explicit_window else '' if args.scope=='study' else f'，每天{clock(args.day_start_minutes)}—{clock(args.day_end_minutes)}')}
         days=sorted({datetime.fromtimestamp(a,SHANGHAI).date() for a,b in spans})
         hours,minutes=divmod(args.duration_minutes,60)
         duration=(f'{hours}小时' if hours else '')+(f'{minutes}分钟' if minutes else '')
         if args.scope=='study' and not snap[1].get('configured'):
             overview='还没有保存每周学习时段，暂时无法按学习偏好查询。'
+        elif not days and possible:
+            overview=f'有**待核对时段**，需确认相关安排的结束时间，才能判断是否有**{duration}**连续空档。'
         elif not days:
             overview=f'在本次查询范围内，没有找到**{duration}**的连续'+('日程空档。' if args.scope=='calendar' else '学习空闲。')
         else:
@@ -420,9 +463,11 @@ def execute_tool(name, raw, db, user, thread, state, source):
             elif len(days)<=6:date_label='、'.join(label(day) for day in days)
             else:date_label=f'本次查询中有{len(days)}天'
             overview=f'按已记录安排，**{date_label}**有至少**{duration}**'+('日程空档' if args.scope=='calendar' else '学习空闲')+'。时段见下方。'
-        if any(w.get('could_affect_occupancy') for w in warnings):overview+='\n有时间不完整的安排，后续时段需核对。'
+        if days and any(w.get('could_affect_occupancy') for w in warnings):overview+='\n部分时段需核对安排结束时间。'
+        if args.scope=='calendar':
+            result['basis']+='；已避开固定安排、个人计划与临时不可用时段，未记录的安排不作推测'
         result.update(answer_style=args.answer_style,overview_answer=overview,duration_minutes=args.duration_minutes)
-        append_card(state, 'windows', {**result, 'total_count':len(result['windows']),
+        append_card(state, 'windows', {**result, 'total_count':len(entries),
             'navigation_query':{'semester_id':sid, **args.model_dump(mode='json')}})
         return result
     if state.get('preview'): error(422,'ONE_CHANGE','请先确认当前修改，再处理下一项')
