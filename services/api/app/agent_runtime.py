@@ -86,6 +86,27 @@ NOTICE_INPUT_SYSTEM='''本轮是用户主动提交的外部通知整理输入。
 
 SYSTEM += '\n用户说“已请假”“老师已经允许不去这次课”时，记录具体课次的个人请假，而不是停课或整门课免听。先查询具体课次，再prepare_course_change kind=leave；“会请假/打算请假/还没请假”用plan_leave，仍保留课程占用；撤销请假恢复上课用attend。自述已经请假是个人记录依据，不要求额外校方证明。已有待确认活动时，把活动和请假放在同一prepare_batch里核对，不要丢失原安排，不只口头说已记录。用户只是询问保存状态时，核对previous_preview_status和receipt；needs_confirmation只代表待保存，superseded/cancelled是失效，不得说已写入。查询或补充说明不会自动保存，也不会自动取消原预览；只有新的实际预览替代旧预览。\n候场、集合、提前到场与正式开始是不同时间。“14:40候场，15:00正式开始”应time.at=15:00、end_at留空、details.early_arrival_minutes=20；不得把15:00当结束时间。通知包含分节目时段时，按用户明确的节目/职责与共同要求组织个人安排；未知本人节目时问一个必要问题，不能宣称全天排练都是本人必须占用。'
 
+SYSTEM += '\n新增、修改或恢复本人参加的会议、活动和考试时，先核对工具返回的impact冲突，不能把缺少结束时间当成没有冲突。开始时刻已落在课内要直接说明该时刻有课；只可能延续到其他课程的情况明确说可能冲突，不把核对范围当实际结束。让用户选择调整或补充时间、已请假课次或明确保留重叠后再保存。开会、考试、参加活动都不代表课程停课或已经请假，不自动修改出勤；准备请假仍占用，已请假才解除个人占用。仅参考、不参加且不预留的记录不要求请假，也不为未知日期封锁整个学期。今天和明天仍按真实上海日期，浏览周次只解释明确页面指代。'
+
+
+def preview_confirmation_answer(preview):
+    impact = preview.get('impact') or {}
+    conflicts = impact.get('new_fixed_conflicts', impact.get('fixed_conflicts', []))
+    if not conflicts:
+        return '请核对这次修改，确认后保存。'
+    courses = impact.get('course_conflicts', [])
+    if any(c.get('overlap_at_start') for c in conflicts):
+        fact = '这个开始时刻已有课程或其他安排。'
+    elif any(c.get('certainty') == 'possible' for c in conflicts):
+        fact = '时间信息不完整，这项安排可能与已有安排冲突。'
+    else:
+        fact = '这项安排与已有安排时间重叠。'
+    choices = ('可以调整或补充时间；如果相关课次已经请假，可在下方选择；'
+               '否则需明确保留重叠后保存。准备请假仍按需要上课处理。') if courses else (
+               '请先调整或补充时间，或在核对后明确保留重叠，再保存。')
+    return fact + choices
+
+
 def initial_state(db,user,thread,text,now,exclude_run_id=None,input_kind='message'):
     s=owned_semester(db,user,thread.semester_id)
     clock=model_reference(now)
@@ -372,7 +393,7 @@ def work_once(engine,model=None):
                 for pending in db.scalars(select(AgentRun).where(AgentRun.thread_id==row.thread_id,
                         AgentRun.id!=row.id,AgentRun.status=='needs_confirmation').with_for_update()):
                     invalidate_preview(db,pending);pending.status='superseded'
-                status='needs_confirmation';state.update(answer='请核对这次修改，确认后保存。',stage='等待确认')
+                status='needs_confirmation';state.update(answer=preview_confirmation_answer(state['preview']),stage='等待确认')
                 advance(state,'waiting','等待确认')
             elif state['repairs']>2:
                 status='failed';state['error']='暂时没能完成这次请求，已保留查到的内容。请补充名称或时间后继续。'

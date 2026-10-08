@@ -177,7 +177,7 @@ class RiskOverview extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: SoftNotice(
-              '${(conflict['titles'] as List).join(' / ')} 时间重叠\n${displayInstant(conflict['start_at'])} 至 ${displayInstant(conflict['end_at'])}',
+              '${(conflict['titles'] as List).join(' / ')} ${conflict['certainty'] == 'possible' ? '可能有时间冲突（时间未完整）' : '时间重叠'}\n${conflict['certainty'] == 'possible' ? '需核对的时段：' : ''}${displayInterval(conflict['start_at'], conflict['end_at'])}',
               warning: true,
             ),
           ),
@@ -371,7 +371,7 @@ Future<void> showRiskDetails(
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: SoftNotice(
-                          '${(conflict['titles'] as List).join(' / ')}\n${displayInstant(conflict['start_at'])} 至 ${displayInstant(conflict['end_at'])}',
+                          '${(conflict['titles'] as List).join(' / ')}${conflict['certainty'] == 'possible' ? ' · 可能冲突（时间未完整）' : ''}\n${conflict['certainty'] == 'possible' ? '需核对的时段：' : ''}${displayInterval(conflict['start_at'], conflict['end_at'])}',
                           warning: true,
                         ),
                       ),

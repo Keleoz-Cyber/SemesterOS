@@ -2285,12 +2285,15 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                               'event',
                               'undo',
                             }.contains(p['kind']) ||
+                            p['kind'] == 'item' &&
+                                p['after']?['kind'] == 'exam' ||
                             p['kind'] == 'event' && p['action'] == 'restore'
                       ? ChangeConfirmation(
                           key: ValueKey(p['token']),
                           run: run,
                           controller: c,
                           details: (child) => changeDetails(run, child),
+                          onAdjustTime: () => editMessage(run),
                         )
                       : previewCard(run, Map<String, dynamic>.from(p)),
                 if (!applied && p is Map && rows(run['cards']).isNotEmpty)

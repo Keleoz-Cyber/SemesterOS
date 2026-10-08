@@ -180,9 +180,8 @@ def validate_restore(db, user, s, data):
     _, after_issues = classify(restored[4], restored[3], after_context['free'].spans, after_context['begin'])
     if {fingerprint(i) for i in after_issues} - {fingerprint(i) for i in before_issues}:
         error(409, 'UNDO_REALITY_CONFLICT', '恢复后会影响当前个人计划，请先核对或重新规划')
-    def conflict_key(c):
-        return (tuple(sorted(c['item_ids'])),instant(c['start_at']),instant(c['end_at']))
-    if {conflict_key(c) for c in after_context['conflicts']} - {conflict_key(c) for c in before_context['conflicts']}:
+    from .conflict_changes import introduced_conflicts
+    if introduced_conflicts(before_context['conflicts'], after_context['conflicts']):
         error(409, 'UNDO_FIXED_CONFLICT', '恢复后与当前固定安排冲突，请先核对这些安排')
 
 

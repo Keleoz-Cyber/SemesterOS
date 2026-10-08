@@ -2,7 +2,7 @@ import '../../ui/app_date_time_picker.dart';
 import '../../ui/app_selection.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/date_labels.dart';
-import '../../core/api.dart' show userError;
+import '../../core/api.dart' show ApiFailure, userError;
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -20,6 +20,7 @@ import '../planning/date_time_picker.dart';
 import '../centers/exam_pages.dart';
 import '../notices/notice_fields.dart';
 import '../tags/tag_picker_field.dart';
+import '../calendar/event_conflict_review.dart';
 
 class ItemFormPage extends StatefulWidget {
   final ItemsController controller;
@@ -61,6 +62,8 @@ class _ItemFormPageState extends State<ItemFormPage> {
   bool reserveTime = true;
   bool dayEnd = false, split = true, reviewed = false, busy = false;
   String? error, timeError, _requestKey, _requestBody;
+  String? _confirmedExamSource;
+  Map<String, dynamic>? _confirmedExamData;
   List<Map<String, dynamic>> reminders = [];
   late final generation = widget.controller.api.generation;
   bool get sameSession => generation == widget.controller.api.generation;
@@ -322,7 +325,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
       });
       return;
     }
-    final data = <String, dynamic>{
+    var data = <String, dynamic>{
       'semester_id': widget.semester['id'],
       'kind': kind,
       'title': title.text.trim(),
@@ -363,14 +366,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
             : reason.text.trim(),
       },
     };
-    final encoded = jsonEncode(data);
-    if (_requestBody != encoded) {
-      _requestBody = encoded;
-      _requestKey = List.generate(
-        20,
-        (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
-      ).join();
-    }
+    final sourceBody = jsonEncode(data);
     setState(() {
       busy = true;
       error = null;
@@ -409,6 +405,60 @@ class _ItemFormPageState extends State<ItemFormPage> {
         if (applied == true && mounted) Navigator.pop(context, true);
         return;
       }
+      if (kind == 'exam') {
+        if (_confirmedExamSource == sourceBody &&
+            _confirmedExamData != null &&
+            !widget.controller.revisionIsStale(
+              widget.semester['id'],
+              _confirmedExamData!['expected_revision'] as int,
+            )) {
+          data = Map<String, dynamic>.from(_confirmedExamData!);
+        } else {
+          _confirmedExamSource = null;
+          _confirmedExamData = null;
+          final preview = await widget.controller.changeRequest(
+            'POST',
+            '/items/conflict-preview',
+            data: data,
+          );
+          if (!mounted ||
+              !sameSession ||
+              widget.controller.semesterId != widget.semester['id']) {
+            return;
+          }
+          final impact = Map<String, dynamic>.from(preview['impact'] ?? {});
+          if (eventConflicts(impact).isNotEmpty) {
+            final choice = await confirmEventConflicts(context, impact);
+            if (!mounted ||
+                !sameSession ||
+                widget.controller.semesterId != widget.semester['id']) {
+              return;
+            }
+            if (choice == null || choice.adjustTime) {
+              setState(() => busy = false);
+              if (choice?.adjustTime == true) await pickExact();
+              return;
+            }
+            data = {
+              ...data,
+              if (choice.keepConflicts) 'confirm_fixed_conflicts': true,
+              if (choice.courseLeaveTargets.isNotEmpty)
+                'course_leave_targets': choice.courseLeaveTargets,
+            };
+          }
+          data['expected_revision'] = preview['base_revision'];
+          _confirmedExamSource = sourceBody;
+          _confirmedExamData = Map<String, dynamic>.from(data);
+        }
+      }
+      final encoded = jsonEncode(data);
+      if (_requestBody != encoded) {
+        _requestBody = encoded;
+        _requestKey = List.generate(
+          20,
+          (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+        ).join();
+      }
       await widget.controller.save(
         data,
         id: widget.initial?['id'],
@@ -416,6 +466,10 @@ class _ItemFormPageState extends State<ItemFormPage> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
+      if (e is ApiFailure && {409, 422}.contains(e.statusCode)) {
+        _confirmedExamSource = null;
+        _confirmedExamData = null;
+      }
       if (mounted) setState(() => error = userError(e));
     } finally {
       if (mounted) setState(() => busy = false);

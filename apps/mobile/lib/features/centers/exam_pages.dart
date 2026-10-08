@@ -21,6 +21,7 @@ import '../notices/notice_fields.dart' show noticeTime;
 import '../planning/date_time_picker.dart';
 import '../planning/risk_widgets.dart';
 import '../planning/plan_list.dart';
+import '../calendar/event_conflict_review.dart';
 import 'hub_data.dart';
 
 String _examLocation(Map<String, dynamic> exam) {
@@ -1065,21 +1066,18 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
                   ),
               ],
             ),
-          for (final r in conflicts)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: SoftNotice(
-                '${(r['titles'] as List).join(' 与 ')}时间重叠\n${noticeTime({'at': r['start_at'], 'end_at': r['end_at']})}',
-                warning: true,
-              ),
-            ),
-          if (conflict && !applied)
-            AppCheckRow(
-              title: const Text('保留这些重叠安排'),
-              value: confirmConflict,
-              onChanged: busy
+          if (conflict)
+            EventConflictReview(
+              impact: Map<String, dynamic>.from(p),
+              leaveTargets: const {},
+              acknowledged: confirmConflict,
+              enabled: !busy && !stale,
+              onAdjustTime: applied
                   ? null
-                  : (v) => setState(() => confirmConflict = v!),
+                  : () => Navigator.pop(context, false),
+              onAcknowledged: applied
+                  ? null
+                  : (value) => setState(() => confirmConflict = value),
             ),
           if (affectedBlocks.isNotEmpty) const SoftNotice('已有计划会保留，可按需调整时间。'),
           if (stale && !applied)

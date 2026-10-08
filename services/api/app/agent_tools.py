@@ -615,7 +615,7 @@ def execute_tool(name, raw, db, user, thread, state, source):
         allowed=set(ItemCreate.model_fields)-{'semester_id','source_id','candidate_id','source_text'}
         if set(fields)-allowed: error(422,'INVALID_FIELDS','请只填写事项本身的信息')
         body=ItemCreate.model_validate({**fields,'certainty':args.fields.certainty,
-            'semester_id':sid,'source_text':source})
+            'semester_id':sid,'expected_revision':s.revision,'source_text':source})
         if 'category_id' not in fields and body.kind in ('assignment','exam'):
             body.category_id = 'study'
         if body.course_id:
@@ -644,6 +644,13 @@ def execute_tool(name, raw, db, user, thread, state, source):
         preview['impact'] = simulate(db, user, s,
             [{'id': 'event-preview', 'title': preview['after']['title'], 'operations': [preview]}], s.revision)
         preview['token']=fingerprint({'run_id': state['run_id'], 'preview': {k:v for k,v in preview.items() if k!='token'}})
+    if ((preview['kind'] == 'item' and (preview.get('after') or {}).get('kind') == 'exam')
+            or (preview['kind'] == 'item_state' and preview['action'] == 'active'
+                and (preview.get('after') or {}).get('kind') == 'exam')):
+        from .items import exam_conflict_impact
+        preview['impact'] = exam_conflict_impact(db, user, s, preview['after'],
+            item_id=preview.get('target_id'))
+        preview['token']=fingerprint({'run_id': state['run_id'], 'preview': {k:v for k,v in preview.items() if k!='token'}})
     state['preview']=preview
     return {'status':'needs_confirmation','preview':preview,'message':'尚未保存，请用户核对预览后点击确认。'}
 
@@ -671,16 +678,19 @@ def apply_preview(db,user,preview,*,confirm_fixed_conflicts=False,prepared_base_
         from .operations import apply_command
         return apply_command(db,user,preview['operation_id'],OperationAction.model_validate(data))
     if preview['kind']=='item':
-        item = (edit_item_command(db, user, preview['target_id'], ItemEdit.model_validate(data))
-                if preview['action'] == 'update' else create_item_command(db,user,ItemCreate.model_validate(data)))
+        item = (edit_item_command(db, user, preview['target_id'], ItemEdit.model_validate(data),
+                    confirm_fixed_conflicts=confirm_fixed_conflicts)
+                if preview['action'] == 'update' else create_item_command(db,user,ItemCreate.model_validate(data),
+                    confirm_fixed_conflicts=confirm_fixed_conflicts))
         return {'semester_id':s.id,'revision':s.revision,'item':item}
     if preview['kind'] == 'item_state':
         from .items import set_lifecycle_command
-        item = set_lifecycle_command(db, user, preview['target_id'], LifecycleInput.model_validate(data))
+        item = set_lifecycle_command(db, user, preview['target_id'], LifecycleInput.model_validate(data),
+            confirm_fixed_conflicts=confirm_fixed_conflicts)
         return {'semester_id': s.id, 'revision': s.revision, 'item': item}
     action=preview['action']
-    if action=='create':return events.create_event_command(db,user,EventFields.model_validate(data))
-    if action=='update':return events.edit_event_command(db,user,preview['target_id'],EventEdit.model_validate(data))
+    if action=='create':return events.create_event_command(db,user,EventFields.model_validate(data),confirm_fixed_conflicts=confirm_fixed_conflicts)
+    if action=='update':return events.edit_event_command(db,user,preview['target_id'],EventEdit.model_validate(data),confirm_fixed_conflicts=confirm_fixed_conflicts)
     if action=='restore':return events.restore_event_command(db,user,preview['target_id'],EventCancel.model_validate(data),
         confirm_fixed_conflicts=confirm_fixed_conflicts)
     return events.cancel_event_command(db,user,preview['target_id'],EventCancel.model_validate(data))

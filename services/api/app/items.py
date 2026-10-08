@@ -5,11 +5,11 @@ from sqlalchemy.orm import Session
 from .academics import owned_semester, replay, remember
 from .auth import current_user, error
 from .database import get_db
-from .item_schemas import ItemCreate, ItemEdit, LifecycleInput, ReminderCreate, ReminderEdit
+from .item_schemas import ItemCreate, ItemEdit, ItemConflictPreview, LifecycleInput, ReminderCreate, ReminderEdit
 from .models import CourseMeeting, ItemRevision, ReminderRule, StudyItem, TextCandidate, User
 from .reminder_rules import anchor_at, evaluate, utcnow
 from .plan_store import preview_blocks,cancel_for_change
-from .event_store import tag_ids, classification_value, classification_request
+from .event_store import tag_ids, classification_value, classification_request, without_default_confirmation_fields
 
 router = APIRouter()
 
@@ -80,7 +80,8 @@ def checked_payload(db, user, body):
     s = owned_semester(db, user, body.semester_id, lock=True)
     if body.time.week and body.time.week > s.total_weeks:
         error(422, 'INVALID_WEEK', '周次超出当前学期，请核对')
-    data = body.model_dump(mode='json', exclude={'reminders', 'expected_version', 'change_reason', 'tags'})
+    data = body.model_dump(mode='json', exclude={'reminders', 'expected_version', 'change_reason', 'tags',
+        'expected_revision', 'confirm_fixed_conflicts', 'course_leave_targets'})
     data['tag_ids'] = tag_ids(db, user, body.tags)
     if 'category_id' not in body.model_fields_set:
         data['category_id'] = 'study' if body.kind in ('assignment', 'exam') else None
@@ -161,12 +162,100 @@ def create_item(body: ItemCreate, user: User = Depends(current_user), db: Sessio
     return result
 
 
-def create_item_command(db, user, body, idempotency_key=None):
+def exam_conflict_impact(db, user, semester, data, *, item_id=None, lifecycle='active'):
+    """Compare snapshots without writing a candidate, taxonomy or reminders."""
+    from .schedule_api import snapshot
+    from .fixed_conflict_guard import fixed_change_impact
+    source = snapshot(db, user, semester)
+    draft_id = item_id or 'draft:exam'
+    after_items = [item for item in source[3] if item['id'] != draft_id]
+    after_items.append({**data, 'id': draft_id, 'lifecycle': lifecycle})
+    return fixed_change_impact(db, user, semester, items=after_items,
+        draft_ids=() if item_id else (draft_id,))
+
+
+def guard_exam_change(db, user, semester, body, data, *, item_id=None,
+                      lifecycle='active', confirm_fixed_conflicts=None):
+    from .fixed_conflict_guard import require_fixed_confirmation
+    if body.expected_revision is not None and body.expected_revision != semester.revision:
+        error(409, 'SNAPSHOT_STALE', '安排已更新，请重新核对冲突后保存')
+    impact = exam_conflict_impact(db, user, semester, data,
+        item_id=item_id, lifecycle=lifecycle)
+    confirmed = body.confirm_fixed_conflicts if confirm_fixed_conflicts is None else confirm_fixed_conflicts
+    if (impact['new_fixed_conflicts'] and confirmed and
+            confirm_fixed_conflicts is None and body.expected_revision is None):
+        error(409, 'SNAPSHOT_STALE', '请先核对当前安排，再确认保留冲突')
+    require_fixed_confirmation(impact, confirmed)
+    return impact
+
+
+def save_exam_with_leave(db, user, semester, body, data, *, item=None, action='create'):
+    from .agent_attendance import apply_with_course_leave
+    if body.expected_revision != semester.revision:
+        error(409, 'SNAPSHOT_STALE', '安排已更新，请重新核对请假课次')
+    kind = 'item_state' if isinstance(body, LifecycleInput) else 'item'
+    command = body.model_dump(mode='json', exclude_unset=True)
+    command['course_leave_targets'] = []
+    preview = {'kind': kind, 'action': action, 'target_id': item.id if item else None,
+        'semester_id': semester.id, 'expected_revision': semester.revision,
+        'before': serialize_item(db, item) if item else None,
+        'after': {**data, 'lifecycle': action} if kind == 'item_state' else data,
+        'body': command}
+    result = apply_with_course_leave(db, user, preview, body.course_leave_targets,
+        run_id=None, confirm_fixed_conflicts=body.confirm_fixed_conflicts)
+    return {**result['item'], 'course_attendance': result.get('course_attendance', [])}
+
+
+@router.post('/items/conflict-preview')
+def preview_item_conflicts(body: ItemConflictPreview, user: User = Depends(current_user),
+                           db: Session = Depends(get_db)):
+    semester = owned_semester(db, user, body.semester_id, lock=True)
+    if body.expected_revision is not None and body.expected_revision != semester.revision:
+        error(409, 'SNAPSHOT_STALE', '安排已更新，请重新核对冲突')
+    item = owned_item(db, user, body.item_id) if body.item_id else None
+    if item:
+        if item.semester_id != semester.id or item.payload['kind'] != body.kind:
+            error(404, 'NOT_FOUND', '找不到这条考试')
+        if body.expected_version is None:
+            error(422, 'INVALID_VERSION', '请先重新打开这条考试')
+        check_version(item, body.expected_version)
+    if body.time.week and body.time.week > semester.total_weeks:
+        error(422, 'INVALID_WEEK', '周次超出当前学期，请核对')
+    if body.kind != 'exam':
+        return {'base_revision': semester.revision, 'impact': {}}
+    data = body.model_dump(mode='json')
+    if item:
+        for field in ('reserve_time', 'details'):
+            if field not in body.model_fields_set and field in item.payload:
+                data[field] = item.payload[field]
+        if 'details' in body.model_fields_set:
+            data['details'] = {**item.payload.get('details', {}),
+                **body.details.model_dump(mode='json', exclude_unset=True)}
+        preserve_notice_time(item.payload['time'], body.time, data['time'])
+        if ('end_at' not in body.time.model_fields_set and
+                item.payload['time'].get('at') == data['time'].get('at') and
+                item.payload['time']['precision'] == data['time']['precision'] == 'exact'):
+            data['time']['end_at'] = item.payload['time'].get('end_at')
+    impact = exam_conflict_impact(db, user, semester, data,
+        item_id=item.id if item else None, lifecycle=item.lifecycle if item else 'active')
+    return {'base_revision': semester.revision, 'impact': impact}
+
+
+def create_item_command(db, user, body, idempotency_key=None, *, confirm_fixed_conflicts=None):
     data, s = checked_payload(db, user, body)
     request = classification_request(body)
     cached = replay(db, user, 'create-item', idempotency_key, request)
     if cached is not None:
         return cached
+    if body.kind == 'exam':
+        if body.course_leave_targets and confirm_fixed_conflicts is None:
+            result = save_exam_with_leave(db, user, s, body, data)
+            remember(db, user, 'create-item', idempotency_key, request, result)
+            return result
+        guard_exam_change(db, user, s, body, data,
+            confirm_fixed_conflicts=confirm_fixed_conflicts)
+    elif body.course_leave_targets:
+        error(422, 'INVALID_ATTENDANCE', '只有与课程冲突的考试可同时记录本次请假')
     candidate = None
     if body.candidate_id:
         candidate = db.scalar(select(TextCandidate).where(TextCandidate.id == body.candidate_id,
@@ -207,7 +296,7 @@ def edit_item(item_id: str, body: ItemEdit, user: User = Depends(current_user), 
     return result
 
 
-def edit_item_command(db, user, item_id, body, idempotency_key=None):
+def edit_item_command(db, user, item_id, body, idempotency_key=None, *, confirm_fixed_conflicts=None):
     item = owned_item(db, user, item_id, lock=True)
     if item.semester_id != body.semester_id or item.payload['kind'] != body.kind:
         error(422, 'IMMUTABLE_KIND', '不能通过编辑改变事项所属学期或类型')
@@ -246,6 +335,15 @@ def edit_item_command(db, user, item_id, body, idempotency_key=None):
     for key in ('source_text', 'candidate_id', 'parse_evidence', 'review_exam_id','source_id', 'import_origin'):
         if key in item.payload:
             data[key] = item.payload[key]
+    if body.kind == 'exam':
+        if body.course_leave_targets and confirm_fixed_conflicts is None:
+            result = save_exam_with_leave(db, user, s, body, data, item=item, action='update')
+            remember(db, user, operation, idempotency_key, request, result)
+            return result
+        guard_exam_change(db, user, s, body, data, item_id=item.id,
+            lifecycle=item.lifecycle, confirm_fixed_conflicts=confirm_fixed_conflicts)
+    elif body.course_leave_targets:
+        error(422, 'INVALID_ATTENDANCE', '只有与课程冲突的考试可同时记录本次请假')
     changed_anchor = item.payload['time'] != data['time']
     item.payload = data
     item.version += 1
@@ -284,15 +382,24 @@ def set_lifecycle(item_id: str, body: LifecycleInput, user: User = Depends(curre
     return result
 
 
-def set_lifecycle_command(db, user, item_id, body, idempotency_key=None):
+def set_lifecycle_command(db, user, item_id, body, idempotency_key=None, *, confirm_fixed_conflicts=None):
     item = owned_item(db, user, item_id, lock=True)
-    request = body.model_dump()
+    request = without_default_confirmation_fields(body.model_dump())
     operation = 'item-state/' + item_id
     cached = replay(db, user, operation, idempotency_key, request)
     if cached is not None:
         return cached
     check_version(item, body.expected_version)
     current=owned_semester(db,user,item.semester_id)
+    if item.payload['kind'] == 'exam' and body.lifecycle == 'active':
+        if body.course_leave_targets and confirm_fixed_conflicts is None:
+            result = save_exam_with_leave(db, user, current, body, item.payload, item=item, action='active')
+            remember(db, user, operation, idempotency_key, request, result)
+            return result
+        guard_exam_change(db, user, current, body, item.payload, item_id=item.id,
+            confirm_fixed_conflicts=confirm_fixed_conflicts)
+    elif body.course_leave_targets:
+        error(422, 'INVALID_ATTENDANCE', '只有恢复考试时可同时记录冲突课次的请假')
     future=preview_blocks(db,item,utcnow())
     if body.lifecycle!='active' and future:
         if body.expected_revision!=current.revision:error(409,'PLAN_CONFIRMATION_REQUIRED','请先预览并确认如何取消未来计划')
@@ -320,7 +427,10 @@ def preview_lifecycle(item_id:str,body:LifecycleInput,user:User=Depends(current_
     item=owned_item(db,user,item_id,lock=True);check_version(item,body.expected_version)
     s=owned_semester(db,user,item.semester_id)
     blocks=preview_blocks(db,item,utcnow()) if body.lifecycle!='active' else []
-    return {'base_revision':s.revision,'affected_blocks':blocks,'affected_plan_count':len(blocks)}
+    result = {'base_revision':s.revision,'affected_blocks':blocks,'affected_plan_count':len(blocks)}
+    if item.payload['kind'] == 'exam' and body.lifecycle == 'active':
+        result['impact'] = exam_conflict_impact(db, user, s, item.payload, item_id=item.id)
+    return result
 
 
 @router.post('/items/{item_id}/reminders', status_code=201)

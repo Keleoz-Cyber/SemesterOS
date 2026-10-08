@@ -705,7 +705,7 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: SoftNotice(
-                '${(collision['titles'] as List).join(' 与 ')}时间重叠\n${noticeTime({'at': collision['start_at'], 'end_at': collision['end_at']})}',
+                '${(collision['titles'] as List).join(' 与 ')}${collision['certainty'] == 'possible' ? '可能有时间冲突（时间未完整）' : '时间重叠'}\n${collision['certainty'] == 'possible' ? '需核对的时段：' : ''}${noticeTime({'at': collision['start_at'], 'end_at': collision['end_at']})}',
                 warning: true,
               ),
             ),

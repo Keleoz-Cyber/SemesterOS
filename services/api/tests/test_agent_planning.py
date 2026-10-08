@@ -333,7 +333,7 @@ def test_worker_plan_confirm_is_atomic_idempotent_and_partial_is_disclosed(clien
 @pytest.mark.parametrize('action', ['reject', 'supersede', 'cancel'])
 def test_worker_plan_invalidation_rejects_draft_without_writes(client, monkeypatch, action):
     from app.models import PlanProposal, PlanBlock
-    from test_agent import turn
+    from test_agent import turn, run, call
     h, s, item = setup(client, monkeypatch)
     tid, url, value = agent_plan(client, h, s, item)
     assert value['status'] == 'needs_confirmation', value
@@ -344,7 +344,8 @@ def test_worker_plan_invalidation_rejects_draft_without_writes(client, monkeypat
     elif action == 'cancel':
         assert client.post(url + '/cancel', headers=h).status_code == 200
     else:
-        turn(client, h, tid, '先不安排了', 'new-turn')
+        turn(client, h, tid, '改成记一条无期限任务', 'new-turn')
+        run(client, lambda m, t: call('prepare_item', {'fields': {'kind': 'task', 'title': '替代安排'}}))
     with Session(client.app.state.engine) as db:
         assert db.get(PlanProposal, preview['target_id']).phase == 'rejected'
         assert db.scalar(select(func.count()).select_from(PlanBlock)) == 0

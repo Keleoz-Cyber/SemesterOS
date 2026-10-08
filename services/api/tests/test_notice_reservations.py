@@ -73,6 +73,9 @@ def test_confirmation_update_reserves_and_legacy_create_still_defaults_true(clie
     assert changed.status_code == 200, changed.text
     assert changed.json()['event']['reserve_time'] is True
     legacy = client.post('/api/v1/events', headers=h, json=event_body(s['id'], title='旧客户端会议',expected_revision=2))
+    assert legacy.status_code == 422 and legacy.json()['code'] == 'CONFIRM_FIXED_CONFLICTS'
+    legacy = client.post('/api/v1/events', headers=h, json=event_body(s['id'],
+        title='旧客户端会议', expected_revision=2, confirm_fixed_conflicts=True))
     assert legacy.status_code == 201, legacy.text
     assert legacy.json()['event']['reserve_time'] is True
 

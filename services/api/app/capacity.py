@@ -118,7 +118,7 @@ def calendar_context(semester, availability, courses, items, now, *, query_dates
     available = merge(available)
     school = course_intervals(semester, courses)
     exams = [i for i in items if i['kind'] == 'exam' and i['lifecycle'] == 'active']
-    uncertain = [];uncertainty_exclusions=[];uncertainty_warnings=[]
+    uncertain = [];uncertainty_exclusions=[];uncertainty_warnings=[]; uncertain_fixed=[]
     def note_uncertainty(record,a,b,missing,eid):
         t=record['time'];unbounded=t['precision']=='unknown'
         end_unknown=missing and t['precision']=='exact' and not t.get('end_at')
@@ -141,6 +141,11 @@ def calendar_context(semester, availability, courses, items, now, *, query_dates
             'start_at':None if unbounded else iso(a),'end_at':None if unbounded else iso(b),
             'exclusion_applied':missing and not unbounded,'unbounded':unbounded,
             'end_unknown':bool(end_unknown),'could_affect_occupancy':missing})
+        if missing and not unbounded:
+            # Bounds describe a comparison window, not an invented end time.
+            uncertain_fixed.append((a, b, eid, record['title'], {
+                'reason': 'end_unknown' if end_unknown else t['precision'],
+                'start_at': t.get('at') if t['precision'] == 'exact' else None}))
     for exam in exams:
         if exam['time'].get('meaning') in ('window', 'candidate', 'course_anchor'):
             continue
@@ -174,8 +179,27 @@ def calendar_context(semester, availability, courses, items, now, *, query_dates
         active = [old for old in active if old[1] > a]
         for old in active:
             conflicts.append({'start_at': iso(max(a, old[0])), 'end_at': iso(min(b, old[1])),
-                              'titles': [old[3], title], 'item_ids': [old[2], id]})
+                              'titles': [old[3], title], 'item_ids': [old[2], id],
+                              'certainty': 'confirmed'})
         active.append(row)
+    uncertain_fixed = sorted(r for r in uncertain_fixed if r[1] > begin and r[0] < available_end)
+    for index, row in enumerate(uncertain_fixed):
+        a, b, eid, title, info = row
+        for other in [*school, *uncertain_fixed[:index]]:
+            left, right = max(a, other[0]), min(b, other[1])
+            if left >= right or eid == other[2]:
+                continue
+            unknown = [row] + ([other] if len(other) > 4 else [])
+            actual_start = info['start_at']
+            overlap_at_start = bool(len(other) == 4 and actual_start
+                                    and other[0] <= instant(actual_start).timestamp() < other[1])
+            conflicts.append({'start_at': iso(left), 'end_at': iso(right),
+                'titles': [other[3], title], 'item_ids': [other[2], eid],
+                'certainty': 'possible', 'time_incomplete': True,
+                'uncertain_item_ids': [r[2] for r in unknown],
+                'uncertainty_reasons': list(dict.fromkeys(r[4]['reason'] for r in unknown)),
+                'event_start_at': actual_start, 'overlap_at_start': overlap_at_start,
+                'window_is_comparison': True})
     blocked = [(a, b) for a, b, _, _ in school]
     blocked += [(instant(r['start_at']).timestamp(), instant(r['end_at']).timestamp()) for r in availability.get('exclusions', [])]
     total = CapacityIndex(available)
@@ -236,7 +260,8 @@ def analyze(semester, availability, courses, items, now, plans=()):
         plan_problem=any(p['item_id']==item['id'] for p in plan_issues)
         if plan_problem:reasons.append('plan_conflict')
         if remaining is not None and own_coverage>remaining:reasons.append('plan_overcoverage');plan_problem=True
-        hard = due is not None and any(instant(c['start_at']).timestamp() < due and instant(c['end_at']).timestamp() > release for c in conflicts)
+        hard = due is not None and any(c.get('certainty') != 'possible'
+            and instant(c['start_at']).timestamp() < due and instant(c['end_at']).timestamp() > release for c in conflicts)
         if hard:
             reasons.append('fixed_conflict')
         overdue = due is not None and due <= current and remaining is not None and remaining > 0 and item.get('certainty') == 'formal'
@@ -300,10 +325,12 @@ def analyze(semester, availability, courses, items, now, plans=()):
                 row['level'] = 'unknown'
                 row['reason_codes'].append('other_tasks_incomplete')
     uncertain_count = sum(a < semester_end and b > begin for a,b,_,_ in uncertain)
-    level = 'high' if conflicts or plan_issues or any(r['level']=='high' for r in result) else 'unknown' if incomplete or not availability.get('configured') else 'medium' if uncertain_count or any(r['level']=='medium' for r in result) else 'low'
+    confirmed_conflicts = [c for c in conflicts if c.get('certainty') != 'possible']
+    level = 'high' if confirmed_conflicts or plan_issues or any(r['level']=='high' for r in result) else 'unknown' if incomplete or not availability.get('configured') else 'medium' if uncertain_count or any(r['level']=='medium' for r in result) else 'low'
     return {'items':result, 'summary':{'level':level, 'active_task_count':len(tasks), 'incomplete_count':incomplete,
         'window_gap_minutes':critical['gap_minutes'] if critical else 0, 'critical_window':critical,
-        'fixed_conflict_count':len(conflicts), 'configured':availability.get('configured', False),
+        'fixed_conflict_count':len(confirmed_conflicts),
+        'possible_fixed_conflict_count':len(conflicts)-len(confirmed_conflicts), 'configured':availability.get('configured', False),
         'uncertain_exam_count':sum(a < semester_end and b > begin and not id.startswith('event:') for a,b,_,id in uncertain),
         'uncertain_event_count':sum(a < semester_end and b > begin and id.startswith('event:') for a,b,_,id in uncertain),
         'plan_conflict_count':len(plan_issues),

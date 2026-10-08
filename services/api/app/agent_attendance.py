@@ -28,7 +28,10 @@ def apply_with_course_leave(db, user, preview, targets, *, run_id,
                              confirm_fixed_conflicts=confirm_fixed_conflicts)
     if len(targets) != len(set(targets)):
         error(422, 'INVALID_ATTENDANCE', '请假课次不能重复')
-    if preview['kind'] not in ('event', 'batch'):
+    personal_exam = preview['kind'] in ('item', 'item_state') and (preview.get('after') or {}).get('kind') == 'exam'
+    if preview['kind'] == 'item_state' and preview['action'] != 'active':
+        personal_exam = False
+    if preview['kind'] not in ('event', 'batch') and not personal_exam:
         error(422, 'INVALID_ATTENDANCE', '请在活动安排预览中核对需要请假的课次')
     s = owned_semester(db, user, preview['semester_id'], lock=True)
     if s.revision != preview['expected_revision']:

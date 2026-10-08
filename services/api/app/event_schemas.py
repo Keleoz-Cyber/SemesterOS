@@ -20,6 +20,8 @@ class EventFields(Input):
     reminder_minutes: list[int] = Field(default_factory=list, max_length=12)
     expected_revision: int = Field(ge=0)
     candidate_id: str | None = Field(default=None, max_length=36)
+    confirm_fixed_conflicts: bool = False
+    course_leave_targets: list[str] = Field(default_factory=list, max_length=120)
 
     @field_validator('tags')
     @classmethod
@@ -60,3 +62,14 @@ class EventEdit(EventFields):
 class EventCancel(Input):
     expected_version: int = Field(ge=1)
     expected_revision: int = Field(ge=0)
+
+
+class EventConflictPreview(EventFields):
+    event_id: str | None = Field(default=None, max_length=36)
+    expected_version: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode='after')
+    def editing_version(self):
+        if self.event_id is not None and self.expected_version is None:
+            raise ValueError('修改日程需要当前版本')
+        return self

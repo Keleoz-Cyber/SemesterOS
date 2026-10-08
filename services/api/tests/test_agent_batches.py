@@ -38,11 +38,11 @@ def test_batch_second_failure_rolls_back_first(client,monkeypatch):
     url,value=batch(client,h,s['id'],[group('A'),group('B')])
     import app.agent_tools as tools
     real=tools.create_item_command
-    def broken(db,user,body):
+    def broken(db,user,body, **kwargs):
         if body.title=='B':
             from app.auth import error
             error(422,'TEST_FAILURE','第二项失败')
-        return real(db,user,body)
+        return real(db,user,body, **kwargs)
     monkeypatch.setattr(tools,'create_item_command',broken)
     data={'decision':'confirm','token':value['preview']['token'],
           'selected_group_ids':[g['id'] for g in value['preview']['groups']]}
@@ -62,6 +62,8 @@ def test_batch_combined_conflicts_need_explicit_confirmation(client,monkeypatch)
         for title in ['组会','班会']]
     url,value=batch(client,h,s['id'],groups)
     assert value['preview']['impact']['fixed_conflicts']
+    assert all(c['pending_record'] and c['item_ids'] == []
+               for c in value['preview']['impact']['fixed_conflicts'])
     assert revision(client,h,s['id'])==0
     data={'decision':'confirm','token':value['preview']['token'],'selected_group_ids':[g['id'] for g in value['preview']['groups']]}
     assert client.post(url+'/decision',headers=h,json=data).status_code==422
@@ -98,3 +100,23 @@ def test_selection_preview_detects_conflict_hidden_by_an_unselected_cancellation
         saved=client.post(url+'/decision',headers=h,json={**data,'decision':'confirm','confirm_fixed_conflicts':True})
         assert saved.status_code==200,saved.text
         assert saved.json()['receipt']['impact']['fixed_conflicts']
+
+
+def test_new_course_and_event_preview_do_not_expose_unsaved_attendance_targets(client, monkeypatch):
+    from app import reminder_rules
+    from datetime import datetime
+    monkeypatch.setattr(reminder_rules, 'utcnow', lambda: datetime.fromisoformat('2026-10-08T20:00:00+08:00'))
+    _, h = register(client); s = semester(client, h)
+    groups = [
+        {'title': '新增补课', 'operations': [{'tool': 'prepare_course_change', 'arguments': {
+            'kind': 'add', 'title': '新补课', 'start_at': '2026-10-09T09:00:00+08:00',
+            'end_at': '2026-10-09T10:00:00+08:00'}}]},
+        {'title': '会议', 'operations': [{'tool': 'prepare_event', 'arguments': {
+            'action': 'create', 'fields': {'title': '会议', 'time': {
+                'precision': 'exact', 'at': '2026-10-09T09:30:00+08:00'}}}}]},
+    ]
+    _, value = batch(client, h, s['id'], groups)
+    impact = value['preview']['impact']
+    assert impact['new_fixed_conflicts'] and impact['course_conflicts'] == []
+    assert all(c['pending_record'] and c['item_ids'] == [] for c in impact['new_fixed_conflicts'])
+    assert revision(client, h, s['id']) == 0

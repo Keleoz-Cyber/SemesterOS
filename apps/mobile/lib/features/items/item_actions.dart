@@ -3,6 +3,7 @@ import '../../ui/app_controls.dart';
 import '../../ui/accessibility.dart';
 import '../../core/api.dart' show userError;
 import '../planning/plan_change_confirmation.dart';
+import '../calendar/event_conflict_review.dart';
 import 'items_controller.dart';
 
 /// A short undo opportunity; Flutter otherwise persists snack bars with actions.
@@ -86,8 +87,8 @@ Future<bool> changeItemLifecycle(
   );
   final label = switch (state) {
     'completed' => '确认已完成',
-    'cancelled' => '确认取消任务',
-    _ => '恢复这条任务',
+    'cancelled' => item['kind'] == 'exam' ? '确认取消考试' : '确认取消任务',
+    _ => item['kind'] == 'exam' ? '恢复这场考试' : '恢复这条任务',
   };
   Map<String, dynamic>? selection;
   if (blocks.isNotEmpty) {
@@ -119,6 +120,20 @@ Future<bool> changeItemLifecycle(
       ),
     );
     if (yes != true) return false;
+  }
+  if (state == 'active' && item['kind'] == 'exam') {
+    if (!context.mounted || !same()) return false;
+    final impact = Map<String, dynamic>.from(preview['impact'] ?? {});
+    if (eventConflicts(impact).isNotEmpty) {
+      final choice = await confirmEventConflicts(context, impact);
+      if (choice == null || choice.adjustTime) return false;
+      selection = {
+        ...?selection,
+        if (choice.keepConflicts) 'confirm_fixed_conflicts': true,
+        if (choice.courseLeaveTargets.isNotEmpty)
+          'course_leave_targets': choice.courseLeaveTargets,
+      };
+    }
   }
   if (!context.mounted || !same()) return false;
   var saved = false;

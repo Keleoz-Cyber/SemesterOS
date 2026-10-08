@@ -51,7 +51,10 @@ def day_brief(sid: str, day: date | None = Query(default=None),
             'source_ids':[p['plan_id'] for p in overlaps], 'action_label':'查看调整建议',
             'request':f'请检查{day}与固定安排冲突的个人计划，提出调整建议，固定课程和活动保持原位。'})
     if data['fixed_conflicts']:
-        suggestions.append({'kind':'fixed_conflict','title':'固定安排时间重叠','detail':'；'.join(' / '.join(c['titles']) for c in data['fixed_conflicts'][:3]),
+        possible_only = all(c.get('certainty') == 'possible' for c in data['fixed_conflicts'])
+        detail = '；'.join(' / '.join(c['titles']) + ('（时段未完整说明，可能重叠）'
+            if c.get('certainty') == 'possible' else '') for c in data['fixed_conflicts'][:3])
+        suggestions.append({'kind':'fixed_conflict','title':'有安排时间待核对' if possible_only else '固定安排时间重叠','detail':detail,
             'source_ids':list({id for c in data['fixed_conflicts'] for id in c['item_ids']}),'action_label':'核对这一天',
             'request':f'请核对{day}的固定安排冲突，说明哪些通知需要我确认，不自动移动课程或活动。'})
     if uncertain:

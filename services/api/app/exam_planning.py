@@ -59,7 +59,8 @@ def create_review(id:str,body:ReviewInput,user:User=Depends(current_user),db:Ses
         fields=ItemFields(semester_id=s.id,kind='task',title=e.payload['title'][:115]+'复习',course_id=e.payload.get('course_id'),
             time={'precision':'exact','at':at} if at else {'precision':'unknown'},certainty='formal' if at else 'unknown',
             remaining_minutes=body.remaining_minutes,start_policy=body.start_policy)
-        payload={**fields.model_dump(mode='json'),'course_title':e.payload.get('course_title',''),'review_exam_id':e.id}
+        payload={**fields.model_dump(mode='json', exclude={'expected_revision', 'confirm_fixed_conflicts', 'course_leave_targets'}),
+            'course_title':e.payload.get('course_title',''),'review_exam_id':e.id}
         task=StudyItem(user_id=user.id,semester_id=s.id,payload=payload,created_at=now.isoformat(),updated_at=now.isoformat())
         db.add(task);db.flush();audit(db,task,'用户确认考试复习目标')
     s.revision+=1;result=serialize_item(db,task);remember(db,user,op,idempotency_key,data,result);db.commit();return result

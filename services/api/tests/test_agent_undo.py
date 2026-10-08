@@ -274,7 +274,7 @@ def test_undo_title_change_does_not_treat_existing_overlap_as_new_conflict(clien
     _,h=register(client);s=semester(client,h)
     when={'precision':'exact','at':'2026-12-01T09:00:00+08:00','end_at':'2026-12-01T10:00:00+08:00'}
     a=event(client,h,s['id'],title='A',time=when)
-    event(client,h,s['id'],title='B',time=when)
+    event(client,h,s['id'],title='B',time=when,confirm_fixed_conflicts=True)
     before=capture(client,s['id'])
     result=client.patch('/api/v1/events/'+a['id'],headers=h,json={
         'semester_id':s['id'],'title':'改名后的A','time':when,'certainty':'formal',
@@ -283,6 +283,24 @@ def test_undo_title_change_does_not_treat_existing_overlap_as_new_conflict(clien
     rid=record(client,s['id'],before,'event')
     apply(client,s['id'],prepare(client,s['id'],rid))
     assert client.get('/api/v1/events/'+a['id'],headers=h).json()['title']=='A'
+
+
+def test_undo_does_not_turn_possible_overlap_into_confirmed_overlap_silently(client):
+    _, h = register(client); s = semester(client, h)
+    when = {'precision': 'exact', 'at': '2026-12-01T09:00:00+08:00',
+            'end_at': '2026-12-01T10:00:00+08:00'}
+    first = event(client, h, s['id'], title='A', time=when)
+    event(client, h, s['id'], title='B', time=when, confirm_fixed_conflicts=True)
+    before = capture(client, s['id'])
+    response = client.patch('/api/v1/events/' + first['id'], headers=h, json={
+        'semester_id': s['id'], 'title': 'A', 'time': {**when, 'end_at': None},
+        'expected_version': 1, 'expected_revision': before['revision'], 'change_reason': '结束时间需核对'})
+    assert response.status_code == 200, response.text
+    assert response.json()['fixed_conflicts'][0]['certainty'] == 'possible'
+    rid = record(client, s['id'], before, 'event')
+    with pytest.raises(HTTPException) as failure:
+        prepare(client, s['id'], rid)
+    assert failure.value.detail['code'] == 'UNDO_FIXED_CONFLICT'
 
 
 def test_old_plan_endpoint_cannot_bypass_agent_undo_confirmation(client,monkeypatch):

@@ -8,6 +8,18 @@ CATEGORIES = [{'id': key, 'name': name} for key, name in (
     ('study', '学业'), ('research', '科研'), ('affairs', '校园事务'), ('life', '生活'))]
 
 
+def without_default_confirmation_fields(data, *, optional_revision=False):
+    """Keep pre-conflict request hashes stable without dropping real choices."""
+    result = dict(data)
+    if result.get('confirm_fixed_conflicts') is False:
+        result.pop('confirm_fixed_conflicts', None)
+    if result.get('course_leave_targets') == []:
+        result.pop('course_leave_targets', None)
+    if optional_revision and result.get('expected_revision') is None:
+        result.pop('expected_revision', None)
+    return result
+
+
 def classification_request(body):
     # Edit omissions preserve stored choices; explicitly supplied empty values
     # can clear them. The idempotency signature must retain that distinction.
@@ -20,7 +32,8 @@ def classification_request(body):
         for key in ('expression', 'meaning', 'candidate_dates', 'course_anchor', 'end_at'):
             if key not in body.time.model_fields_set:
                 data['time'].pop(key, None)
-    return data
+    from .item_schemas import ItemFields
+    return without_default_confirmation_fields(data, optional_revision=isinstance(body, ItemFields))
 
 
 def event_rows(db, user, sid=None, active=True):

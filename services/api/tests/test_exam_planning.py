@@ -43,7 +43,8 @@ def test_exam_reschedule_preview_keeps_work_and_updates_review_only_when_confirm
 def test_tentative_exam_cannot_invent_review_deadline_and_link_requires_owner(client):
     h,s,e=setup(client)
     tentative=client.post('/api/v1/items',headers=h,json={'semester_id':s['id'],'kind':'exam','title':'暂定考试',
-        'time':{'precision':'week','week':14},'certainty':'tentative'}).json()
+        'time':{'precision':'week','week':14},'certainty':'tentative',
+        'expected_revision':1,'confirm_fixed_conflicts':True}).json()
     path=f"/api/v1/exams/{tentative['id']}/reviews"
     assert client.post(path,headers=h,json={'expected_exam_version':1,'remaining_minutes':120,'deadline_mode':'exam'}).status_code==422
     r=client.post(path,headers=h,json={'expected_exam_version':1,'remaining_minutes':120,'deadline_mode':'unknown'})

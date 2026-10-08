@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 from .academics import owned_semester, replay, remember
 from .auth import current_user, error
 from .database import get_db
-from .event_schemas import EventFields, EventEdit, EventCancel
-from .event_store import CATEGORIES, tag_ids, event_rows, event_value, classification_value, classification_request
+from .event_schemas import EventFields, EventEdit, EventCancel, EventConflictPreview
+from .event_store import CATEGORIES, tag_ids, event_rows, event_value, classification_value, classification_request, without_default_confirmation_fields
 from .models import CalendarEvent, CalendarEventRevision, CalendarTag, StudyItem, TextCandidate, User
 from .reminder_rules import utcnow, instant, notice_arrival_at, reservation_enabled
 from .course_participation import course_requires_attendance, course_attendance_label
@@ -25,12 +25,14 @@ def guard(s, expected_revision, row=None, version=None):
         error(409, 'SNAPSHOT_STALE', '安排已更新，请重新打开后核对')
 
 
-def payload(db, user, s, body):
+def payload(db, user, s, body, *, resolve_tags=True):
     if body.semester_id != s.id: error(404, 'NOT_FOUND', '日程不属于这个学期')
     if body.time.week and body.time.week > s.total_weeks:
         error(422, 'INVALID_TIME', '周次超出当前学期')
-    data = body.model_dump(mode='json', exclude={'expected_revision', 'expected_version', 'change_reason', 'tags', 'semester_id'})
-    data['tag_ids'] = tag_ids(db, user, body.tags)
+    data = body.model_dump(mode='json', exclude={'expected_revision', 'expected_version', 'change_reason', 'tags', 'semester_id',
+        'confirm_fixed_conflicts', 'course_leave_targets', 'event_id'})
+    if resolve_tags:
+        data['tag_ids'] = tag_ids(db, user, body.tags)
     return data
 
 
@@ -58,16 +60,41 @@ def taxonomy(user: User = Depends(current_user), db: Session = Depends(get_db)):
         select(CalendarTag).where(CalendarTag.user_id == user.id, CalendarTag.merged_into.is_(None)).order_by(CalendarTag.name))]}
 
 
+def event_change_impact(db, user, s, proposed, row=None):
+    from copy import deepcopy
+    from .event_store import calendar_snapshot
+    from .fixed_conflict_guard import fixed_change_impact
+    calendar = deepcopy(calendar_snapshot(db, user, s))
+    draft_id = row.id if row else '__draft_event__'
+    calendar['fixed_events'] = [entry for entry in calendar['fixed_events'] if entry['id'] != draft_id]
+    calendar['fixed_events'].append({**proposed, 'id': draft_id})
+    return fixed_change_impact(db, user, s, calendar=calendar, now=utcnow(),
+                              draft_ids=() if row else ('event:' + draft_id,))
+
+
+@router.post('/events/conflict-preview')
+def conflict_preview(body: EventConflictPreview, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    s = owned_semester(db, user, body.semester_id, lock=True)
+    row = owned_event(db, user, body.event_id) if body.event_id else None
+    if row is not None and row.semester_id != s.id:
+        error(404, 'NOT_FOUND', '日程不属于这个学期')
+    guard(s, body.expected_revision, row, body.expected_version)
+    proposed = edited_payload(db, user, s, row, body, resolve_tags=False) if row else payload(db, user, s, body, resolve_tags=False)
+    return {'impact': event_change_impact(db, user, s, proposed, row), 'expected_revision': s.revision}
+
+
 @router.post('/events', status_code=201)
 def create_event(body: EventFields, user: User = Depends(current_user), db: Session = Depends(get_db),
                  idempotency_key: str | None = Header(default=None)):
-    result = create_event_command(db, user, body, idempotency_key)
+    result = (save_with_course_leave(db, user, body, idempotency_key=idempotency_key)
+              if body.course_leave_targets else create_event_command(db, user, body, idempotency_key))
     db.commit()
     return result
 
 
-def create_event_command(db, user, body, idempotency_key=None):
-    s = owned_semester(db, user, body.semester_id, lock=True); data = body.model_dump(mode='json')
+def create_event_command(db, user, body, idempotency_key=None, *, confirm_fixed_conflicts=False):
+    s = owned_semester(db, user, body.semester_id, lock=True)
+    data = without_default_confirmation_fields(body.model_dump(mode='json'))
     cached = replay(db, user, 'event-create', idempotency_key, data)
     if cached is not None: return cached
     candidate = None
@@ -85,6 +112,10 @@ def create_event_command(db, user, body, idempotency_key=None):
             db.refresh(source, with_for_update=True)
             version(source, media_ref['version'])
     guard(s, body.expected_revision)
+    from .fixed_conflict_guard import require_fixed_confirmation
+    proposed = payload(db, user, s, body, resolve_tags=False)
+    require_fixed_confirmation(event_change_impact(db, user, s, proposed),
+                               confirm_fixed_conflicts or body.confirm_fixed_conflicts)
     now = utcnow().isoformat()
     row = CalendarEvent(user_id=user.id, semester_id=s.id, payload=payload(db, user, s, body),
         version=1, lifecycle='active', created_at=now, updated_at=now)
@@ -115,21 +146,17 @@ def history(eid: str, user: User = Depends(current_user), db: Session = Depends(
 @router.patch('/events/{eid}')
 def edit_event(eid: str, body: EventEdit, user: User = Depends(current_user), db: Session = Depends(get_db),
                idempotency_key: str | None = Header(default=None)):
-    result = edit_event_command(db, user, eid, body, idempotency_key)
+    result = (save_with_course_leave(db, user, body, eid=eid, idempotency_key=idempotency_key)
+              if body.course_leave_targets else edit_event_command(db, user, eid, body, idempotency_key))
     db.commit()
     return result
 
 
-def edit_event_command(db, user, eid, body, idempotency_key=None):
-    row = owned_event(db, user, eid); s = owned_semester(db, user, row.semester_id, lock=True); db.refresh(row)
-    data = classification_request(body); operation = 'event-edit/' + eid
-    cached = replay(db, user, operation, idempotency_key, data)
-    if cached is not None: return cached
-    guard(s, body.expected_revision, row, body.expected_version)
+def edited_payload(db, user, s, row, body, *, resolve_tags=True):
     if row.lifecycle != 'active': error(409, 'EVENT_CANCELLED', '日程已取消，不能继续修改')
     if body.candidate_id not in (None, row.payload.get('candidate_id')):
         error(422, 'SOURCE_IMMUTABLE', '不能更换日程的原始来源')
-    updated = payload(db, user, s, body)
+    updated = payload(db, user, s, body, resolve_tags=resolve_tags)
     for field, stored in (('category_id', 'category_id'), ('tags', 'tag_ids'), ('details', 'details')):
         if field not in body.model_fields_set and stored in row.payload:
             updated[stored] = row.payload[stored]
@@ -148,6 +175,20 @@ def edit_event_command(db, user, eid, body, idempotency_key=None):
         updated['import_origin'] = row.payload['import_origin']
     if row.payload.get('candidate_id'):
         updated.update({k: row.payload.get(k) for k in ('candidate_id', 'source_id', 'source_text')})
+    return updated
+
+
+def edit_event_command(db, user, eid, body, idempotency_key=None, *, confirm_fixed_conflicts=False):
+    row = owned_event(db, user, eid); s = owned_semester(db, user, row.semester_id, lock=True); db.refresh(row)
+    data = classification_request(body); operation = 'event-edit/' + eid
+    cached = replay(db, user, operation, idempotency_key, data)
+    if cached is not None: return cached
+    guard(s, body.expected_revision, row, body.expected_version)
+    proposed = edited_payload(db, user, s, row, body, resolve_tags=False)
+    from .fixed_conflict_guard import require_fixed_confirmation
+    require_fixed_confirmation(event_change_impact(db, user, s, proposed, row),
+                               confirm_fixed_conflicts or body.confirm_fixed_conflicts)
+    updated = edited_payload(db, user, s, row, body)
     row.payload = updated; row.version += 1; row.updated_at = utcnow().isoformat(); s.revision += 1
     db.flush(); response = receipt(db, user, s, row, body.change_reason)
     remember(db, user, operation, idempotency_key, data, response)
@@ -175,25 +216,29 @@ def cancel_event_command(db, user, eid, body, idempotency_key=None):
     return response
 
 
+def save_with_course_leave(db, user, body, *, eid=None, idempotency_key=None):
+    from .agent_attendance import apply_with_course_leave
+    s = owned_semester(db, user, body.semester_id, lock=True)
+    operation = 'event-edit/' + eid if eid else 'event-create'
+    data = classification_request(body) if eid else without_default_confirmation_fields(body.model_dump(mode='json'))
+    cached = replay(db, user, operation, idempotency_key, data)
+    if cached is not None: return cached
+    row = owned_event(db, user, eid) if eid else None
+    guard(s, body.expected_revision, row, body.expected_version if row else None)
+    proposed = edited_payload(db, user, s, row, body, resolve_tags=False) if row else payload(db, user, s, body, resolve_tags=False)
+    request = body.model_dump(mode='json', exclude_unset=True,
+                              exclude={'course_leave_targets', 'confirm_fixed_conflicts'})
+    preview = {'kind': 'event', 'action': 'update' if row else 'create', 'body': request,
+               'after': proposed, 'semester_id': s.id, 'expected_revision': s.revision}
+    if row: preview['target_id'] = row.id
+    result = apply_with_course_leave(db, user, preview, body.course_leave_targets, run_id=None,
+                                    confirm_fixed_conflicts=body.confirm_fixed_conflicts)
+    remember(db, user, operation, idempotency_key, data, result)
+    return result
+
+
 def restore_impact(db,user,s,row):
-    from copy import deepcopy
-    from .schedule_api import snapshot
-    from .capacity import calendar_context
-    from .plan_rules import classify
-    from .conflict_changes import introduced_conflicts
-    from .academics import fingerprint
-    source=snapshot(db,user,s);now=utcnow()
-    before=calendar_context(*source[:4],now)
-    before_issues=classify(source[4],source[3],before['free'].spans,before['begin'])[1]
-    restored=deepcopy(source[0])
-    restored['fixed_events'].append({**row.payload,'id':row.id,'version':row.version})
-    after=calendar_context(restored,*source[1:4],now)
-    after_issues=classify(source[4],source[3],after['free'].spans,after['begin'])[1]
-    old={fingerprint(issue) for issue in before_issues}
-    affected={issue['block_id'] for issue in after_issues if fingerprint(issue) not in old}
-    return {'fixed_conflicts':after['conflicts'],
-        'new_fixed_conflicts':introduced_conflicts(before['conflicts'],after['conflicts']),
-        'affected_plan_count':len(affected),'affected_blocks':[block for block in source[4] if block['id'] in affected]}
+    return event_change_impact(db, user, s, row.payload, row)
 
 
 def restore_event_command(db,user,eid,body,*,confirm_fixed_conflicts=False):

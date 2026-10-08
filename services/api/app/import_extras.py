@@ -89,7 +89,8 @@ def extra_payload(db, user, semester, extra):
         title=extra['title'], category_id='study', tags=['课程', '实践课'],
         time={'precision': 'unknown'}, reserve_time=False,
         location=extra.get('location', ''), notes=notes, source_text=raw)
-    value = body.model_dump(mode='json', exclude={'semester_id', 'expected_revision', 'tags'})
+    value = body.model_dump(mode='json', exclude={'semester_id', 'expected_revision', 'tags',
+        'confirm_fixed_conflicts', 'course_leave_targets'})
     value['tag_ids'] = tag_ids(db, user, body.tags)
     return value
 

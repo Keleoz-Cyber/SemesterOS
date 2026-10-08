@@ -107,6 +107,9 @@ class ReminderInput(Input):
 class ItemFields(Input):
     _allow_legacy_window_end: ClassVar[bool] = False
     semester_id: str = Field(min_length=1, max_length=36)
+    expected_revision: int | None = Field(default=None, ge=0)
+    confirm_fixed_conflicts: bool = False
+    course_leave_targets: list[str] = Field(default_factory=list, max_length=100)
     kind: Literal['assignment', 'task', 'exam']
     title: str = Field(min_length=1, max_length=120)
     course_id: str | None = Field(default=None, max_length=36)
@@ -167,12 +170,20 @@ class ItemEdit(ItemFields):
     change_reason: str = Field(min_length=1, max_length=500)
 
 
+class ItemConflictPreview(ItemCreate):
+    item_id: str | None = Field(default=None, max_length=36)
+    expected_version: int | None = Field(default=None, ge=1)
+    change_reason: str = Field(default='', max_length=500)
+
+
 class LifecycleInput(Input):
     expected_version: int = Field(ge=1)
     lifecycle: Literal['active', 'completed', 'cancelled']
     expected_revision:int|None=Field(default=None,ge=0)
     cancel_plan_ids:list[str]=Field(default_factory=list,max_length=300)
     confirm_locked_cancellation:bool=False
+    confirm_fixed_conflicts: bool = False
+    course_leave_targets: list[str] = Field(default_factory=list, max_length=100)
 
 
 class ReminderCreate(ReminderInput):

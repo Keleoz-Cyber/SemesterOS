@@ -205,19 +205,25 @@ def test_import_extras_migration_keeps_populated_0014_batches(tmp_path, monkeypa
     legacy = MetaData()
     for table in Base.metadata.sorted_tables:
         table.to_metadata(legacy)
+    # SQLite tests exercise the additive delta: the older full migration chain
+    # uses PostgreSQL constraint ALTERs. Exclude every post-0014 column here.
     for name in ('extras', 'source_first_monday'):
         legacy.tables['import_batches']._columns.remove(legacy.tables['import_batches'].c[name])
+    legacy.tables['agent_threads']._columns.remove(legacy.tables['agent_threads'].c.deleted_at)
     legacy.create_all(engine)
     command.stamp(config, '0014_notice_context')
+    assert 'deleted_at' not in {col['name'] for col in inspect(engine).get_columns('agent_threads')}
     with engine.begin() as c:
         c.execute(text("INSERT INTO users (id, username, password_hash, recovery_hash) VALUES ('u','old_user','test','test')"))
         c.execute(text("INSERT INTO semesters (id,user_id,name,first_monday,total_weeks,periods,revision) VALUES ('s','u','old','2026-08-31',20,'[]',1)"))
         c.execute(text("INSERT INTO import_batches (id,user_id,semester_id,source,source_term,courses,base_revision) VALUES ('b','u','s','haut_webview','old-term','[]',0)"))
     command.upgrade(config, 'head')
+    assert 'deleted_at' in {col['name'] for col in inspect(engine).get_columns('agent_threads')}
     with engine.connect() as c:
         assert c.execute(text('SELECT source, source_term, extras, source_first_monday FROM import_batches')).one() == ('haut_webview', 'old-term', '[]', None)
     command.downgrade(config, '0014_notice_context')
     assert 'extras' not in {col['name'] for col in inspect(engine).get_columns('import_batches')}
+    assert 'deleted_at' not in {col['name'] for col in inspect(engine).get_columns('agent_threads')}
     with engine.connect() as c:
         assert c.execute(text('SELECT id FROM import_batches')).scalar_one() == 'b'
     engine.dispose()

@@ -17,7 +17,6 @@ def impact(db,user,s):
     data=snapshot(db,user,s)
     context=calendar_context(*data[:4],utcnow())
     _,issues=classify(data[4],data[3],context['free'].spans,context['begin'])
-    # No simulated IDs escape the savepoint as actionable records.
     conflicts=context['conflicts']
     from .agent_attendance import conflict_courses
     return {'fixed_conflicts':conflicts,'affected_plan_count':len({i['block_id'] for i in issues}),
@@ -59,13 +58,34 @@ def run_children(db,user,s,groups,base):
 
 
 def simulate(db,user,s,groups,base):
+    from .schedule_api import snapshot
+    from .occurrences import expand
+    original = snapshot(db, user, s)
+    actionable_courses = {e['id'] for e in expand(original[0], original[2])}
     before=impact(db,user,s)
     transaction=db.begin_nested()
     try:
-        run_children(db,user,s,groups,base)
+        applied = run_children(db,user,s,groups,base)
         result=impact(db,user,s)
         from .conflict_changes import introduced_conflicts
-        return {**result,'new_fixed_conflicts':introduced_conflicts(before['fixed_conflicts'],result['fixed_conflicts'])}
+        from .fixed_conflict_guard import without_draft_ids
+        from .agent_attendance import conflict_courses
+        drafts = []
+        for group, receipt_group in zip(groups, applied):
+            for operation, receipt in zip(group['operations'], receipt_group['receipts']):
+                if operation['action'] == 'create' and operation['kind'] in ('event', 'item'):
+                    field = 'event' if operation['kind'] == 'event' else 'item'
+                    created = receipt.get(field)
+                    if created:
+                        drafts.append(('event:' if field == 'event' else '') + created['id'])
+        introduced = introduced_conflicts(before['fixed_conflicts'], result['fixed_conflicts'])
+        current = snapshot(db, user, s)
+        drafts.extend(e['id'] for e in expand(current[0], current[2]) if e['id'] not in actionable_courses)
+        return {**result,
+                'fixed_conflicts': without_draft_ids(result['fixed_conflicts'], drafts),
+                'new_fixed_conflicts': without_draft_ids(introduced, drafts),
+                'course_conflicts': [e for e in conflict_courses(current[0], current[2], introduced)
+                                     if e['occurrence_id'] in actionable_courses]}
     finally:
         transaction.rollback()
 

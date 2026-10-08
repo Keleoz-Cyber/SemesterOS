@@ -19,6 +19,7 @@ import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'calendar_repository.dart';
 import 'event_overview.dart';
+import 'event_conflict_review.dart';
 import '../media/source_view.dart';
 import '../notices/notice_fields.dart';
 import '../tags/tag_picker_field.dart';
@@ -293,6 +294,7 @@ class _EventFormPageState extends State<EventFormPage> {
 
   Future<void> save() async {
     if (!same || !ready || busy) return;
+    final requiresPreview = submitted == null;
     if (submitted == null) {
       if (title.text.trim().isEmpty) {
         form.currentState?.validate();
@@ -356,7 +358,39 @@ class _EventFormPageState extends State<EventFormPage> {
       error = null;
     });
     FocusManager.instance.primaryFocus?.unfocus();
+    var writeStarted = false;
     try {
+      if (requiresPreview) {
+        final preview = await widget.controller.changeRequest(
+          'POST',
+          '/events/conflict-preview',
+          data: {
+            ...submitted!,
+            if (widget.original != null) 'event_id': widget.original!['id'],
+          },
+        );
+        if (!mounted || !same) return;
+        final impact = Map<String, dynamic>.from(preview['impact'] ?? {});
+        if (eventConflicts(impact).isNotEmpty) {
+          final choice = await confirmEventConflicts(context, impact);
+          if (!mounted || !same) return;
+          if (choice == null || choice.adjustTime) {
+            setState(() {
+              submitted = null;
+              busy = false;
+            });
+            if (choice?.adjustTime == true) await pick(false);
+            return;
+          }
+          submitted = {
+            ...submitted!,
+            if (choice.keepConflicts) 'confirm_fixed_conflicts': true,
+            if (choice.courseLeaveTargets.isNotEmpty)
+              'course_leave_targets': choice.courseLeaveTargets,
+          };
+        }
+      }
+      writeStarted = true;
       final result = await widget.controller.changeRequest(
         widget.original == null ? 'POST' : 'PATCH',
         widget.original == null
@@ -375,9 +409,17 @@ class _EventFormPageState extends State<EventFormPage> {
       );
       Navigator.pop(context, true);
     } catch (e) {
+      if (e is ApiFailure && e.statusCode == 409) {
+        submitted = null;
+        if (widget.original == null) {
+          await loadRevision();
+        } else if (mounted) {
+          setState(() => ready = false);
+        }
+      }
       if (mounted) {
         setState(() {
-          if (e is ApiFailure && e.statusCode == 422) {
+          if (!writeStarted || e is ApiFailure && e.statusCode == 422) {
             submitted = null;
             error = userError(e);
           } else {

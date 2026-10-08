@@ -2,8 +2,8 @@ import '../../ui/app_controls.dart';
 import 'package:flutter/material.dart';
 import '../../ui/campus_theme.dart';
 import '../../core/api.dart';
-import '../items/item_widgets.dart';
 import '../changes/course_change_display.dart';
+import '../calendar/event_conflict_review.dart';
 import 'agent_controller.dart';
 import 'agent_surfaces.dart';
 
@@ -12,11 +12,13 @@ class ChangeConfirmation extends StatefulWidget {
   final Map<String, dynamic> run;
   final AgentController controller;
   final Widget Function(Map<String, dynamic>) details;
+  final VoidCallback? onAdjustTime;
   const ChangeConfirmation({
     super.key,
     required this.run,
     required this.controller,
     required this.details,
+    this.onAdjustTime,
   });
   @override
   State<ChangeConfirmation> createState() => _ChangeConfirmationState();
@@ -65,6 +67,22 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
     }
   }
 
+  Future<void> saveDecision({required bool batch}) async {
+    await widget.controller.decide(
+      widget.run,
+      true,
+      selectedGroupIds: batch ? selected.toList() : null,
+      confirmFixedConflicts: conflictAcknowledged,
+      courseLeaveTargets: leaveTargets.toList(),
+    );
+    if (mounted && widget.controller.error != null) {
+      setState(() {
+        conflictAcknowledged = false;
+        leaveTargets.clear();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = preview, c = widget.controller;
@@ -76,25 +94,8 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
           ? (widget.run['receipt']?['impact'] ?? {})
           : (selectedImpact ?? p['impact'] ?? {}),
     );
-    final conflicts = rows(
-      impact['new_fixed_conflicts'] ?? impact['fixed_conflicts'],
-    );
-    final conflictIds = conflicts
-        .expand((r) => r['item_ids'] as List? ?? [])
-        .toSet();
-    final courses = rows(
-      impact['course_conflicts'],
-    ).where((r) => conflictIds.contains(r['occurrence_id'])).toList();
-    final unresolved = conflicts
-        .where(
-          (r) =>
-              (r['item_ids'] as List? ?? []).isEmpty ||
-              (r['item_ids'] as List? ?? [])
-                      .where((id) => !leaveTargets.contains(id))
-                      .length >=
-                  2,
-        )
-        .toList();
+    final conflicts = eventConflicts(impact);
+    final unresolved = unresolvedEventConflicts(impact, leaveTargets);
     final saved = rows(
       widget.run['receipt']?['groups'],
     ).map((g) => g['id']).toSet();
@@ -134,6 +135,10 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                         ? '恢复日程'
                         : p['kind'] == 'event' && p['action'] == 'create'
                         ? '新增日程'
+                        : p['kind'] == 'item' &&
+                              p['after']?['kind'] == 'exam' &&
+                              p['action'] == 'create'
+                        ? '新增考试'
                         : '修改预览',
                     style: const TextStyle(
                       fontSize: 18,
@@ -209,84 +214,26 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
             ],
             if (conflicts.isNotEmpty) ...[
               const Divider(height: 28),
-              Text(
-                unresolved.isEmpty && leaveTargets.isNotEmpty
-                    ? '已选请假处理'
-                    : '有时间冲突',
-                style: TextStyle(
-                  color: unresolved.isEmpty && leaveTargets.isNotEmpty
-                      ? CampusColors.teal
-                      : CampusColors.warning,
-                  fontWeight: FontWeight.w700,
-                ),
+              EventConflictReview(
+                impact: impact,
+                leaveTargets: leaveTargets,
+                acknowledged: conflictAcknowledged,
+                enabled: !c.busy && !c.processing && !checking,
+                onAdjustTime: pending ? widget.onAdjustTime : null,
+                onLeaveChanged: pending
+                    ? (id, value) => setState(() {
+                        if (value) {
+                          leaveTargets.add(id);
+                        } else {
+                          leaveTargets.remove(id);
+                        }
+                        conflictAcknowledged = false;
+                      })
+                    : null,
+                onAcknowledged: pending
+                    ? (value) => setState(() => conflictAcknowledged = value)
+                    : null,
               ),
-              for (final conflict in conflicts.take(6))
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    '${(conflict['titles'] as List? ?? []).join(' / ')}\n${displayInstant(conflict['start_at'])} — ${displayInstant(conflict['end_at'])}',
-                  ),
-                ),
-              if (conflicts.length > 6)
-                AppDisclosure(
-                  tilePadding: EdgeInsets.zero,
-                  title: Text('查看其余 ${conflicts.length - 6} 处冲突'),
-                  children: [
-                    for (final conflict in conflicts.skip(6))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(
-                          '${(conflict['titles'] as List? ?? []).join(' / ')}\n${displayInstant(conflict['start_at'])} — ${displayInstant(conflict['end_at'])}',
-                        ),
-                      ),
-                  ],
-                ),
-              if (pending)
-                if (courses.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  const Text(
-                    '课程请假',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const Text(
-                    '仅勾选已请假的课次；准备请假的课程仍保留占用。',
-                    style: TextStyle(fontSize: 13, color: CampusColors.muted),
-                  ),
-                  for (final course in courses)
-                    AppCheckRow(
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      title: Text('${course['title']} · 我已请假'),
-                      subtitle: Text(
-                        displayInterval(course['start_at'], course['end_at']),
-                      ),
-                      value: leaveTargets.contains(course['occurrence_id']),
-                      onChanged: c.busy || c.processing
-                          ? null
-                          : (v) => setState(() {
-                              if (v == true) {
-                                leaveTargets.add(course['occurrence_id']);
-                              } else {
-                                leaveTargets.remove(course['occurrence_id']);
-                              }
-                              conflictAcknowledged = false;
-                            }),
-                    ),
-                  if (leaveTargets.isNotEmpty)
-                    const Text(
-                      '保存时一并标记本次请假；原课程和其他周次保留。',
-                      style: TextStyle(fontSize: 13, color: CampusColors.teal),
-                    ),
-                ],
-              if (pending && unresolved.isNotEmpty)
-                AppCheckRow(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('保留这些重叠安排'),
-                  value: conflictAcknowledged,
-                  onChanged: c.busy || c.processing
-                      ? null
-                      : (v) => setState(() => conflictAcknowledged = v == true),
-                ),
             ],
             if (applied &&
                 rows(
@@ -343,13 +290,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                             (batch && selected.isEmpty) ||
                             (unresolved.isNotEmpty && !conflictAcknowledged)
                         ? null
-                        : () => c.decide(
-                            widget.run,
-                            true,
-                            selectedGroupIds: batch ? selected.toList() : null,
-                            confirmFixedConflicts: conflictAcknowledged,
-                            courseLeaveTargets: leaveTargets.toList(),
-                          ),
+                        : () => saveDecision(batch: batch),
                     child: Text(
                       undo
                           ? '确认撤销'
@@ -376,6 +317,10 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                           ? '确认恢复'
                           : p['kind'] == 'event' && p['action'] == 'create'
                           ? '保存日程'
+                          : p['kind'] == 'item' &&
+                                p['after']?['kind'] == 'exam' &&
+                                p['action'] == 'create'
+                          ? '保存考试'
                           : '确认修改',
                     ),
                   ),

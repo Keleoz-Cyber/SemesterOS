@@ -14,14 +14,21 @@ from app.models import Base
 def test_notice_migration_upgrade_downgrade_keeps_business_and_conversation_data(tmp_path, monkeypatch):
     url = 'sqlite:///' + str(tmp_path / 'migration.db')
     monkeypatch.setenv('DATABASE_URL', url)
+    config = Config(str(Path(__file__).resolve().parents[1] / 'alembic.ini'))
+    config.set_main_option('script_location', str(Path(__file__).resolve().parents[1] / 'alembic'))
     legacy = MetaData()
     for table in Base.metadata.sorted_tables:
         if table.name != 'user_profiles': table.to_metadata(legacy)
-    legacy.tables['agent_threads']._columns.remove(legacy.tables['agent_threads'].c.context)
+    # Keep this SQLite fixture at 0013, excluding all later columns. The separate
+    # PostgreSQL test exercises the complete historical migration chain.
+    for name in ('context', 'deleted_at'):
+        legacy.tables['agent_threads']._columns.remove(legacy.tables['agent_threads'].c[name])
     for name in ('extras', 'source_first_monday'):
         legacy.tables['import_batches']._columns.remove(legacy.tables['import_batches'].c[name])
     engine = create_engine(url)
     legacy.create_all(engine)
+    command.stamp(config, '0013_semester_cleanup')
+    assert 'deleted_at' not in legacy.tables['agent_threads'].c
     with engine.begin() as c:
         c.execute(legacy.tables['users'].insert(), {'id':'user', 'username':'migration_user',
             'password_hash':'test-only', 'recovery_hash':'0'*64})
@@ -35,19 +42,18 @@ def test_notice_migration_upgrade_downgrade_keeps_business_and_conversation_data
         c.execute(legacy.tables['agent_runs'].insert(), {'id':'run', 'user_id':'user', 'thread_id':'thread',
             'request_id':'old', 'text':'旧问题', 'status':'applied', 'state':{'receipt':{'item_id':'item'}},
             'lease_until':0, 'attempts':0, 'created_at':'2026-09-30'})
-    config = Config(str(Path(__file__).resolve().parents[1] / 'alembic.ini'))
-    config.set_main_option('script_location', str(Path(__file__).resolve().parents[1] / 'alembic'))
-    command.stamp(config, '0013_semester_cleanup')
     for _ in range(2):
         command.upgrade(config, 'head')
         assert 'user_profiles' in inspect(engine).get_table_names()
         with engine.connect() as c:
             assert c.execute(select(Base.metadata.tables['agent_threads'].c.context)).scalar_one() == {}
+            assert c.execute(select(Base.metadata.tables['agent_threads'].c.deleted_at)).scalar_one() is None
             assert c.execute(select(legacy.tables['study_items'].c.id)).scalar_one() == 'item'
             assert c.execute(select(legacy.tables['agent_runs'].c.state)).scalar_one() == {'receipt':{'item_id':'item'}}
         command.downgrade(config, '0013_semester_cleanup')
         assert 'user_profiles' not in inspect(engine).get_table_names()
         assert 'context' not in {c['name'] for c in inspect(engine).get_columns('agent_threads')}
+        assert 'deleted_at' not in {c['name'] for c in inspect(engine).get_columns('agent_threads')}
     engine.dispose()
 
 

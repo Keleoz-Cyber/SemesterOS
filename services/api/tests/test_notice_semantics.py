@@ -272,6 +272,10 @@ def test_explicit_arrival_is_displayed_and_complete_occupancy_includes_it(client
     second = client.post('/api/v1/events', headers=h, json={'semester_id':s['id'],
         'title':'其他安排', 'expected_revision':1,
         'time':{'precision':'exact','at':'2026-10-09T14:45:00+08:00','end_at':'2026-10-09T14:55:00+08:00'}})
+    assert second.status_code == 422 and second.json()['code'] == 'CONFIRM_FIXED_CONFLICTS'
+    second = client.post('/api/v1/events', headers=h, json={'semester_id':s['id'],
+        'title':'其他安排', 'expected_revision':1, 'confirm_fixed_conflicts':True,
+        'time':{'precision':'exact','at':'2026-10-09T14:45:00+08:00','end_at':'2026-10-09T14:55:00+08:00'}})
     assert second.status_code == 201, second.text
     assert second.json()['fixed_conflicts']
     stats = client.get('/api/v1/semesters/' + s['id'] + '/insights', headers=h,

@@ -398,6 +398,7 @@ void main() {
         await _show(tester, find.text('确认考试新安排'));
         expect(tester.widget<AppButton>(submit).onPressed, isNull);
         await _shot(tester, 'exam-preview-confirm-$size');
+        await _show(tester, find.byType(AppCheckRow));
         await tester.tap(find.byType(AppCheckRow));
         await tester.pumpAndSettle();
         expect(tester.widget<AppButton>(submit).onPressed, isNotNull);
