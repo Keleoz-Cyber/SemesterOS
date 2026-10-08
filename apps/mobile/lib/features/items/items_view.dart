@@ -469,6 +469,22 @@ class _ItemsViewState extends State<ItemsView> {
             loading: c.busy,
           ),
           const SizedBox(height: 16),
+          // The filter stays ahead of controls whose presence depends on it.
+          // Keeping its position and identity lets the spring finish uninterrupted.
+          AppSegmentedControl<String>(
+            key: const ValueKey('task-status-tabs'),
+            value: filter,
+            options: const {
+              'active': '待处理',
+              'completed': '已完成',
+              'cancelled': '已取消',
+            },
+            onChanged: (value) => setState(() {
+              filter = value;
+              sorting = false;
+            }),
+          ),
+          const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, box) {
               final actions = <Widget>[
@@ -581,18 +597,6 @@ class _ItemsViewState extends State<ItemsView> {
                 ),
               ),
             ),
-          AppSegmentedControl<String>(
-            value: filter,
-            options: const {
-              'active': '待处理',
-              'completed': '已完成',
-              'cancelled': '已取消',
-            },
-            onChanged: (value) => setState(() {
-              filter = value;
-              sorting = false;
-            }),
-          ),
           const SizedBox(height: 12),
           if (c.notice != null) ...[
             SoftNotice(c.notice!, warning: true),

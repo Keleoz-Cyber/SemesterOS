@@ -35,9 +35,9 @@ String hitDescription(HitTestResult result) => result.path
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadPreviewFonts);
-  for (final morph in [false, true]) {
+  {
     testWidgets(
-      'real AgentPage footer and history retain hit geometry, morph=$morph',
+      'real AgentPage footer and history retain hit geometry during sheet opening',
       (tester) async {
         final folder = (await tester.runAsync(
           () => Directory.systemTemp.createTemp('sheet-hit-'),
@@ -107,9 +107,6 @@ void main() {
                 onPressed: () => showAppSheet<void>(
                   context: context,
                   heightFactor: .9,
-                  originRect: morph
-                      ? const Rect.fromLTWH(325, 750, 52, 52)
-                      : null,
                   builder: (_) => AgentPage(
                     controller: f.c,
                     semester: const {'id': 's', 'name': '学期'},
@@ -145,14 +142,12 @@ void main() {
         expect(
           initialThreadReads,
           1,
-          reason:
-              'Opening the sheet must read the selected thread once; morph=$morph',
+          reason: 'Opening the sheet must read the selected thread once',
         );
         expect(
           agentState,
           same(firstFrameState),
-          reason:
-              'Source geometry becoming available must not remount AgentPage; morph=$morph',
+          reason: 'Opening the assistant must not remount AgentPage',
         );
         final keyboard = find.byTooltip('切换键盘输入');
         expect(keyboard, findsOneWidget);

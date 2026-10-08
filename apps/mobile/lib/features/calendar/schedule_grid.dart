@@ -13,6 +13,7 @@ import '../../ui/v2/widgets/schedule_block.dart';
 import '../../ui/v2/widgets/dashed_border.dart';
 import '../../ui/v2/motion/now_pulse.dart';
 import '../../ui/v2/motion/pressable.dart';
+import '../../ui/v2/motion/skeleton.dart';
 
 class ScheduleGrid extends StatefulWidget {
   final DateTime firstDay;
@@ -495,6 +496,20 @@ class _ScheduleGridState extends State<ScheduleGrid>
             ),
           ),
         ),
+        if (widget.loading && entries.isEmpty)
+          for (final day in [0, 2, 4])
+            Positioned(
+              top: 16.0 + day * 12,
+              left: timeWidth + offsets[day] + 3,
+              width: widths[day] - 6,
+              height: 72,
+              child: const IgnorePointer(
+                child: SkeletonBox(
+                  height: 72,
+                  borderRadius: BorderRadius.all(Radius.circular(11)),
+                ),
+              ),
+            ),
         for (
           var hour = first ~/ 60;
           widget.periods.isEmpty && hour < last ~/ 60;
@@ -664,20 +679,19 @@ class _ScheduleGridState extends State<ScheduleGrid>
                         flex: (weights[i] * 100).round(),
                         child: Builder(
                           builder: (context) {
-                            final date = widget.firstDay.add(Duration(days: i)),
-                                selected =
-                                    widget.selectedDay != null &&
-                                    calendarDate(date) ==
-                                        calendarDate(widget.selectedDay!);
+                            final date = widget.firstDay.add(Duration(days: i));
+                            // In a weekly overview the highlighted column is
+                            // today's actual date, never a remembered weekday.
+                            // Tapping a date opens the day view, so there is no
+                            // selected-day state to paint on another week.
+                            final selected = i == today;
                             return Semantics(
                               button: true,
                               selected: selected,
                               label:
                                   '${date.month}月${date.day}日${i == today ? '，今天' : ''}',
                               child: Material(
-                                color: i == today
-                                    ? CampusColors.surface
-                                    : selected
+                                color: selected
                                     ? CampusColors.blueSoft
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(16),
@@ -788,26 +802,26 @@ class _GridLines extends CustomPainter {
   );
   @override
   void paint(Canvas canvas, Size size) {
-    // The scale owns the real time mapping. Long, unoccupied breaks only gain
-    // a diagonal texture here; the painter never changes their clock bounds.
+    // Compressed, genuinely unoccupied breaks keep their real clock bounds.
+    // A quiet pair of hairlines marks the skipped space without a shaded band.
     for (var i = 1; i < scale.minutes.length; i++) {
       final a = scale.minutes[i - 1], b = scale.minutes[i];
       final top = scale.positions[i - 1], bottom = scale.positions[i];
       if (b - a < 45 || bottom - top > 24) continue;
-      final band = Rect.fromLTRB(timeWidth, top, size.width, bottom);
-      canvas.save();
-      canvas.clipRect(band);
-      canvas.drawRect(
-        band,
-        Paint()..color = v2.ShiriColors.light.surfaceSunken,
+      final separator = Paint()
+        ..color = CampusColors.line.withValues(alpha: .75)
+        ..strokeWidth = .6;
+      final center = (top + bottom) / 2;
+      canvas.drawLine(
+        Offset(timeWidth, center - 1.5),
+        Offset(size.width, center - 1.5),
+        separator,
       );
-      final stripes = Paint()
-        ..color = v2.ShiriColors.light.line
-        ..strokeWidth = 3;
-      for (double x = timeWidth - 24; x < size.width + 24; x += 12) {
-        canvas.drawLine(Offset(x, bottom), Offset(x + 24, top), stripes);
-      }
-      canvas.restore();
+      canvas.drawLine(
+        Offset(timeWidth, center + 1.5),
+        Offset(size.width, center + 1.5),
+        separator,
+      );
     }
     final paint = Paint()
       ..color = CampusColors.line

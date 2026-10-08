@@ -18,11 +18,13 @@ class GlassSurface extends StatelessWidget {
     required this.radius,
     required this.child,
     this.lowEnd = false,
+    this.shadow = true,
   });
 
   final double radius;
   final Widget child;
   final bool lowEnd;
+  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +44,7 @@ class GlassSurface extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: shape,
-        boxShadow: shiri.shadows.floating,
+        boxShadow: shadow ? shiri.shadows.floating : const [],
       ),
       child: ClipRRect(
         borderRadius: shape,
@@ -157,6 +159,7 @@ class _GlassDockState extends State<GlassDock>
     return GlassSurface(
       radius: ShiriLayout.dockRadius,
       lowEnd: widget.lowEnd,
+      shadow: false,
       child: SizedBox(
         height: GlassDock.heightFor(context),
         child: LayoutBuilder(

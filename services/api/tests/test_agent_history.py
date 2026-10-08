@@ -6,7 +6,7 @@ from test_foundation import client, register, semester
 from test_agent import call, run, thread, turn
 
 
-def test_history_delete_restore_is_owner_scoped_and_cursor_survives_deleted_row(client):
+def test_history_delete_is_not_restorable_and_cursor_survives_deleted_row(client):
     _, h = register(client); _, other = register(client, 'other')
     s = semester(client, h)
     tids = [thread(client, h, s['id']) for _ in range(4)]
@@ -27,14 +27,16 @@ def test_history_delete_restore_is_owner_scoped_and_cursor_survives_deleted_row(
     older = client.get('/api/v1/agent/history', headers=h,
         params={**query, 'before_thread_id': tid}).json()
     assert {r['id'] for r in first['threads'] + older['threads']} == set(tids)
-    trash = client.get('/api/v1/agent/history', headers=h,
+    legacy_query = client.get('/api/v1/agent/history', headers=h,
         params={'semester_id': s['id'], 'deleted': True}).json()
-    assert [r['id'] for r in trash['threads']] == [tid]
+    assert {r['id'] for r in legacy_query['threads']} == set(tids) - {tid}
+    assert all(r['deleted_at'] is None for r in legacy_query['threads'])
     assert client.post(url + '/restore', headers=other).status_code == 404
-    restored = client.post(url + '/restore', headers=h)
-    assert restored.status_code == 200 and restored.json()['deleted_at'] is None
-    assert client.post(url + '/restore', headers=h).json() == restored.json()
-    assert client.get(url, headers=h).status_code == 200
+    assert client.post(url + '/restore', headers=h).status_code == 404
+    assert client.get(url, headers=h).status_code == 404
+    visible = client.get('/api/v1/agent/history', headers=h,
+        params={'semester_id': s['id']}).json()
+    assert {r['id'] for r in visible['threads']} == set(tids) - {tid}
 
 
 def test_delete_revokes_running_worker_and_recognition_leases_without_purging_media(client, tmp_path):
@@ -70,12 +72,14 @@ def test_delete_revokes_running_worker_and_recognition_leases_without_purging_me
     assert client.get('/api/v1/agent/media-runs/' + source_id, headers=h).status_code == 404
     assert client.post('/api/v1/agent/media-runs/' + source_id + '/retry', headers=h,
         json={'expected_version': 2}).status_code == 404
-    assert client.post('/api/v1/agent/threads/' + tid + '/restore', headers=h).status_code == 200
-    value = client.get('/api/v1/agent/runs/' + req['id'], headers=h).json()
-    assert value['status'] == 'cancelled' and value['preview'] is None
+    assert client.post('/api/v1/agent/threads/' + tid + '/restore', headers=h).status_code == 404
+    assert client.get('/api/v1/agent/runs/' + req['id'], headers=h).status_code == 404
+    with Session(client.app.state.engine) as db:
+        row = db.get(AgentRun, req['id'])
+        assert row.status == 'cancelled' and row.state.get('preview') is None
 
 
-def test_restore_does_not_reactivate_confirmation(client):
+def test_deleted_confirmation_cannot_be_restored_or_applied(client):
     _, h = register(client); s = semester(client, h); tid = thread(client, h, s['id'])
     req = turn(client, h, tid, '添加组会')
     run(client, lambda m, t: call('prepare_event', {'action': 'create', 'fields': {'title': '组会'}}))
@@ -83,9 +87,11 @@ def test_restore_does_not_reactivate_confirmation(client):
     decision = {'decision': 'confirm', 'token': client.get(url, headers=h).json()['preview']['token']}
     assert client.delete('/api/v1/agent/threads/' + tid, headers=h).status_code == 200
     assert client.post(url + '/decision', headers=h, json=decision).status_code == 404
-    assert client.post('/api/v1/agent/threads/' + tid + '/restore', headers=h).status_code == 200
-    assert client.get(url, headers=h).json()['status'] == 'cancelled'
-    assert client.post(url + '/decision', headers=h, json=decision).status_code == 409
+    assert client.post('/api/v1/agent/threads/' + tid + '/restore', headers=h).status_code == 404
+    assert client.get(url, headers=h).status_code == 404
+    assert client.post(url + '/decision', headers=h, json=decision).status_code == 404
+    with Session(client.app.state.engine) as db:
+        assert db.get(AgentRun, req['id']).status == 'cancelled'
     assert client.get('/api/v1/semesters/' + s['id'] + '/calendar', headers=h,
         params={'from_date': '2026-10-01', 'to_date': '2026-10-01'}).json()['undated'] == []
 

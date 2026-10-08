@@ -121,7 +121,7 @@ def owned_run(db, user, rid, lock=False, *, include_deleted=False):
     query = select(AgentRun).where(AgentRun.id == rid, AgentRun.user_id == user.id)
     row = db.scalar(query)
     if row is None: error(404, 'NOT_FOUND', '找不到这条请求')
-    # Mutations serialize with delete/restore on thread -> run, so deletion
+    # Mutations serialize with deletion on thread -> run, so deletion
     # cannot race an old confirmation or publish a new turn into hidden history.
     owned_thread(db, user, row.thread_id, lock, include_deleted=include_deleted)
     if lock:
@@ -245,13 +245,13 @@ def threads(semester_id: str, user: User = Depends(current_user), db: Session = 
 
 @router.get('/history')
 def history(semester_id: str, limit: int = Query(default=20, ge=1, le=100),
-            before_thread_id: str | None = None, deleted: bool = False,
+            before_thread_id: str | None = None,
             user: User = Depends(current_user), db: Session = Depends(get_db)):
     owned_semester(db, user, semester_id)
     query = select(AgentThread).where(AgentThread.user_id == user.id, AgentThread.semester_id == semester_id)
-    query = query.where(AgentThread.deleted_at.is_not(None) if deleted else AgentThread.deleted_at.is_(None))
+    query = query.where(AgentThread.deleted_at.is_(None))
     if before_thread_id:
-        # A removed/restored cursor still denotes the same immutable position.
+        # A removed cursor still denotes the same immutable position.
         before = owned_thread(db, user, before_thread_id, include_deleted=True)
         if before.semester_id != semester_id: error(404, 'NOT_FOUND', '找不到当前学期的历史位置')
         query = query.where(earlier(AgentThread.created_at, AgentThread.id, before.created_at, before.id))
@@ -289,17 +289,6 @@ def delete_thread(tid: str, user: User = Depends(current_user), db: Session = De
                      'sequence': run.state.get('sequence', 0) + 1}
     row.deleted_at = utcnow().isoformat()
     db.commit()
-    return history_thread(row)
-
-
-@router.post('/threads/{tid}/restore')
-def restore_thread(tid: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    row = owned_thread(db, user, tid, True, include_deleted=True)
-    if row.deleted_at is not None:
-        # Restore history only. Cancelled processing and confirmation authority
-        # remain revoked; applied receipts and business data never changed.
-        row.deleted_at = None
-        db.commit()
     return history_thread(row)
 
 

@@ -7,6 +7,7 @@ import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import 'schedule_grid.dart';
+import 'calendar_week_pager.dart';
 import 'time_track.dart';
 import 'calendar_repository.dart';
 import 'day_context_panel.dart';
@@ -42,6 +43,9 @@ class CalendarPanelState extends State<CalendarPanel>
   late final CalendarRepository repository;
   final ScrollController dayStripController = ScrollController();
   String? dayStripAnchor;
+  final _gridPages = <String, List<Map<String, dynamic>>>{};
+  String? _gridScope;
+  int? _gridRevision;
   late int week;
   bool grid = true, weekList = false, active = true, foreground = true;
   bool _viewChosen = false;
@@ -1314,6 +1318,16 @@ class CalendarPanelState extends State<CalendarPanel>
     final currentRevision = (repository.revision ?? 0) > expectedRevision
         ? repository.revision!
         : expectedRevision;
+    final gridScope =
+        '$sid:${widget.items.api.generation}:${widget.app.user['id']}';
+    if (_gridScope != gridScope || _gridRevision != currentRevision) {
+      _gridPages.clear();
+      _gridScope = gridScope;
+      _gridRevision = currentRevision;
+    }
+    if (repository.data != null) {
+      _gridPages[calendarDate(first)] = repository.entries;
+    }
     final contents = <Widget>[
       calendarToolbar(now),
       const SizedBox(height: 6),
@@ -1364,7 +1378,11 @@ class CalendarPanelState extends State<CalendarPanel>
         ),
       AppContentTransition(
         key: ValueKey('calendar-body-$sid'),
-        value: '$week:$weekMode:$phoneWeek:${calendarDate(date)}:$kind',
+        // The weekly table owns its PageView gesture and transition. Changing
+        // a week must not also fade/move that complete paging viewport.
+        value: weekMode && !phoneWeek
+            ? 'table:$kind'
+            : '$week:$weekMode:$phoneWeek:${calendarDate(date)}:$kind',
         direction: _direction,
         child: weekMode
             ? Column(
@@ -1395,28 +1413,41 @@ class CalendarPanelState extends State<CalendarPanel>
                               }
                               return false;
                             },
-                            child: ScheduleGrid(
-                              key: ValueKey('week-grid-$sid'),
-                              firstDay: first,
-                              minDay: start,
-                              maxDay: end,
-                              entries: repository.entries,
-                              periods: widget.items.rows(semester['periods']),
-                              loading: repository.busy,
-                              resourceFilter: kind,
-                              revision: currentRevision,
-                              showHeader: true,
-                              selectedDay: date,
-                              visible: weekMode && !phoneWeek,
-                              now: widget.now,
-                              refreshClock: false,
-                              onOpen: open,
-                              onOpenSurface: (row, surfaceTag) =>
-                                  open(row, surfaceTag: surfaceTag),
-                              onDay: selectDay,
-                              onWeek: (d) => changeWeek(
-                                d.difference(start).inDays ~/ 7 + 1,
-                              ),
+                            child: CalendarWeekPager(
+                              key: ValueKey('week-pages-$gridScope'),
+                              week: week,
+                              totalWeeks: semester['total_weeks'] as int,
+                              onChanged: changeWeek,
+                              pageBuilder: (context, pageWeek) {
+                                final pageDay = start.add(
+                                  Duration(days: (pageWeek - 1) * 7),
+                                );
+                                final saved = _gridPages[calendarDate(pageDay)];
+                                return ScheduleGrid(
+                                  key: PageStorageKey(
+                                    'week-grid-$gridScope-$pageWeek',
+                                  ),
+                                  firstDay: pageDay,
+                                  minDay: start,
+                                  maxDay: end,
+                                  entries: saved ?? const [],
+                                  periods: widget.items.rows(
+                                    semester['periods'],
+                                  ),
+                                  loading: saved == null,
+                                  resourceFilter: kind,
+                                  revision: currentRevision,
+                                  showHeader: true,
+                                  selectedDay: date,
+                                  visible: weekMode && !phoneWeek,
+                                  now: widget.now,
+                                  refreshClock: false,
+                                  onOpen: open,
+                                  onOpenSurface: (row, surfaceTag) =>
+                                      open(row, surfaceTag: surfaceTag),
+                                  onDay: selectDay,
+                                );
+                              },
                             ),
                           ),
                         ),

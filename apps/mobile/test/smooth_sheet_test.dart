@@ -4,7 +4,7 @@ import 'package:semester_os/ui/app_sheet.dart';
 import 'package:smooth_sheets/smooth_sheets.dart';
 
 void main() {
-  testWidgets('pill sheet footer accepts taps at its painted position', (
+  testWidgets('assistant sheet footer accepts taps at its painted position', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -20,7 +20,6 @@ void main() {
               onPressed: () => showAppSheet<void>(
                 context: context,
                 heightFactor: .9,
-                originRect: const Rect.fromLTWH(350, 754, 48, 48),
                 builder: (_) => Column(
                   children: [
                     const Expanded(child: Text('Conversation')),

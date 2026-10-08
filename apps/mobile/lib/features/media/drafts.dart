@@ -25,11 +25,12 @@ class CaptureDrafts {
     Map<String, dynamic>? value, {
     String? pointerKey,
     bool activatePointer = false,
+    bool Function()? when,
   }) {
     _writes = _writes.catchError((_) {}).then((_) async {
-      if (!valid()) return;
+      if (!valid() || when?.call() == false) return;
       final data = await cache.read('capture:$owner') ?? {};
-      if (!valid()) return;
+      if (!valid() || when?.call() == false) return;
       if (value == null) {
         data.remove(key);
       } else {
@@ -42,6 +43,34 @@ class CaptureDrafts {
         } else if (data[pointerKey]?['key'] == key) {
           data.remove(pointerKey);
         }
+      }
+      await cache.write('capture:$owner', data);
+    });
+    return _writes;
+  }
+
+  /// Retire conversation draft references without deleting shared source files.
+  Future<void> clearConversation(String semesterId, String threadId) {
+    _writes = _writes.catchError((_) {}).then((_) async {
+      if (!valid()) return;
+      final data = await cache.read('capture:$owner') ?? {};
+      if (!valid()) return;
+      final base = 'assistant:$semesterId';
+      final context = 'assistant-context:$semesterId:';
+      final removed = data.keys.where((key) {
+        if (key == '$base:thread:$threadId') return true;
+        final value = data[key];
+        return (key == base || key.startsWith(context)) &&
+            value is Map &&
+            value['thread_id'] == threadId;
+      }).toSet();
+      for (final key in removed) {
+        data.remove(key);
+      }
+      final pointerKey = 'assistant-context-latest:$semesterId';
+      final pointer = data[pointerKey];
+      if (pointer is Map && removed.contains(pointer['key'])) {
+        data.remove(pointerKey);
       }
       await cache.write('capture:$owner', data);
     });

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import '../../ui/app_sheet.dart';
 import '../../ui/assistant_scope.dart';
-import '../../ui/v2/widgets/surface_origin.dart';
+import '../../ui/motion.dart';
 import '../items/items_controller.dart';
 import '../media/drafts.dart';
 import 'agent_page.dart';
@@ -22,7 +22,6 @@ Future<void> openAssistantSheet(
   String? retainedAudio;
   final owner = controller.owner;
   final generation = controller.api.generation;
-  final origin = AssistantSurfaceOrigin.rectOf(context);
   if (audioPath != null && owner != null) {
     final folder = await CaptureDrafts.folder(owner);
     await folder.create(recursive: true);
@@ -40,7 +39,8 @@ Future<void> openAssistantSheet(
     await showAppSheet<void>(
       context: context,
       heightFactor: .90,
-      originRect: origin,
+      transitionDuration: AppMotion.change(context),
+      transitionCurve: Curves.easeOutCubic,
       builder: (context) => AgentPage(
         controller: controller,
         semester: semester,

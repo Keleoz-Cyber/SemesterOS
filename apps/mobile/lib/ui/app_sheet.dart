@@ -88,7 +88,8 @@ Future<T?> showAppSheet<T>({
   bool showHandle = true,
   bool barrierDismissible = true,
   bool swipeDismissible = true,
-  Rect? originRect,
+  Duration? transitionDuration,
+  Curve transitionCurve = ShiriMotion.easeStandard,
 }) {
   assert(heightFactor == null || (heightFactor > 0 && heightFactor <= 1));
   final themes = InheritedTheme.capture(
@@ -100,8 +101,10 @@ Future<T?> showAppSheet<T>({
       barrierDismissible: barrierDismissible,
       swipeDismissible: swipeDismissible,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      transitionDuration: AppMotion.sheet(context),
-      transitionCurve: ShiriMotion.easeStandard,
+      transitionDuration: AppMotion.reduced(context)
+          ? Duration.zero
+          : transitionDuration ?? AppMotion.sheet(context),
+      transitionCurve: transitionCurve,
       viewportBuilder: (context, child) {
         final media = MediaQuery.of(context);
         final side = math.max(0.0, (media.size.width - 720) / 2);
@@ -125,7 +128,6 @@ Future<T?> showAppSheet<T>({
           builder: builder,
           heightFactor: heightFactor,
           showHandle: showHandle,
-          originRect: originRect,
         ),
       ),
     ),
@@ -137,13 +139,11 @@ class _AppSheet extends StatelessWidget {
     required this.builder,
     required this.heightFactor,
     required this.showHandle,
-    this.originRect,
   });
 
   final WidgetBuilder builder;
   final double? heightFactor;
   final bool showHandle;
-  final Rect? originRect;
 
   @override
   Widget build(BuildContext context) {
@@ -205,60 +205,6 @@ class _AppSheet extends StatelessWidget {
         ),
       ),
     );
-    return originRect == null
-        ? sheet
-        : _SheetMorph(origin: originRect!, child: sheet);
-  }
-}
-
-/// Keeps the existing draggable route and keyboard viewport. Only its painted
-/// surface moves from the triggering pill's bounds to the final sheet bounds.
-class _SheetMorph extends StatefulWidget {
-  const _SheetMorph({required this.origin, required this.child});
-  final Rect origin;
-  final Widget child;
-  @override
-  State<_SheetMorph> createState() => _SheetMorphState();
-}
-
-class _SheetMorphState extends State<_SheetMorph> {
-  final boundsKey = GlobalKey();
-  @override
-  Widget build(BuildContext context) {
-    final reduced = AppMotion.reduced(context);
-    final animation =
-        ModalRoute.of(context)?.animation ??
-        const AlwaysStoppedAnimation<double>(1);
-    return RepaintBoundary(
-      key: boundsKey,
-      child: AnimatedBuilder(
-        animation: animation,
-        child: widget.child,
-        builder: (context, child) {
-          final box = boundsKey.currentContext?.findRenderObject();
-          final current = box is RenderBox && box.hasSize && !box.size.isEmpty
-              ? box.localToGlobal(Offset.zero) & box.size
-              : null;
-          final t = reduced ? 1.0 : animation.value;
-          final rect = current == null
-              ? null
-              : Rect.lerp(widget.origin, current, t)!;
-          // Keep one subtree while bounds arrive or accessibility changes.
-          // Replacing the first-frame Sheet with a Transform would dispose its
-          // model and the live assistant, including input and hit geometry.
-          return Transform.translate(
-            offset: current == null
-                ? Offset.zero
-                : rect!.topLeft - current.topLeft,
-            child: Transform.scale(
-              alignment: Alignment.topLeft,
-              scaleX: current == null ? 1 : rect!.width / current.width,
-              scaleY: current == null ? 1 : rect!.height / current.height,
-              child: Opacity(opacity: t.clamp(.05, 1.0), child: child),
-            ),
-          );
-        },
-      ),
-    );
+    return sheet;
   }
 }

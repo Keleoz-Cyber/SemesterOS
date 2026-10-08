@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/api.dart';
 import '../../ui/assistant_scope.dart' show AssistantBrowsingContext;
 import '../items/items_controller.dart';
+import 'conversation_session.dart';
 
 List<Map<String, dynamic>> rows(dynamic value) => value is List
     ? value.whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList()
@@ -19,7 +20,7 @@ class AgentController extends ChangeNotifier {
   String? threadId, error;
   bool busy = false, loading = true, _closed = false;
   bool historyLoading = false, earlierLoading = false;
-  bool historyDeleted = false, historyChanging = false;
+  bool historyChanging = false;
   bool hasMoreThreads = false, hasMoreRuns = false;
   String? threadCursor, runCursor;
   final Set<String> loadingCards = {};
@@ -31,10 +32,65 @@ class AgentController extends ChangeNotifier {
   final Set<String> _syncedReceipts = {};
   Future<void>? _receiptSync;
   Map<String, dynamic>? mediaRun;
-  AgentController(this.items, this.semesterId);
+  late final String _owner = items.owner ?? '';
+  late final ConversationDeletions _deletions;
+  final _observedDeletions = <String>{};
+  int deletedContextVersion = 0;
+  String? retiredThreadId;
+  AgentController(this.items, this.semesterId) {
+    _deletions = ConversationSessions.deletionsFor(
+      items.api,
+      owner: _owner,
+      generation: generation,
+    );
+    _observedDeletions.addAll(_deletions.forSemester(semesterId));
+    _deletions.addListener(_retireDeletedThreads);
+  }
+
+  bool isThreadDeleted(String? id) =>
+      id != null && _deletions.contains(semesterId, id);
+
+  void _checkThread(String? id) {
+    if (isThreadDeleted(id)) {
+      throw ApiFailure('这段对话已删除，请新建对话');
+    }
+  }
+
+  void _retireDeletedThreads() {
+    if (_closed ||
+        items.api.generation != generation ||
+        items.owner != _owner) {
+      return;
+    }
+    final removed = _deletions.forSemester(semesterId);
+    if (removed.difference(_observedDeletions).isEmpty) return;
+    _observedDeletions.addAll(removed);
+    _historyEpoch++;
+    historyLoading = false;
+    threads = threads.where((row) => !removed.contains(row['id'])).toList();
+    if (removed.contains(threadId)) {
+      retiredThreadId = threadId;
+      deletedContextVersion++;
+      _epoch++;
+      _poll?.cancel();
+      threadId = null;
+      runs = [];
+      mediaRun = null;
+      hasMoreRuns = false;
+      runCursor = null;
+      earlierLoading = loading = busy = false;
+      _pendingId = _pendingText = null;
+      loadingCards.clear();
+      _undoRequests.clear();
+      error = null;
+    }
+    notifyListeners();
+  }
+
   bool get active =>
       !_closed &&
       items.api.generation == generation &&
+      items.owner == _owner &&
       items.semesterId == semesterId;
   bool get processing =>
       mediaProcessing ||
@@ -77,6 +133,11 @@ class AgentController extends ChangeNotifier {
     Map<String, dynamic>? query,
   }) => items.api.request(method, path, data: data, queryParameters: query);
   Future<void> open({String? id, bool fresh = false}) async {
+    if (isThreadDeleted(id)) {
+      retiredThreadId = id;
+      deletedContextVersion++;
+      fresh = true;
+    }
     final stamp = ++_epoch;
     _historyEpoch++;
     _poll?.cancel();
@@ -103,7 +164,9 @@ class AgentController extends ChangeNotifier {
           '/agent/threads?semester_id=$semesterId',
         );
         check(stamp);
-        threads = rows(all);
+        threads = rows(
+          all,
+        ).where((row) => !isThreadDeleted(row['id'])).toList();
       }
       threadId = id ?? (threads.isEmpty ? null : threads.first['id'] as String);
       runs = [];
@@ -145,17 +208,9 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadHistory({bool reset = false, bool? deleted}) async {
+  Future<void> loadHistory({bool reset = false}) async {
     if (!active || (historyLoading && !reset) || (!reset && !hasMoreThreads)) {
       return;
-    }
-    final mode = deleted ?? historyDeleted;
-    if (mode != historyDeleted) {
-      historyDeleted = mode;
-      threads = [];
-      hasMoreThreads = false;
-      threadCursor = null;
-      reset = true;
     }
     final stamp = _epoch;
     final pageStamp = reset ? ++_historyEpoch : _historyEpoch;
@@ -169,13 +224,14 @@ class AgentController extends ChangeNotifier {
         query: {
           'semester_id': semesterId,
           'limit': 20,
-          'deleted': historyDeleted,
           if (!reset && threadCursor != null) 'before_thread_id': threadCursor,
         },
       );
       check(stamp);
       if (pageStamp != _historyEpoch) return;
-      final page = rows(value['threads']);
+      final page = rows(
+        value['threads'],
+      ).where((row) => !isThreadDeleted(row['id'])).toList();
       threads = reset
           ? page
           : [
@@ -205,50 +261,14 @@ class AgentController extends ChangeNotifier {
     try {
       await request('DELETE', '/agent/threads/$id');
       check(stamp);
-      _historyEpoch++;
-      historyLoading = false;
-      threads = threads.where((row) => row['id'] != id).toList();
-      if (threadId == id) {
-        _epoch++;
-        _poll?.cancel();
-        threadId = null;
-        runs = [];
-        mediaRun = null;
-        hasMoreRuns = false;
-        runCursor = null;
-        earlierLoading = loading = false;
-        _pendingId = _pendingText = null;
-      }
+      ConversationSessions.forgetThread(
+        items.api,
+        owner: _owner,
+        generation: generation,
+        semester: semesterId,
+        threadId: id,
+      );
       if (threads.isEmpty && hasMoreThreads) await loadHistory();
-      return true;
-    } catch (e) {
-      if (active && stamp == _epoch) error = userError(e);
-      return false;
-    } finally {
-      if (active) {
-        historyChanging = false;
-        emit();
-      }
-    }
-  }
-
-  Future<bool> restoreThread(String id) async {
-    if (!active || historyChanging) return false;
-    final stamp = _epoch;
-    historyChanging = true;
-    error = null;
-    emit();
-    try {
-      await request('POST', '/agent/threads/$id/restore');
-      check(stamp);
-      _historyEpoch++;
-      historyLoading = false;
-      if (historyDeleted) {
-        threads = threads.where((row) => row['id'] != id).toList();
-        if (threads.isEmpty && hasMoreThreads) await loadHistory();
-      } else {
-        await loadHistory(reset: true);
-      }
       return true;
     } catch (e) {
       if (active && stamp == _epoch) error = userError(e);
@@ -480,8 +500,13 @@ class AgentController extends ChangeNotifier {
   }
 
   void _acceptMediaRun(Map<String, dynamic> value) {
-    mediaRun = value;
     final thread = value['thread'];
+    _checkThread(thread is Map ? thread['id'] as String? : null);
+    final incomingRun = value['run'];
+    _checkThread(
+      incomingRun is Map ? incomingRun['thread_id'] as String? : null,
+    );
+    mediaRun = value;
     if (thread is Map && thread['id'] is String) threadId = thread['id'];
     final run = value['run'];
     if (run is Map) {
@@ -662,6 +687,7 @@ class AgentController extends ChangeNotifier {
   }
 
   void replace(Map<String, dynamic> value) {
+    _checkThread(value['thread_id'] as String?);
     if (value['status'] == 'applied' && value['preview']?['kind'] == 'undo') {
       final sourceId = value['preview']['source_run_id'];
       runs = [
@@ -935,6 +961,7 @@ class AgentController extends ChangeNotifier {
   @override
   void dispose() {
     _closed = true;
+    _deletions.removeListener(_retireDeletedThreads);
     _epoch++;
     _poll?.cancel();
     super.dispose();

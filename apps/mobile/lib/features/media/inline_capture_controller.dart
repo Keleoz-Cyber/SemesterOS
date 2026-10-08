@@ -15,21 +15,26 @@ class InlineCaptureController extends ChangeNotifier {
     this.onTranscript,
     Duration pollInterval = const Duration(seconds: 2),
   }) : _generation = controller.api.generation,
+       // Keep the public pollInterval injection name while storing it privately.
+       // ignore: prefer_initializing_formals
+       _pollInterval = pollInterval,
        _owner = controller.owner {
     _drafts = CaptureDrafts(controller.cache, _owner ?? '', () => same);
     controller.addListener(_accountChanged);
-    _poll = Timer.periodic(pollInterval, (_) => unawaited(checkJob()));
+    _ensurePolling();
   }
 
   final ItemsController controller;
   final String semesterId;
   final ValueChanged<String>? onTranscript;
   final int _generation;
+  final Duration _pollInterval;
   final String? _owner;
   late final CaptureDrafts _drafts;
   Timer? _poll;
   bool _disposed = false, _working = false, _checking = false;
-  int _operation = 0;
+  int _operation = 0, _contextEpoch = 0;
+  int? _checkingOperation;
   String _key = _newKey(), _kind = 'audio', _phase = 'idle';
   String _referenceAt = DateTime.now().toUtc().toIso8601String();
   String? _local, _error, _reported, _confirmedText, _confirmedReference;
@@ -73,6 +78,40 @@ class InlineCaptureController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  void _ensurePolling() {
+    if (_poll?.isActive != true) {
+      _poll = Timer.periodic(_pollInterval, (_) => unawaited(checkJob()));
+    }
+  }
+
+  /// Retires this composer's context locally; shared source files stay intact.
+  Future<void> retireContext({String? scope}) {
+    if (_disposed) return Future<void>.value();
+    if (_scope == null && scope != null) _scope = scope;
+    final key = draftKey;
+    _operation++;
+    _contextEpoch++;
+    _poll?.cancel();
+    _poll = null;
+    _checking = false;
+    _checkingOperation = null;
+    _reset();
+    _changed();
+    final actor = _owner;
+    if (actor == null) return Future<void>.value();
+    // A queued cleanup must finish after page disposal, while remaining scoped
+    // to the original account/generation/semester. No server cancellation or
+    // file release is performed here.
+    return CaptureDrafts(
+      controller.cache,
+      actor,
+      () =>
+          _generation == controller.api.generation &&
+          actor == controller.owner &&
+          semesterId == controller.semesterId,
+    ).save(key, null);
+  }
+
   void _accountChanged() {
     if (same || _disposed) return;
     _operation++;
@@ -95,18 +134,21 @@ class InlineCaptureController extends ChangeNotifier {
     _key = _newKey();
   }
 
-  Future<void> _save() => _drafts.save(draftKey, {
-    'kind': _kind,
-    'local': _local,
-    'key': _key,
-    'source': _source,
-    'reference_at': _referenceAt,
-    'phase': _phase,
-    'confirmed_text': _confirmedText,
-    'confirmed_reference': _confirmedReference,
-    'confirmed_version': _confirmedVersion,
-    'pending_confirmation': _pendingConfirmation,
-  });
+  Future<void> _save() {
+    final context = _contextEpoch;
+    return _drafts.save(draftKey, {
+      'kind': _kind,
+      'local': _local,
+      'key': _key,
+      'source': _source,
+      'reference_at': _referenceAt,
+      'phase': _phase,
+      'confirmed_text': _confirmedText,
+      'confirmed_reference': _confirmedReference,
+      'confirmed_version': _confirmedVersion,
+      'pending_confirmation': _pendingConfirmation,
+    }, when: () => context == _contextEpoch);
+  }
 
   void _accept(Map<String, dynamic> value, {bool transcript = true}) {
     if (value['semester_id'] != null && value['semester_id'] != semesterId) {
@@ -138,6 +180,7 @@ class InlineCaptureController extends ChangeNotifier {
 
   Future<void> restore({String? scope}) async {
     if (!same || _working || hasPending) return;
+    _ensurePolling();
     if (scope != null) _scope = scope;
     final stamp = ++_operation;
     _working = true;
@@ -180,6 +223,7 @@ class InlineCaptureController extends ChangeNotifier {
   /// Copies the caller-owned temporary file before this future completes.
   Future<void> capture(String path, String kind) async {
     if (!same || busy) return;
+    _ensurePolling();
     final previousLocal = _local;
     final stamp = ++_operation;
     _working = true;
@@ -305,6 +349,7 @@ class InlineCaptureController extends ChangeNotifier {
     }
     final stamp = _operation, id = _source!['id'];
     _checking = true;
+    _checkingOperation = stamp;
     try {
       final value = await controller.api.request('GET', '/sources/$id');
       if (!_valid(stamp) || _source?['id'] != id) return;
@@ -320,7 +365,10 @@ class InlineCaptureController extends ChangeNotifier {
         _changed();
       }
     } finally {
-      if (!_disposed) _checking = false;
+      if (_checkingOperation == stamp) {
+        _checking = false;
+        _checkingOperation = null;
+      }
     }
   }
 

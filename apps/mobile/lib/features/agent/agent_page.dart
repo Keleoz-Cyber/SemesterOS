@@ -134,6 +134,8 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   late AssistantBrowsingContext? browsingContext = widget.browsingContext;
   bool browsingContextRemoved = false;
   bool _receivingHistory = false;
+  int _handledDeletedContext = 0;
+  bool _retiringDraft = false;
   @override
   void initState() {
     super.initState();
@@ -145,7 +147,15 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       controller: widget.controller,
       semesterId: widget.semester['id'],
       onTranscript: (value) {
-        if (!mounted || !c.active || value.trim().isEmpty) return;
+        if (!mounted ||
+            !c.active ||
+            _retiringDraft ||
+            c.deletedContextVersion != _handledDeletedContext ||
+            !media.hasPending ||
+            media.phase != 'recognized' ||
+            value.trim().isEmpty) {
+          return;
+        }
         final source = media.source;
         final token = '${source?['id']}:${source?['version']}';
         // The acknowledgement and composer text are saved together. Reopening
@@ -227,6 +237,11 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     final target = widget.initialThreadId ?? session.threadId;
     await c.open(id: target, fresh: target == null);
     if (!mounted || !c.active) return;
+    if (c.isThreadDeleted(saved?['thread_id']) || c.isThreadDeleted(target)) {
+      saved = null;
+      editingRun = null;
+      session.editBackup = null;
+    }
     _seenTurns.addAll(c.runs.map((run) => '${run['id']}'));
     if (saved != null) {
       if (widget.browsingContext == null || editingRun != null) {
@@ -257,6 +272,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       noticeDraft = saved['notice_input'] == true || noticeDraft;
     }
     readyForDraft = true;
+    conversationChanged();
     session.threadId = c.threadId;
     restoringMedia = true;
     try {
@@ -352,6 +368,39 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
 
   void conversationChanged() {
     if (!readyForDraft) return;
+    if (_handledDeletedContext != c.deletedContextVersion) {
+      _handledDeletedContext = c.deletedContextVersion;
+      final deletedId = c.retiredThreadId;
+      _retiringDraft = true;
+      draftTimer?.cancel();
+      audioAdoptionTimer?.cancel();
+      captureEpoch++;
+      unawaited(media.retireContext(scope: draftKey).catchError((_) {}));
+      editingRun = null;
+      session.editBackup = null;
+      input.clear();
+      pendingImages.clear();
+      imageRequestId = imageRequestSignature = null;
+      noticeDraft = false;
+      pickingImage = sendingMedia = adoptingAudio = false;
+      pendingMediaDraft = false;
+      captureError = null;
+      expandedImagePreview = false;
+      incomingAudio = null;
+      attachment = null;
+      detachedSource = false;
+      mediaReferenceOverride = null;
+      transcriptAck = null;
+      browsingContext = browsingContextRemoved ? null : widget.browsingContext;
+      _retiringDraft = false;
+      if (deletedId != null) {
+        unawaited(
+          drafts
+              .clearConversation(widget.semester['id'], deletedId)
+              .catchError((_) {}),
+        );
+      }
+    }
     if (c.loading || c.earlierLoading) {
       _receivingHistory = true;
       _unshownArrivals.clear();
@@ -397,12 +446,15 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   }
 
   void scheduleDraft() {
-    if (!readyForDraft) return;
+    if (!readyForDraft || _retiringDraft) return;
     draftTimer?.cancel();
     draftTimer = Timer(const Duration(milliseconds: 350), () => saveDraft());
   }
 
   Future<bool> saveDraft() async {
+    final thread = c.threadId;
+    if (c.isThreadDeleted(thread)) return false;
+    bool stillNotDeleted() => !c.isThreadDeleted(thread);
     final value = {
       'text': input.text,
       'notice_input': noticeDraft,
@@ -411,7 +463,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       'browsing_context_removed': browsingContextRemoved,
       'source': attachment,
       'detached': detachedSource,
-      'thread_id': c.threadId,
+      'thread_id': thread,
       'media_reference_override': mediaReferenceOverride,
       'media_transcript_ack': transcriptAck,
       'pending_media': pendingMediaDraft || media.hasPending,
@@ -438,9 +490,15 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             value['pending_media'] == true ||
             pendingImages.isNotEmpty ||
             value['picking_image'] == true,
+        when: stillNotDeleted,
       );
-      if (c.threadId != null) {
-        await drafts.save('$baseDraftKey:thread:${c.threadId}', value);
+      if (!stillNotDeleted()) return false;
+      if (thread != null) {
+        await drafts.save(
+          '$baseDraftKey:thread:$thread',
+          value,
+          when: stillNotDeleted,
+        );
       }
       return true;
     } catch (_) {
@@ -731,7 +789,8 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     bool sameActor() =>
         actor == widget.controller.owner &&
         generation == widget.controller.api.generation &&
-        semester == widget.controller.semesterId;
+        semester == widget.controller.semesterId &&
+        !c.isThreadDeleted(thread);
     bool visibleContext() =>
         mounted &&
         c.active &&
@@ -813,8 +872,12 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             'image_request_signature': null,
             'media_transcript_ack': null,
           };
-          await drafts.save(scope, adoptedDraft);
-          await drafts.save('$baseDraftKey:thread:$thread', adoptedDraft);
+          await drafts.save(scope, adoptedDraft, when: sameActor);
+          await drafts.save(
+            '$baseDraftKey:thread:$thread',
+            adoptedDraft,
+            when: sameActor,
+          );
         }
         adopted = true;
         audioAdoptionTimer?.cancel();
@@ -874,7 +937,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                     jsonEncode(oldImages)) {
               return;
             }
-            await drafts.save(key, oldDraft);
+            await drafts.save(key, oldDraft, when: sameActor);
           }
 
           await restoreUnchanged(scope);
@@ -1125,7 +1188,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     await saveDraft();
     if (!mounted) return;
     setState(() => showingHistory = true);
-    await c.loadHistory(reset: true, deleted: false);
+    await c.loadHistory(reset: true);
   }
 
   Future<void> deleteHistoryThread(Map<String, dynamic> thread) async {
@@ -1144,7 +1207,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 12),
             const Text(
-              '处理和待确认操作会停止。已保存的日程、待办和后续对话保留，可在“已删除对话”中恢复。',
+              '删除后无法恢复，处理和待确认操作会停止。已保存的日程、待办和后续对话保留。',
               style: TextStyle(
                 fontSize: 14,
                 height: 1.5,
@@ -1175,44 +1238,15 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     final wasCurrent = c.threadId == id;
     if (wasCurrent && !await saveDraft()) return;
     if (!await c.deleteThread(id) || !mounted || !c.active) return;
-    if (wasCurrent && c.threadId == null) {
-      draftTimer?.cancel();
-      setState(() {
-        editingRun = null;
-        session.editBackup = null;
-        input.clear();
-        pendingImages.clear();
-        imageRequestId = imageRequestSignature = null;
-        noticeDraft = false;
-        attachment = null;
-        detachedSource = false;
-        mediaReferenceOverride = null;
-        transcriptAck = null;
-        browsingContext = browsingContextRemoved
-            ? null
-            : widget.browsingContext;
-      });
-      await saveDraft();
+    try {
+      await drafts.clearConversation(widget.semester['id'], id);
+    } catch (_) {
+      // Local cleanup cannot undo a successful server deletion.
     }
-    if (!mounted) return;
+    if (!mounted || !c.active) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('对话已删除'),
-        action: SnackBarAction(
-          label: '撤销',
-          onPressed: () => restoreHistoryThread(id),
-        ),
-      ),
-    );
-  }
-
-  Future<void> restoreHistoryThread(String id) async {
-    if (!await c.restoreThread(id) || !mounted || !c.active) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(const SnackBar(content: Text('对话已恢复')));
+    messenger.showSnackBar(const SnackBar(content: Text('对话已删除')));
   }
 
   Future<void> openHistory(String id) async {
@@ -1367,16 +1401,10 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             : 60,
         leading: showingHistory
             ? AppIconButton(
-                tooltip: c.historyDeleted ? '返回历史对话' : '返回对话',
+                tooltip: '返回对话',
                 onPressed: c.historyChanging
                     ? null
-                    : () {
-                        if (c.historyDeleted) {
-                          c.loadHistory(reset: true, deleted: false);
-                        } else {
-                          setState(() => showingHistory = false);
-                        }
-                      },
+                    : () => setState(() => showingHistory = false),
                 icon: const Icon(Icons.arrow_back_rounded),
               )
             : widget.embedded
@@ -1395,7 +1423,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              showingHistory ? (c.historyDeleted ? '已删除对话' : '历史对话') : '助手',
+              showingHistory ? '历史对话' : '助手',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             if ('${widget.semester['name'] ?? ''}'.isNotEmpty)
@@ -1743,30 +1771,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget historyList() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: AppTextButton.icon(
-            onPressed: c.historyChanging
-                ? null
-                : () => c.loadHistory(reset: true, deleted: !c.historyDeleted),
-            icon: Icon(
-              c.historyDeleted
-                  ? Icons.history_rounded
-                  : Icons.restore_from_trash_outlined,
-              size: 19,
-            ),
-            label: Text(c.historyDeleted ? '返回历史对话' : '已删除对话'),
-          ),
-        ),
-      ),
-      Expanded(child: historyRows()),
-    ],
-  );
+  Widget historyList() => historyRows();
 
   Widget historyRows() {
     if (c.historyLoading && c.threads.isEmpty) {
@@ -1801,14 +1806,14 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       }
       return Center(
         child: EmptyState(
-          title: c.historyDeleted ? '没有已删除的对话' : '还没有历史对话',
+          title: '还没有历史对话',
           icon: Icons.chat_bubble_outline_rounded,
         ),
       );
     }
     return LazyLoadList<Map<String, dynamic>>(
       pagingKey:
-          '${widget.controller.owner}:${widget.semester['id']}:${widget.controller.api.generation}:${c.historyDeleted}',
+          '${widget.controller.owner}:${widget.semester['id']}:${widget.controller.api.generation}',
       items: c.threads,
       hasMore: c.hasMoreThreads,
       itemKey: (row) => ValueKey('history-${row['id']}'),
@@ -1826,8 +1831,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       itemBuilder: (context, thread, index) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!c.historyDeleted &&
-              historyDay(thread).isNotEmpty &&
+          if (historyDay(thread).isNotEmpty &&
               (index == 0 ||
                   historyDay(c.threads[index - 1]) != historyDay(thread)))
             Padding(
@@ -1856,15 +1860,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            subtitle: c.historyDeleted
-                ? Text(
-                    '删除于 ${noticeClock(thread['deleted_at'])}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: CampusColors.muted,
-                    ),
-                  )
-                : thread['updated_at'] == null
+            subtitle: thread['updated_at'] == null
                 ? null
                 : Text(
                     noticeClock(thread['updated_at'], clockOnly: true),
@@ -1873,23 +1869,14 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                       color: CampusColors.muted,
                     ),
                   ),
-            trailing: c.historyDeleted
-                ? AppTextButton(
-                    onPressed: c.historyChanging
-                        ? null
-                        : () => restoreHistoryThread(thread['id'] as String),
-                    child: const Text('恢复'),
-                  )
-                : AppIconButton(
-                    tooltip: '删除对话',
-                    onPressed: c.historyChanging
-                        ? null
-                        : () => deleteHistoryThread(thread),
-                    icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                  ),
-            onTap: c.historyDeleted || c.historyChanging
-                ? null
-                : () => openHistory(thread['id']),
+            trailing: AppIconButton(
+              tooltip: '删除对话',
+              onPressed: c.historyChanging
+                  ? null
+                  : () => deleteHistoryThread(thread),
+              icon: const Icon(Icons.delete_outline_rounded, size: 20),
+            ),
+            onTap: c.historyChanging ? null : () => openHistory(thread['id']),
           ),
         ],
       ),
