@@ -116,15 +116,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
       if (mounted) setState(() => error = userError(e));
     }
     if (changed && mounted && error == null && state == 'completed') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('已完成'),
-          action: SnackBarAction(
-            label: '撤销',
-            onPressed: () => changeState('active'),
-          ),
-        ),
-      );
+      showItemCompletionFeedback(context, onUndo: () => changeState('active'));
     }
   }
 

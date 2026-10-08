@@ -221,6 +221,11 @@ class _GlassDockState extends State<GlassDock>
       child: InkResponse(
         containedInkWell: true,
         highlightShape: BoxShape.rectangle,
+        highlightColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: shiri.colors.primarySoft,
+        splashFactory: NoSplash.splashFactory,
         onTap: () {
           if (selected) return;
           HapticFeedback.selectionClick();

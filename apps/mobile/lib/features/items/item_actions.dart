@@ -5,6 +5,23 @@ import '../../core/api.dart' show userError;
 import '../planning/plan_change_confirmation.dart';
 import 'items_controller.dart';
 
+/// A short undo opportunity; Flutter otherwise persists snack bars with actions.
+void showItemCompletionFeedback(
+  BuildContext context, {
+  required VoidCallback onUndo,
+}) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: const Text('已完成'),
+      duration: Duration(
+        seconds: MediaQuery.accessibleNavigationOf(context) ? 10 : 5,
+      ),
+      persist: false,
+      action: SnackBarAction(label: '撤销', onPressed: onUndo),
+    ),
+  );
+}
+
 /// Shared list/home feedback around the same preview-and-consent lifecycle path.
 Future<bool> completeItemWithUndo(
   BuildContext context,
@@ -25,28 +42,23 @@ Future<bool> completeItemWithUndo(
     'completed',
   );
   if (!changed || !context.mounted || !same()) return changed;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: const Text('已完成'),
-      action: SnackBarAction(
-        label: '撤销',
-        onPressed: () async {
-          try {
-            if (!context.mounted || !same()) return;
-            final fresh = await controller.get('${item['id']}');
-            if (context.mounted && same()) {
-              await changeItemLifecycle(context, controller, fresh, 'active');
-            }
-          } catch (error) {
-            if (context.mounted && same()) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(userError(error))));
-            }
-          }
-        },
-      ),
-    ),
+  showItemCompletionFeedback(
+    context,
+    onUndo: () async {
+      try {
+        if (!context.mounted || !same()) return;
+        final fresh = await controller.get('${item['id']}');
+        if (context.mounted && same()) {
+          await changeItemLifecycle(context, controller, fresh, 'active');
+        }
+      } catch (error) {
+        if (context.mounted && same()) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userError(error))));
+        }
+      }
+    },
   );
   return true;
 }

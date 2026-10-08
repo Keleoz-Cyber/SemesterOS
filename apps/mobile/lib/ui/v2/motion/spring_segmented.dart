@@ -205,6 +205,11 @@ class _SpringSegmentedState<T> extends State<SpringSegmented<T>>
       inMutuallyExclusiveGroup: true,
       child: InkWell(
         borderRadius: BorderRadius.circular(11),
+        highlightColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: c.primarySoft,
+        splashFactory: NoSplash.splashFactory,
         onTap: !widget.enabled || widget.disabledValues.contains(value)
             ? null
             : () {
