@@ -285,6 +285,7 @@ void main() {
       );
       await settle(tester);
       expect(find.text('完成实验报告与误差分析'), findsOneWidget);
+      await reveal(tester, find.text('还需 1小时30分钟'));
       expect(find.text('还需 1小时30分钟'), findsOneWidget);
       await shot(tester, 'inner-item-detail-$suffix');
       await reveal(tester, find.text('提醒 · 2条'));

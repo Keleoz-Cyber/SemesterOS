@@ -347,7 +347,7 @@ class _ImportPageState extends State<ImportPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              school.name,
+              '登录教务',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 18, height: 1.25),

@@ -16,6 +16,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_markdown_plus: 1.0.12
+  flutter_svg: ^2.2.3
   flutter_local_notifications: 22.3.1
   flutter_localizations:
     sdk: flutter
@@ -47,6 +48,10 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/brand_mark.png
+    - assets/brand/mark.svg
+    - assets/illustrations/
+    - assets/icons/
+    - assets/patterns/
     - assets/haut_reader.js
     - assets/hlju_reader.js
     - assets/hlju_browser_compat.js

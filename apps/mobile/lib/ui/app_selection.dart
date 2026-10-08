@@ -1,9 +1,7 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
-import 'motion.dart';
+import 'v2/motion/spring_segmented.dart';
 
-/// One actual Forui tab system across list states, ranges and view modes.
+/// Stable API: disabled/selected semantics remain with the spring control.
 class AppSegmentedControl<T> extends StatelessWidget {
   final T value;
   final ValueChanged<T> onChanged;
@@ -21,62 +19,12 @@ class AppSegmentedControl<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (options.isEmpty) return const SizedBox.shrink();
-    final entries = options.entries.toList();
-    final index = entries.indexWhere((entry) => entry.key == value);
-    var slot = 48.0;
-    for (final entry in entries) {
-      final painter = TextPainter(
-        text: TextSpan(
-          text: entry.value,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout();
-      slot = math.max(slot, painter.width + 32);
-      painter.dispose();
-    }
-    return LayoutBuilder(
-      builder: (context, constraints) => IgnorePointer(
-        ignoring: !enabled,
-        child: FTabs(
-          control: FTabControl.lifted(
-            index: index < 0 ? 0 : index,
-            motion: FTabMotion(duration: AppMotion.change(context)),
-            onChange: (next) {
-              if (enabled && !disabledValues.contains(entries[next].key)) {
-                onChanged(entries[next].key);
-              }
-            },
-          ),
-          scrollable:
-              !constraints.hasBoundedWidth ||
-              slot * entries.length + 8 > constraints.maxWidth,
-          style: const FTabsStyleDelta.delta(minHeight: 48, spacing: 0),
-          children: [
-            for (final entry in entries)
-              FTabEntry(
-                label: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 16),
-                  child: Padding(
-                    padding: EdgeInsets.zero,
-                    child: Text(
-                      entry.value,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: TextStyle(
-                        color: disabledValues.contains(entry.key)
-                            ? Theme.of(context).disabledColor
-                            : null,
-                      ),
-                    ),
-                  ),
-                ),
-                child: const SizedBox.shrink(),
-              ),
-          ],
-        ),
-      ),
+    return SpringSegmented<T>(
+      segments: [for (final entry in options.entries) (entry.key, entry.value)],
+      selected: value,
+      enabled: enabled,
+      disabledValues: disabledValues,
+      onChanged: onChanged,
     );
   }
 }

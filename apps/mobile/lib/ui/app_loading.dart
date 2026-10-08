@@ -5,6 +5,33 @@ import 'package:flutter/material.dart';
 
 import 'campus_theme.dart';
 import 'motion.dart';
+import 'v2/motion/skeleton.dart';
+
+/// First-load placeholder; refresh continues to use the non-reflowing overlay.
+class AppPageSkeleton extends StatelessWidget {
+  const AppPageSkeleton({super.key, this.label = '正在加载'});
+  final String label;
+  @override
+  Widget build(BuildContext context) => SkeletonScope(
+    semanticLabel: label,
+    child: ListView(
+      padding: const EdgeInsets.all(20),
+      children: const [
+        SkeletonLine(widthFactor: .48),
+        SizedBox(height: 24),
+        SkeletonBox(height: 128),
+        SizedBox(height: 28),
+        SkeletonLine(widthFactor: .28),
+        SizedBox(height: 16),
+        SkeletonBox(height: 72),
+        SizedBox(height: 12),
+        SkeletonBox(height: 72),
+        SizedBox(height: 12),
+        SkeletonBox(height: 72),
+      ],
+    ),
+  );
+}
 
 /// Refresh feedback paints above the existing content; it never becomes a row.
 class AppLoadingOverlay extends StatelessWidget {
@@ -119,7 +146,8 @@ class _AppLoadingIndicatorState extends State<AppLoadingIndicator>
   @override
   void didUpdateWidget(covariant AppLoadingIndicator oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.visible != widget.visible || oldWidget.delay != widget.delay) {
+    if (oldWidget.visible != widget.visible ||
+        oldWidget.delay != widget.delay) {
       _prepare();
     }
     _sync();

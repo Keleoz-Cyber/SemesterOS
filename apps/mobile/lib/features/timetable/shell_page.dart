@@ -1,4 +1,13 @@
+import 'dart:async';
+import 'package:flutter/services.dart';
 import '../../ui/app_loading.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
+import '../home/today_sky_header.dart';
+import '../calendar/time_track.dart' show MinuteClock;
+import '../media/hold_voice_button.dart';
+import '../../ui/v2/shiri_tokens.dart';
+import '../../ui/v2/widgets/surface_origin.dart';
+import '../../ui/v2/motion/skeleton.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/app_sheet.dart';
 import '../calendar/calendar_panel.dart';
@@ -38,11 +47,92 @@ class ShellPage extends StatefulWidget {
   State<ShellPage> createState() => _ShellPageState();
 }
 
-class _ShellPageState extends State<ShellPage> {
+class _ShellPageState extends State<ShellPage>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  late final tabFade = AnimationController(vsync: this, value: 1);
+  int? pendingTab;
+  int switchEpoch = 0;
+  void finishTab() {
+    switchEpoch++;
+    tabFade.stop();
+    if (pendingTab != null) {
+      tab = pendingTab!;
+      visitedTabs.add(tab);
+      pendingTab = null;
+    }
+    tabFade.value = 1;
+  }
+
+  Future<void> openDock({String? mediaKind}) async {
+    final generation = c.api.generation, semesterId = c.semester?['id'];
+    if (pendingTab != null) setState(finishTab);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted ||
+        generation != c.api.generation ||
+        semesterId != c.semester?['id']) {
+      return;
+    }
+    await AssistantScope.open(
+      assistantSourceKey.currentContext ?? context,
+      mediaKind: mediaKind,
+      browsingContext: tab == 1
+          ? calendarKey.currentState?.browsingContext
+          : null,
+    );
+  }
+
+  MinuteClock? skyClock;
+  DateTime skyNow = schoolNow();
+  bool foreground = true;
+  void syncSkyClock() {
+    final visible =
+        foreground &&
+        tab == 0 &&
+        c.semester != null &&
+        TickerMode.valuesOf(context).enabled &&
+        ModalRoute.isCurrentOf(context) != false;
+    if (!visible) {
+      skyClock?.cancel();
+      skyClock = null;
+      return;
+    }
+    skyNow = schoolNow();
+    skyClock ??= MinuteClock(() {
+      if (mounted) setState(() => skyNow = schoolNow());
+    }, now: schoolNow);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!AppMotion.allowed(context)) finishTab();
+    syncSkyClock();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    foreground = state == AppLifecycleState.resumed;
+    if (mounted) {
+      syncSkyClock();
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    switchEpoch++;
+    tabFade.dispose();
+    skyClock?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   var calendarKey = GlobalKey<CalendarPanelState>();
   var todayKey = GlobalKey<TodayDashboardState>();
   var semesterKey = GlobalKey<SemesterHomeState>();
   String? actor;
+  bool pillCollapsed = false;
+  final assistantSourceKey = GlobalKey();
   final visitedTabs = <int>{0};
   int tab = 0;
   AxisDirection tabDirection = AxisDirection.right;
@@ -51,6 +141,8 @@ class _ShellPageState extends State<ShellPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    tabFade;
     tab = widget.initialTab.clamp(0, 3);
     visitedTabs.add(tab);
   }
@@ -63,13 +155,44 @@ class _ShellPageState extends State<ShellPage> {
     }
   }
 
-  void switchTab(int value) {
-    if (value == tab) return;
+  void switchTab(int value) async {
+    if (value == (pendingTab ?? tab)) return;
+    if (!AppMotion.allowed(context)) {
+      setState(() {
+        finishTab();
+        tabDirection = value > tab ? AxisDirection.right : AxisDirection.left;
+        tab = value;
+        visitedTabs.add(value);
+        pillCollapsed = false;
+      });
+      syncSkyClock();
+      return;
+    }
+    final stamp = ++switchEpoch;
+    setState(() {
+      pendingTab = value;
+      visitedTabs.add(value);
+      pillCollapsed = false;
+    });
+    try {
+      await tabFade
+          .animateTo(
+            0,
+            duration: ShiriMotion.tap,
+            curve: ShiriMotion.easeAccelerate,
+          )
+          .orCancel;
+    } on TickerCanceled {
+      return;
+    }
+    if (!mounted || stamp != switchEpoch) return;
     setState(() {
       tabDirection = value > tab ? AxisDirection.right : AxisDirection.left;
       tab = value;
-      visitedTabs.add(value);
+      pendingTab = null;
     });
+    tabFade.value = 1;
+    syncSkyClock();
   }
 
   void openImport() =>
@@ -433,7 +556,12 @@ class _ShellPageState extends State<ShellPage> {
       );
     }
     return switch (index) {
-      1 => CalendarPanel(key: calendarKey, app: c, items: widget.items),
+      1 => CalendarPanel(
+        key: calendarKey,
+        app: c,
+        items: widget.items,
+        sliver: true,
+      ),
       2 => ItemsView(
         controller: widget.items,
         onCreate: add,
@@ -448,6 +576,7 @@ class _ShellPageState extends State<ShellPage> {
         onManage: manageSemester,
       ),
       _ => TodayDashboard(
+        showHeader: false,
         key: todayKey,
         app: c,
         items: widget.items,
@@ -465,12 +594,11 @@ class _ShellPageState extends State<ShellPage> {
     listenable: c,
     builder: (context, _) {
       if (!c.ready) {
-        return const Scaffold(
-          body: Center(child: AppLoadingIndicator(label: '正在打开拾日')),
-        );
+        return const Scaffold(body: AppPageSkeleton(label: '正在打开拾日'));
       }
       final nextActor = '${c.user['id']}:${c.semester?['id']}';
       if (actor != nextActor) {
+        finishTab();
         actor = nextActor;
         calendarKey = GlobalKey<CalendarPanelState>();
         todayKey = GlobalKey<TodayDashboardState>();
@@ -478,139 +606,362 @@ class _ShellPageState extends State<ShellPage> {
         visitedTabs
           ..clear()
           ..add(tab);
+        syncSkyClock();
       }
-      return Scaffold(
-        appBar: tab == 1
-            ? null
-            : AppBar(
-                toolbarHeight: 48,
-                title: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const ExcludeSemantics(child: BrandMark(size: 26)),
-                    const SizedBox(width: 9),
-                    Text(
-                      tab == 0
-                          ? appName
-                          : tab == 2
-                          ? '任务'
-                          : '学期',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -.5,
-                      ),
+      final voiceSemester = c.semester == null
+          ? null
+          : Map<String, dynamic>.from(c.semester!);
+      final voiceOwner = '${c.user['id']}';
+      final voiceGeneration = c.api.generation;
+      return AssistantSurfaceOrigin(
+        sourceKey: assistantSourceKey,
+        child: _ShellSystemBars(
+          sky: tab == 0 && c.semester != null ? skyNow : null,
+          child: Scaffold(
+            extendBody: true,
+            appBar: tab == 1 || (tab == 0 && c.semester != null)
+                ? null
+                : AppBar(
+                    toolbarHeight: 48,
+                    title: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const ExcludeSemantics(child: BrandMark(size: 26)),
+                        const SizedBox(width: 9),
+                        Text(
+                          tab == 0
+                              ? appName
+                              : tab == 2
+                              ? '任务'
+                              : '学期',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -.5,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                actions: [
-                  AppIconButton(
-                    onPressed: account,
-                    guardAsync: false,
-                    tooltip: '账户',
-                    icon: const CircleAvatar(
-                      radius: 18,
-                      backgroundColor: CampusColors.blueSoft,
-                      child: Icon(
-                        Icons.person_outline_rounded,
-                        size: 23,
-                        color: CampusColors.primary,
+                    actions: [
+                      AppIconButton(
+                        onPressed: account,
+                        guardAsync: false,
+                        tooltip: '账户',
+                        icon: const CircleAvatar(
+                          radius: 18,
+                          backgroundColor: CampusColors.blueSoft,
+                          child: Icon(
+                            Icons.person_outline_rounded,
+                            size: 23,
+                            color: CampusColors.primary,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                ],
-              ),
-        body: SafeArea(
-          bottom: false,
-          child: IndexedStack(
-            index: tab,
-            children: [
-              for (var index = 0; index < 4; index++)
-                if (!visitedTabs.contains(index))
-                  const SizedBox()
-                else
-                  KeyedSubtree(
-                    key: ValueKey(
-                      'tab-${c.user['id']}-${c.semester?['id']}-$index',
-                    ),
-                    child: TickerMode(
-                      enabled: tab == index,
-                      child: TabEntrance(
-                        active: tab == index,
-                        animateOnMount: index != 0,
-                        direction: tabDirection,
-                        child: RefreshIndicator(
-                          onRefresh: refresh,
-                          child: CustomScrollView(
-                            key: PageStorageKey(
-                              'semester-tab-${c.user['id']}-${c.semester?['id']}-$index',
-                            ),
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            slivers: [
-                              SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  8,
-                                  16,
-                                  22,
-                                ),
-                                sliver: SliverMainAxisGroup(
-                                  slivers: [
-                                    if (index == 0 && c.semester != null)
-                                      SliverToBoxAdapter(
-                                        child: Column(
-                                          children: [
-                                            const StudentProfilePrompt(),
-                                            ClipboardNoticePrompt(
-                                              onImport: (text) =>
-                                                  openAssistantSheet(
-                                                    context,
-                                                    controller: widget.items,
-                                                    semester: c.semester!,
-                                                    initialText: text,
-                                                    noticeInput: true,
+            body: SafeArea(
+              bottom: false,
+              child: MediaQuery.removePadding(
+                context: context,
+                removeBottom: true,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: SkeletonScope(
+                        loading: false,
+                        child: IgnorePointer(
+                          ignoring: pendingTab != null,
+                          child: FadeTransition(
+                            opacity: tabFade,
+                            child: IndexedStack(
+                              index: tab,
+                              children: [
+                                for (var index = 0; index < 4; index++)
+                                  if (!visitedTabs.contains(index))
+                                    const SizedBox()
+                                  else
+                                    KeyedSubtree(
+                                      key: ValueKey(
+                                        'tab-${c.user['id']}-${c.semester?['id']}-$index',
+                                      ),
+                                      child: TickerMode(
+                                        enabled: tab == index,
+                                        child: TabEntrance(
+                                          active: tab == index,
+                                          animateOnMount: index != 0,
+                                          direction: tabDirection,
+                                          child: NotificationListener<UserScrollNotification>(
+                                            onNotification: (notice) {
+                                              if (index != tab ||
+                                                  notice.depth != 0 ||
+                                                  notice.direction ==
+                                                      ScrollDirection.idle) {
+                                                return false;
+                                              }
+                                              final collapsed =
+                                                  notice.direction ==
+                                                  ScrollDirection.reverse;
+                                              if (collapsed != pillCollapsed) {
+                                                setState(
+                                                  () =>
+                                                      pillCollapsed = collapsed,
+                                                );
+                                              }
+                                              return false;
+                                            },
+                                            child: RefreshIndicator(
+                                              onRefresh: refresh,
+                                              child: CustomScrollView(
+                                                key: PageStorageKey(
+                                                  'semester-tab-${c.user['id']}-${c.semester?['id']}-$index',
+                                                ),
+                                                physics:
+                                                    const AlwaysScrollableScrollPhysics(),
+                                                slivers: [
+                                                  if (index == 0 &&
+                                                      c.semester != null)
+                                                    SliverPersistentHeader(
+                                                      pinned: true,
+                                                      delegate: _TodayHeaderDelegate(
+                                                        now: skyNow,
+                                                        semester: c.semester!,
+                                                        extent:
+                                                            TodaySkyHeader.expandedExtent(
+                                                              context,
+                                                              now: skyNow,
+                                                            ),
+                                                        onProfile: account,
+                                                        onSettings: () =>
+                                                            todayKey
+                                                                .currentState
+                                                                ?.editModules(),
+                                                      ),
+                                                    ),
+                                                  SliverPadding(
+                                                    padding: EdgeInsets.fromLTRB(
+                                                      index == 0 ? 0 : 20,
+                                                      index == 0 ? 0 : 8,
+                                                      index == 0 ? 0 : 20,
+                                                      AppNavigation.reserveHeight(
+                                                            context,
+                                                          ) +
+                                                          22,
+                                                    ),
+                                                    sliver: SliverMainAxisGroup(
+                                                      slivers: [
+                                                        if (index == 0 &&
+                                                            c.semester != null)
+                                                          SliverToBoxAdapter(
+                                                            child: Column(
+                                                              children: [
+                                                                const StudentProfilePrompt(),
+                                                                ClipboardNoticePrompt(
+                                                                  onImport: (text) => openAssistantSheet(
+                                                                    context,
+                                                                    controller:
+                                                                        widget
+                                                                            .items,
+                                                                    semester: c
+                                                                        .semester!,
+                                                                    initialText:
+                                                                        text,
+                                                                    noticeInput:
+                                                                        true,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        if (c.notice != null &&
+                                                            (!c.notice!
+                                                                    .startsWith(
+                                                                      '正在同步',
+                                                                    ) ||
+                                                                c.offline))
+                                                          SliverToBoxAdapter(
+                                                            child: Padding(
+                                                              padding:
+                                                                  const EdgeInsets.only(
+                                                                    bottom: 14,
+                                                                  ),
+                                                              child: SoftNotice(
+                                                                c.notice!,
+                                                                warning:
+                                                                    c.offline,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        if ((index == 1 ||
+                                                                index == 2) &&
+                                                            c.semester != null)
+                                                          page(index)
+                                                        else
+                                                          SliverToBoxAdapter(
+                                                            child: page(index),
+                                                          ),
+                                                      ],
+                                                    ),
                                                   ),
+                                                ],
+                                              ),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                    if (c.notice != null &&
-                                        (!c.notice!.startsWith('正在同步') ||
-                                            c.offline))
-                                      SliverToBoxAdapter(
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 14,
-                                          ),
-                                          child: SoftNotice(
-                                            c.notice!,
-                                            warning: c.offline,
                                           ),
                                         ),
                                       ),
-                                    if (index == 2 && c.semester != null)
-                                      page(index)
-                                    else
-                                      SliverToBoxAdapter(child: page(index)),
-                                  ],
-                                ),
-                              ),
-                            ],
+                                    ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-            ],
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: AppNavigation.reserveHeight(context),
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                CampusColors.background.withValues(alpha: 0),
+                                CampusColors.background,
+                                CampusColors.background,
+                              ],
+                              stops: const [0, .28, 1],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            bottomNavigationBar: AppNavigation(
+              selected: pendingTab ?? tab,
+              onAssistantOpen: () => unawaited(openDock()),
+              onAssistantImage: () => unawaited(openDock(mediaKind: 'image')),
+              onSelected: switchTab,
+              collapsed: pillCollapsed,
+              sourceKey: assistantSourceKey,
+              browsingContext: tab == 1
+                  ? calendarKey.currentState?.browsingContext
+                  : null,
+              microphone: HoldVoiceButton(
+                key: ValueKey(
+                  'dock-voice-${c.user['id']}-${c.semester?['id']}-${c.api.generation}',
+                ),
+                compact: true,
+                enabled:
+                    voiceSemester != null &&
+                    widget.items.semesterId == voiceSemester['id'] &&
+                    widget.items.owner == voiceOwner,
+                onTap: () => unawaited(openDock(mediaKind: 'audio')),
+                onRecorded: (path) async {
+                  final semester = voiceSemester;
+                  if (!mounted ||
+                      semester == null ||
+                      c.semester?['id'] != semester['id'] ||
+                      '${c.user['id']}' != voiceOwner ||
+                      c.api.generation != voiceGeneration ||
+                      widget.items.semesterId != semester['id'] ||
+                      widget.items.owner != voiceOwner) {
+                    return;
+                  }
+                  await openAssistantSheet(
+                    assistantSourceKey.currentContext ?? context,
+                    controller: widget.items,
+                    semester: semester,
+                    audioPath: path,
+                    browsingContext: tab == 1
+                        ? calendarKey.currentState?.browsingContext
+                        : null,
+                  );
+                },
+                onError: (error) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(error)));
+                  }
+                },
+              ),
+            ),
           ),
-        ),
-        bottomNavigationBar: AppNavigation(
-          selected: tab,
-          onSelected: switchTab,
-          showAssistant: tab != 1,
         ),
       );
     },
   );
+}
+
+/// Pages without an AppBar still own their system-bar surface from cold start.
+class _ShellSystemBars extends StatelessWidget {
+  const _ShellSystemBars({required this.sky, required this.child});
+  final DateTime? sky;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.shiri.colors;
+    final background = sky == null
+        ? colors.bg
+        : Color.alphaBlend(
+            Colors.white.withValues(
+              alpha: .55 * (1 - ShiriGradients.nightAmount(sky!)),
+            ),
+            ShiriGradients.skyGradient(sky!).colors.first,
+          );
+    final lightIcons = background.computeLuminance() < .21;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value:
+          (lightIcons ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+              .copyWith(
+                statusBarColor: background,
+                systemNavigationBarColor: colors.bg,
+                systemNavigationBarIconBrightness: colors.isDark
+                    ? Brightness.light
+                    : Brightness.dark,
+                systemNavigationBarContrastEnforced: false,
+              ),
+      child: child,
+    );
+  }
+}
+
+class _TodayHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _TodayHeaderDelegate({
+    required this.now,
+    required this.semester,
+    required this.extent,
+    required this.onProfile,
+    required this.onSettings,
+  });
+  final DateTime now;
+  final Map<String, dynamic> semester;
+  final double extent;
+  final VoidCallback onProfile, onSettings;
+  @override
+  double get maxExtent => extent - ShiriLayout.heroOverlapNextCard;
+  @override
+  double get minExtent => ShiriLayout.heroCollapsed;
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => TodaySkyHeader(
+    now: now,
+    semester: semester,
+    onProfile: onProfile,
+    onSettings: onSettings,
+    collapse: (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0),
+    layoutExtent: (maxExtent - shrinkOffset).clamp(minExtent, maxExtent),
+  );
+  @override
+  bool shouldRebuild(_TodayHeaderDelegate old) =>
+      now != old.now || semester != old.semester || extent != old.extent;
 }

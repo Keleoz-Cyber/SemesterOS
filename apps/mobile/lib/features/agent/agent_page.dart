@@ -3,7 +3,7 @@ import '../../ui/assistant_scope.dart' show AssistantBrowsingContext;
 import '../../core/api.dart' show userError, ApiFailure;
 import '../../ui/performance_widgets.dart';
 import '../../ui/empty_states.dart';
-import '../../ui/motion.dart' show SkeletonLoader, EmptyState;
+import '../../ui/motion.dart' show EmptyState;
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
@@ -17,6 +17,9 @@ import 'agent_controller.dart';
 import 'agent_answer.dart';
 import 'agent_widgets.dart';
 import 'agent_motion.dart';
+import 'agent_surfaces.dart';
+import '../../ui/v2/shiri_tokens.dart';
+import '../../ui/v2/motion/skeleton.dart';
 import '../../ui/app_loading.dart';
 import '../../ui/app_sheet.dart';
 import 'agent_receipt.dart';
@@ -39,6 +42,7 @@ class AgentPage extends StatefulWidget {
   final ItemsController controller;
   final Map<String, dynamic> semester;
   final String? initialMediaKind;
+  final String? initialAudioPath;
   final String? initialText;
   final String? initialThreadId;
   final List<String> initialImagePaths;
@@ -54,6 +58,7 @@ class AgentPage extends StatefulWidget {
     required this.controller,
     required this.semester,
     this.initialMediaKind,
+    this.initialAudioPath,
     this.initialText,
     this.initialThreadId,
     this.initialImagePaths = const [],
@@ -79,6 +84,8 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   bool restoringMedia = false, sendingMedia = false, pickingImage = false;
   bool pendingMediaDraft = false;
   bool expandedImagePreview = false;
+  bool adoptingAudio = false;
+  Timer? audioAdoptionTimer;
   String? transcriptAck;
   int captureEpoch = 0;
   String? captureError;
@@ -86,6 +93,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
       media.busy ||
       ['uploading', 'queued', 'running', 'recognizing'].contains(media.phase);
   bool get conversationLocked =>
+      adoptingAudio ||
       !readyForDraft ||
       c.loading ||
       c.busy ||
@@ -111,6 +119,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   bool readyForDraft = false;
   late bool voiceMode = widget.initialMediaKind == 'audio';
   bool voiceRecording = false;
+  late String? incomingAudio = widget.initialAudioPath;
   Map<String, dynamic>? attachment;
   final List<String> pendingImages = [];
   String? imageRequestId, imageRequestSignature;
@@ -264,7 +273,17 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     }
     setState(() {});
     showLatest();
-    if (saved?['picking_image'] == true) {
+    if (incomingAudio != null &&
+        !media.hasPending &&
+        currentSource == null &&
+        pendingImages.isEmpty &&
+        !c.processing &&
+        !c.busy) {
+      final path = incomingAudio!;
+      await attach('audio', audioPath: path);
+      if (!mounted || !c.active) return;
+      if (media.hasPending) setState(() => incomingAudio = null);
+    } else if (saved?['picking_image'] == true) {
       // Recover only inside the resolved conversation draft scope. Do not
       // launch a fresh picker, which would consume Android's lost result.
       if (!media.hasPending) await attach('image', recoverImage: true);
@@ -435,16 +454,35 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (audioAdoptionTimer != null && !audioCopyCheckerVisible) {
+      audioAdoptionTimer?.cancel();
+    }
+  }
+
+  bool get audioCopyCheckerVisible {
+    if (!mounted) return false;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    return (lifecycle == null || lifecycle == AppLifecycleState.resumed) &&
+        ModalRoute.isCurrentOf(context) != false &&
+        TickerMode.valuesOf(context).enabled;
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       c.poll();
       media.checkJob(force: true);
+    } else {
+      audioAdoptionTimer?.cancel();
     }
   }
 
   @override
   void dispose() {
     draftTimer?.cancel();
+    audioAdoptionTimer?.cancel();
     if (readyForDraft) saveDraft();
     input.removeListener(scheduleDraft);
     composerFocus.dispose();
@@ -461,7 +499,8 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
   }
 
   Future<void> send() async {
-    if (!readyForDraft ||
+    if (adoptingAudio ||
+        !readyForDraft ||
         !c.active ||
         c.loading ||
         c.busy ||
@@ -655,6 +694,207 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     await saveDraft();
   }
 
+  /// Retire the previous image draft only after the ordinary capture path has
+  /// written a different durable local recording. The model is not submitted.
+  Future<void> adoptIncomingAudio() async {
+    final path = incomingAudio;
+    if (path == null ||
+        adoptingAudio ||
+        !readyForDraft ||
+        !c.active ||
+        c.loading ||
+        c.busy ||
+        c.processing ||
+        mediaWorking ||
+        sendingMedia ||
+        pickingImage ||
+        voiceRecording) {
+      return;
+    }
+    final actor = widget.controller.owner;
+    final generation = widget.controller.api.generation;
+    final semester = widget.controller.semesterId;
+    final contextVersion = c.contextVersion;
+    final scope = draftKey, thread = c.threadId;
+    final previousLocal = media.localPath;
+    final oldAttachment = attachment;
+    final oldDetached = detachedSource;
+    final oldReference = mediaReferenceOverride;
+    final oldAck = transcriptAck;
+    final oldPending = pendingMediaDraft;
+    final oldImages = pendingImages.toList();
+    final oldImageRequestId = imageRequestId;
+    final oldImageRequestSignature = imageRequestSignature;
+    Map<String, dynamic>? oldDraft;
+    bool adopted = false, checking = false;
+    Completer<void>? copyCheck;
+    bool sameActor() =>
+        actor == widget.controller.owner &&
+        generation == widget.controller.api.generation &&
+        semester == widget.controller.semesterId;
+    bool visibleContext() =>
+        mounted &&
+        c.active &&
+        sameActor() &&
+        contextVersion == c.contextVersion &&
+        scope == draftKey;
+    setState(() => adoptingAudio = true);
+    Future<void> checkCopy({bool fromTimer = false}) async {
+      if (adopted || !sameActor()) {
+        audioAdoptionTimer?.cancel();
+        return;
+      }
+      if (fromTimer && !audioCopyCheckerVisible) {
+        audioAdoptionTimer?.cancel();
+        return;
+      }
+      if (checking) {
+        await copyCheck?.future;
+        if (!adopted) {
+          await checkCopy(fromTimer: fromTimer);
+        }
+        return;
+      }
+      final local = media.localPath;
+      if (local == null || local == previousLocal || media.kind != 'audio') {
+        return;
+      }
+      checking = true;
+      copyCheck = Completer<void>();
+      try {
+        final persisted = await drafts.read(media.draftKey);
+        if (fromTimer && !audioCopyCheckerVisible) {
+          audioAdoptionTimer?.cancel();
+          return;
+        }
+        if (!sameActor()) {
+          audioAdoptionTimer?.cancel();
+          return;
+        }
+        if (persisted?['local'] != local) return;
+        if (visibleContext()) {
+          setState(() {
+            pendingImages.clear();
+            imageRequestId = imageRequestSignature = null;
+            incomingAudio = null;
+          });
+          if (!await saveDraft()) {
+            audioAdoptionTimer?.cancel();
+            if (visibleContext()) {
+              setState(() {
+                pendingImages
+                  ..clear()
+                  ..addAll(oldImages);
+                imageRequestId = oldImageRequestId;
+                imageRequestSignature = oldImageRequestSignature;
+                incomingAudio = path;
+                adoptingAudio = false;
+              });
+            }
+            return;
+          }
+        } else if (oldDraft != null && thread != null) {
+          final latest = await drafts.read(scope);
+          if (!sameActor() ||
+              latest == null ||
+              latest['thread_id'] != thread ||
+              latest['text'] != oldDraft['text'] ||
+              jsonEncode(latest['image_paths'] ?? []) !=
+                  jsonEncode(oldImages)) {
+            return;
+          }
+          final adoptedDraft = {
+            ...latest,
+            'source': null,
+            'detached': true,
+            'pending_media': true,
+            'image_paths': const <String>[],
+            'image_request_id': null,
+            'image_request_signature': null,
+            'media_transcript_ack': null,
+          };
+          await drafts.save(scope, adoptedDraft);
+          await drafts.save('$baseDraftKey:thread:$thread', adoptedDraft);
+        }
+        adopted = true;
+        audioAdoptionTimer?.cancel();
+        await releaseNoticeImages(oldImages);
+        if (visibleContext()) {
+          setState(() => adoptingAudio = false);
+        }
+      } catch (error) {
+        // A temporary read failure does not retire the previous attachment.
+        audioAdoptionTimer?.cancel();
+        if (visibleContext()) {
+          setState(() {
+            adoptingAudio = false;
+            captureError = userError(error);
+          });
+        }
+      } finally {
+        checking = false;
+        copyCheck?.complete();
+      }
+    }
+
+    try {
+      if (!await saveDraft() || !visibleContext()) return;
+      oldDraft = await drafts.read(scope);
+      if (!visibleContext()) return;
+      if (audioCopyCheckerVisible) {
+        audioAdoptionTimer = Timer.periodic(
+          const Duration(milliseconds: 30),
+          (_) => checkCopy(fromTimer: true),
+        );
+      }
+      await attach('audio', audioPath: path);
+      await checkCopy();
+      if (!adopted && sameActor()) {
+        if (visibleContext()) {
+          setState(() {
+            attachment = oldAttachment;
+            detachedSource = oldDetached;
+            mediaReferenceOverride = oldReference;
+            transcriptAck = oldAck;
+            pendingMediaDraft = oldPending;
+            imageRequestId = oldImageRequestId;
+            imageRequestSignature = oldImageRequestSignature;
+          });
+          await saveDraft();
+        } else if (oldDraft != null) {
+          Future<void> restoreUnchanged(String key) async {
+            final latest = await drafts.read(key);
+            if (!sameActor() ||
+                latest == null ||
+                latest['thread_id'] != thread ||
+                latest['text'] != oldDraft!['text'] ||
+                latest['source'] != null ||
+                latest['pending_media'] != true ||
+                jsonEncode(latest['image_paths'] ?? []) !=
+                    jsonEncode(oldImages)) {
+              return;
+            }
+            await drafts.save(key, oldDraft);
+          }
+
+          await restoreUnchanged(scope);
+          if (thread != null) {
+            await restoreUnchanged('$baseDraftKey:thread:$thread');
+          }
+        }
+      }
+    } catch (error) {
+      if (visibleContext()) {
+        setState(() => captureError = userError(error));
+      }
+    } finally {
+      audioAdoptionTimer?.cancel();
+      if (mounted) {
+        setState(() => adoptingAudio = false);
+      }
+    }
+  }
+
   Future<void> removeCapture() async {
     captureEpoch++;
     if (mediaWorking) await media.cancel();
@@ -836,18 +1076,23 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               '手动添加',
               style: TextStyle(fontSize: 12, color: CampusColors.muted),
             ),
-            Wrap(
-              spacing: 8,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final choice in const [
                   ('event', '添加日程', Icons.event_outlined),
                   ('item', '添加待办', Icons.checklist_rounded),
                   ('exam', '添加考试', Icons.school_outlined),
                 ])
-                  AppTextButton.icon(
-                    icon: Icon(choice.$3, size: 18),
-                    label: Text(choice.$2.substring(2)),
-                    onPressed: () => Navigator.pop(context, choice.$1),
+                  AppTile(
+                    leading: Icon(
+                      choice.$3,
+                      size: 22,
+                      color: CampusColors.primary,
+                    ),
+                    title: Text(choice.$2.substring(2)),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.pop(context, choice.$1),
                   ),
               ],
             ),
@@ -921,7 +1166,10 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
         ],
       ),
     );
-    if (confirmed != true || !mounted || !c.active || stamp != c.contextVersion) {
+    if (confirmed != true ||
+        !mounted ||
+        !c.active ||
+        stamp != c.contextVersion) {
       return;
     }
     final wasCurrent = c.threadId == id;
@@ -1134,7 +1382,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             : widget.embedded
             ? AppIconButton(
                 tooltip: '收起输入',
-                onPressed: () => Navigator.pop(context),
+                onPressed: adoptingAudio ? null : () => Navigator.pop(context),
                 icon: const Icon(Icons.keyboard_arrow_down_rounded),
               )
             : AppIconButton(
@@ -1178,16 +1426,21 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
         child: Column(
           children: [
             Expanded(
-              child: showingHistory ? historyList() : conversationList(),
+              child: AbsorbPointer(
+                absorbing: adoptingAudio,
+                child: showingHistory ? historyList() : conversationList(),
+              ),
             ),
             if (c.error != null)
               AssistantInlineError(
                 text: c.error!,
-                onRetry: () => showingHistory
-                    ? c.loadHistory(reset: true)
-                    : c.processing
-                    ? c.poll()
-                    : c.open(id: c.threadId, fresh: c.threadId == null),
+                onRetry: adoptingAudio
+                    ? null
+                    : () => showingHistory
+                          ? c.loadHistory(reset: true)
+                          : c.processing
+                          ? c.poll()
+                          : c.open(id: c.threadId, fresh: c.threadId == null),
               ),
             if (!showingHistory && editingRun != null)
               Padding(
@@ -1213,7 +1466,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                     ),
                     AppIconButton(
                       tooltip: '取消编辑',
-                      onPressed: cancelEditing,
+                      onPressed: adoptingAudio ? null : cancelEditing,
                       icon: const Icon(Icons.close_rounded, size: 18),
                     ),
                   ],
@@ -1240,7 +1493,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                     const Spacer(),
                     AppIconButton(
                       tooltip: '移除本次附件',
-                      onPressed: c.busy
+                      onPressed: c.busy || adoptingAudio
                           ? null
                           : () => setState(() {
                               attachment = null;
@@ -1252,8 +1505,13 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 ),
               ),
             if (!showingHistory && browsingContext != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 18, right: 8),
+              Container(
+                margin: const EdgeInsets.fromLTRB(20, 4, 20, 2),
+                padding: const EdgeInsets.only(left: 12),
+                decoration: BoxDecoration(
+                  color: context.shiri.colors.surface,
+                  borderRadius: BorderRadius.circular(ShiriRadius.md),
+                ),
                 child: Row(
                   children: [
                     const Icon(
@@ -1279,7 +1537,8 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                               sendingMedia ||
                               mediaWorking ||
                               pickingImage ||
-                              voiceRecording
+                              voiceRecording ||
+                              adoptingAudio
                           ? null
                           : () {
                               setState(() {
@@ -1300,9 +1559,79 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     ),
   );
 
+  Widget incomingAudioCard() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: AgentSurface(
+      color: context.shiri.colors.primarySoft,
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('录音已保留', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          const Text(
+            '使用这段录音会替换当前附件，输入文字保留。',
+            style: TextStyle(fontSize: 14, color: CampusColors.muted),
+          ),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            children: [
+              AppTextButton(
+                onPressed: adoptingAudio
+                    ? null
+                    : () => setState(() => incomingAudio = null),
+                child: const Text('不用这段'),
+              ),
+              AppButton(
+                onPressed:
+                    adoptingAudio ||
+                        !readyForDraft ||
+                        !c.active ||
+                        c.loading ||
+                        c.busy ||
+                        c.processing ||
+                        mediaWorking ||
+                        sendingMedia ||
+                        pickingImage ||
+                        voiceRecording
+                    ? null
+                    : adoptIncomingAudio,
+                child: const Text('用录音替换附件'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+
   Widget conversationList() {
     if (c.loading || !readyForDraft) {
-      return const Center(child: AppLoadingIndicator(label: '正在读取对话'));
+      return Semantics(
+        label: '正在读取对话',
+        child: SkeletonScope(
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: const [
+              Align(
+                alignment: Alignment.centerRight,
+                child: SkeletonBox(
+                  width: 220,
+                  height: 64,
+                  borderRadius: ShiriRadius.lgAll,
+                ),
+              ),
+              SizedBox(height: 28),
+              SkeletonLine(widthFactor: .8),
+              SizedBox(height: 10),
+              SkeletonLine(widthFactor: .6),
+              SizedBox(height: 20),
+              SkeletonBox(height: 160, borderRadius: ShiriRadius.lgAll),
+            ],
+          ),
+        ),
+      );
     }
     final uploadingImages = sendingMedia && pendingImages.isNotEmpty;
     final batch =
@@ -1314,14 +1643,18 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
         media.error != null ||
         captureError != null ||
         pickingImage;
-    final welcome = c.runs.isEmpty && !capture;
+    final welcome = c.runs.isEmpty && !capture && incomingAudio == null;
     final leading = c.hasMoreRuns ? 1 : 0;
     return VirtualizedListView<int>(
       key: const Key('agent-messages'),
       controller: conversationScroll,
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       items: List<int>.generate(
-        leading + (welcome ? 1 : 0) + c.runs.length + (capture ? 1 : 0),
+        leading +
+            (welcome ? 1 : 0) +
+            c.runs.length +
+            (capture ? 1 : 0) +
+            (incomingAudio == null ? 0 : 1),
         (i) => i,
       ),
       itemBuilder: (context, entry, _) {
@@ -1379,6 +1712,9 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             ),
           );
         }
+        if (incomingAudio != null && index == c.runs.length) {
+          return incomingAudioCard();
+        }
         if (uploadingImages) {
           return AssistantActivity(stage: '正在上传${pendingImages.length}张图片');
         }
@@ -1434,14 +1770,27 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
 
   Widget historyRows() {
     if (c.historyLoading && c.threads.isEmpty) {
-      return ListView(
-        children: [
-          for (var i = 0; i < 4; i++)
-            const Padding(
+      return SkeletonScope(
+        child: ListView(
+          children: const [
+            Padding(
               padding: EdgeInsets.all(12),
-              child: SkeletonLoader(width: double.infinity, height: 64),
+              child: SkeletonBox(height: 64, borderRadius: ShiriRadius.smAll),
             ),
-        ],
+            Padding(
+              padding: EdgeInsets.all(12),
+              child: SkeletonBox(height: 64, borderRadius: ShiriRadius.smAll),
+            ),
+            Padding(
+              padding: EdgeInsets.all(12),
+              child: SkeletonBox(height: 64, borderRadius: ShiriRadius.smAll),
+            ),
+            Padding(
+              padding: EdgeInsets.all(12),
+              child: SkeletonBox(height: 64, borderRadius: ShiriRadius.smAll),
+            ),
+          ],
+        ),
       );
     }
     if (c.threads.isEmpty) {
@@ -1570,6 +1919,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     final landscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final blocked =
+        adoptingAudio ||
         !readyForDraft ||
         !c.active ||
         c.loading ||
@@ -1622,7 +1972,8 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             c.active &&
             !c.loading &&
             !media.busy &&
-            !sendingMedia,
+            !sendingMedia &&
+            !adoptingAudio,
         maxLength: 10000,
         hint: '输入通知或问题',
         counterBuilder: (_, _, _, _) => null,
@@ -1650,29 +2001,45 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     );
     final submit = ValueListenableBuilder<TextEditingValue>(
       valueListenable: input,
-      builder: (_, value, _) => AppIconButton.filled(
-        tooltip: '发送',
-        onPressed:
-            c.loading ||
-                blocked ||
-                (value.text.trim().isEmpty && pendingImages.isEmpty)
-            ? null
-            : send,
-        icon: const Icon(Icons.arrow_upward_rounded),
-      ),
+      builder: (context, value, _) {
+        final enabled =
+            !c.loading &&
+            !blocked &&
+            (value.text.trim().isNotEmpty || pendingImages.isNotEmpty);
+        return Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: enabled ? null : context.shiri.colors.surfaceSunken,
+            gradient: enabled ? ShiriGradients.brand : null,
+          ),
+          child: AppIconButton(
+            tooltip: '发送',
+            onPressed: enabled ? send : null,
+            icon: Icon(
+              Icons.arrow_upward_rounded,
+              color: enabled
+                  ? context.shiri.colors.ink900
+                  : context.shiri.colors.ink500,
+            ),
+          ),
+        );
+      },
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       child: ListenableBuilder(
         listenable: composerFocus,
         builder: (context, child) => AnimatedContainer(
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
               : const Duration(milliseconds: 120),
-          padding: const EdgeInsets.all(5),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: CampusColors.surface,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(ShiriRadius.xl),
+            boxShadow: context.shiri.shadows.card,
             border: Border.all(
               color: composerFocus.hasFocus
                   ? CampusColors.primary
@@ -1728,7 +2095,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 children: [
                   if (pendingImages.isNotEmpty) imageStrip(),
                   field,
-                  Row(children: [toggle, const Spacer(), more, submit]),
+                  Row(children: [toggle, more, const Spacer(), submit]),
                 ],
               ),
       ),
@@ -1764,7 +2131,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                   top: 0,
                   child: AppIconButton(
                     tooltip: '移除第${pendingImages.indexOf(path) + 1}张图片',
-                    onPressed: sendingMedia
+                    onPressed: sendingMedia || adoptingAudio
                         ? null
                         : () async {
                             setState(() => pendingImages.remove(path));
@@ -1827,16 +2194,6 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
         rows(run['cards']).isNotEmpty ||
         run['error'] != null ||
         {'applied', 'cancelled', 'superseded'}.contains(run['status']);
-    final responseRevision = hasResponse
-        ? jsonEncode([
-            answer.isNotEmpty,
-            p is Map ? p['token'] : null,
-            '${run['status']}',
-            for (final card in rows(run['cards']))
-              [card['card_id'], card['kind']],
-            run['error'],
-          ])
-        : null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 22),
       child: Column(
@@ -1876,7 +2233,9 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             ),
           AssistantArrival(
             key: ValueKey('agent-response-${run['id']}'),
-            revision: responseRevision,
+            // Reveal only the first actual response. Streaming text, final
+            // status and appended result cards never replay the whole answer.
+            revision: hasResponse ? 'first-response' : null,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1885,7 +2244,17 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                     (p is! Map || answer != '请核对这次修改，确认后保存。'))
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: AgentAnswer(answer),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: AssistantMark(),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: AgentAnswer(answer)),
+                      ],
+                    ),
                   ),
                 if (overview.isNotEmpty &&
                     !working &&
@@ -2013,17 +2382,13 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
     }
   }
 
-  Widget panel(Widget child, {Color color = Colors.white}) => Padding(
+  Widget panel(
+    Widget child, {
+    Color color = Colors.white,
+    bool raised = false,
+  }) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: Material(
-      color: CampusColors.surface,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: CampusColors.line),
-      ),
-      child: Padding(padding: const EdgeInsets.all(15), child: child),
-    ),
+    child: AgentSurface(color: color, raised: raised, child: child),
   );
 
   Widget factCard(Map<String, dynamic> run, Map<String, dynamic> card) {
@@ -2413,30 +2778,14 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 '查询 ${d['query_label']}',
                 style: const TextStyle(fontSize: 12, color: CampusColors.muted),
               ),
-            for (final e in shown)
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: CampusColors.line)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.schedule_rounded,
-                      size: 19,
-                      color: CampusColors.teal,
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: Text(
-                        '${entryTime(e)}${e['needs_check'] == true ? '\n需核对安排结束时间' : ''}',
-                        style: const TextStyle(fontSize: 15, height: 1.5),
-                      ),
-                    ),
-                  ],
-                ),
+            for (var i = 0; i < shown.length; i++) ...[
+              if (i > 0) const Divider(height: 1),
+              AssistantWindowRow(
+                window: shown[i],
+                label: entryTime(shown[i]),
+                dailySearch: noticeMap(d['daily_search']),
               ),
+            ],
             if (shown.length < windows.length)
               AppTextButton(
                 onPressed: () => setState(() => expandedResults.add(key)),
@@ -2463,7 +2812,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               ),
           ],
         ),
-        color: CampusColors.mint,
+        color: CampusColors.surface,
       );
     }
     if (kind == 'recent_actions') {
@@ -2703,7 +3052,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             padding: const EdgeInsets.fromLTRB(12, 0, 4, 10),
             child: child,
           )
-        : panel(child);
+        : panel(child, raised: true);
     return wrap(
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2926,12 +3275,27 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                   fontSize: 14,
                 ),
               ),
-            Text(
-              fieldValue(key, after[key]),
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-                height: 1.4,
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: key == 'time'
+                    ? context.shiri.colors.warningSoft
+                    : Colors.transparent,
+                borderRadius: ShiriRadius.xsAll,
+              ),
+              child: Padding(
+                padding: key == 'time'
+                    ? const EdgeInsets.symmetric(horizontal: 6, vertical: 3)
+                    : EdgeInsets.zero,
+                child: Text(
+                  fieldValue(key, after[key]),
+                  style: TextStyle(
+                    fontWeight: key == 'time'
+                        ? FontWeight.w700
+                        : FontWeight.w600,
+                    fontSize: 16,
+                    height: 1.5,
+                  ),
+                ),
               ),
             ),
           ],
@@ -3072,7 +3436,21 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 fontSize: 14,
               ),
             ),
-          Text(entryTime(b), style: const TextStyle(fontSize: 15)),
+          const SizedBox(height: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: context.shiri.colors.primarySoft,
+              borderRadius: ShiriRadius.smAll,
+              border: Border(
+                left: BorderSide(color: context.shiri.colors.primary, width: 3),
+              ),
+            ),
+            child: Text(
+              entryTime(b),
+              style: const TextStyle(fontSize: 16, height: 1.5),
+            ),
+          ),
         ],
       ),
     );
@@ -3187,6 +3565,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
             ),
         ],
       ),
+      raised: pending,
     );
   }
 }

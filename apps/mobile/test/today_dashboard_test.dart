@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/features/home/today_dashboard.dart';
+import 'package:semester_os/features/home/next_schedule_card.dart';
 import 'package:semester_os/features/calendar/time_track.dart';
 import 'package:semester_os/features/home/home_preferences.dart';
 import 'schedule_flow_test.dart' show ScheduleFixture;
@@ -107,7 +108,13 @@ void main() {
         expect(find.byKey(const Key('today-tasks-action')), findsOneWidget);
         if (populated) {
           expect(find.text('课后报告'), findsOneWidget);
-          expect(find.text('晚间课程'), findsOneWidget);
+          expect(find.text('晚间课程'), findsNWidgets(2));
+          expect(
+            tester
+                .widget<NextScheduleCard>(find.byType(NextScheduleCard))
+                .row['id'],
+            'course',
+          );
           expect(
             tester.getTopLeft(find.text('次日课程')).dy,
             greaterThan(tester.getTopLeft(find.text('课后报告')).dy),
@@ -246,131 +253,134 @@ void main() {
       app.dispose();
     },
   );
-  testWidgets('today puts three courses above fold and offers module editing', (
-    tester,
-  ) async {
-    final f = ScheduleFixture();
-    var current = DateTime.utc(2026, 9, 21, 7);
-    final old = f.api.dio.httpClientAdapter as ControlledTransport;
-    f.api.dio.httpClientAdapter = ControlledTransport((r) async {
-      if (r.path.contains('/day-brief?')) {
-        return body({
-          'semester_id': 's',
-          'revision': 1,
-          'date': '2026-09-21',
-          'valid_until': '2099-01-01T00:00:00Z',
-          'entries': [
-            for (var i = 0; i < 3; i++)
-              {
-                'id': 'c$i',
-                'resource_id': 'c$i',
-                'resource_type': 'course',
-                'title': ['概率论', '程序设计', '大学英语'][i],
-                'location': 'A${i + 1}01',
-                'start_at': '2026-09-21T${['08', '10', '14'][i]}:00:00+08:00',
-                'end_at': '2026-09-21T${['09', '11', '15'][i]}:50:00+08:00',
-                'time_precision': 'exact',
-              },
-          ],
-          'undated': [],
-          'suggestions': [],
-          'available_windows': [],
-          'needs_availability': true,
-        });
-      }
-      return old.respond(r);
-    });
-    await tester.runAsync(() => f.c.bind('s'));
-    final app = AppController(
-      f.api,
-      MemoryStore(),
-      clearSchoolSession: () async {},
-    )..semester = semester();
-    await mount(
-      tester,
-      Scaffold(
-        appBar: AppBar(title: const Text('品牌')),
-        bottomNavigationBar: const SizedBox(height: 134),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TodayDashboard(
-              app: app,
-              items: f.c,
-              onCalendar: () {},
-              now: () => current,
-            ),
-          ],
+  testWidgets(
+    'today emphasizes the next course and keeps all courses and module editing reachable',
+    (tester) async {
+      final f = ScheduleFixture();
+      var current = DateTime.utc(2026, 9, 21, 7);
+      final old = f.api.dio.httpClientAdapter as ControlledTransport;
+      f.api.dio.httpClientAdapter = ControlledTransport((r) async {
+        if (r.path.contains('/day-brief?')) {
+          return body({
+            'semester_id': 's',
+            'revision': 1,
+            'date': '2026-09-21',
+            'valid_until': '2099-01-01T00:00:00Z',
+            'entries': [
+              for (var i = 0; i < 3; i++)
+                {
+                  'id': 'c$i',
+                  'resource_id': 'c$i',
+                  'resource_type': 'course',
+                  'title': ['概率论', '程序设计', '大学英语'][i],
+                  'location': 'A${i + 1}01',
+                  'start_at': '2026-09-21T${['08', '10', '14'][i]}:00:00+08:00',
+                  'end_at': '2026-09-21T${['09', '11', '15'][i]}:50:00+08:00',
+                  'time_precision': 'exact',
+                },
+            ],
+            'undated': [],
+            'suggestions': [],
+            'available_windows': [],
+            'needs_availability': true,
+          });
+        }
+        return old.respond(r);
+      });
+      await tester.runAsync(() => f.c.bind('s'));
+      final app = AppController(
+        f.api,
+        MemoryStore(),
+        clearSchoolSession: () async {},
+      )..semester = semester();
+      await mount(
+        tester,
+        Scaffold(
+          appBar: AppBar(title: const Text('品牌')),
+          bottomNavigationBar: const SizedBox(height: 134),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              TodayDashboard(
+                app: app,
+                items: f.c,
+                onCalendar: () {},
+                now: () => current,
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 80)),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('大学英语'), findsOneWidget);
-    expect(tester.getRect(find.text('大学英语')).bottom, lessThan(710));
-    expect(find.byTooltip('调整首页内容'), findsOneWidget);
-    await capture(tester, 'today-course-first');
-    final dashboard = tester.state<TodayDashboardState>(
-      find.byType(TodayDashboard),
-    );
-    await tester.runAsync(
-      () => dashboard.preferences.change(todayView: TodayViewMode.schedule),
-    );
-    await tester.pumpAndSettle();
-    current = DateTime.utc(2026, 9, 21, 8, 55);
-    await tester.pump(const Duration(minutes: 1));
-    await tester.pumpAndSettle();
-    final active = tester.widget<LinearProgressIndicator>(
-      find.byKey(const ValueKey('time-track-event-progress')),
-    );
-    expect(active.value, closeTo(.5, .001));
-    expect(find.text('现在 08:55'), findsOneWidget);
-    await capture(tester, 'today-current-active');
-    current = DateTime.utc(2026, 9, 21, 9, 55);
-    await tester.pump(const Duration(minutes: 1));
-    await tester.pumpAndSettle();
-    final gap =
-        tester
-                .widget<CustomPaint>(
-                  find.descendant(
-                    of: find.byKey(const ValueKey('time-track-current-gap')),
-                    matching: find.byType(CustomPaint),
-                  ),
-                )
-                .painter!
-            as TimeTrackMarkerPainter;
-    expect(gap.fraction, closeTo(.5, .001));
-    expect(find.text('现在 09:55'), findsOneWidget);
-    await capture(tester, 'today-current-gap');
-    f.c.items = [
-      {
-        ...f.item,
-        'id': 'exam',
-        'kind': 'exam',
-        'title': '本周暂定考试',
-        'certainty': 'tentative',
-        'time': {'precision': 'week', 'week': 4},
-      },
-      {
-        ...f.item,
-        'id': 'range',
-        'title': '本周待定汇报',
-        'time': {
-          'precision': 'range',
-          'date': '2026-09-20',
-          'end_date': '2026-09-24',
+      );
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 80)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(NextScheduleCard), findsOneWidget);
+      await tester.ensureVisible(find.text('大学英语'));
+      await tester.pumpAndSettle();
+      expect(find.text('大学英语').hitTestable(), findsOneWidget);
+      expect(find.byTooltip('调整首页内容'), findsOneWidget);
+      await capture(tester, 'today-course-first');
+      final dashboard = tester.state<TodayDashboardState>(
+        find.byType(TodayDashboard),
+      );
+      await tester.runAsync(
+        () => dashboard.preferences.change(todayView: TodayViewMode.schedule),
+      );
+      await tester.pumpAndSettle();
+      current = DateTime.utc(2026, 9, 21, 8, 55);
+      await tester.pump(const Duration(minutes: 1));
+      await tester.pumpAndSettle();
+      final active = tester.widget<LinearProgressIndicator>(
+        find.byKey(const ValueKey('time-track-event-progress')),
+      );
+      expect(active.value, closeTo(.5, .001));
+      expect(find.text('现在 08:55'), findsOneWidget);
+      await capture(tester, 'today-current-active');
+      current = DateTime.utc(2026, 9, 21, 9, 55);
+      await tester.pump(const Duration(minutes: 1));
+      await tester.pumpAndSettle();
+      final gap =
+          tester
+                  .widget<CustomPaint>(
+                    find.descendant(
+                      of: find.byKey(const ValueKey('time-track-current-gap')),
+                      matching: find.byType(CustomPaint),
+                    ),
+                  )
+                  .painter!
+              as TimeTrackMarkerPainter;
+      expect(gap.fraction, closeTo(.5, .001));
+      expect(find.text('现在 09:55'), findsOneWidget);
+      await capture(tester, 'today-current-gap');
+      f.c.items = [
+        {
+          ...f.item,
+          'id': 'exam',
+          'kind': 'exam',
+          'title': '本周暂定考试',
+          'certainty': 'tentative',
+          'time': {'precision': 'week', 'week': 4},
         },
-      },
-    ];
-    f.c.changed();
-    await tester.pumpAndSettle();
-    expect(find.text('本周暂定考试'), findsOneWidget);
-    expect(find.text('本周待定汇报'), findsOneWidget);
-    expect(find.text('截止日期已过'), findsNothing);
-    await tester.pumpWidget(const SizedBox());
-    f.c.dispose();
-    app.dispose();
-  });
+        {
+          ...f.item,
+          'id': 'range',
+          'title': '本周待定汇报',
+          'time': {
+            'precision': 'range',
+            'date': '2026-09-20',
+            'end_date': '2026-09-24',
+          },
+        },
+      ];
+      f.c.changed();
+      await tester.pumpAndSettle();
+      expect(find.text('本周暂定考试'), findsOneWidget);
+      expect(find.text('本周待定汇报'), findsOneWidget);
+      expect(find.text('截止日期已过'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      f.c.dispose();
+      app.dispose();
+    },
+  );
 }

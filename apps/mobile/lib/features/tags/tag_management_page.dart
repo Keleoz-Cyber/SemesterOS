@@ -7,6 +7,10 @@ import '../../ui/campus_widgets.dart';
 import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
 import '../items/task_surfaces.dart';
+import '../../ui/empty_scene.dart';
+import '../../ui/v2/motion/skeleton.dart';
+import '../../ui/v2/motion/rolling_number.dart';
+import '../../ui/v2/shiri_tokens.dart' show ShiriRadius;
 
 class TagManagementController extends ChangeNotifier {
   final ItemsController items;
@@ -328,8 +332,8 @@ class _TagManagementPageState extends State<TagManagementPage> {
                   key: ValueKey('tag-impact-${entry.key}'),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${counts[entry.key]}',
+                    RollingNumber(
+                      value: (counts[entry.key] as num).toInt(),
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
@@ -356,21 +360,6 @@ class _TagManagementPageState extends State<TagManagementPage> {
               ? '旧标签将并入所选标签，重复标签只保留一个。历史统计同步归类，旧名称仍可识别。'
               : '相关记录将显示新名称，旧名称仍可识别。',
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            AppButton(
-              onPressed: c.busy ? null : c.apply,
-              child: Text(merge ? '确认合并' : '确认重命名'),
-            ),
-            AppTextButton(
-              onPressed: c.busy ? null : c.cancelPreview,
-              child: const Text('取消预览'),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -387,6 +376,20 @@ class _TagManagementPageState extends State<TagManagementPage> {
         ),
       ],
     ),
+    bottomNavigationBar: !c.active || c.preview == null
+        ? null
+        : ActionFooter(
+            secondary: Align(
+              alignment: Alignment.centerRight,
+              child: AppTextButton(
+                onPressed: c.busy ? null : c.cancelPreview,
+                child: const Text('取消预览'),
+              ),
+            ),
+            label: c.preview!['operation'] == 'merge' ? '确认合并' : '确认重命名',
+            icon: Icons.check_rounded,
+            onPressed: c.busy ? null : c.apply,
+          ),
     body: !c.active
         ? const Center(child: Text('账号或学期已切换，请重新打开标签管理'))
         : AppLoadingOverlay(
@@ -416,10 +419,37 @@ class _TagManagementPageState extends State<TagManagementPage> {
                     child: SoftNotice(c.notice!),
                   ),
                 if (c.preview != null) previewCard(c.preview!),
+                if (c.busy && c.tags.isEmpty)
+                  const SkeletonScope(
+                    child: Column(
+                      children: [
+                        SkeletonBox(
+                          height: 64,
+                          borderRadius: ShiriRadius.smAll,
+                        ),
+                        SizedBox(height: 12),
+                        SkeletonBox(
+                          height: 64,
+                          borderRadius: ShiriRadius.smAll,
+                        ),
+                        SizedBox(height: 12),
+                        SkeletonBox(
+                          height: 64,
+                          borderRadius: ShiriRadius.smAll,
+                        ),
+                      ],
+                    ),
+                  ),
                 if (!c.busy && c.tags.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('还没有标签。在事项或日程中添加标签后，即可在这里管理。'),
+                    child: Column(
+                      children: [
+                        AppEmptyScene(kind: EmptySceneKind.tasks, size: 160),
+                        SizedBox(height: 12),
+                        Text('还没有标签。在事项或日程中添加标签后，即可在这里管理。'),
+                      ],
+                    ),
                   ),
                 if (c.tags.isNotEmpty) const SectionHeading('现有标签'),
                 for (final tag in c.tags) tagRow(tag),
@@ -453,7 +483,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
         final actions = Wrap(
           spacing: 4,
           children: [
-            AppTextButton(
+            AppOutlineButton(
               onPressed: c.busy || c.preview != null ? null : () => rename(tag),
               child: const Text('重命名'),
             ),

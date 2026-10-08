@@ -16,6 +16,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'controller.dart';
 import '../ui/campus_theme.dart';
+import '../ui/v2/shiri_theme.dart';
+import '../ui/v2/widgets/performance_scope.dart';
 import '../features/accounts/auth_page.dart';
 import '../features/semester/semester_page.dart';
 import '../features/timetable/shell_page.dart';
@@ -184,6 +186,12 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
             controller: items,
             courseId: state.pathParameters['id']!,
             occurrenceId: state.uri.queryParameters['occurrence'],
+            surfaceTitle: state.extra is Map
+                ? (state.extra as Map)['surface_title'] as String?
+                : null,
+            surfaceTag: state.extra is Map
+                ? (state.extra as Map)['surface_tag'] as String?
+                : null,
           ),
         ),
         GoRoute(
@@ -625,7 +633,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
     ],
     debugShowCheckedModeBanner: false,
     routerConfig: router,
-    theme: campusTheme(),
+    theme: shiriLightTheme(),
     highContrastTheme: HighContrastTheme.theme(campusTheme()),
     builder: (context, child) => HighContrastDetector(
       child: ShiriForuiTheme(
@@ -655,7 +663,9 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
                     browsingContext: browsingContext,
                   );
                 },
-            child: entryFrame(context, child ?? const SizedBox()),
+            child: ShiriPerformance(
+              child: entryFrame(context, child ?? const SizedBox()),
+            ),
           ),
         ),
       ),

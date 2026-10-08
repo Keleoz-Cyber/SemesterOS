@@ -434,8 +434,9 @@ class _EventFormPageState extends State<EventFormPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                    AcademicEditorSection(
+                      title: '日程内容',
+                      icon: Icons.edit_note_rounded,
                       children: [
                         AppFormField(
                           controller: title,
@@ -529,6 +530,7 @@ class _EventFormPageState extends State<EventFormPage> {
                             icon: const Icon(Icons.add),
                             label: const Text('添加结束时间'),
                           ),
+                        const SizedBox(height: 12),
                         TimeInputOptions(
                           precision: precision,
                           exactValue: 'exact_start',

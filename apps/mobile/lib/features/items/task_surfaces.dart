@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/motion.dart';
+import '../../ui/v2/shiri_tokens.dart';
 import '../planning/risk_widgets.dart' show minutesLabel;
 
 /// A fact reads like a small document, rather than another nested card.
@@ -43,24 +44,19 @@ class TaskFactStrip extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+                style: const TextStyle(fontSize: 14, color: CampusColors.muted),
               ),
               const SizedBox(height: 5),
               Text(
                 value,
-                style: TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
-                  color: accent,
-                ),
+                style: context.shiri.text.title.copyWith(color: accent),
               ),
               if (detail?.trim().isNotEmpty == true) ...[
                 const SizedBox(height: 5),
                 Text(
                   detail!,
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: 14,
                     color: CampusColors.muted,
                   ),
                 ),
@@ -219,7 +215,7 @@ class TaskDurationBalance extends StatelessWidget {
         if (target != null)
           Text(
             '目标 ${minutesLabel(target)}',
-            style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+            style: const TextStyle(fontSize: 14, color: CampusColors.muted),
           ),
         if (total > 0) ...[
           const SizedBox(height: 10),
@@ -228,7 +224,7 @@ class TaskDurationBalance extends StatelessWidget {
                 .map((part) => '${part.$1}${minutesLabel(part.$2)}')
                 .join('，'),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(3),
+              borderRadius: ShiriRadius.xsAll,
               child: Row(
                 children: [
                   for (final part in parts)
@@ -237,7 +233,12 @@ class TaskDurationBalance extends StatelessWidget {
                       child: AnimatedContainer(
                         duration: AppMotion.change(context),
                         height: 7,
-                        color: part.$3,
+                        decoration: BoxDecoration(
+                          color: part.$3,
+                          gradient: part.$1 == '本次新增'
+                              ? ShiriGradients.brand
+                              : null,
+                        ),
                       ),
                     ),
                 ],
@@ -255,9 +256,11 @@ class TaskDurationBalance extends StatelessWidget {
                   children: [
                     Container(width: 6, height: 6, color: part.$3),
                     const SizedBox(width: 6),
-                    Text(
-                      '${part.$1} ${minutesLabel(part.$2)}',
-                      style: TextStyle(fontSize: 13, color: part.$3),
+                    Flexible(
+                      child: Text(
+                        '${part.$1} ${minutesLabel(part.$2)}',
+                        style: TextStyle(fontSize: 14, color: part.$3),
+                      ),
                     ),
                   ],
                 ),
@@ -292,7 +295,7 @@ class TaskChangeFacts extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 12, color: CampusColors.muted),
+                style: const TextStyle(fontSize: 13, color: CampusColors.muted),
               ),
               const SizedBox(height: 5),
               Text(
@@ -309,7 +312,7 @@ class TaskChangeFacts extends StatelessWidget {
                 Text(
                   detail!,
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: 14,
                     color: CampusColors.muted,
                   ),
                 ),
@@ -383,7 +386,7 @@ class TaskTimeBudget extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+                style: const TextStyle(fontSize: 14, color: CampusColors.muted),
               ),
               Text(
                 minutesLabel(amount),
@@ -408,14 +411,14 @@ class TaskTimeBudget extends StatelessWidget {
                     Container(
                       decoration: BoxDecoration(
                         color: CampusColors.line,
-                        borderRadius: BorderRadius.circular(3),
+                        borderRadius: ShiriRadius.xsAll,
                       ),
                     ),
                     Container(
                       width: size.maxWidth * value,
                       decoration: BoxDecoration(
                         color: color,
-                        borderRadius: BorderRadius.circular(3),
+                        borderRadius: ShiriRadius.xsAll,
                       ),
                     ),
                   ],

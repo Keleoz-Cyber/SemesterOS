@@ -4,6 +4,7 @@ import '../../ui/app_controls.dart';
 import '../items/task_surfaces.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/date_labels.dart';
+import '../../ui/v2/shiri_tokens.dart';
 
 List<Map<String, dynamic>> _rows(dynamic value) => value is List
     ? value.whereType<Map>().map(Map<String, dynamic>.from).toList()
@@ -130,7 +131,22 @@ class CourseChangeSummary extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(data.icon, size: 20, color: CampusColors.teal),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: data.suspension
+                        ? context.shiri.colors.warningSoft
+                        : context.shiri.colors.successSoft,
+                    borderRadius: ShiriRadius.smAll,
+                  ),
+                  child: Icon(
+                    data.icon,
+                    size: 20,
+                    color: data.suspension
+                        ? context.shiri.colors.warning
+                        : CampusColors.teal,
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -183,12 +199,26 @@ class CourseChangeSummary extends StatelessWidget {
                       color: CampusColors.ink,
                     ),
                   ),
-                Text(
-                  data.countLabel,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: CampusColors.teal,
-                    fontWeight: FontWeight.w600,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: data.suspension
+                        ? context.shiri.colors.warningSoft
+                        : context.shiri.colors.successSoft,
+                    borderRadius: ShiriRadius.xsAll,
+                  ),
+                  child: Text(
+                    data.countLabel,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: data.suspension
+                          ? context.shiri.colors.warning
+                          : CampusColors.teal,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],

@@ -1,6 +1,10 @@
 import '../../ui/app_controls.dart';
+import '../../ui/detail_widgets.dart';
 import '../../ui/app_selection.dart';
 import '../../ui/brand.dart';
+import '../../ui/empty_scene.dart';
+import '../../ui/v2/widgets/wave_edge.dart';
+import '../../ui/v2/shiri_tokens.dart';
 import '../../ui/campus_theme.dart';
 import '../../core/api.dart' show userError;
 import 'package:flutter/material.dart';
@@ -123,6 +127,18 @@ class _AuthPageState extends State<AuthPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    backgroundColor: ShiriColors.light.surface,
+    bottomNavigationBar: ActionFooter(
+      actionKey: const Key('auth-submit'),
+      onPressed: busy ? null : submit,
+      label: busy
+          ? '请稍候…'
+          : mode == 2
+          ? '设置新密码'
+          : mode == 1
+          ? '创建账户'
+          : '登录',
+    ),
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
@@ -136,9 +152,10 @@ class _AuthPageState extends State<AuthPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const SizedBox(height: 12),
                     const Row(
                       children: [
-                        BrandMark(size: 36),
+                        BrandMark(size: 48),
                         SizedBox(width: 12),
                         Text(
                           appName,
@@ -150,7 +167,16 @@ class _AuthPageState extends State<AuthPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: AppEmptyScene(
+                        size: 180,
+                        kind: mode == 1
+                            ? EmptySceneKind.plan
+                            : EmptySceneKind.collect,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                       mode == 2
                           ? '恢复账户'
@@ -175,7 +201,9 @@ class _AuthPageState extends State<AuthPage> {
                         color: CampusColors.muted,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    const SizedBox(height: 28, child: WaveEdge()),
+                    const SizedBox(height: 20),
                     if (widget.pendingNoticeCount > 0) ...[
                       const Text(
                         '分享的通知已暂存。登录或先体验后，可以继续核对。',
@@ -304,19 +332,6 @@ class _AuthPageState extends State<AuthPage> {
                               ],
                             ),
                           ),
-                        AppButton(
-                          key: const Key('auth-submit'),
-                          onPressed: busy ? null : submit,
-                          child: Text(
-                            busy
-                                ? '请稍候…'
-                                : mode == 2
-                                ? '设置新密码'
-                                : mode == 1
-                                ? '创建账户'
-                                : '登录',
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 12),

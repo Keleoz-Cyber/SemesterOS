@@ -204,7 +204,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(sent?['certainty'], 'unknown');
       expect(sent?['time'], {
-        'meaning': 'unspecified', 'expression': '',
+        'meaning': 'unspecified',
+        'expression': '',
         'precision': 'exact',
         'at': '2026-10-03T06:00:00.000Z',
       });

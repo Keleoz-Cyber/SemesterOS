@@ -23,6 +23,11 @@ import '../planning/risk_widgets.dart';
 import '../planning/availability_page.dart';
 import '../planning/plan_list.dart';
 import '../changes/changes_page.dart';
+import '../../ui/v2/shiri_tokens.dart';
+import '../../ui/v2/motion/staggered_reveal.dart';
+import 'task_summary.dart';
+import '../../app/controller.dart' show schoolNow;
+import 'package:flutter_svg/flutter_svg.dart';
 
 class ItemsView extends StatefulWidget {
   final ItemsController controller;
@@ -353,7 +358,37 @@ class _ItemsViewState extends State<ItemsView> {
           ? () => completeRow(row)
           : null,
     );
-    if (!sorting) return card;
+    if (!sorting) {
+      final grouped = filter == 'active' && preferences.taskOrder.isEmpty;
+      final group = grouped ? rowGroup(row) : 0;
+      final first =
+          grouped &&
+          (index == 0 ||
+              index - 1 >= rows.length ||
+              rowGroup(rows[index - 1]) != group);
+      var sectionCount = 0;
+      if (first) {
+        for (
+          var i = index;
+          i < rows.length && rowGroup(rows[i]) == group;
+          i++
+        ) {
+          sectionCount++;
+        }
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (grouped && first && row['_completion_reveal'] != true)
+            TaskGroupHeading(group: group, count: sectionCount),
+          StaggeredReveal(
+            revealKey: '${c.owner}/${c.semesterId}/tasks/${row['id']}',
+            index: index,
+            child: ClipRRect(borderRadius: ShiriRadius.mdAll, child: card),
+          ),
+        ],
+      );
+    }
     return Row(
       key: ValueKey('ordered-task-${row['id']}'),
       children: [
@@ -382,6 +417,14 @@ class _ItemsViewState extends State<ItemsView> {
         ),
       ],
     );
+  }
+
+  int rowGroup(Map<String, dynamic> row) {
+    final byDate = taskDisplayGroup(row, schoolNow());
+    if (byDate == 0 || byDate == 6) return byDate;
+    if (c.riskFor(row)?['level'] == 'high') return 8;
+    if (row['priority'] == 'high') return 7;
+    return byDate;
   }
 
   Widget liftedTask(Widget child, int index, Animation<double> lift) =>
@@ -420,6 +463,12 @@ class _ItemsViewState extends State<ItemsView> {
       Widget makeHeader(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          TaskSummaryCards(
+            rows: c.items,
+            available: c.itemsRevision != null,
+            loading: c.busy,
+          ),
+          const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, box) {
               final actions = <Widget>[
@@ -435,7 +484,7 @@ class _ItemsViewState extends State<ItemsView> {
                     icon: const Icon(Icons.sort_rounded),
                   ),
                 if (rows.isNotEmpty ||
-                    (c.itemsRevision == null && c.busy) ||
+                    c.itemsRevision == null ||
                     filter != 'active')
                   AppIconButton(
                     tooltip: '新建任务',
@@ -549,12 +598,21 @@ class _ItemsViewState extends State<ItemsView> {
             SoftNotice(c.notice!, warning: true),
             const SizedBox(height: 12),
           ],
-          if (rows.isEmpty && (c.itemsRevision != null || !c.busy))
+          if (rows.isEmpty && c.itemsRevision != null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  SvgPicture.asset(
+                    filter == 'completed'
+                        ? 'assets/illustrations/all-done.svg'
+                        : 'assets/illustrations/empty-tasks.svg',
+                    width: 180,
+                    height: 135,
+                    excludeFromSemantics: true,
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     filter == 'active'
                         ? '暂无任务'
@@ -571,6 +629,7 @@ class _ItemsViewState extends State<ItemsView> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 4,
+                      alignment: WrapAlignment.center,
                       children: [
                         AppButton.icon(
                           onPressed: widget.onCreate,
@@ -803,8 +862,6 @@ class _CompactRiskLine extends StatelessWidget {
                   Expanded(
                     child: Text(
                       label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

@@ -585,6 +585,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
                 ),
                 validator: (v) => v!.trim().isEmpty ? '请输入任务标题' : null,
               ),
+              const SizedBox(height: 16),
               AppPickerField<String>(
                 initialValue: course,
                 isExpanded: true,
@@ -619,6 +620,52 @@ class _ItemFormPageState extends State<ItemFormPage> {
               ),
             ],
           ),
+          if (kind != 'exam')
+            AppDisclosure(
+              title: const Text('安排学习时间'),
+              leading: const Icon(Icons.timelapse_outlined),
+              initiallyExpanded:
+                  minutes.text.isNotEmpty || startPolicy != 'unconfirmed',
+              children: [
+                estimate(),
+                const SizedBox(height: 14),
+                AppPickerField<String>(
+                  key: const Key('task-start-policy'),
+                  initialValue: startPolicy,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '最早何时可以开始'),
+                  items: const [
+                    DropdownMenuItem(value: 'unconfirmed', child: Text('未设置')),
+                    DropdownMenuItem(value: 'now', child: Text('从现在起可开始')),
+                    DropdownMenuItem(value: 'at', child: Text('指定最早开始时间')),
+                  ],
+                  onChanged: (v) => setState(() => startPolicy = v!),
+                ),
+                if (startPolicy == 'at')
+                  AppOutlineButton(
+                    guardAsync: false,
+                    onPressed: () async {
+                      final selected = await pickSchoolDateTime(
+                        context,
+                        initial: earliestAt,
+                      );
+                      if (selected != null &&
+                          mounted &&
+                          sameSession &&
+                          widget.controller.semesterId ==
+                              widget.semester['id']) {
+                        setState(() => earliestAt = selected);
+                      }
+                    },
+                    child: Text(
+                      earliestAt == null
+                          ? '选择最早开始时间'
+                          : displayInstant(earliestAt!.toIso8601String()),
+                    ),
+                  ),
+                const SizedBox(height: 14),
+              ],
+            ),
           EditorSection(
             title: kind == 'exam'
                 ? '考试时间'
@@ -751,7 +798,7 @@ class _ItemFormPageState extends State<ItemFormPage> {
                 onChanged: (value) => setState(() => certainty = value),
               ),
               if (kind == 'exam') ...[
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 AppFormField(
                   controller: location,
                   decoration: const InputDecoration(labelText: '考试地点（可留空）'),
@@ -759,52 +806,6 @@ class _ItemFormPageState extends State<ItemFormPage> {
               ],
             ],
           ),
-          if (kind != 'exam')
-            AppDisclosure(
-              title: const Text('安排学习时间'),
-              leading: const Icon(Icons.timelapse_outlined),
-              initiallyExpanded:
-                  minutes.text.isNotEmpty || startPolicy != 'unconfirmed',
-              children: [
-                estimate(),
-                const SizedBox(height: 14),
-                AppPickerField<String>(
-                  key: const Key('task-start-policy'),
-                  initialValue: startPolicy,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: '最早何时可以开始'),
-                  items: const [
-                    DropdownMenuItem(value: 'unconfirmed', child: Text('未设置')),
-                    DropdownMenuItem(value: 'now', child: Text('从现在起可开始')),
-                    DropdownMenuItem(value: 'at', child: Text('指定最早开始时间')),
-                  ],
-                  onChanged: (v) => setState(() => startPolicy = v!),
-                ),
-                if (startPolicy == 'at')
-                  AppOutlineButton(
-                    guardAsync: false,
-                    onPressed: () async {
-                      final selected = await pickSchoolDateTime(
-                        context,
-                        initial: earliestAt,
-                      );
-                      if (selected != null &&
-                          mounted &&
-                          sameSession &&
-                          widget.controller.semesterId ==
-                              widget.semester['id']) {
-                        setState(() => earliestAt = selected);
-                      }
-                    },
-                    child: Text(
-                      earliestAt == null
-                          ? '选择最早开始时间'
-                          : displayInstant(earliestAt!.toIso8601String()),
-                    ),
-                  ),
-                const SizedBox(height: 14),
-              ],
-            ),
           if (!editing)
             EditorSection(
               title: '提醒',
@@ -911,23 +912,29 @@ class _ItemFormPageState extends State<ItemFormPage> {
                   ),
                 ),
               if (!parsed && !editing)
-                AppFormField(
-                  controller: source,
-                  maxLines: 3,
-                  maxLength: 10000,
-                  decoration: const InputDecoration(
-                    labelText: '来源原文（可留空）',
-                    counterText: '',
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: AppFormField(
+                    controller: source,
+                    maxLines: 3,
+                    maxLength: 10000,
+                    decoration: const InputDecoration(
+                      labelText: '来源原文（可留空）',
+                      counterText: '',
+                    ),
                   ),
                 ),
               if (editing)
-                AppFormField(
-                  key: const Key('item-change-reason'),
-                  controller: reason,
-                  maxLength: 500,
-                  decoration: const InputDecoration(
-                    labelText: '修改原因（选填）',
-                    counterText: '',
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: AppFormField(
+                    key: const Key('item-change-reason'),
+                    controller: reason,
+                    maxLength: 500,
+                    decoration: const InputDecoration(
+                      labelText: '修改原因（选填）',
+                      counterText: '',
+                    ),
                   ),
                 ),
             ],

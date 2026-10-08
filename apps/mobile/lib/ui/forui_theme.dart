@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 
 import 'campus_theme.dart';
+import 'v2/shiri_tokens.dart';
 import 'accessibility.dart';
 
 /// Forui and Material share the same campus palette, rather than mixing themes.
@@ -13,6 +14,7 @@ FThemeData campusForuiTheme({
   final base = materialTheme ?? campusTheme();
   final theme = highContrast ? campusHighContrastTheme(base: base) : base;
   final scheme = theme.colorScheme;
+  final shiri = theme.extension<ShiriTheme>() ?? ShiriTheme.light();
   final colors =
       (theme.brightness == Brightness.dark
               ? FColors.neutralDark
@@ -22,9 +24,9 @@ FThemeData campusForuiTheme({
             foreground: scheme.onSurface,
             primary: scheme.primary,
             primaryForeground: scheme.onPrimary,
-            secondary: scheme.primaryContainer,
+            secondary: shiri.colors.primarySoft,
             secondaryForeground: scheme.onPrimaryContainer,
-            muted: theme.scaffoldBackgroundColor,
+            muted: shiri.colors.surfaceSunken,
             mutedForeground: scheme.onSurfaceVariant,
             card: scheme.surface,
             border: scheme.outlineVariant,
@@ -40,7 +42,7 @@ FThemeData campusForuiTheme({
   );
   final typography = FTypography(body: typeface, display: typeface);
   return FThemeData(
-    debugLabel: highContrast ? '拾日 · 校园高对比度' : '拾日 · 校园蓝绿',
+    debugLabel: highContrast ? '拾日 · 晴日高对比度' : '拾日 · 晴日',
     colors: colors,
     touch: true,
     typography: typography,
@@ -68,7 +70,7 @@ class ShiriForuiTheme extends StatelessWidget {
     builder: (context, highContrast) => FTheme(
       data: campusForuiTheme(
         fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
-        materialTheme: Theme.of(context),
+        materialTheme: Theme.of(context).copyWith(extensions: [context.shiri]),
         highContrast: highContrast,
       ),
       child: child,

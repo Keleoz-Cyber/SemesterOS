@@ -3,22 +3,28 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'empty_scene.dart';
+import 'v2/shiri_tokens.dart';
+import 'v2/motion/skeleton.dart';
+import 'v2/motion/completion_check.dart';
 
-const Duration motionDuration = Duration(milliseconds: 300);
-const Duration motionQuick = Duration(milliseconds: 150);
-const Curve motionEaseOut = Curves.easeOutCubic;
+const Duration motionDuration = ShiriMotion.standard;
+const Duration motionQuick = ShiriMotion.quick;
+const Curve motionEaseOut = ShiriMotion.easeDecelerate;
 
 class AppMotion {
   static bool reduced(BuildContext context) =>
       (MediaQuery.maybeOf(context)?.disableAnimations ?? false) ||
       (MediaQuery.maybeOf(context)?.accessibleNavigation ?? false);
   static bool allowed(BuildContext context) =>
-      !reduced(context) && TickerMode.valuesOf(context).enabled;
+      !reduced(context) &&
+      TickerMode.valuesOf(context).enabled &&
+      ModalRoute.isCurrentOf(context) != false;
   static Duration change(BuildContext context) =>
       reduced(context) ? Duration.zero : motionDuration;
   static Duration feedback(BuildContext context) =>
       reduced(context) ? Duration.zero : motionQuick;
-  static Duration sheet(BuildContext context) => change(context);
+  static Duration sheet(BuildContext context) =>
+      reduced(context) ? Duration.zero : ShiriMotion.emphasized;
   static Duration page(BuildContext context) => change(context);
   static Duration expand(BuildContext context) =>
       reduced(context) ? Duration.zero : const Duration(milliseconds: 260);
@@ -44,7 +50,7 @@ class _AppContentTransitionState extends State<AppContentTransition>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 220),
+    duration: ShiriMotion.standard,
     value: 1,
   );
   bool _foreground = true;
@@ -311,6 +317,7 @@ class _TabEntranceState extends _MotionState<TabEntrance> {
     if (!_foreground || !AppMotion.allowed(context)) {
       controller.stop();
       controller.value = 1;
+      _pendingEntrance = false;
       return;
     }
     if (_pendingEntrance) {
@@ -336,19 +343,19 @@ class _TabEntranceState extends _MotionState<TabEntrance> {
   };
   @override
   Widget build(BuildContext context) => TickerMode(
-    enabled: widget.active,
+    enabled: widget.active && ModalRoute.isCurrentOf(context) != false,
     child: ExcludeFocus(
       excluding: !widget.active,
       child: FadeTransition(
         opacity: controller.drive(CurveTween(curve: motionEaseOut)),
-        child: SlideTransition(
-          position: controller.drive(
-            Tween(
-              begin: offset,
-              end: Offset.zero,
-            ).chain(CurveTween(curve: motionEaseOut)),
+        child: ScaleTransition(
+          scale: controller.drive(
+            Tween(begin: .98, end: 1.0).chain(CurveTween(curve: motionEaseOut)),
           ),
-          child: widget.child,
+          child: HeroMode(
+            enabled: widget.active && !AppMotion.reduced(context),
+            child: widget.child,
+          ),
         ),
       ),
     ),
@@ -424,6 +431,7 @@ class EmptyState extends StatelessWidget {
           if (scene != null)
             AppEmptyScene(
               kind: scene!,
+              size: 180,
               accent: Theme.of(context).colorScheme.secondary,
             )
           else
@@ -440,7 +448,7 @@ class EmptyState extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
             textAlign: TextAlign.center,
           ),
-          if (message != null) ...[
+          if (message?.trim().isNotEmpty == true) ...[
             const SizedBox(height: 8),
             Text(
               message!,
@@ -466,6 +474,7 @@ class ErrorState extends StatelessWidget {
     liveRegion: true,
     child: EmptyState(
       icon: Icons.error_outline_rounded,
+      scene: EmptySceneKind.offline,
       title: '加载失败',
       message: message,
       action: onRetry == null
@@ -479,7 +488,8 @@ class ErrorState extends StatelessWidget {
   );
 }
 
-class SkeletonLoader extends StatefulWidget {
+/// Legacy API backed by the shared v2 shimmer scope.
+class SkeletonLoader extends StatelessWidget {
   final double width, height;
   final BorderRadius? borderRadius;
   const SkeletonLoader({
@@ -489,111 +499,25 @@ class SkeletonLoader extends StatefulWidget {
     this.borderRadius,
   });
   @override
-  State<SkeletonLoader> createState() => _SkeletonLoaderState();
-}
-
-class _SkeletonLoaderState extends _MotionState<SkeletonLoader> {
-  @override
-  Duration get duration => const Duration(milliseconds: 1500);
-  @override
-  bool get repeats => true;
-  @override
   Widget build(BuildContext context) => Semantics(
     label: '正在加载',
-    liveRegion: true,
-    child: AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final scheme = Theme.of(context).colorScheme;
-        return Container(
-          width: widget.width,
-          height: widget.height,
-          decoration: BoxDecoration(
-            borderRadius: widget.borderRadius ?? BorderRadius.circular(8),
-            gradient: LinearGradient(
-              begin: Alignment(-2 + controller.value * 4, 0),
-              end: Alignment(-1 + controller.value * 4, 0),
-              colors: [
-                scheme.surfaceContainerHighest,
-                scheme.surface,
-                scheme.surfaceContainerHighest,
-              ],
-            ),
-          ),
-        );
-      },
+    child: SkeletonBox(
+      width: width,
+      height: height,
+      borderRadius: borderRadius ?? ShiriRadius.xsAll,
     ),
   );
 }
 
-class SuccessCheckmark extends StatefulWidget {
+class SuccessCheckmark extends StatelessWidget {
   final double size;
   final Color? color;
   const SuccessCheckmark({super.key, this.size = 64, this.color});
   @override
-  State<SuccessCheckmark> createState() => _SuccessCheckmarkState();
-}
-
-class _SuccessCheckmarkState extends _MotionState<SuccessCheckmark> {
-  @override
-  Duration get duration => const Duration(milliseconds: 450);
-  @override
-  Widget build(BuildContext context) {
-    final color = widget.color ?? Theme.of(context).colorScheme.secondary;
-    return ExcludeSemantics(
-      child: AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) => Transform.scale(
-          scale: .8 + .2 * Curves.easeOut.transform(controller.value),
-          child: Container(
-            width: widget.size,
-            height: widget.size,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: .1),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: CustomPaint(
-              size: Size.square(widget.size * .6),
-              painter: _CheckmarkPainter(
-                progress: controller.value,
-                color: color,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CheckmarkPainter extends CustomPainter {
-  final double progress;
-  final Color color;
-  _CheckmarkPainter({required this.progress, required this.color});
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    final a = Offset(size.width * .2, size.height * .5);
-    final b = Offset(size.width * .45, size.height * .7);
-    final c = Offset(size.width * .8, size.height * .3);
-    final path = Path()..moveTo(a.dx, a.dy);
-    if (progress <= .5) {
-      final point = Offset.lerp(a, b, progress * 2)!;
-      path.lineTo(point.dx, point.dy);
-    } else {
-      path.lineTo(b.dx, b.dy);
-      final point = Offset.lerp(b, c, (progress - .5) * 2)!;
-      path.lineTo(point.dx, point.dy);
-    }
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(_CheckmarkPainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.color != color;
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: SizedBox.square(
+      dimension: size,
+      child: CompletionCheck(status: CompletionStatus.done, color: color),
+    ),
+  );
 }

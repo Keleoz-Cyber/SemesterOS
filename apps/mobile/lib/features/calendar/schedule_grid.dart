@@ -8,6 +8,11 @@ import 'calendar_repository.dart';
 import 'time_track.dart';
 import 'timetable_scale.dart';
 import '../../ui/date_labels.dart';
+import '../../ui/v2/shiri_tokens.dart' as v2;
+import '../../ui/v2/widgets/schedule_block.dart';
+import '../../ui/v2/widgets/dashed_border.dart';
+import '../../ui/v2/motion/now_pulse.dart';
+import '../../ui/v2/motion/pressable.dart';
 
 class ScheduleGrid extends StatefulWidget {
   final DateTime firstDay;
@@ -15,6 +20,10 @@ class ScheduleGrid extends StatefulWidget {
   final List<Map<String, dynamic>> entries;
   final List<Map<String, dynamic>> periods;
   final ValueChanged<Map<String, dynamic>> onOpen;
+
+  /// Presentation identity of the clicked day-part; never added to the row.
+  final void Function(Map<String, dynamic> row, String surfaceTag)?
+  onOpenSurface;
   final ValueChanged<DateTime>? onDay, onWeek;
   final bool loading, showHeader, visible;
   final String resourceFilter;
@@ -27,6 +36,7 @@ class ScheduleGrid extends StatefulWidget {
     required this.entries,
     this.periods = const [],
     required this.onOpen,
+    this.onOpenSurface,
     this.onDay,
     this.onWeek,
     this.minDay,
@@ -158,21 +168,20 @@ class _ScheduleGridState extends State<ScheduleGrid>
     return result;
   }
 
-  Color accent(_GridPart part) => switch (part.source['resource_type']) {
-    'event' => CampusColors.teal,
-    'plan' => CampusColors.primary,
-    'exam' => CampusColors.warning,
-    _ => CoursePalette.forTitle('${part.source['title']}').accent,
-  };
-  Color background(_GridPart part) => switch (part.source['resource_type']) {
-    'event' => CampusColors.tealSoft,
-    'plan' => CampusColors.blueSoft,
-    'exam' => CampusColors.warningSoft,
-    _ => CoursePalette.forTitle('${part.source['title']}').background,
-  };
+  String surfaceTag(_GridPart part) => 'course-surface-${part.id}';
+
+  void openPart(_GridPart part) {
+    final openSurface = widget.onOpenSurface;
+    if (openSurface != null && part.source['resource_type'] == 'course') {
+      openSurface(part.source, surfaceTag(part));
+    } else {
+      widget.onOpen(part.source);
+    }
+  }
+
   Future<void> openGroup(List<_GridPart> group) async {
     if (group.length == 1) {
-      widget.onOpen(group.first.source);
+      openPart(group.first);
       return;
     }
     await showAppSheet<void>(
@@ -197,7 +206,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () {
                     Navigator.pop(context);
-                    widget.onOpen(part.source);
+                    openPart(part);
                   },
                 ),
               if (widget.onDay != null)
@@ -223,9 +232,22 @@ class _ScheduleGridState extends State<ScheduleGrid>
     final label = group.length > 1
         ? '${group.length}项${overlaps(group) ? '重叠' : ''}'
         : '${part.source['title']}';
-    final ink = part.source['resource_type'] == 'course'
-        ? CoursePalette.forTitle('${part.source['title']}').ink
-        : CampusColors.ink;
+    final kind = switch (part.source['resource_type']) {
+      'event' => v2.ScheduleKind.event,
+      'plan' => v2.ScheduleKind.plan,
+      'exam' => v2.ScheduleKind.exam,
+      _ => v2.ScheduleKind.course,
+    };
+    final visual = v2.KindStyle.of(
+      kind,
+      palette: v2.CoursePalette.forTitle(
+        '${part.source['title']}'.replaceFirst(
+          RegExp(r'^(?:已请假|待请假|免听)\s*·\s*'),
+          '',
+        ),
+      ),
+      brightness: Theme.of(context).brightness,
+    );
     return Semantics(
       button: true,
       label: group
@@ -238,91 +260,126 @@ class _ScheduleGridState extends State<ScheduleGrid>
         message: group
             .map((p) => '${p.source['title']} ${calendarTimeLabel(p.source)}')
             .join('\n'),
-        child: Material(
-          color: overlaps(group) ? CampusColors.errorSoft : background(part),
-          borderRadius: BorderRadius.circular(isShort ? 4 : 6),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: ValueKey(
-              '${part.point ? 'schedule-start' : 'schedule-tile'}-${part.id}',
-            ),
-            onTap: () => openGroup(group),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(
-                    color: accent(part),
-                    width: part.point ? 2 : 3,
+        child: LayoutBuilder(
+          key: ValueKey(
+            '${part.point ? 'schedule-start' : 'schedule-tile'}-${part.id}',
+          ),
+          builder: (context, bounds) {
+            final participation = calendarParticipationLabel(part.source);
+            if (!isShort && bounds.maxHeight >= 64 * scaled) {
+              return HeroMode(
+                enabled: widget.visible && active && foreground,
+                child: ScheduleBlock(
+                  title: label,
+                  kind: kind,
+                  palette: v2.CoursePalette.forTitle(
+                    '${part.source['title']}'.replaceFirst(
+                      RegExp(r'^(?:已请假|待请假|免听)\s*·\s*'),
+                      '',
+                    ),
+                  ),
+                  location:
+                      group.length == 1 &&
+                          '${part.source['location'] ?? ''}'.trim().isNotEmpty
+                      ? shortCampusLocation('${part.source['location']}')
+                      : null,
+                  heroTag:
+                      group.length == 1 &&
+                          part.source['resource_type'] == 'course'
+                      ? surfaceTag(part)
+                      : null,
+                  onTap: () => openGroup(group),
+                ),
+              );
+            }
+            Widget body = Pressable(
+              onPressed: () => openGroup(group),
+              pressedScale: .96,
+              excludeChildSemantics: true,
+              semanticLabel: label,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(11),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: overlaps(group)
+                        ? CampusColors.errorSoft
+                        : visual.fill,
+                    border: Border(
+                      left: BorderSide(color: visual.accent, width: 3),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            label,
+                            maxLines: scaled > 1.3
+                                ? 5
+                                : bounds.maxHeight > 45 * scaled
+                                ? 3
+                                : 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: compact ? 11 : 14,
+                              fontWeight: FontWeight.w700,
+                              color: visual.foreground,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                        if (part.point && bounds.maxHeight > 38 * scaled)
+                          Text(
+                            participation.isNotEmpty
+                                ? participation
+                                : hhmm(schoolTime(part.source['start_at'])),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: visual.foreground,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              padding: EdgeInsets.symmetric(
-                horizontal: compact ? 3 : 6,
-                vertical: isShort ? 2 : 6,
-              ),
-              child: LayoutBuilder(
-                builder: (context, bounds) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: isShort
-                            ? 2
-                            : compact
-                            ? 4
-                            : 3,
-                        overflow: isShort && scaled > 1.3
-                            ? TextOverflow.clip
-                            : TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: compact ? 11 : 14,
-                          fontWeight: FontWeight.w700,
-                          color: ink,
-                          height: 1.2,
+            );
+            if (visual.border != null) {
+              body = visual.dashed
+                  ? CustomPaint(
+                      foregroundPainter: DashedRRectPainter(
+                        color: visual.border!,
+                        strokeWidth: visual.borderWidth,
+                        dash: visual.dash,
+                        gap: visual.gap,
+                        radius: 11,
+                      ),
+                      child: body,
+                    )
+                  : DecoratedBox(
+                      position: DecorationPosition.foreground,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: visual.border!,
+                          width: visual.borderWidth,
                         ),
+                        borderRadius: BorderRadius.circular(11),
                       ),
-                    ),
-                    if (part.point && bounds.maxHeight > 32 * scaled)
-                      Text(
-                        calendarParticipationLabel(part.source).isNotEmpty
-                            ? calendarParticipationLabel(part.source)
-                            : hhmm(schoolTime(part.source['start_at'])),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11, color: accent(part)),
-                      ),
-                    if (group.length == 1 &&
-                        bounds.maxHeight > 55 * scaled &&
-                        bounds.maxWidth > 35 &&
-                        '${part.source['location'] ?? ''}'.trim().isNotEmpty)
-                      Text(
-                        shortCampusLocation('${part.source['location']}'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: CampusColors.muted,
-                        ),
-                      ),
-                    if (group.length == 1 &&
-                        bounds.maxHeight > 120 * scaled &&
-                        bounds.maxWidth > 55 &&
-                        calendarArrivalLabel(part.source).isNotEmpty)
-                      Text(
-                        calendarArrivalLabel(part.source),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: CampusColors.muted,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+                      child: body,
+                    );
+            }
+            if (group.length == 1 && part.source['resource_type'] == 'course') {
+              body = HeroMode(
+                enabled: widget.visible && active && foreground,
+                child: Hero(tag: surfaceTag(part), child: body),
+              );
+            }
+            return body;
+          },
         ),
       ),
     );
@@ -391,7 +448,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
         minuteHeight,
         scaled,
         entries
-            .where((p) => p.source['resource_type'] != 'course' && !p.point)
+            .where((p) => !p.point)
             .map((p) => (start: p.start, end: p.end))
             .toList(),
       );
@@ -421,7 +478,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
               child: IgnorePointer(
                 child: ColoredBox(
                   color: i == today
-                      ? CampusColors.tealSoft.withValues(alpha: .42)
+                      ? v2.ShiriColors.light.primarySoft.withValues(alpha: .72)
                       : CampusColors.background.withValues(alpha: .45),
                 ),
               ),
@@ -537,8 +594,8 @@ class _ScheduleGridState extends State<ScheduleGrid>
             width: 2,
             height: scale.at(minute),
             child: IgnorePointer(
-              child: ColoredBox(
-                color: CampusColors.teal.withValues(alpha: .28),
+              child: const DecoratedBox(
+                decoration: BoxDecoration(gradient: v2.ShiriGradients.brand),
               ),
             ),
           ),
@@ -553,16 +610,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
             child: IgnorePointer(
               child: Semantics(
                 label: '现在 ${hhmm(current)}',
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: CampusColors.teal,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: CampusColors.background,
-                      width: 2,
-                    ),
-                  ),
-                ),
+                child: NowDot(time: current, size: 10),
               ),
             ),
           ),
@@ -595,7 +643,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
                                     '现在',
                                     style: TextStyle(
                                       fontSize: 10,
-                                      color: CampusColors.teal,
+                                      color: v2.ShiriBrand.sunInk,
                                     ),
                                   ),
                                   Text(
@@ -604,7 +652,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
                                     style: const TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w700,
-                                      color: CampusColors.teal,
+                                      color: v2.ShiriBrand.sunInk,
                                     ),
                                   ),
                                 ],
@@ -627,14 +675,18 @@ class _ScheduleGridState extends State<ScheduleGrid>
                               label:
                                   '${date.month}月${date.day}日${i == today ? '，今天' : ''}',
                               child: Material(
-                                color: selected
+                                color: i == today
+                                    ? CampusColors.surface
+                                    : selected
                                     ? CampusColors.blueSoft
                                     : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
                                 child: InkWell(
                                   key: ValueKey(
                                     'calendar-day-${calendarDate(date)}',
                                   ),
                                   onTap: () => widget.onDay?.call(date),
+                                  borderRadius: BorderRadius.circular(16),
                                   child: Center(
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
@@ -645,6 +697,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
                                           softWrap: false,
                                           style: const TextStyle(
                                             fontSize: 11,
+                                            height: 1.2,
                                             color: CampusColors.muted,
                                           ),
                                         ),
@@ -655,6 +708,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
                                           softWrap: false,
                                           style: const TextStyle(
                                             fontSize: 18,
+                                            height: 1.2,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
@@ -665,7 +719,8 @@ class _ScheduleGridState extends State<ScheduleGrid>
                                             softWrap: false,
                                             style: TextStyle(
                                               fontSize: 11,
-                                              color: CampusColors.teal,
+                                              height: 1.2,
+                                              color: v2.ShiriBrand.sunInk,
                                             ),
                                           ),
                                       ],
@@ -733,6 +788,27 @@ class _GridLines extends CustomPainter {
   );
   @override
   void paint(Canvas canvas, Size size) {
+    // The scale owns the real time mapping. Long, unoccupied breaks only gain
+    // a diagonal texture here; the painter never changes their clock bounds.
+    for (var i = 1; i < scale.minutes.length; i++) {
+      final a = scale.minutes[i - 1], b = scale.minutes[i];
+      final top = scale.positions[i - 1], bottom = scale.positions[i];
+      if (b - a < 45 || bottom - top > 24) continue;
+      final band = Rect.fromLTRB(timeWidth, top, size.width, bottom);
+      canvas.save();
+      canvas.clipRect(band);
+      canvas.drawRect(
+        band,
+        Paint()..color = v2.ShiriColors.light.surfaceSunken,
+      );
+      final stripes = Paint()
+        ..color = v2.ShiriColors.light.line
+        ..strokeWidth = 3;
+      for (double x = timeWidth - 24; x < size.width + 24; x += 12) {
+        canvas.drawLine(Offset(x, bottom), Offset(x + 24, top), stripes);
+      }
+      canvas.restore();
+    }
     final paint = Paint()
       ..color = CampusColors.line
       ..strokeWidth = .6;
@@ -746,7 +822,13 @@ class _GridLines extends CustomPainter {
             ? [for (var n = first; n <= last; n += 60) n]
             : [for (final p in periods) _clockMinute(p['start']), last]) {
       final y = scale.at(minute);
-      canvas.drawLine(Offset(timeWidth, y), Offset(size.width, y), paint);
+      for (double x = timeWidth; x < size.width; x += 7) {
+        canvas.drawLine(
+          Offset(x, y),
+          Offset(math.min(x + 4, size.width), y),
+          paint,
+        );
+      }
     }
   }
 

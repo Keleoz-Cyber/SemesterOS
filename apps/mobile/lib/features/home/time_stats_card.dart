@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/v2/shiri_tokens.dart';
+import '../../ui/v2/motion/skeleton.dart';
 import '../../ui/app_controls.dart';
 import '../calendar/calendar_repository.dart';
 import '../calendar/time_track.dart';
@@ -62,11 +64,13 @@ class TimeStatsCard extends StatelessWidget {
   final List<Map<String, dynamic>> todayItems;
   final List<Map<String, dynamic>> weekItems;
   final DateTime now;
+  final bool updating;
   const TimeStatsCard({
     super.key,
     required this.todayItems,
     required this.weekItems,
     required this.now,
+    this.updating = false,
   });
   String _duration(int minutes) => minutes < 60
       ? '$minutes分钟'
@@ -107,17 +111,26 @@ class TimeStatsCard extends StatelessWidget {
     );
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: CampusColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CampusColors.line),
-      ),
+      decoration: context.shiri.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '日程时长',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('日程时长', style: context.shiri.text.titleSmall),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  updating ? '正在更新' : '',
+                  style: context.shiri.text.label.copyWith(
+                    color: context.shiri.colors.ink500,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           LayoutBuilder(
@@ -165,6 +178,63 @@ class TimeStatsCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class TimeStatsLoading extends StatelessWidget {
+  const TimeStatsLoading({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final shiri = context.shiri;
+    Widget metric() => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SkeletonLine(widthFactor: .3, style: shiri.text.label),
+        const SizedBox(height: 5),
+        SkeletonLine(widthFactor: .6, style: shiri.text.numL),
+      ],
+    );
+    return SkeletonScope(
+      semanticLabel: '正在读取日程时长',
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: shiri.cardDecoration(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: SkeletonLine(
+                widthFactor: .35,
+                style: shiri.text.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 10),
+            LayoutBuilder(
+              builder: (context, box) =>
+                  MediaQuery.textScalerOf(context).scale(16) > 22 ||
+                      box.maxWidth < 280
+                  ? Column(
+                      children: [
+                        metric(),
+                        const SizedBox(height: 14),
+                        metric(),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: metric()),
+                        const SizedBox(width: 16),
+                        Expanded(child: metric()),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 8),
+            SkeletonLine(widthFactor: .4, style: shiri.text.label),
+          ],
+        ),
       ),
     );
   }

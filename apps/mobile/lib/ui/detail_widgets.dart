@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'campus_theme.dart';
 import 'app_controls.dart';
+import 'v2/shiri_tokens.dart';
 
 /// A record's identity, separate from its dates, actions and editable fields.
 class RecordHeading extends StatelessWidget {
@@ -37,7 +38,7 @@ class RecordHeading extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 26,
+                      fontSize: 30,
                       fontWeight: FontWeight.w700,
                       height: 1.25,
                       color: CampusColors.ink,
@@ -104,40 +105,47 @@ class EditorSection extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 24),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: accent),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: CampusColors.ink,
+    padding: const EdgeInsets.only(bottom: ShiriSpace.sectionGap),
+    child: Container(
+      padding: const EdgeInsets.all(ShiriSpace.cardLoose),
+      decoration: BoxDecoration(
+        color: context.shiri.colors.surface,
+        borderRadius: ShiriRadius.lgAll,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: CampusColors.ink,
+                    ),
                   ),
                 ),
-              ),
-              if (action != null) ...[const SizedBox(width: 12), action!],
-            ],
-          ),
-        ),
-        if (subtitle != null && subtitle!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              subtitle!,
-              style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+                if (action != null) ...[const SizedBox(width: 12), action!],
+              ],
             ),
           ),
-        ...children,
-      ],
+          if (subtitle != null && subtitle!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                subtitle!,
+                style: const TextStyle(fontSize: 13, color: CampusColors.muted),
+              ),
+            ),
+          ...children,
+        ],
+      ),
     ),
   );
 }
@@ -189,6 +197,7 @@ class RecordFact extends StatelessWidget {
 }
 
 class ActionFooter extends StatelessWidget {
+  final Key? actionKey;
   final String label;
   final FutureOr<void> Function()? onPressed;
   final IconData? icon;
@@ -199,6 +208,7 @@ class ActionFooter extends StatelessWidget {
     required this.onPressed,
     this.icon,
     this.secondary,
+    this.actionKey,
   });
   @override
   Widget build(BuildContext context) => Material(
@@ -206,13 +216,19 @@ class ActionFooter extends StatelessWidget {
     child: SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          12,
+          20,
+          12 + MediaQuery.viewInsetsOf(context).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ?secondary,
             AppButton.base(
+              key: actionKey,
               onPressed: onPressed,
               variant: FButtonVariant.primary,
               icon: icon == null ? null : Icon(icon),
@@ -239,8 +255,8 @@ class DocumentPanel extends StatelessWidget {
     padding: const EdgeInsets.all(16),
     margin: const EdgeInsets.only(bottom: 16),
     decoration: BoxDecoration(
-      color: CampusColors.tealSoft,
-      borderRadius: BorderRadius.circular(14),
+      color: CampusColors.surface,
+      borderRadius: ShiriRadius.lgAll,
       border: const Border(
         left: BorderSide(color: CampusColors.teal, width: 4),
       ),

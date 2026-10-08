@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'media_input.dart';
 import '../../ui/motion.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/v2/shiri_tokens.dart';
 
 /// Owns one recording at a time. The callback must copy the temporary file
 /// before completing; the file is released even when the callback fails.
@@ -15,6 +17,8 @@ class HoldVoiceButton extends StatefulWidget {
     this.onRecordingChanged,
     this.input,
     this.enabled = true,
+    this.compact = false,
+    this.onTap,
   });
 
   final Future<void> Function(String path) onRecorded;
@@ -22,6 +26,8 @@ class HoldVoiceButton extends StatefulWidget {
   final ValueChanged<bool>? onRecordingChanged;
   final MediaInput? input;
   final bool enabled;
+  final bool compact;
+  final VoidCallback? onTap;
 
   @override
   State<HoldVoiceButton> createState() => _HoldVoiceButtonState();
@@ -29,7 +35,8 @@ class HoldVoiceButton extends StatefulWidget {
 
 class _HoldVoiceButtonState extends State<HoldVoiceButton>
     with WidgetsBindingObserver {
-  late final input = widget.input ?? DeviceMediaInput();
+  MediaInput? _input;
+  MediaInput get input => _input ??= widget.input ?? DeviceMediaInput();
   bool starting = false, recording = false, finishing = false;
   bool held = false, cancelling = false, dead = false;
   int? pointer;
@@ -44,6 +51,7 @@ class _HoldVoiceButtonState extends State<HoldVoiceButton>
   @override
   void initState() {
     super.initState();
+    _input = widget.input;
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -72,7 +80,7 @@ class _HoldVoiceButtonState extends State<HoldVoiceButton>
       await pendingStart;
       if (recording) await end(cancel: true);
       await pendingFinish;
-      await input.dispose();
+      await _input?.dispose();
     }());
     super.dispose();
   }
@@ -182,8 +190,82 @@ class _HoldVoiceButtonState extends State<HoldVoiceButton>
     }
   }
 
+  Widget compactFace(BuildContext context) {
+    final active = starting || recording || finishing;
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      enabled: widget.enabled && !finishing,
+      label: active ? (cancelling ? '松开取消' : '松开完成') : '按住说话，轻点打开助手',
+      hint: '上滑取消；双击开始，再次双击结束',
+      onTap: widget.enabled && !finishing ? accessibleToggle : null,
+      child: Focus(
+        onKeyEvent: (_, event) {
+          if (event is KeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.space ||
+                  event.logicalKey == LogicalKeyboardKey.enter)) {
+            accessibleToggle();
+            return KeyEventResult.handled;
+          }
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape) {
+            unawaited(end(cancel: true));
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.enabled && !active ? widget.onTap : null,
+          onLongPressStart: widget.enabled && !active
+              ? (details) {
+                  originY = details.globalPosition.dy;
+                  begin();
+                }
+              : null,
+          onLongPressMoveUpdate: (details) {
+            final next = originY - details.globalPosition.dy >= 64;
+            if (next != cancelling) {
+              cancelling = next;
+              refresh();
+            }
+          },
+          onLongPressEnd: (_) => unawaited(end()),
+          onLongPressCancel: () => unawaited(end(cancel: true)),
+          child: ExcludeSemantics(
+            child: AnimatedContainer(
+              duration: AppMotion.feedback(context),
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: cancelling ? null : ShiriGradients.brand,
+                color: cancelling ? colors.errorContainer : null,
+              ),
+              child: active
+                  ? Center(
+                      child: recording
+                          ? const _VoiceWave(width: 26, height: 20)
+                          : Text(
+                              finishing ? '…' : '…',
+                              style: const TextStyle(color: CampusColors.ink),
+                            ),
+                    )
+                  : const Icon(
+                      Icons.mic_rounded,
+                      size: 24,
+                      color: CampusColors.ink,
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.compact) return compactFace(context);
     final colors = Theme.of(context).colorScheme;
     final active = recording || starting;
     final label = cancelling
@@ -265,6 +347,8 @@ class _HoldVoiceButtonState extends State<HoldVoiceButton>
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        const _VoiceWave(width: 56, height: 20),
+                        const SizedBox(height: 6),
                         Text(
                           '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}',
                           style: TextStyle(
@@ -305,4 +389,75 @@ class _HoldVoiceButtonState extends State<HoldVoiceButton>
       ),
     );
   }
+}
+
+/// Decorative hold feedback, not a measurement of microphone amplitude.
+class _VoiceWave extends StatefulWidget {
+  const _VoiceWave({required this.width, required this.height});
+  final double width, height;
+  @override
+  State<_VoiceWave> createState() => _VoiceWaveState();
+}
+
+class _VoiceWaveState extends State<_VoiceWave>
+    with SingleTickerProviderStateMixin {
+  late final animation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  );
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.allowed(context) &&
+        ModalRoute.isCurrentOf(context) != false) {
+      animation.repeat();
+    } else {
+      animation.stop();
+      animation.value = .5;
+    }
+  }
+
+  @override
+  void dispose() {
+    animation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: CustomPaint(
+      size: Size(widget.width, widget.height),
+      painter: _WavePainter(animation),
+    ),
+  );
+}
+
+class _WavePainter extends CustomPainter {
+  _WavePainter(this.animation) : super(repaint: animation);
+  final Animation<double> animation;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = CampusColors.ink;
+    for (var i = 0; i < 5; i++) {
+      final h =
+          size.height *
+          (.28 +
+              .6 * (math.sin(animation.value * math.pi * 2 + i * .8) + 1) / 2);
+      final x = (i + .5) * size.width / 5;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(x, size.height / 2),
+            width: 3,
+            height: h,
+          ),
+          const Radius.circular(2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WavePainter old) => old.animation != animation;
 }

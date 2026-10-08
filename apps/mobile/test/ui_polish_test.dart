@@ -21,6 +21,7 @@ import 'package:semester_os/features/calendar/calendar_panel.dart';
 import 'package:semester_os/features/centers/semester_centers.dart';
 import 'package:semester_os/features/centers/academic_visuals.dart';
 import 'package:semester_os/ui/campus_theme.dart';
+import 'package:semester_os/ui/v2/shiri_theme.dart';
 import 'api_session_test.dart' show ControlledTransport, body, account;
 import 'controller_test.dart' show MemoryStore;
 import 'reminder_sync_test.dart' show FakeNotifications;
@@ -142,7 +143,24 @@ AppController sampleController() {
         'courses': events,
         'items': [],
         'exams': [],
-        'weeks': [],
+        'weeks': [
+          for (var week = 1; week <= 20; week++)
+            {
+              'week': week,
+              'start_date': monday
+                  .add(Duration(days: (week - 4) * 7))
+                  .toIso8601String()
+                  .substring(0, 10),
+              'end_date': monday
+                  .add(Duration(days: (week - 4) * 7 + 6))
+                  .toIso8601String()
+                  .substring(0, 10),
+              'exams': [],
+              'deadlines': [],
+              'events': [],
+              'changes': [],
+            },
+        ],
         'changes': [],
       });
     }
@@ -182,6 +200,7 @@ Future<void> mount(
   addTearDown(tester.view.resetDevicePixelRatio);
   var theme = campusTheme();
   if (previewFont) {
+    theme = shiriLightTheme(fontFamily: 'PreviewSans');
     theme = theme.copyWith(
       textTheme: theme.textTheme.apply(fontFamily: 'PreviewSans'),
       primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'PreviewSans'),
@@ -258,7 +277,13 @@ Future<void> capture(WidgetTester tester, String name) async {
   await tester.pump();
   try {
     await tester.runAsync(() async {
-      final image = await boundary.toImage(pixelRatio: 2);
+      final image = await boundary.toImage(
+        pixelRatio:
+            double.tryParse(
+              Platform.environment['UI_PREVIEW_PIXEL_RATIO'] ?? '',
+            ) ??
+            2,
+      );
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       final directory = Directory(output!);
       await directory.create(recursive: true);

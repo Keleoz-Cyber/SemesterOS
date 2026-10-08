@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
 import '../notices/notice_fields.dart';
+import '../../ui/v2/shiri_tokens.dart' as v2;
 
 List<String> eventDisplayTags(Map<String, dynamic> row, String? category) {
   String normalize(String s) =>
@@ -51,23 +52,38 @@ class EventOverview extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          '${row['title']}',
-          style: const TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: CampusColors.ink,
-            height: 1.3,
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: v2.ShiriGradients.brandSoft,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${row['title']}',
+                style: const TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w700,
+                  color: CampusColors.teal,
+                  height: 1.25,
+                ),
+              ),
+              if (states.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    states.join(' · '),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: CampusColors.muted,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
-        if (states.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text(
-              states.join(' · '),
-              style: const TextStyle(fontSize: 13, color: CampusColors.muted),
-            ),
-          ),
         if (when.isNotEmpty || location.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 24),
@@ -75,10 +91,8 @@ class EventOverview extends StatelessWidget {
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 color: CampusColors.surface,
-                border: const Border(
-                  top: BorderSide(color: CampusColors.teal, width: 3),
-                  bottom: BorderSide(color: CampusColors.line),
-                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: v2.ShiriShadows.light.card,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -116,14 +130,17 @@ class EventOverview extends StatelessWidget {
                                 builder: (context, bounds) {
                                   var style = TextStyle(
                                     fontSize: local == null && when.length > 16
-                                      ? 16 :
-                                        local == null ||
-                                            !sameDay && endLocal != null
+                                        ? 16
+                                        : local == null ||
+                                              !sameDay && endLocal != null
                                         ? 22
                                         : 30,
                                     fontWeight: FontWeight.w700,
                                     color: CampusColors.ink,
                                     height: 1.2,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   );
                                   if (sameDay) {
                                     bool fits(TextStyle value) {
@@ -248,9 +265,26 @@ class EventOverview extends StatelessWidget {
         if (category != null || tags.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 16),
-            child: Text(
-              [?category, ...tags].join(' · '),
-              style: const TextStyle(fontSize: 12, color: CampusColors.muted),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: CampusColors.surface,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  [?category, ...tags].join(' · '),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: CampusColors.muted,
+                  ),
+                ),
+              ),
             ),
           ),
       ],

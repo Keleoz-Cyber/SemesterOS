@@ -36,14 +36,11 @@ class TimeInputOptions extends StatelessWidget {
                   vertical: 10,
                 ),
                 selected: precision == entry.key,
-                leading: Icon(
-                  switch (entry.key) {
-                    'week' => Icons.date_range_outlined,
-                    'range' => Icons.unfold_more_rounded,
-                    _ => Icons.event_busy_outlined,
-                  },
-                  color: CampusColors.teal,
-                ),
+                leading: Icon(switch (entry.key) {
+                  'week' => Icons.date_range_outlined,
+                  'range' => Icons.unfold_more_rounded,
+                  _ => Icons.event_busy_outlined,
+                }, color: CampusColors.teal),
                 title: Text(entry.value),
                 trailing: precision == entry.key
                     ? const Text(
@@ -102,7 +99,11 @@ class TimeInputOptions extends StatelessWidget {
       ),
       AppTextButton.icon(
         onPressed: onChanged == null ? null : () => otherTime(context),
-        icon: const Icon(Icons.tune_rounded, size: 18, color: CampusColors.muted),
+        icon: const Icon(
+          Icons.tune_rounded,
+          size: 18,
+          color: CampusColors.muted,
+        ),
         label: const Text('时间方式'),
       ),
     ],

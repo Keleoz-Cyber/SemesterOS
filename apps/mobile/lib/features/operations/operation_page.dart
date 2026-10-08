@@ -20,6 +20,7 @@ import '../planning/risk_widgets.dart';
 import '../media/drafts.dart';
 import '../agent/agent_motion.dart';
 import '../agent/agent_widgets.dart';
+import '../items/detail_surfaces.dart';
 
 String operationValue(dynamic field, dynamic value) {
   if (value == null) return '移除此项设置';
@@ -513,8 +514,34 @@ class _OperationPageState extends State<OperationPage> {
     final rejected = p?['phase'] == 'rejected';
     final compactRequest =
         p != null && preview != null && !editing && !rejected;
+    final showEditor =
+        editing &&
+        !applied &&
+        !rejected &&
+        ['update_task', 'update_reminder', 'request_plan'].contains(intent);
     return Scaffold(
       appBar: AppBar(title: const Text('智能修改')),
+      bottomNavigationBar: !same
+          ? null
+          : showEditor
+          ? ActionFooter(
+              label: '查看修改前后',
+              icon: Icons.compare_arrows_rounded,
+              onPressed: busy ? null : resolve,
+            )
+          : !compactRequest
+          ? ActionFooter(
+              label: '让AI整理修改',
+              icon: Icons.auto_awesome_outlined,
+              onPressed: busy ? null : parse,
+            )
+          : p['phase'] == 'ready' && !editing && !applied && !stale
+          ? ActionFooter(
+              label: intent == 'request_plan' ? '按这个范围生成计划' : '确认保存修改',
+              icon: Icons.check_rounded,
+              onPressed: busy ? null : apply,
+            )
+          : null,
       body: !same
           ? const Center(child: Text('账号或学期已切换，请返回'))
           : AppLoadingOverlay(
@@ -579,10 +606,11 @@ class _OperationPageState extends State<OperationPage> {
                         ),
                       ],
                     ),
-                    AppButton(
-                      onPressed: busy ? null : parse,
-                      child: const Text('让AI整理修改'),
-                    ),
+                    if (showEditor)
+                      AppTextButton(
+                        onPressed: busy ? null : parse,
+                        child: const Text('让AI整理修改'),
+                      ),
                   ] else ...[
                     if (stale)
                       AppTextButton(
@@ -628,30 +656,19 @@ class _OperationPageState extends State<OperationPage> {
                             : '修改已保存',
                       ),
                     if (rejected) const SoftNotice('已放弃这次修改，原来的安排保留。'),
-                    if (editing &&
-                        !applied &&
-                        !rejected &&
-                        [
-                          'update_task',
-                          'update_reminder',
-                          'request_plan',
-                        ].contains(intent))
-                      ...editor(),
+                    if (showEditor)
+                      EditorSection(
+                        title: '调整修改内容',
+                        icon: Icons.tune_rounded,
+                        children: editor(),
+                      ),
                     if (!editing && preview != null)
                       AssistantArrival(
                         revision: '${p['id']}:${p['version']}:${p['phase']}',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                        child: DetailGroup(
                           children: previewWidgets(
                             Map<String, dynamic>.from(preview),
                           ),
-                        ),
-                      ),
-                    if (p['phase'] == 'ready' && !editing && !applied && !stale)
-                      AppButton(
-                        onPressed: busy ? null : apply,
-                        child: Text(
-                          intent == 'request_plan' ? '按这个范围生成计划' : '确认保存修改',
                         ),
                       ),
                     if (!applied && !rejected) ...[
@@ -923,9 +940,6 @@ class _OperationPageState extends State<OperationPage> {
           ),
       ]);
     }
-    result.add(
-      AppButton(onPressed: busy ? null : resolve, child: const Text('查看修改前后')),
-    );
     return result;
   }
 

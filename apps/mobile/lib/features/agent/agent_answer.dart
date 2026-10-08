@@ -15,7 +15,7 @@ class AgentAnswer extends StatelessWidget {
     styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
       p: const TextStyle(fontSize: 16, height: 1.5, color: CampusColors.ink),
       strong: const TextStyle(
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         color: CampusColors.primary,
       ),
       a: const TextStyle(color: CampusColors.primary),

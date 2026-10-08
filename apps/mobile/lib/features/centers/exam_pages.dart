@@ -14,6 +14,9 @@ import '../../ui/app_picker_field.dart';
 import '../../ui/time_input_options.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
+import '../items/detail_surfaces.dart';
+import '../../ui/v2/shiri_tokens.dart';
+import '../../ui/empty_scene.dart';
 import '../notices/notice_fields.dart' show noticeTime;
 import '../planning/date_time_picker.dart';
 import '../planning/risk_widgets.dart';
@@ -90,7 +93,21 @@ class _ExamCenterPageState extends State<ExamCenterPage> {
                 ),
               ],
               if (rows.isEmpty)
-                CampusPanel(child: Text(cancelled ? '没有已取消的考试' : '这里还没有考试记录')),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 28),
+                  child: Column(
+                    children: [
+                      const AppEmptyScene(size: 180),
+                      const SizedBox(height: 16),
+                      Text(
+                        cancelled ? '没有已取消的考试' : '这里还没有考试记录',
+                        style: context.shiri.text.body.copyWith(
+                          color: context.shiri.colors.ink500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               for (final row in rows) ...[
                 const SizedBox(height: 12),
                 _ExamRecord(
@@ -488,8 +505,12 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
                   onChanged: busy ? null : (v) => setState(() => mode = v!),
                 ),
                 if (mode == 'custom')
-                  AppTextButton(
-                    onPressed: busy
+                  RecordActionTile(
+                    icon: Icons.schedule_rounded,
+                    title: deadline == null
+                        ? '选择复习截止'
+                        : displayInstant(deadline!.toIso8601String()),
+                    onTap: busy
                         ? null
                         : () async {
                             final d = await pickSchoolDateTime(
@@ -500,11 +521,6 @@ class _ReviewSetupPageState extends State<ReviewSetupPage> {
                               setState(() => deadline = d);
                             }
                           },
-                    child: Text(
-                      deadline == null
-                          ? '选择复习截止'
-                          : displayInstant(deadline!.toIso8601String()),
-                    ),
                   ),
                 AppCheckRow(
                   title: const Text('现在即可安排复习'),
@@ -958,6 +974,15 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
     final affectedBlocks = widget.controller.rows(p['affected_blocks']);
     return Scaffold(
       appBar: AppBar(title: const Text('考试改期确认')),
+      bottomNavigationBar: ActionFooter(
+        label: applied ? '完成核对' : '确认考试新安排',
+        icon: Icons.check_rounded,
+        onPressed: applied
+            ? () => Navigator.pop(context, true)
+            : busy || stale || (conflict && !confirmConflict)
+            ? null
+            : apply,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -969,9 +994,13 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
                 : Icons.compare_arrows_rounded,
           ),
 
-          _ExamComparison(
-            before: Map<String, dynamic>.from(p['before']),
-            after: Map<String, dynamic>.from(p['after']),
+          DetailGroup(
+            children: [
+              _ExamComparison(
+                before: Map<String, dynamic>.from(p['before']),
+                after: Map<String, dynamic>.from(p['after']),
+              ),
+            ],
           ),
           if (p['before']['title'] != p['after']['title'])
             Text('标题：${p['before']['title']} → ${p['after']['title']}'),
@@ -1057,13 +1086,6 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
             const SoftNotice('账号、学期或安排已变化，请重新预览', warning: true),
           if (error != null) SoftNotice(error!, warning: true),
 
-          if (!applied)
-            AppButton(
-              onPressed: busy || stale || (conflict && !confirmConflict)
-                  ? null
-                  : apply,
-              child: const Text('确认考试新安排'),
-            ),
           if (applied) ...[
             const SoftNotice('考试新安排已保存'),
             AppOutlineButton(
@@ -1074,10 +1096,6 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
                 ),
               ),
               child: const Text('查看学习安排并按需重排'),
-            ),
-            AppButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('完成核对'),
             ),
           ],
         ],
@@ -1107,11 +1125,9 @@ class _ExamRecord extends StatelessWidget {
             'tentative' => '暂定',
             _ => '暂定',
           };
-    final accent = exam['certainty'] == 'formal'
-        ? CampusColors.primary
-        : CampusColors.teal;
+    final accent = context.shiri.colors.danger;
     return Material(
-      color: CampusColors.blueSoft,
+      color: context.shiri.colors.dangerSoft,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       child: InkWell(
         onTap: onOpen,

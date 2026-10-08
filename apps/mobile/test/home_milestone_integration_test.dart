@@ -11,7 +11,7 @@ import 'package:semester_os/ui/empty_scene.dart';
 import 'package:semester_os/ui/time_river.dart';
 import 'package:semester_os/ui/week_heatmap.dart';
 import 'package:semester_os/ui/accessibility.dart';
-import 'package:semester_os/ui/app_controls.dart';
+import 'package:semester_os/ui/v2/motion/completion_check.dart';
 import 'controller_test.dart' show MemoryStore;
 import 'ui_polish_test.dart' show mount;
 
@@ -236,7 +236,7 @@ void main() {
       expect(find.text('今日日程'), findsOneWidget);
       expect(find.text('待办任务'), findsOneWidget);
       expect(find.text('今天没有安排'), findsOneWidget);
-      final completion = find.widgetWithText(AppTextButton, '完成');
+      final completion = find.byType(CompletionCheck);
       expect(completion, findsOneWidget);
       expect(tester.getSize(completion).height, greaterThanOrEqualTo(48));
       await tester.tap(completion);
@@ -283,6 +283,9 @@ void main() {
       );
       expect(find.byType(ItemCard), findsNWidgets(8));
       expect(find.text('查看全部 1000 项'), findsOneWidget);
+      await tester.ensureVisible(find.text('调整顺序'));
+      await tester.tap(find.text('调整顺序'));
+      await tester.pumpAndSettle();
       final preview = tester.widget<ReorderableListView>(
         find.byType(ReorderableListView),
       );

@@ -54,19 +54,38 @@ void main() {
     tester,
   ) async {
     final current = {
-      'id': 's', 'name': '2026—2027学年第一学期',
-      'first_monday': '2026-08-31', 'total_weeks': 20, 'revision': 2,
+      'id': 's',
+      'name': '2026—2027学年第一学期',
+      'first_monday': '2026-08-31',
+      'total_weeks': 20,
+      'revision': 2,
     };
-    await mount(tester, Scaffold(body: SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: SemesterView(
-        semesters: [current], current: current,
-        onSelect: (_) {}, onCreate: () {}, onImport: () {}, onManual: () {},
-        onEdit: () {}, onDelete: () {},
+    await mount(
+      tester,
+      Scaffold(
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: SemesterView(
+            semesters: [current],
+            current: current,
+            onSelect: (_) {},
+            onCreate: () {},
+            onImport: () {},
+            onManual: () {},
+            onEdit: () {},
+            onDelete: () {},
+          ),
+        ),
       ),
-    )), width: 320, height: 760, textScale: 2);
-    await tester.scrollUntilVisible(find.text('删除当前学期'), 240,
-        scrollable: find.byType(Scrollable).first);
+      width: 320,
+      height: 760,
+      textScale: 2,
+    );
+    await tester.scrollUntilVisible(
+      find.text('删除当前学期'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('删除当前学期'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await capture(tester, 'semester-management-large');

@@ -23,7 +23,10 @@ Map<String, dynamic> calendarDisplayEntry(Map<String, dynamic> row) {
   final time = calendarTime(row);
   return {
     ...row,
-    if ({'leave', 'plan_leave'}.contains(row['attendance_status']))
+    if ({'leave', 'plan_leave'}.contains(row['attendance_status']) &&
+        !'${row['title'] ?? ''}'.startsWith(
+          '${row['attendance_status'] == 'leave' ? '已请假' : '待请假'} · ',
+        ))
       'title':
           '${row['attendance_status'] == 'leave' ? '已请假' : '待请假'} · ${row['title'] ?? ''}',
     if (row['attendance_exempt'] == true &&

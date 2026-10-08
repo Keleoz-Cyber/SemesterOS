@@ -10,6 +10,8 @@ import '../semester/semester_page.dart';
 import '../../ui/app_number_picker.dart';
 import '../items/item_widgets.dart' show displayInstant;
 import '../centers/academic_visuals.dart';
+import '../../ui/v2/shiri_tokens.dart' as v2;
+import 'package:flutter_svg/flutter_svg.dart';
 
 Future<bool> showImportPreview(
   BuildContext context,
@@ -202,9 +204,24 @@ class _ImportPreviewState extends State<ImportPreview> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Expanded(
-              child: AcademicRecordHeading(
-                title: '核对课表',
-                icon: Icons.fact_check_outlined,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.fact_check_outlined,
+                    size: 24,
+                    color: CampusColors.primary,
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '核对课表',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             AppIconButton(
@@ -226,18 +243,32 @@ class _ImportPreviewState extends State<ImportPreview> {
             children: [
               const AcademicStepRail(steps: ['读取课表', '核对课程', '保存'], current: 1),
               Container(
-                padding: const EdgeInsets.only(left: 14, top: 4, bottom: 8),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: CampusColors.primary, width: 3),
-                  ),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: v2.ShiriGradients.brandSoft,
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '保存到',
-                      style: TextStyle(fontSize: 12, color: CampusColors.muted),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            '保存到',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: CampusColors.muted,
+                            ),
+                          ),
+                        ),
+                        SvgPicture.asset(
+                          'assets/illustrations/import-timetable.svg',
+                          width: 32,
+                          height: 24,
+                          excludeFromSemantics: true,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 5),
                     Text(
@@ -423,13 +454,9 @@ class _ImportPreviewState extends State<ImportPreview> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Container(
                       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          left: BorderSide(
-                            color: CampusColors.primary,
-                            width: 3,
-                          ),
-                        ),
+                      decoration: BoxDecoration(
+                        color: CampusColors.surface,
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -679,9 +706,13 @@ class _ImportExtraTile extends StatelessWidget {
     final details = _extraLine(extra);
     final notes = '${extra['notes'] ?? ''}'.trim();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 14),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: CampusColors.line)),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: extra['kind'] == 'exam'
+            ? v2.ShiriColors.light.dangerSoft
+            : CampusColors.tealSoft,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -693,15 +724,19 @@ class _ImportExtraTile extends StatelessWidget {
                     ? Icons.assignment_outlined
                     : Icons.school_outlined,
                 size: 18,
-                color: CampusColors.teal,
+                color: extra['kind'] == 'exam'
+                    ? v2.ShiriColors.light.danger
+                    : CampusColors.teal,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   extra['kind'] == 'exam' ? '考试' : '实践课',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: CampusColors.teal,
+                    color: extra['kind'] == 'exam'
+                        ? v2.ShiriColors.light.danger
+                        : CampusColors.teal,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -738,10 +773,13 @@ class _ImportCourseTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = '${course['location'] ?? ''}'.trim();
     final teacher = '${course['teacher'] ?? ''}'.trim();
+    final palette = CoursePalette.forTitle('${course['title']}');
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 14),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: CampusColors.line)),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: palette.background,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -779,10 +817,11 @@ class _ImportCourseTile extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '${course['title']}',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 17,
               height: 1.4,
               fontWeight: FontWeight.w700,
+              color: palette.ink,
             ),
           ),
           if (course['start_time'] != null && course['end_time'] != null) ...[

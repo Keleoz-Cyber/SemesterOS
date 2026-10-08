@@ -210,6 +210,12 @@ class _AppMinuteWheelState extends State<AppMinuteWheel> {
               decoration: BoxDecoration(
                 color: CampusColors.blueSoft,
                 borderRadius: BorderRadius.circular(12),
+                border: Border(
+                  bottom: BorderSide(
+                    color: CampusColors.primary.withValues(alpha: .28),
+                    width: 1,
+                  ),
+                ),
               ),
             ),
           ),

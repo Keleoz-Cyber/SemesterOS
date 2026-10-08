@@ -193,8 +193,10 @@ class _RiverRow extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Material(
-                color: featured ? CampusColors.tealSoft : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                color: featured ? CampusColors.surface : Colors.transparent,
+                elevation: featured ? 2 : 0,
+                shadowColor: CampusColors.primary.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(16),
                 child: InkWell(
                   onTap: onTap,
                   borderRadius: BorderRadius.circular(12),

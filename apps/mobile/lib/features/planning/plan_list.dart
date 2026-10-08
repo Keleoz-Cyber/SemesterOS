@@ -15,6 +15,10 @@ import 'proposal_page.dart';
 import 'plan_block_sheet.dart';
 import 'schedule_page.dart';
 import '../../ui/date_labels.dart';
+import '../../ui/v2/shiri_tokens.dart';
+import '../../ui/v2/widgets/dashed_border.dart';
+import '../../ui/v2/motion/pressable.dart';
+import '../../ui/empty_scene.dart';
 
 class PlanningEntry extends StatelessWidget {
   final ItemsController controller;
@@ -51,143 +55,270 @@ class PlanningEntry extends StatelessWidget {
         a['start_at'],
       ).compareTo(DateTime.parse(b['start_at'])),
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LayoutBuilder(
-          builder: (context, box) {
-            final scaler = MediaQuery.textScalerOf(context);
-            final title = today ? '今日学习安排' : '学习安排';
-            final compact =
-                box.maxWidth <
-                scaler.scale(17) * title.length + scaler.scale(13) * 4 + 72;
-            void openAll() => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PlanListPage(controller: controller),
-              ),
-            );
-            return Row(
-              key: const ValueKey('learning-plan-header'),
-              children: [
-                const Icon(
-                  Icons.timeline_rounded,
-                  size: 20,
-                  color: CampusColors.teal,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: CampusColors.ink,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (onSettings != null)
-                  compact
-                      ? AppIconButton(
-                          key: const Key('learning-time-settings'),
-                          tooltip: '学习时间',
-                          onPressed: onSettings,
-                          guardAsync: false,
-                          icon: const Icon(Icons.tune_rounded, size: 20),
-                        )
-                      : AppTextButton.icon(
-                          key: const Key('learning-time-settings'),
-                          onPressed: onSettings,
-                          guardAsync: false,
-                          icon: const Icon(Icons.tune_rounded, size: 18),
-                          label: const Text('设置时段'),
-                          style: AppTextButton.styleFrom(
-                            textStyle: const TextStyle(fontSize: 13),
-                          ),
-                        )
-                else if (compact)
-                  AppIconButton(
-                    onPressed: openAll,
-                    guardAsync: false,
-                    tooltip: '查看全部安排',
-                    icon: const Icon(Icons.view_agenda_outlined, size: 21),
-                  )
-                else
-                  AppTextButton.icon(
-                    onPressed: openAll,
-                    guardAsync: false,
-                    style: AppTextButton.styleFrom(
-                      textStyle: const TextStyle(fontSize: 13),
-                    ),
-                    icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                    iconAlignment: IconAlignment.end,
-                    label: const Text('全部安排'),
-                  ),
-              ],
-            );
-          },
-        ),
-        if (blocks.isNotEmpty)
-          for (final b in blocks.take(3))
-            _CompactPlanBlock(
-              block: b,
-              today: today,
-              onTap: () => context.push('/items/${b['item_id']}'),
-            )
-        else
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              controller.hasCurrentPlans
-                  ? (today
-                        ? '今天还没有学习安排'
-                        : hasPendingTask
-                        ? '任务还没有安排到具体时间'
-                        : '还没有学习安排')
-                  : controller.planNotice ?? '安排正在同步',
-              style: const TextStyle(fontSize: 14, color: CampusColors.muted),
-            ),
-          ),
-        if (onSettings != null &&
-            (hasPendingTask ||
-                controller.rows(controller.planFeed?['blocks']).isNotEmpty))
-          Align(
-            alignment: Alignment.centerRight,
-            child: AppTextButton.icon(
-              onPressed: () => Navigator.push(
+    final weekStart = DateTime.utc(
+      now.year,
+      now.month,
+      now.day - now.weekday + 1,
+    );
+    final weekEnd = weekStart.add(const Duration(days: 7));
+    final weekBlocks = blocks
+        .where(
+          (b) =>
+              schoolTime(b['start_at']).isBefore(weekEnd) &&
+              !schoolTime(b['start_at']).isBefore(weekStart),
+        )
+        .toList();
+    final weekMinutes = weekBlocks.fold<int>(
+      0,
+      (n, b) => n + ((b['minutes'] as num?)?.toInt() ?? 0),
+    );
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: context.shiri.brandSoftDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LayoutBuilder(
+            builder: (context, box) {
+              final scaler = MediaQuery.textScalerOf(context);
+              final title = today ? '今日学习安排' : '学习安排';
+              final compact =
+                  box.maxWidth <
+                  scaler.scale(17) * title.length + scaler.scale(13) * 4 + 72;
+              void openAll() => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => PlanListPage(controller: controller),
                 ),
-              ),
-              guardAsync: false,
-              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-              iconAlignment: IconAlignment.end,
-              label: const Text('全部安排'),
-              style: AppTextButton.styleFrom(
-                textStyle: const TextStyle(fontSize: 13),
+              );
+              return Row(
+                key: const ValueKey('learning-plan-header'),
+                children: [
+                  const Icon(
+                    Icons.timeline_rounded,
+                    size: 20,
+                    color: CampusColors.teal,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: CampusColors.ink,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (onSettings != null)
+                    compact
+                        ? AppIconButton(
+                            key: const Key('learning-time-settings'),
+                            tooltip: '学习时间',
+                            onPressed: onSettings,
+                            guardAsync: false,
+                            icon: const Icon(Icons.tune_rounded, size: 20),
+                          )
+                        : AppTextButton.icon(
+                            key: const Key('learning-time-settings'),
+                            onPressed: onSettings,
+                            guardAsync: false,
+                            icon: const Icon(Icons.tune_rounded, size: 18),
+                            label: const Text('设置时段'),
+                            style: AppTextButton.styleFrom(
+                              textStyle: const TextStyle(fontSize: 13),
+                            ),
+                          )
+                  else if (compact)
+                    AppIconButton(
+                      onPressed: openAll,
+                      guardAsync: false,
+                      tooltip: '查看全部安排',
+                      icon: const Icon(Icons.view_agenda_outlined, size: 21),
+                    )
+                  else
+                    AppTextButton.icon(
+                      onPressed: openAll,
+                      guardAsync: false,
+                      style: AppTextButton.styleFrom(
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                      iconAlignment: IconAlignment.end,
+                      label: const Text('全部安排'),
+                    ),
+                ],
+              );
+            },
+          ),
+          if (controller.hasCurrentPlans && weekBlocks.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                '本周后续 ${weekBlocks.length}段 · ${minutesLabel(weekMinutes)}',
+                style: context.shiri.text.bodySmall.copyWith(
+                  color: context.shiri.colors.ink500,
+                ),
               ),
             ),
-          ),
-        if (showAction && (hasPendingTask || blocks.isNotEmpty))
-          Align(
-            alignment: Alignment.centerLeft,
-            child: AppTextButton.icon(
-              key: const ValueKey('learning-plan-action'),
-              onPressed: () => AssistantScope.open(
-                context,
-                initialText: today
-                    ? '请结合今天的日程和任务，帮我安排今天的学习时间。'
-                    : '请结合现有日程和任务，帮我安排接下来的学习时间；有冲突的安排请一起调整，先给我方案。',
-                autoSubmit: true,
+          if (blocks.isNotEmpty)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < blocks.length && i < 3; i++) ...[
+                      if (i > 0) const SizedBox(width: 12),
+                      _UpcomingStudyCard(
+                        block: blocks[i],
+                        today: today,
+                        onTap: () =>
+                            context.push('/items/${blocks[i]['item_id']}'),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              guardAsync: false,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('安排任务'),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                controller.hasCurrentPlans
+                    ? (today
+                          ? '今天还没有学习安排'
+                          : hasPendingTask
+                          ? '任务还没有安排到具体时间'
+                          : '还没有学习安排')
+                    : controller.planNotice ?? '安排正在同步',
+                style: const TextStyle(fontSize: 14, color: CampusColors.muted),
+              ),
+            ),
+          if (onSettings != null &&
+              (hasPendingTask ||
+                  controller.rows(controller.planFeed?['blocks']).isNotEmpty))
+            Align(
+              alignment: Alignment.centerRight,
+              child: AppTextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PlanListPage(controller: controller),
+                  ),
+                ),
+                guardAsync: false,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                iconAlignment: IconAlignment.end,
+                label: const Text('全部安排'),
+                style: AppTextButton.styleFrom(
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ),
+          if (showAction && (hasPendingTask || blocks.isNotEmpty))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppTextButton.icon(
+                key: const ValueKey('learning-plan-action'),
+                onPressed: () => AssistantScope.open(
+                  context,
+                  initialText: today
+                      ? '请结合今天的日程和任务，帮我安排今天的学习时间。'
+                      : '请结合现有日程和任务，帮我安排接下来的学习时间；有冲突的安排请一起调整，先给我方案。',
+                  autoSubmit: true,
+                ),
+                guardAsync: false,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('安排任务'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UpcomingStudyCard extends StatelessWidget {
+  const _UpcomingStudyCard({
+    required this.block,
+    required this.today,
+    required this.onTap,
+  });
+  final Map<String, dynamic> block;
+  final bool today;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final start = schoolTime(block['start_at']),
+        end = schoolTime(block['end_at']);
+    final shiri = context.shiri;
+    return SizedBox(
+      key: ValueKey('learning-plan-${block['id']}'),
+      width: 232,
+      child: Pressable(
+        onPressed: onTap,
+        semanticLabel:
+            '${block['title']}，${displayInterval(block['start_at'], block['end_at'])}',
+        child: CustomPaint(
+          painter: DashedRRectPainter(
+            color: shiri.colors.primary.withValues(alpha: .45),
+            radius: 12,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: shiri.colors.surface.withValues(alpha: .85),
+              borderRadius: ShiriRadius.smAll,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 3,
+                      height: 18,
+                      decoration: const BoxDecoration(
+                        gradient: ShiriGradients.brand,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '计划',
+                      style: shiri.text.label.copyWith(
+                        color: shiri.colors.primary,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (block['locked'] == true)
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        size: 17,
+                        color: shiri.colors.ink500,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${hhmm(start)}–${DateUtils.isSameDay(start, end) ? hhmm(end) : '${end.month}/${end.day} ${hhmm(end)}'}',
+                  style: shiri.text.numM,
+                ),
+                const SizedBox(height: 8),
+                Text('${block['title']}', style: shiri.text.titleSmall),
+                const SizedBox(height: 6),
+                Text(
+                  '${today ? '' : '${studentDate(start, weekday: true)} · '}${minutesLabel(block['minutes'])}',
+                  style: shiri.text.bodySmall.copyWith(
+                    color: shiri.colors.ink500,
+                  ),
+                ),
+              ],
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 }
@@ -526,10 +657,16 @@ class _PlanListPageState extends State<PlanListPage> {
               ],
               if (c.hasCurrentPlans && blocks.isEmpty)
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 36),
-                  child: Text(
-                    '暂无学习安排',
-                    style: TextStyle(color: CampusColors.muted),
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Column(
+                    children: [
+                      AppEmptyScene(kind: EmptySceneKind.plan, size: 180),
+                      SizedBox(height: 12),
+                      Text(
+                        '暂无学习安排',
+                        style: TextStyle(color: CampusColors.muted),
+                      ),
+                    ],
                   ),
                 ),
               if (feed?['latest_proposal'] != null ||

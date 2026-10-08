@@ -1,4 +1,3 @@
-import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/app_time_range_picker.dart';
 import '../../ui/app_selection.dart';
@@ -13,6 +12,8 @@ import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import 'date_time_picker.dart';
 import 'availability_bulk_sheet.dart';
+import '../../ui/v2/motion/skeleton.dart';
+import '../../ui/v2/shiri_tokens.dart';
 
 class AvailabilityPage extends StatefulWidget {
   final ItemsController controller;
@@ -309,7 +310,30 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
     body: version == null
         ? Center(
             child: error == null
-                ? const AppLoadingIndicator(label: '正在读取学习时间')
+                ? const SkeletonScope(
+                    semanticLabel: '正在读取学习时间',
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SkeletonLine(widthFactor: .5),
+                          SizedBox(height: 20),
+                          SkeletonBox(
+                            height: 48,
+                            borderRadius: ShiriRadius.smAll,
+                          ),
+                          SizedBox(height: 20),
+                          SkeletonBox(
+                            height: 120,
+                            borderRadius: ShiriRadius.lgAll,
+                          ),
+                          SizedBox(height: 28),
+                          SkeletonLine(widthFactor: .6),
+                        ],
+                      ),
+                    ),
+                  )
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -362,39 +386,28 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                       ],
                     ),
                     for (final row in weekly.where((r) => r['weekday'] == day))
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.schedule_rounded,
-                            size: 18,
-                            color: CampusColors.teal,
+                      AppTile(
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                        leading: const Icon(
+                          Icons.schedule_rounded,
+                          size: 18,
+                          color: CampusColors.teal,
+                        ),
+                        title: Text(
+                          '${row['start']}—${row['end']}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: AppTextButton(
-                              style: AppTextButton.styleFrom(
-                                alignment: Alignment.centerLeft,
-                              ),
-                              onPressed: busy
-                                  ? null
-                                  : () => editWindow(day, row),
-                              child: Text(
-                                '${row['start']}—${row['end']}',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                          AppIconButton(
-                            tooltip: '移除此时段',
-                            onPressed: busy
-                                ? null
-                                : () => setState(() => weekly.remove(row)),
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
+                        ),
+                        onTap: busy ? null : () => editWindow(day, row),
+                        trailing: AppIconButton(
+                          tooltip: '移除此时段',
+                          onPressed: busy
+                              ? null
+                              : () => setState(() => weekly.remove(row)),
+                          icon: const Icon(Icons.close),
+                        ),
                       ),
                     if (!weekly.any((row) => row['weekday'] == day))
                       const Padding(
@@ -407,46 +420,50 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                   ],
                 ],
               ),
-              SectionHeading(
-                '临时不可用时段',
-                action: '添加',
-                onAction: busy ? null : () => editExclusion(),
-              ),
-              if (exclusions.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    '活动、休息等不能学习的时间，可以单独排除。',
-                    style: TextStyle(color: CampusColors.muted),
-                  ),
+              EditorSection(
+                title: '临时不可用时段',
+                icon: Icons.event_busy_outlined,
+                accent: CampusColors.teal,
+                action: AppIconButton.filledTonal(
+                  tooltip: '添加临时不可用时段',
+                  onPressed: busy ? null : () => editExclusion(),
+                  icon: const Icon(Icons.add_rounded),
                 ),
-              for (final row in exclusions)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: CampusPanel(
-                    padding: EdgeInsets.zero,
-                    child: AppTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      title: Text(
-                        displayInterval(row['start_at'], row['end_at']),
-                      ),
-                      subtitle: '${row['label'] ?? ''}'.trim().isEmpty
-                          ? null
-                          : Text('${row['label']}'),
-                      onTap: busy ? null : () => editExclusion(row),
-                      trailing: AppIconButton(
-                        tooltip: '移除此不可用时段',
-                        onPressed: busy
-                            ? null
-                            : () => setState(() => exclusions.remove(row)),
-                        icon: const Icon(Icons.close),
+                children: [
+                  if (exclusions.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        '活动、休息等不能学习的时间，可以单独排除。',
+                        style: TextStyle(color: CampusColors.muted),
                       ),
                     ),
-                  ),
-                ),
+                  for (final row in exclusions)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: AppTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 0,
+                          vertical: 8,
+                        ),
+                        title: Text(
+                          displayInterval(row['start_at'], row['end_at']),
+                        ),
+                        subtitle: '${row['label'] ?? ''}'.trim().isEmpty
+                            ? null
+                            : Text('${row['label']}'),
+                        onTap: busy ? null : () => editExclusion(row),
+                        trailing: AppIconButton(
+                          tooltip: '移除此不可用时段',
+                          onPressed: busy
+                              ? null
+                              : () => setState(() => exclusions.remove(row)),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 12),
               if (error != null) ...[
                 SoftNotice(error!, warning: true),

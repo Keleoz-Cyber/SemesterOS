@@ -66,7 +66,7 @@ class _MotionTaskListState extends State<MotionTaskList>
     retiring++;
     final stamp = epoch;
     late final Timer timer;
-    timer = Timer(const Duration(milliseconds: 250), () {
+    timer = Timer(const Duration(milliseconds: 900), () {
       cleanups.remove(timer);
       if (mounted && stamp == epoch) setState(() => retiring--);
     });
@@ -74,6 +74,7 @@ class _MotionTaskListState extends State<MotionTaskList>
     final old = data.removeAt(index);
     final retired = {
       ...old,
+      '_completion_reveal': widget.removedStates['${old['id']}'] == 'completed',
       if (widget.removedStates['${old['id']}'] != null)
         'lifecycle': widget.removedStates['${old['id']}'],
     };
@@ -81,10 +82,14 @@ class _MotionTaskListState extends State<MotionTaskList>
       child: ExcludeFocus(
         child: ExcludeSemantics(
           child: SizeTransition(
-            sizeFactor: a,
+            sizeFactor: a.drive(
+              CurveTween(
+                curve: const Interval(0, 260 / 880, curve: Curves.easeInOut),
+              ),
+            ),
             alignment: Alignment.topCenter,
             child: FadeTransition(
-              opacity: a,
+              opacity: a.drive(CurveTween(curve: const Interval(0, 260 / 880))),
               child: widget.builder(c, retired, index),
             ),
           ),
@@ -95,13 +100,13 @@ class _MotionTaskListState extends State<MotionTaskList>
       sliver.currentState!.removeItem(
         index,
         leaving,
-        duration: const Duration(milliseconds: 240),
+        duration: const Duration(milliseconds: 880),
       );
     } else {
       list.currentState!.removeItem(
         index,
         leaving,
-        duration: const Duration(milliseconds: 240),
+        duration: const Duration(milliseconds: 880),
       );
     }
   }
@@ -111,12 +116,12 @@ class _MotionTaskListState extends State<MotionTaskList>
     if (widget.sliver) {
       sliver.currentState!.insertItem(
         index,
-        duration: const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 260),
       );
     } else {
       list.currentState!.insertItem(
         index,
-        duration: const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 260),
       );
     }
   }

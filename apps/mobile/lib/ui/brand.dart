@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 const appName = '拾日';
 
@@ -13,10 +14,9 @@ class BrandMark extends StatelessWidget {
     image: true,
     child: SizedBox.square(
       dimension: size,
-      child: Image.asset(
-        'assets/brand/brand_mark.png',
+      child: SvgPicture.asset(
+        'assets/brand/mark.svg',
         excludeFromSemantics: true,
-        filterQuality: FilterQuality.medium,
       ),
     ),
   );

@@ -5,6 +5,7 @@ import '../../core/api.dart';
 import '../items/item_widgets.dart';
 import '../changes/course_change_display.dart';
 import 'agent_controller.dart';
+import 'agent_surfaces.dart';
 
 /// Confirmation authority stays with the visible selection, never model prose.
 class ChangeConfirmation extends StatefulWidget {
@@ -100,20 +101,11 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
     final selectedCount = rows(p['groups'])
         .where((g) => selected.contains(g['id']))
         .fold<int>(0, (n, g) => n + rows(g['operations']).length);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: CampusColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border(
-          top: BorderSide(
-            color: applied ? CampusColors.teal : CampusColors.primary,
-            width: 3,
-          ),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AgentSurface(
+        raised: !applied,
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

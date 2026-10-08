@@ -9,6 +9,9 @@ import '../calendar/calendar_repository.dart';
 import '../items/item_widgets.dart';
 import 'home_preferences.dart';
 import '../../ui/motion_task_list.dart';
+import '../../ui/v2/shiri_tokens.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'today_loading.dart';
 
 /// Live Today modes share the same event/task data. Explicit choices and task
 /// ordering persist through the parent's owner-and-semester-scoped store.
@@ -71,12 +74,12 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
     super.initState();
     _contentMotion = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 220),
+      duration: ShiriMotion.standard,
       value: 1,
     );
     _contentCurve = CurvedAnimation(
       parent: _contentMotion,
-      curve: Curves.easeOutCubic,
+      curve: ShiriMotion.easeDecelerate,
     );
     WidgetsBinding.instance.addObserver(this);
     _shownMode = _mode;
@@ -196,12 +199,6 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
           end.isAfter(widget.now) ||
           !start.isBefore(widget.now);
     }).toList();
-    final nextId = upcoming.where((row) {
-      final start = schoolTime(row['start_at']);
-      final end = row['end_at'] == null ? null : schoolTime(row['end_at']);
-      return calendarReservesTime(row) &&
-          (!start.isBefore(widget.now) || end?.isAfter(widget.now) == true);
-    }).firstOrNull?['id'];
     final tasks = [...widget.tasks];
     final priorityIndex = tasks.indexWhere(
       (row) => row['id'] == widget.priorityTaskId,
@@ -230,13 +227,15 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
           const Key('today-events-action'),
         ),
         if (!widget.scheduleAvailable && widget.timeline.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              widget.scheduleLoading ? '正在读取今日安排…' : '暂时无法读取今日安排',
-              style: const TextStyle(color: CampusColors.muted),
-            ),
-          )
+          widget.scheduleLoading
+              ? const AgendaLoadingRail()
+              : Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    '暂时无法读取今日安排',
+                    style: const TextStyle(color: CampusColors.muted),
+                  ),
+                )
         else if (widget.timeline.isEmpty && widget.otherEntries.isEmpty)
           const _TodayEmptyView(kind: EmptySceneKind.agenda, title: '今天没有安排')
         else if (upcoming.isEmpty && widget.timeline.isNotEmpty)
@@ -245,8 +244,13 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
             children: [for (final row in widget.timeline) _agendaRow(row)],
           )
         else
-          for (var i = 0; i < upcoming.length && i < 3; i++)
-            _agendaRow(upcoming[i], next: upcoming[i]['id'] == nextId),
+          TimeRiverView(
+            events: widget.timeline,
+            now: widget.now,
+            day: widget.day,
+            showNow: !widget.dayFinished,
+            onEventTap: widget.onEventTap,
+          ),
         for (final row in otherEntries.take(2))
           AppTile(
             contentPadding: const EdgeInsets.symmetric(vertical: 6),
@@ -257,7 +261,7 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
                 : Text(calendarTimeLabel(row, includeMissing: false)),
             trailing: const Icon(Icons.chevron_right_rounded, size: 18),
           ),
-        const SizedBox(height: 8),
+        const SizedBox(height: ShiriSpace.sectionGap),
         _summaryHeading(
           '待办任务',
           widget.onAllTasks,
@@ -269,7 +273,7 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
             title: '暂无待办事项',
           ),
           removedStates: widget.removedTaskStates,
-          items: tasks.take(2).toList(),
+          items: tasks.take(3).toList(),
           builder: (context, task, index) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: ItemCard(
@@ -339,10 +343,11 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
     if (!widget.scheduleAvailable &&
         widget.timeline.isEmpty &&
         widget.otherEntries.isEmpty) {
+      if (widget.scheduleLoading) return const AgendaLoadingRail();
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Text(
-          widget.scheduleLoading ? '正在读取今日安排…' : '暂时无法读取今日安排',
+          '暂时无法读取今日安排',
           style: const TextStyle(color: CampusColors.muted),
         ),
       );
@@ -528,25 +533,24 @@ class _TodayEmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 10),
-    child: Row(
+    padding: const EdgeInsets.symmetric(vertical: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Icon(
+        SvgPicture.asset(
           kind == EmptySceneKind.tasks
-              ? Icons.checklist_rounded
-              : Icons.event_available_outlined,
-          size: 20,
-          color: CampusColors.muted,
+              ? 'assets/illustrations/empty-tasks.svg'
+              : 'assets/illustrations/empty-today.svg',
+          width: 180,
+          height: 135,
+          excludeFromSemantics: true,
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: CampusColors.muted,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+        const SizedBox(height: 12),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: context.shiri.text.body.copyWith(
+            color: context.shiri.colors.ink500,
           ),
         ),
       ],
@@ -573,7 +577,7 @@ class UrgentItemCard extends StatelessWidget {
     return BreathingCard(
       key: ValueKey('urgent-cue-${item['id']}'),
       remainingMinutes: remaining,
-      enabled: remaining != null && remaining > 0 && remaining < 120,
+      enabled: false,
       child: Material(
         color: remaining == null
             ? CampusColors.blueSoft

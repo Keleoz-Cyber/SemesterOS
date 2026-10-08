@@ -1,21 +1,35 @@
-import 'app_controls.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'assistant_scope.dart';
-import 'package:forui/forui.dart';
-import 'forui_theme.dart';
-import 'accessibility.dart';
-import 'motion.dart';
+import 'v2/shiri_tokens.dart';
+import 'v2/widgets/glass_dock.dart';
+import 'v2/widgets/performance_scope.dart';
 
 class AppNavigation extends StatelessWidget {
+  static double reserveHeight(BuildContext context) =>
+      GlassDock.heightFor(context) +
+      ShiriLayout.pillHeight +
+      ShiriLayout.pillGapAboveDock +
+      ShiriLayout.dockBottomInset +
+      MediaQuery.viewPaddingOf(context).bottom;
+  final VoidCallback? onAssistantOpen, onAssistantImage;
   final int selected;
   final ValueChanged<int> onSelected;
-  final bool showAssistant;
+  final bool showAssistant, collapsed;
+  final Widget? microphone;
+  final GlobalKey? sourceKey;
+  final AssistantBrowsingContext? browsingContext;
   const AppNavigation({
     super.key,
     required this.selected,
     required this.onSelected,
     this.showAssistant = true,
+    this.collapsed = false,
+    this.microphone,
+    this.sourceKey,
+    this.browsingContext,
+    this.onAssistantOpen,
+    this.onAssistantImage,
   });
   static const labels = ['今日', '日程', '任务', '学期'];
   static const outlined = [
@@ -30,195 +44,105 @@ class AppNavigation extends StatelessWidget {
     Icons.checklist_rounded,
     Icons.auto_stories_rounded,
   ];
+  static const names = ['today', 'schedule', 'tasks', 'semester'];
   @override
-  Widget build(BuildContext context) => ShiriForuiTheme(
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppExpandRegion(
-              visible: showAssistant,
-              child: const AssistantDock(),
-            ),
-            FBottomNavigationBar(
-              index: selected,
-              onChange: (value) {
-                if (selected != value) {
-                  HapticFeedback.selectionClick();
-                  onSelected(value);
-                }
-              },
-              children: [
-                for (var i = 0; i < labels.length; i++)
-                  SemanticTab(
-                    index: i,
-                    total: labels.length,
-                    childHandlesInput: true,
-                    // Replace this one native tab's duplicate label/count only.
-                    // Its keyboard and pointer handlers remain in the F item.
-                    replaceNativeSemantics: true,
-                    selected: selected == i,
-                    label: labels[i],
-                    onTap: () {
-                      if (selected != i) onSelected(i);
-                    },
-                    child: FBottomNavigationBarItem(
-                      icon: _NavigationGlyph(
-                        selected: selected == i,
-                        outlined: outlined[i],
-                        filled: filled[i],
-                      ),
-                      label: Text(labels[i]),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _NavigationGlyph extends StatelessWidget {
-  final bool selected;
-  final IconData outlined, filled;
-  const _NavigationGlyph({
-    required this.selected,
-    required this.outlined,
-    required this.filled,
-  });
-  @override
-  Widget build(BuildContext context) => SizedBox.square(
-    dimension: 24,
-    child: AnimatedSwitcher(
-      key: ValueKey(AppMotion.reduced(context)),
-      duration: AppMotion.feedback(context),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeOutCubic,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: SlideTransition(
-          position: animation.drive(
-            Tween(begin: const Offset(0, .08), end: Offset.zero),
-          ),
-          child: child,
-        ),
-      ),
-      child: Icon(
-        selected ? filled : outlined,
-        key: ValueKey(selected),
-        size: 24,
-      ),
-    ),
-  );
-}
-
-class AssistantDock extends StatelessWidget {
-  const AssistantDock({super.key});
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
-    child: Material(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
+  Widget build(BuildContext context) => SafeArea(
+    top: false,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: SemanticButton(
-              key: const Key('assistant-dock-input'),
-              label: '输入通知或日程问题',
-              onPressed: () => AssistantScope.open(context),
-              childHandlesInput: true,
-              child: InkWell(
-                onTap: () => AssistantScope.open(context),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 48),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.edit_note_rounded,
-                          size: 24,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final style = TextStyle(
-                                fontSize: 14,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              );
-                              String caption = '记录';
-                              for (final value in const [
-                                '输入通知或日程问题',
-                                '输入通知',
-                                '记录',
-                              ]) {
-                                final text = TextPainter(
-                                  text: TextSpan(text: value, style: style),
-                                  textDirection: Directionality.of(context),
-                                  textScaler: MediaQuery.textScalerOf(context),
-                                )..layout();
-                                final fits = text.width <= constraints.maxWidth;
-                                text.dispose();
-                                if (fits) {
-                                  caption = value;
-                                  break;
-                                }
-                              }
-                              return ExcludeSemantics(
-                                child: Text(caption, style: style, maxLines: 1),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+          if (showAssistant) ...[
+            AssistantDock(
+              key: sourceKey,
+              collapsed: collapsed,
+              microphone: microphone,
+              browsingContext: browsingContext,
+              onOpen: onAssistantOpen,
+              onImage: onAssistantImage,
+            ),
+            const SizedBox(height: ShiriLayout.pillGapAboveDock),
+          ],
+          GlassDock(
+            index: selected,
+            onSelect: onSelected,
+            lowEnd: ShiriPerformance.lowEndOf(context),
+            items: [
+              for (var i = 0; i < labels.length; i++)
+                GlassDockItem(
+                  label: labels[i],
+                  icon: _glyph(context, i, false),
+                  selectedIcon: _glyph(context, i, true),
                 ),
-              ),
-            ),
-          ),
-          AppIconButton(
-            tooltip: '图片通知',
-            onPressed: () => AssistantScope.open(context, mediaKind: 'image'),
-            icon: Icon(
-              Icons.add_photo_alternate_outlined,
-              size: 22,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 3),
-            child: AppIconButton.filled(
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.secondary,
-                foregroundColor: Theme.of(context).colorScheme.onSecondary,
-              ),
-              tooltip: '语音输入',
-              onPressed: () => AssistantScope.open(context, mediaKind: 'audio'),
-              icon: const Icon(Icons.mic_none_rounded, size: 22),
-            ),
+            ],
           ),
         ],
       ),
     ),
+  );
+  Widget _glyph(BuildContext context, int index, bool filled) =>
+      SvgPicture.asset(
+        'assets/icons/nav-${names[index]}${filled ? '-filled' : ''}.svg',
+        width: 24,
+        height: 24,
+        colorFilter: ColorFilter.mode(
+          filled ? context.shiri.colors.primary : context.shiri.colors.ink500,
+          BlendMode.srcIn,
+        ),
+        excludeFromSemantics: true,
+      );
+}
+
+class AssistantDock extends StatelessWidget {
+  const AssistantDock({
+    super.key,
+    this.collapsed = false,
+    this.microphone,
+    this.browsingContext,
+    this.onOpen,
+    this.onImage,
+  });
+  final VoidCallback? onOpen, onImage;
+  final bool collapsed;
+  final Widget? microphone;
+  final AssistantBrowsingContext? browsingContext;
+  @override
+  Widget build(BuildContext context) => AssistantPill(
+    collapsed: collapsed,
+    microphone:
+        microphone ??
+        Tooltip(
+          message: '语音输入',
+          child: InkWell(
+            onTap: () => AssistantScope.open(
+              context,
+              mediaKind: 'audio',
+              browsingContext: browsingContext,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: ShiriGradients.brand,
+              ),
+              child: const Icon(Icons.mic_rounded, color: Color(0xFF142238)),
+            ),
+          ),
+        ),
+    lowEnd: ShiriPerformance.lowEndOf(context),
+    placeholder: '输入通知或日程问题',
+    onOpen:
+        onOpen ??
+        () => AssistantScope.open(context, browsingContext: browsingContext),
+    onImage:
+        onImage ??
+        () => AssistantScope.open(
+          context,
+          mediaKind: 'image',
+          browsingContext: browsingContext,
+        ),
   );
 }

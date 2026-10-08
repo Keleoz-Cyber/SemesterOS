@@ -9,7 +9,10 @@ import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import '../items/task_surfaces.dart';
 import 'risk_widgets.dart';
-import '../agent/agent_widgets.dart' show PlanWarningNote;
+import '../agent/agent_widgets.dart' show PlanWarningNote, AssistantSavedAction;
+import '../items/detail_surfaces.dart';
+import '../../ui/empty_scene.dart';
+import '../../ui/v2/shiri_tokens.dart' show ShiriColors, ShiriRadius;
 
 String proposalStatus(String? status) => switch (status) {
   'FEASIBLE_COMPLETE' => '可以安排这次的任务',
@@ -157,7 +160,9 @@ class _ProposalPageState extends State<ProposalPage> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          RecordHeading(
+          DetailHero(
+            background: ShiriColors.light.primarySoft,
+            foreground: ShiriColors.light.primary,
             icon: Icons.fact_check_outlined,
             label: p['phase'] == 'ready'
                 ? '待确认'
@@ -178,8 +183,9 @@ class _ProposalPageState extends State<ProposalPage> {
           if (expired) const SoftNotice('方案中的时间已经过去，请重新生成。', warning: true),
           if (p['phase'] == 'stale' || stale)
             const SoftNotice('你的安排已有变化，请重新生成计划。', warning: true),
-          if (p['phase'] == 'applied' || p['phase'] == 'undone')
-            SoftNotice(p['phase'] == 'applied' ? '这个方案已保存到日程' : '这个方案已撤销'),
+          if (p['phase'] == 'applied')
+            const AssistantSavedAction(text: '这个方案已保存到日程'),
+          if (p['phase'] == 'undone') const SoftNotice('这个方案已撤销'),
           for (final message in (p['messages'] as List? ?? []).where(
             (m) =>
                 m != '保留已有计划，只为尚未安排的工作补充时间' &&
@@ -279,10 +285,12 @@ class _ProposalPageState extends State<ProposalPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(30, 0, 0, 16),
                   child: Container(
-                    padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+                    padding: const EdgeInsets.all(12),
                     decoration: const BoxDecoration(
+                      color: CampusColors.blueSoft,
+                      borderRadius: ShiriRadius.smAll,
                       border: Border(
-                        bottom: BorderSide(color: CampusColors.line),
+                        left: BorderSide(color: CampusColors.primary, width: 3),
                       ),
                     ),
                     child: Column(
@@ -293,7 +301,7 @@ class _ProposalPageState extends State<ProposalPage> {
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: CampusColors.teal,
+                            color: CampusColors.primary,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -336,11 +344,18 @@ class _ProposalPageState extends State<ProposalPage> {
               ],
             ),
           if (blocks.isEmpty)
-            CampusPanel(
-              child: Text(
-                replan
-                    ? '暂时没有合适的调整方案，原计划保留。原因见上方说明。'
-                    : '这次没有新增安排，原计划保留。尚未安排的任务见上方说明。',
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Column(
+                children: [
+                  const AppEmptyScene(kind: EmptySceneKind.plan, size: 160),
+                  const SizedBox(height: 12),
+                  Text(
+                    replan
+                        ? '暂时没有合适的调整方案，原计划保留。原因见上方说明。'
+                        : '这次没有新增安排，原计划保留。尚未安排的任务见上方说明。',
+                  ),
+                ],
               ),
             ),
           if (partial && canApply)

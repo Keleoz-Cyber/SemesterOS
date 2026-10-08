@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../app/controller.dart';
 import '../../ui/campus_theme.dart';
 import 'calendar_repository.dart';
+import '../../ui/v2/shiri_tokens.dart' as v2;
+import '../../ui/v2/motion/now_pulse.dart';
 
 /// Refresh at the wall-clock minute boundary, with one timer while visible.
 class MinuteClock {
@@ -150,7 +152,8 @@ class TimeTrack extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: CampusColors.teal,
+                  color: v2.ShiriBrand.sunInk,
+                  fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
             ),
@@ -168,13 +171,22 @@ class TimeTrack extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '现在 ${hhmm(now)}',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: CampusColors.teal,
-            ),
+          Row(
+            children: [
+              NowDot(time: now, size: 12),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '现在 ${hhmm(now)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: v2.ShiriBrand.sunInk,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
           ClipRRect(
@@ -183,7 +195,7 @@ class TimeTrack extends StatelessWidget {
               key: const ValueKey('time-track-event-progress'),
               value: position.fraction,
               minHeight: 2,
-              color: CampusColors.teal,
+              color: v2.ShiriBrand.sun500,
               backgroundColor: CampusColors.line,
               semanticsLabel: '当前安排的时间进度',
             ),
@@ -240,7 +252,7 @@ class TimeTrackMarkerPainter extends CustomPainter {
       canvas.drawLine(Offset(railX, y), Offset(railX, size.height), rail);
     }
     final paint = Paint()
-      ..color = CampusColors.teal
+      ..color = v2.ShiriBrand.sun500
       ..strokeWidth = 2;
     canvas.drawCircle(
       Offset(railX, y),
@@ -248,6 +260,14 @@ class TimeTrackMarkerPainter extends CustomPainter {
       Paint()..color = CampusColors.background,
     );
     canvas.drawCircle(Offset(railX, y), 4, paint);
+    canvas.drawCircle(
+      Offset(railX, y),
+      4,
+      Paint()
+        ..color = v2.ShiriBrand.sunInk.withValues(alpha: .55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
     canvas.drawLine(Offset(railX + 5, y), Offset(railX + 12, y), paint);
   }
 

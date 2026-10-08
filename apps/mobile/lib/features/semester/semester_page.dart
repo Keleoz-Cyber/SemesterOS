@@ -13,6 +13,9 @@ import '../../ui/app_picker_field.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/date_labels.dart' show studentDate;
 import '../centers/academic_visuals.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import '../../ui/v2/shiri_tokens.dart' as v2;
+import '../../ui/v2/widgets/wave_edge.dart';
 
 DateTime firstMondayFromCurrentWeek(int week, {DateTime? today}) {
   final now = today ?? schoolNow();
@@ -438,6 +441,45 @@ class _SemesterPageState extends State<SemesterPage> {
                   ),
                 ),
             ],
+          ),
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            height: widget.existing == null ? 148 : 112,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              gradient: v2.ShiriGradients.brandSoft,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Stack(
+              children: [
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: WaveEdge(height: 32),
+                ),
+                Positioned(
+                  left: 20,
+                  top: 22,
+                  child: SvgPicture.asset(
+                    'assets/brand/mark.svg',
+                    width: 48,
+                    height: 48,
+                    excludeFromSemantics: true,
+                  ),
+                ),
+                Positioned(
+                  right: 16,
+                  bottom: 0,
+                  child: SvgPicture.asset(
+                    'assets/illustrations/semester-start.svg',
+                    width: widget.existing == null ? 176 : 140,
+                    height: widget.existing == null ? 132 : 105,
+                    excludeFromSemantics: true,
+                  ),
+                ),
+              ],
+            ),
           ),
           AcademicEditorSection(
             title: '每天的节次',

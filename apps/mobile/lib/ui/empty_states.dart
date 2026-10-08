@@ -31,6 +31,9 @@ class OnboardingGuide extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          const Center(
+            child: AppEmptyScene(size: 180, kind: EmptySceneKind.collect),
+          ),
           AppTile(
             title: const Text('课程表'),
             subtitle: const Text('建立学期，再导入课表或手动添加课程。'),
@@ -41,6 +44,9 @@ class OnboardingGuide extends StatelessWidget {
                 : const Icon(Icons.chevron_right_rounded),
           ),
           const SizedBox(height: 12),
+          const Center(
+            child: AppEmptyScene(size: 180, kind: EmptySceneKind.adapt),
+          ),
           AppTile(
             title: const Text('通知与日程'),
             subtitle: const Text('输入通知文字、图片或录音，核对结果后保存事项。'),
@@ -51,6 +57,9 @@ class OnboardingGuide extends StatelessWidget {
                 : const Icon(Icons.chevron_right_rounded),
           ),
           const SizedBox(height: 12),
+          const Center(
+            child: AppEmptyScene(size: 180, kind: EmptySceneKind.plan),
+          ),
           AppTile(
             title: const Text('任务与学习安排'),
             subtitle: const Text('查看待办与截止日期，按需要安排学习时间。'),
@@ -82,7 +91,7 @@ class EmptyTimetable extends StatelessWidget {
   @override
   Widget build(BuildContext context) => EmptyState(
     icon: Icons.calendar_month_outlined,
-    scene: EmptySceneKind.agenda,
+    scene: EmptySceneKind.timetable,
     title: title,
     message: message ?? '导入课表或手动添加课程。',
     action: onImport == null && onAddCourse == null
@@ -182,6 +191,7 @@ class NetworkError extends StatelessWidget {
     liveRegion: true,
     child: EmptyState(
       icon: Icons.cloud_off_outlined,
+      scene: EmptySceneKind.offline,
       title: title,
       message: message ?? '请检查网络连接后重试。',
       action: AppButton.icon(

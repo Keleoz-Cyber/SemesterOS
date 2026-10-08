@@ -37,6 +37,7 @@ class _ChecklistMark extends CustomPainter {
       ..lineTo(18, 20)
       ..lineTo(3, 20)
       ..close();
+    canvas.drawPath(paper, Paint()..color = color.withValues(alpha: .08));
     canvas.drawPath(paper, stroke);
     canvas.drawPath(
       Path()

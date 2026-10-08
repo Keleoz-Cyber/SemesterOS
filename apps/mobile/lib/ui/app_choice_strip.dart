@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
 
 import 'motion.dart';
+import 'package:flutter/physics.dart';
+import 'v2/shiri_tokens.dart';
 
 /// A nullable choice: the same option can be pressed again to clear it.
 /// The moving surface shares fixed slots, so changing selection never reflows
@@ -30,19 +32,55 @@ class AppOptionalChoiceStrip<T> extends StatefulWidget {
       _AppOptionalChoiceStripState<T>();
 }
 
-class _AppOptionalChoiceStripState<T> extends State<AppOptionalChoiceStrip<T>> {
+class _AppOptionalChoiceStripState<T> extends State<AppOptionalChoiceStrip<T>>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _position;
   int _lastSelected = 0;
 
   @override
   void initState() {
     super.initState();
     _rememberSelection();
+    _position = AnimationController.unbounded(
+      vsync: this,
+      value: _lastSelected.toDouble(),
+    );
   }
 
   @override
   void didUpdateWidget(covariant AppOptionalChoiceStrip<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     _rememberSelection();
+    final target = _lastSelected.toDouble();
+    if (AppMotion.reduced(context)) {
+      _position.stop();
+      _position.value = target;
+    } else {
+      _position.animateWith(
+        SpringSimulation(
+          ShiriMotion.snappy,
+          _position.value,
+          target,
+          _position.velocity,
+          snapToEnd: true,
+        ),
+      );
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reduced(context)) {
+      _position.stop();
+      _position.value = _lastSelected.toDouble();
+    }
+  }
+
+  @override
+  void dispose() {
+    _position.dispose();
+    super.dispose();
   }
 
   void _rememberSelection() {
@@ -69,9 +107,6 @@ class _AppOptionalChoiceStripState<T> extends State<AppOptionalChoiceStrip<T>> {
           height: 1.25,
         );
     final reduced = AppMotion.reduced(context);
-    final duration = reduced
-        ? Duration.zero
-        : const Duration(milliseconds: 220);
     final feedback = AppMotion.feedback(context);
 
     return LayoutBuilder(
@@ -142,16 +177,21 @@ class _AppOptionalChoiceStripState<T> extends State<AppOptionalChoiceStrip<T>> {
                         key: ValueKey('choice-strip-opacity-$reduced'),
                         opacity: selected ? (widget.enabled ? 1 : .5) : 0,
                         duration: feedback,
-                        child: AnimatedAlign(
-                          key: ValueKey('choice-strip-position-$reduced'),
-                          alignment: AlignmentDirectional(
-                            entries.length == 1
-                                ? 0
-                                : -1 + 2 * _lastSelected / (entries.length - 1),
-                            0,
+                        child: AnimatedBuilder(
+                          animation: _position,
+                          builder: (context, child) => Align(
+                            key: ValueKey('choice-strip-position-$reduced'),
+                            alignment: AlignmentDirectional(
+                              entries.length == 1
+                                  ? 0
+                                  : -1 +
+                                        2 *
+                                            _position.value /
+                                            (entries.length - 1),
+                              0,
+                            ),
+                            child: child,
                           ),
-                          duration: duration,
-                          curve: Curves.easeOutCubic,
                           child: FractionallySizedBox(
                             widthFactor: 1 / entries.length,
                             heightFactor: 1,

@@ -1,5 +1,4 @@
 import '../../ui/app_controls.dart';
-import '../../ui/app_loading.dart';
 import '../../ui/app_sheet.dart';
 import '../../ui/app_picker_field.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +14,6 @@ import '../../ui/campus_theme.dart';
 import '../../ui/assistant_scope.dart';
 import 'home_preferences.dart';
 import 'day_brief_controller.dart';
-import '../../ui/date_labels.dart';
 import 'today_view_enhanced.dart';
 import 'week_heatmap.dart';
 import 'semester_progress.dart';
@@ -24,6 +22,12 @@ import 'study_opportunity_card.dart';
 import '../planning/proposal_page.dart';
 import '../../ui/breathing_exercise_card.dart';
 import '../../ui/time_urgency.dart';
+import '../../ui/v2/shiri_tokens.dart';
+import 'next_schedule_card.dart';
+import 'opportunity_inline_preview.dart';
+import 'exam_countdown_card.dart';
+import 'today_loading.dart';
+import 'today_sky_header.dart';
 
 class TodayDashboard extends StatefulWidget {
   final AppController app;
@@ -34,6 +38,7 @@ class TodayDashboard extends StatefulWidget {
   final VoidCallback? onAllTasks;
   final Future<void> Function()? onRetry;
   final DateTime Function()? now;
+  final bool showHeader;
   const TodayDashboard({
     super.key,
     required this.app,
@@ -44,6 +49,7 @@ class TodayDashboard extends StatefulWidget {
     this.onAllTasks,
     this.onRetry,
     this.now,
+    this.showHeader = true,
   });
   @override
   State<TodayDashboard> createState() => TodayDashboardState();
@@ -56,6 +62,11 @@ class TodayDashboardState extends State<TodayDashboard>
   late final HomePreferences preferences;
   MinuteClock? clock;
   bool arrangingOpportunity = false;
+  Map<String, dynamic>? _opportunityPreview,
+      _opportunityReceipt,
+      _displayOpportunity,
+      _opportunitySource;
+  String? _opportunityError;
   late final String semesterId;
   late final String owner;
   late final int generation;
@@ -83,6 +94,15 @@ class TodayDashboardState extends State<TodayDashboard>
           calendarDate(weekStart.add(const Duration(days: 6))) &&
       weekly.revision != null &&
       weekly.revision! >= (revision ?? 0);
+  bool get displayWeek =>
+      sameSemester &&
+      widget.app.api.session?['user']?['id'] == owner &&
+      widget.app.api.generation == generation &&
+      weekly.data?['semester_id'] == sid &&
+      weekly.data?['from_date'] == calendarDate(weekStart) &&
+      weekly.data?['to_date'] ==
+          calendarDate(weekStart.add(const Duration(days: 6))) &&
+      weekly.revision != null;
   String get sid => semesterId;
   bool get sameSemester =>
       widget.app.semester?['id'] == semesterId &&
@@ -303,7 +323,13 @@ class TodayDashboardState extends State<TodayDashboard>
 
   Future<void> arrangeOpportunity(Map<String, dynamic> opportunity) async {
     if (arrangingOpportunity || !sameSemester) return;
-    setState(() => arrangingOpportunity = true);
+    setState(() {
+      arrangingOpportunity = true;
+      _opportunityError = null;
+      _opportunityReceipt = null;
+      if (_opportunityPreview == null) _displayOpportunity = opportunity;
+      _opportunitySource = Map<String, dynamic>.from(opportunity);
+    });
     try {
       final p = await widget.items.generateSchedule(
         {
@@ -318,6 +344,27 @@ class TodayDashboardState extends State<TodayDashboard>
         idempotencyKey: 'opportunity-${DateTime.now().microsecondsSinceEpoch}',
       );
       if (!mounted || !sameSemester) return;
+      final blocks = widget.items.rows(p['blocks']);
+      final taskRows = widget.items.rows(p['tasks']);
+      final simple =
+          p['mode'] != 'replan' &&
+          p['status'] == 'FEASIBLE_COMPLETE' &&
+          blocks.length == 1 &&
+          taskRows.length == 1 &&
+          (taskRows.single['existing_minutes'] ?? 0) == 0 &&
+          (taskRows.single['later_minutes'] ?? 0) == 0;
+      final display = simple ? proposalOpportunity(p) : null;
+      if (display != null) {
+        setState(() {
+          _opportunityPreview = p;
+          _displayOpportunity = display;
+        });
+        return;
+      }
+      setState(() {
+        _opportunityPreview = null;
+        _displayOpportunity = null;
+      });
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -330,6 +377,172 @@ class TodayDashboardState extends State<TodayDashboard>
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userError(error))));
+      }
+    } finally {
+      if (mounted && sameSemester) setState(() => arrangingOpportunity = false);
+    }
+  }
+
+  Map<String, dynamic>? proposalOpportunity(Map<String, dynamic> p) {
+    final blocks = widget.items.rows(p['blocks']),
+        tasks = widget.items.rows(p['tasks']);
+    if (blocks.length != 1 || tasks.length != 1) return null;
+    return opportunityDisplay(
+      blocks.single,
+      tasks.single,
+      needsCheck: widget.items.rows(p['uncertainty_warnings']).isNotEmpty,
+    );
+  }
+
+  Map<String, dynamic>? opportunityDisplay(
+    Map<String, dynamic> block,
+    Map<String, dynamic> task, {
+    bool needsCheck = false,
+    bool saved = false,
+  }) {
+    final start = DateTime.tryParse('${block['start_at']}'),
+        end = DateTime.tryParse('${block['end_at']}');
+    if (start == null || end == null || !end.isAfter(start)) return null;
+    final minutes = block['minutes'] is num
+        ? (block['minutes'] as num).toInt()
+        : end.difference(start).inMinutes;
+    final id = block['item_id'] ?? task['item_id'];
+    if (minutes <= 0 || id == null) return null;
+    return {
+      'item_id': id,
+      'title': block['title'] ?? task['title'] ?? '',
+      'target_minutes': minutes,
+      'already_planned_minutes': task['existing_minutes'],
+      'start_at': block['start_at'],
+      'end_at': block['end_at'],
+      'latest_start_at': block['start_at'],
+      'needs_check': needsCheck,
+      'display_phase': saved ? 'saved' : 'proposal',
+    };
+  }
+
+  Widget opportunityHistory(String status) => Container(
+    key: const Key('opportunity-saved-history'),
+    margin: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.all(16),
+    decoration: context.shiri.cardDecoration(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.history_rounded,
+              size: 20,
+              color: CampusColors.muted,
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                '保存记录',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            AppTextButton(
+              onPressed: arrangingOpportunity ? null : undoOpportunity,
+              child: const Text('撤销'),
+            ),
+          ],
+        ),
+        if ('${_displayOpportunity?['title'] ?? ''}'.isNotEmpty)
+          Text('${_displayOpportunity!['title']}'),
+        const SizedBox(height: 4),
+        Text(
+          displayInterval(
+            _displayOpportunity?['start_at'],
+            _displayOpportunity?['end_at'],
+          ),
+          style: const TextStyle(color: CampusColors.muted, fontSize: 14),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          status,
+          style: const TextStyle(color: CampusColors.muted, fontSize: 14),
+        ),
+        if (_opportunityError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _opportunityError!,
+              style: const TextStyle(color: CampusColors.error),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  Future<void> saveOpportunity() async {
+    final p = _opportunityPreview;
+    if (p == null || arrangingOpportunity || !sameSemester) return;
+    setState(() {
+      arrangingOpportunity = true;
+      _opportunityError = null;
+    });
+    try {
+      final receipt = await widget.items.acceptSchedule(p, false);
+      if (!mounted || !sameSemester) return;
+      setState(() {
+        _opportunityReceipt = receipt;
+        _displayOpportunity = {
+          ...?_displayOpportunity,
+          'display_phase': 'saved',
+        };
+        _opportunityPreview = null;
+      });
+      await reload();
+    } catch (error) {
+      if (mounted && sameSemester) {
+        setState(() => _opportunityError = userError(error));
+      }
+    } finally {
+      if (mounted && sameSemester) setState(() => arrangingOpportunity = false);
+    }
+  }
+
+  Future<void> undoOpportunity() async {
+    final r = _opportunityReceipt;
+    if (r == null || arrangingOpportunity || !sameSemester) return;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AppDialog(
+        title: const Text('撤销最近一次安排？'),
+        content: const Text('撤销本次新增或调整的学习安排。已开始或后来修改过的安排会保留。'),
+        actions: [
+          AppTextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('返回'),
+          ),
+          AppButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('确认撤销'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted || !sameSemester) return;
+    setState(() {
+      arrangingOpportunity = true;
+      _opportunityError = null;
+    });
+    try {
+      await widget.items.undoSchedule({
+        'id': r['proposal_id'],
+        'version': r['proposal_version'],
+      }, r['revision']);
+      if (!mounted || !sameSemester) return;
+      setState(() {
+        _opportunityReceipt = null;
+        _displayOpportunity = null;
+      });
+      await reload();
+    } catch (error) {
+      if (mounted && sameSemester) {
+        setState(() => _opportunityError = userError(error));
       }
     } finally {
       if (mounted && sameSemester) setState(() => arrangingOpportunity = false);
@@ -523,6 +736,9 @@ class TodayDashboardState extends State<TodayDashboard>
   @override
   Widget build(BuildContext context) {
     if (!sameSemester) return const SizedBox.shrink();
+    if (brief.data == null && brief.busy) {
+      return frame(const TodayLoadingBody());
+    }
     final entries = brief.entries;
     final timeline =
         entries
@@ -622,15 +838,6 @@ class TodayDashboardState extends State<TodayDashboard>
                   const ['window', 'start'].contains(calendarMeaning(r)),
         )
         .toList();
-    final start = DateTime.parse(
-      '${widget.app.semester!['first_monday']}T00:00:00Z',
-    );
-    final week = (day.difference(start).inDays ~/ 7) + 1;
-    final weekLabel = day.isBefore(start)
-        ? '尚未开学'
-        : week > widget.app.semester!['total_weeks']
-        ? '学期已结束'
-        : '第$week周';
     final viewMode =
         preferences.todayView ??
         defaultTodayViewMode(
@@ -646,7 +853,7 @@ class TodayDashboardState extends State<TodayDashboard>
     }
     final visibleTaskIds = {
       if (viewMode == TodayViewMode.overview)
-        ...overviewTasks.take(2).map((t) => t['id']),
+        ...overviewTasks.take(3).map((t) => t['id']),
       if (viewMode == TodayViewMode.schedule && urgent != null) urgent['id'],
     };
     final tomorrowPreviewTasks = tomorrowTasks
@@ -656,220 +863,214 @@ class TodayDashboardState extends State<TodayDashboard>
         showTomorrow &&
         viewMode != TodayViewMode.tasks &&
         (tomorrow.isNotEmpty || tomorrowPreviewTasks.isNotEmpty);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final stockOrder =
+        preferences.order.join('|') == homeModules.keys.join('|');
+    final earlyGap = stockOrder && preferences.enabled.contains('windows');
+    return frame(
+      Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: MediaQuery.sizeOf(context).width <= 360
+              ? ShiriSpace.pageCompact
+              : ShiriSpace.page,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 2,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        studentDate(now),
+            if (next != null && viewMode != TodayViewMode.tasks)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: NextScheduleCard(
+                  row: next,
+                  now: now,
+                  onOpen: () => open(next),
+                ),
+              ),
+            if (next == null || viewMode == TodayViewMode.tasks)
+              const SizedBox(height: 12),
+            if (brief.offline)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.cloud_off_outlined,
+                      size: 20,
+                      color: CampusColors.muted,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        brief.data == null ? '暂时无法读取今日安排' : '离线查看已保存安排',
                         style: const TextStyle(
-                          fontSize: 23,
-                          fontWeight: FontWeight.w800,
-                          color: CampusColors.ink,
-                        ),
-                      ),
-                      Text(
-                        '周${'一二三四五六日'[now.weekday - 1]}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
                           color: CampusColors.muted,
+                          fontSize: 14,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          weekLabel,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: CampusColors.teal,
-                            fontWeight: FontWeight.w600,
+                    ),
+                    AppTextButton(
+                      onPressed: brief.busy ? null : retry,
+                      child: const Text('重试'),
+                    ),
+                  ],
+                ),
+              ),
+            if (earlyGap) module('windows', tasks, urgent),
+            if (viewMode != TodayViewMode.overview)
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: LayoutBuilder(
+                  builder: (context, box) {
+                    final title = switch (viewMode) {
+                      TodayViewMode.overview => '今日总览',
+                      TodayViewMode.tasks => '待办任务',
+                      TodayViewMode.schedule => '全天安排',
+                    };
+                    const titleStyle = TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    );
+                    const actionStyle = TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      height: 1.25,
+                    );
+                    double width(String value, TextStyle style) {
+                      final text = TextPainter(
+                        text: TextSpan(text: value, style: style),
+                        textScaler: MediaQuery.textScalerOf(context),
+                        textDirection: Directionality.of(context),
+                      )..layout();
+                      final result = text.width;
+                      text.dispose();
+                      return result;
+                    }
+
+                    final compact =
+                        width(title, titleStyle) +
+                            width('查看全部', actionStyle) +
+                            64 >
+                        box.maxWidth;
+                    final onOpen = viewMode == TodayViewMode.tasks
+                        ? widget.onAllTasks
+                        : widget.onCalendar;
+                    return Row(
+                      children: [
+                        Expanded(child: Text(title, style: titleStyle)),
+                        const SizedBox(width: 12),
+                        if (compact)
+                          AppIconButton(
+                            key: const Key('today-secondary-action'),
+                            tooltip: '查看全部',
+                            onPressed: onOpen,
+                            color: CampusColors.muted,
+                            icon: const Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 20,
+                            ),
+                          )
+                        else
+                          AppTextButton.icon(
+                            key: const Key('today-secondary-action'),
+                            onPressed: onOpen,
+                            iconAlignment: IconAlignment.end,
+                            icon: const Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 18,
+                            ),
+                            style: AppTextButton.styleFrom(
+                              foregroundColor: CampusColors.muted,
+                              textStyle: actionStyle,
+                            ),
+                            label: const Text('查看全部'),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      AppLoadingIndicator(
-                        visible: brief.busy,
-                        compact: true,
-                        label: '正在读取今日安排',
-                      ),
-                    ],
-                  ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            if (viewMode != TodayViewMode.overview) const SizedBox(height: 8),
+            TodayViewSwitch(
+              timeline: timeline,
+              tasks: tasks,
+              otherEntries: otherDay,
+              now: now,
+              day: day,
+              preferences: preferences,
+              dayFinished: dayFinished,
+              scheduleAvailable: brief.data != null,
+              scheduleLoading: brief.busy,
+              scheduleLeading: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (urgent != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: urgentRow(urgent),
+                    ),
                 ],
               ),
-            ),
-            AppIconButton(
-              tooltip: '调整首页内容',
-              guardAsync: false,
-              onPressed: editModules,
-              color: CampusColors.muted,
-              icon: const Icon(Icons.tune_rounded),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (brief.offline)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.cloud_off_outlined,
-                  size: 20,
-                  color: CampusColors.muted,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    brief.data == null ? '暂时无法读取今日安排' : '离线查看已保存安排',
-                    style: const TextStyle(
-                      color: CampusColors.muted,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-                AppTextButton(
-                  onPressed: brief.busy ? null : retry,
-                  child: const Text('重试'),
-                ),
-              ],
-            ),
-          ),
-        if (viewMode != TodayViewMode.overview)
-          ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: LayoutBuilder(
-              builder: (context, box) {
-                final title = switch (viewMode) {
-                  TodayViewMode.overview => '今日总览',
-                  TodayViewMode.tasks => '待办任务',
-                  TodayViewMode.schedule => '全天安排',
-                };
-                const titleStyle = TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                );
-                const actionStyle = TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  height: 1.25,
-                );
-                double width(String value, TextStyle style) {
-                  final text = TextPainter(
-                    text: TextSpan(text: value, style: style),
-                    textScaler: MediaQuery.textScalerOf(context),
-                    textDirection: Directionality.of(context),
-                  )..layout();
-                  final result = text.width;
-                  text.dispose();
-                  return result;
-                }
-
-                final compact =
-                    width(title, titleStyle) + width('查看全部', actionStyle) + 64 >
-                    box.maxWidth;
-                final onOpen = viewMode == TodayViewMode.tasks
-                    ? widget.onAllTasks
-                    : widget.onCalendar;
-                return Row(
-                  children: [
-                    Expanded(child: Text(title, style: titleStyle)),
-                    const SizedBox(width: 12),
-                    if (compact)
-                      AppIconButton(
-                        key: const Key('today-secondary-action'),
-                        tooltip: '查看全部',
-                        onPressed: onOpen,
-                        color: CampusColors.muted,
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 20),
-                      )
-                    else
-                      AppTextButton.icon(
-                        key: const Key('today-secondary-action'),
-                        onPressed: onOpen,
-                        iconAlignment: IconAlignment.end,
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                        style: AppTextButton.styleFrom(
-                          foregroundColor: CampusColors.muted,
-                          textStyle: actionStyle,
-                        ),
-                        label: const Text('查看全部'),
-                      ),
-                  ],
-                );
+              onEventTap: open,
+              onTaskTap: open,
+              onTaskComplete: completeTask,
+              onTaskEdit: widget.onTaskEdit,
+              onAllTasks: widget.onAllTasks,
+              onAllEvents: widget.onCalendar,
+              priorityTaskId: urgent?['id'],
+              removedTaskStates: {
+                for (final r in widget.items.items)
+                  if (r['lifecycle'] != 'active')
+                    '${r['id']}': '${r['lifecycle']}',
               },
             ),
-          ),
-        if (viewMode != TodayViewMode.overview) const SizedBox(height: 8),
-        TodayViewSwitch(
-          timeline: timeline,
-          tasks: tasks,
-          otherEntries: otherDay,
-          now: now,
-          day: day,
-          preferences: preferences,
-          dayFinished: dayFinished,
-          scheduleAvailable: brief.data != null,
-          scheduleLoading: brief.busy,
-          scheduleLeading: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (urgent != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: urgentRow(urgent),
-                ),
-            ],
-          ),
-          onEventTap: open,
-          onTaskTap: open,
-          onTaskComplete: completeTask,
-          onTaskEdit: widget.onTaskEdit,
-          onAllTasks: widget.onAllTasks,
-          onAllEvents: widget.onCalendar,
-          priorityTaskId: urgent?['id'],
-          removedTaskStates: {
-            for (final r in widget.items.items)
-              if (r['lifecycle'] != 'active') '${r['id']}': '${r['lifecycle']}',
-          },
+            for (final id
+                in preferences.order
+                    .where(preferences.enabled.contains)
+                    .where(
+                      (id) =>
+                          (!earlyGap || id != 'windows') &&
+                          (viewMode == TodayViewMode.schedule ||
+                              id != 'deadlines'),
+                    ))
+              module(
+                id,
+                tomorrowVisible
+                    ? tasks
+                          .where(
+                            (t) =>
+                                !tomorrowTasks.any((v) => v['id'] == t['id']),
+                          )
+                          .toList()
+                    : tasks,
+                urgent,
+              ),
+            if (tomorrowVisible)
+              tomorrowPreview(tomorrow, tomorrowPreviewTasks),
+          ],
         ),
-        for (final id
-            in preferences.order
-                .where(preferences.enabled.contains)
-                .where(
-                  (id) =>
-                      viewMode == TodayViewMode.schedule || id != 'deadlines',
-                ))
-          module(
-            id,
-            tomorrowVisible
-                ? tasks
-                      .where(
-                        (t) => !tomorrowTasks.any((v) => v['id'] == t['id']),
-                      )
-                      .toList()
-                : tasks,
-            urgent,
-          ),
-        if (tomorrowVisible) tomorrowPreview(tomorrow, tomorrowPreviewTasks),
-      ],
+      ),
     );
   }
+
+  Widget frame(Widget body) => LayoutBuilder(
+    builder: (context, constraints) {
+      final content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.showHeader)
+            TodaySkyHeader(
+              now: now,
+              semester: widget.app.semester!,
+              onSettings: editModules,
+              onProfile: () => context.push('/profile'),
+            ),
+          body,
+        ],
+      );
+      return constraints.hasBoundedHeight
+          ? SingleChildScrollView(child: content)
+          : content;
+    },
+  );
 
   Widget tomorrowPreview(
     List<Map<String, dynamic>> rows,
@@ -1018,9 +1219,13 @@ class TodayDashboardState extends State<TodayDashboard>
       return Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: WeekHeatmap(
-          items: completeWeek ? weekly.entries : [],
+          items: displayWeek ? weekly.entries : [],
           now: now,
-          available: completeWeek,
+          available: displayWeek,
+          updating:
+              displayWeek &&
+              !completeWeek &&
+              (weekly.busy || _weekRefreshQueued),
           loading: weekly.busy || _weekRefreshQueued,
           offline: weekly.offline,
           onRetry: retry,
@@ -1045,7 +1250,13 @@ class TodayDashboardState extends State<TodayDashboard>
 
     // 时间统计
     if (id == 'time_stats') {
-      if (!completeWeek) {
+      if (!displayWeek) {
+        if (weekly.busy || _weekRefreshQueued) {
+          return const Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: TimeStatsLoading(),
+          );
+        }
         return AppTile(
           title: const Text('时间统计'),
           subtitle: Text(
@@ -1068,6 +1279,7 @@ class TodayDashboardState extends State<TodayDashboard>
           todayItems: todayEntries,
           weekItems: weekEntries,
           now: now,
+          updating: !completeWeek && (weekly.busy || _weekRefreshQueued),
         ),
       );
     }
@@ -1094,16 +1306,85 @@ class TodayDashboardState extends State<TodayDashboard>
       );
     }
     if (id == 'windows') {
-      if (!brief.fresh(revision ?? 0)) return const SizedBox();
-      final suggestions = brief.suggestions;
-      final opportunity = brief.data?['study_opportunity'];
-      final warnings = suggestions
-          .where((s) => s['kind'] != 'free_window')
-          .toList();
-      if (warnings.isEmpty && opportunity is! Map) return const SizedBox();
+      final hasReceipt =
+          _opportunityReceipt?['semester_id'] == sid &&
+          _displayOpportunity != null;
+      final blockIds = (_opportunityReceipt?['block_ids'] as List? ?? [])
+          .map((v) => '$v')
+          .toSet();
+      final plans = widget.items.planFeed;
+      final planRevision = plans?['revision'];
+      final checkedPlans =
+          hasReceipt &&
+          blockIds.isNotEmpty &&
+          sameSemester &&
+          widget.app.api.session?['user']?['id'] == owner &&
+          widget.app.api.generation == generation &&
+          widget.items.hasCurrentPlans &&
+          planRevision is int &&
+          planRevision >= expectedRevision &&
+          !widget.items.revisionIsStale(sid, planRevision);
+      final matches = checkedPlans
+          ? widget.items
+                .rows(plans?['blocks'])
+                .where((row) => blockIds.contains('${row['id']}'))
+                .toList()
+          : <Map<String, dynamic>>[];
+      final active = matches
+          .where((row) => row['status'] == 'active')
+          .firstOrNull;
+      final current = active == null
+          ? null
+          : opportunityDisplay(active, const {}, saved: true);
+      final heldStart = at(current?['start_at']),
+          heldEnd = at(current?['end_at']);
+      final savedCurrent =
+          current != null &&
+          heldStart != null &&
+          heldEnd != null &&
+          DateUtils.isSameDay(heldStart, now) &&
+          heldEnd.isAfter(now);
+      final briefFresh = brief.fresh(revision ?? 0);
+      if (!briefFresh && _opportunityPreview == null && !hasReceipt) {
+        return const SizedBox();
+      }
+      final dynamic opportunity;
+      if (_opportunityPreview != null) {
+        opportunity = _displayOpportunity;
+      } else if (savedCurrent) {
+        opportunity = current;
+      } else if (briefFresh) {
+        opportunity = brief.data?['study_opportunity'];
+      } else {
+        opportunity = null;
+      }
+      final warnings = briefFresh
+          ? brief.suggestions
+                .where((row) => row['kind'] != 'free_window')
+                .toList()
+          : <Map<String, dynamic>>[];
+      var savedStatus = widget.items.busy || arrangingOpportunity || brief.busy
+          ? '当前状态正在更新'
+          : '当前状态暂未核对';
+      if (checkedPlans) {
+        if (matches.isEmpty ||
+            matches.every((row) => row['status'] == 'cancelled')) {
+          savedStatus = '这段安排已变更，不再作为当前安排';
+        } else if (heldEnd != null && !heldEnd.isAfter(now)) {
+          savedStatus = '这段时间已结束';
+        } else if (heldStart != null && !DateUtils.isSameDay(heldStart, now)) {
+          savedStatus = '这段安排不在今天';
+        } else {
+          savedStatus = '当前安排时间待核对';
+        }
+      }
+      if (warnings.isEmpty && opportunity is! Map && !hasReceipt) {
+        return const SizedBox();
+      }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (hasReceipt && !savedCurrent) opportunityHistory(savedStatus),
           if (opportunity is Map)
             StudyOpportunityCard(
               value: Map<String, dynamic>.from(opportunity),
@@ -1113,6 +1394,63 @@ class TodayDashboardState extends State<TodayDashboard>
               onArrange: () =>
                   arrangeOpportunity(Map<String, dynamic>.from(opportunity)),
               onOpen: () => context.push('/items/${opportunity['item_id']}'),
+              saved: savedCurrent,
+              preview: _opportunityPreview != null
+                  ? OpportunityInlinePreview(
+                      proposal: _opportunityPreview!,
+                      controller: widget.items,
+                      busy: arrangingOpportunity,
+                      error: _opportunityError,
+                      onSave: saveOpportunity,
+                      onRegenerate: () => arrangeOpportunity(
+                        Map<String, dynamic>.from(
+                          _opportunitySource ?? opportunity,
+                        ),
+                      ),
+                      onCancel: () => setState(() {
+                        _opportunityPreview = null;
+                        _displayOpportunity = null;
+                        _opportunityError = null;
+                      }),
+                    )
+                  : savedCurrent
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              size: 20,
+                              color: CampusColors.success,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                '已安排',
+                                style: TextStyle(
+                                  color: CampusColors.success,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            AppTextButton(
+                              onPressed: arrangingOpportunity
+                                  ? null
+                                  : undoOpportunity,
+                              child: const Text('撤销'),
+                            ),
+                          ],
+                        ),
+                        if (_opportunityError != null)
+                          Text(
+                            _opportunityError!,
+                            style: const TextStyle(color: CampusColors.error),
+                          ),
+                      ],
+                    )
+                  : null,
             ),
           if (warnings.isNotEmpty)
             section('需要留意', icon: Icons.info_outline_rounded),
@@ -1184,6 +1522,34 @@ class TodayDashboardState extends State<TodayDashboard>
         .take(3)
         .toList();
     if (list.isEmpty) return const SizedBox();
+    if (id == 'exams') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          section(homeModules[id]!, icon: Icons.school_outlined),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < list.length; i++) ...[
+                    if (i > 0) const SizedBox(width: ShiriSpace.itemGap),
+                    ExamCountdownCard(
+                      item: list[i],
+                      now: now,
+                      date: deadline(list[i]),
+                      onOpen: () => open(list[i]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

@@ -11,6 +11,7 @@ import '../../ui/record_actions.dart';
 import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import '../items/task_surfaces.dart';
+import '../items/detail_surfaces.dart';
 import '../notices/notice_fields.dart' show noticeTime;
 import '../planning/date_time_picker.dart';
 import '../planning/proposal_page.dart';
@@ -591,6 +592,28 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
               : '核对课程调整',
         ),
       ),
+      bottomNavigationBar: applied
+          ? null
+          : ActionFooter(
+              label: display.attendance ? '保存听课状态' : '保存修改',
+              icon: Icons.check_rounded,
+              secondary: conflict
+                  ? Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: AppCheckRow(
+                        title: const Text('保留这些重叠安排'),
+                        value: confirmConflict,
+                        onChanged: busy
+                            ? null
+                            : (v) => setState(() => confirmConflict = v!),
+                      ),
+                    )
+                  : null,
+              onPressed:
+                  busy || !same || stale || (conflict && !confirmConflict)
+                  ? null
+                  : () => act(false),
+            ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -600,7 +623,15 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
             icon: display.icon,
           ),
 
-          CourseChangeSummary(change: p, showTitle: false, showSource: false),
+          DetailGroup(
+            children: [
+              CourseChangeSummary(
+                change: p,
+                showTitle: false,
+                showSource: false,
+              ),
+            ],
+          ),
           if ('${p['request']['source_text'] ?? ''}'.trim().isNotEmpty)
             AppDisclosure(
               tilePadding: EdgeInsets.zero,
@@ -678,27 +709,11 @@ class _ChangePreviewPageState extends State<ChangePreviewPage> {
                 warning: true,
               ),
             ),
-          if (conflict && !applied)
-            AppCheckRow(
-              title: const Text('保留这些重叠安排'),
-              value: confirmConflict,
-              onChanged: busy
-                  ? null
-                  : (v) => setState(() => confirmConflict = v!),
-            ),
           if (!same) const SoftNotice('账号或学期已切换，请返回', warning: true),
           if (stale && !applied)
             const SoftNotice('此预览已失效，请返回重新预览', warning: true),
           if (error != null) SoftNotice(error!, warning: true),
 
-          if (!applied)
-            AppButton(
-              onPressed:
-                  busy || !same || stale || (conflict && !confirmConflict)
-                  ? null
-                  : () => act(false),
-              child: Text(display.attendance ? '保存听课状态' : '保存修改'),
-            ),
           if (applied) ...[
             AssistantSavedAction(
               text: display.attendance ? '听课状态已保存' : '调整已保存',

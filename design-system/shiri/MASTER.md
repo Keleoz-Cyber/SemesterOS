@@ -4,16 +4,18 @@
 
 ## 颜色、文字与布局
 
-品牌图标以用户提供的 [app_icon.svg](../../apps/mobile/assets/brand/app_icon.svg) 为源，保留渐变、太阳、日历和底部波纹。App页头与登录页使用同源导出图；安卓自适应图标分为完整背景、安全区内前景及主题单色层，由系统裁切外形。五档密度用 `tool/export_brand.cjs` 导出，渲染依赖只用于生成资源。
+安卓启动图标以用户提供的 [app_icon.svg](../../apps/mobile/assets/brand/app_icon.svg) 为源，保留渐变、太阳、日历和底部波纹；自适应图标分为完整背景、安全区内前景及主题单色层，由系统裁切外形。五档密度用 `tool/export_brand.cjs` 导出，渲染依赖只用于生成资源。晴日 v2 界面页头、登录和引导采用素材包 [mark.svg](../../apps/mobile/assets/brand/mark.svg)，不改启动图标。
 
 颜色对应 [campus_theme.dart](../../apps/mobile/lib/ui/campus_theme.dart)，共用控件与 Forui 主题分别见 [app_controls.dart](../../apps/mobile/lib/ui/app_controls.dart) 和 [forui_theme.dart](../../apps/mobile/lib/ui/forui_theme.dart)。
 
 | 语义 | 色值 |
 | --- | --- |
-| 页面 / 内容面 | #F5F7FB / #FFFFFF |
-| 主要操作 / 次级强调 | #3D66C1 / #34766F |
-| 蓝色浅底 / 青绿浅底 | #EEF3FC / #EDF5F2 |
-| 主文字 / 次文字 / 分隔 | #24344D / #5F6F84 / #E3E9F1 |
+| 页面 / 内容面 | #F3F7FC / #FFFFFF |
+| 主要操作 / 次级强调 | #2E6FE0 / #0F7F63 |
+| 蓝色浅底 / 青绿浅底 | #EAF2FF / #E3F6EE |
+| 主文字 / 次文字 / 分隔 | #142238 / #5B6B82 / #E4ECF5 |
+
+晴日 v2 的视觉数值以 [tokens.json](../shiri-v2/tokens/tokens.json) 为准；本文件中的业务、数据和无障碍规则继续有效。
 
 普通操作以蓝色为主，课程使用稳定的低饱和度分类色；警告和错误只表达对应状态。分类色不表示优先级，颜色不能是类型、风险或选中的唯一依据。现行亮色主题支持系统高对比度；没有完成全 App 暗色与无障碍认证。
 

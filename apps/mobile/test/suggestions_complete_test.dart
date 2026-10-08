@@ -3,12 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/features/home/today_dashboard.dart';
 import 'package:semester_os/features/items/item_widgets.dart';
-import 'package:semester_os/features/planning/proposal_page.dart';
+import 'package:semester_os/features/home/opportunity_inline_preview.dart';
 import 'package:semester_os/ui/motion_task_list.dart';
 import 'api_session_test.dart' show ControlledTransport, body;
 import 'calendar_flow_test.dart' show semester;
 import 'controller_test.dart' show MemoryStore;
 import 'schedule_flow_test.dart' show ScheduleFixture;
+import 'planning_flow_test.dart' show ioTap;
 import 'ui_polish_test.dart' show mount, capture, loadPreviewFonts;
 
 void main() {
@@ -137,17 +138,15 @@ void main() {
       () => Future<void>.delayed(const Duration(milliseconds: 80)),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(ProposalPage), findsOneWidget);
+    expect(find.byType(OpportunityInlinePreview), findsOneWidget);
     expect(f.generated, 1);
     expect(f.applied, 0);
     await capture(tester, 'gap-preview');
-    await tester.tap(find.text('保存学习安排'));
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 80)),
-    );
-    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('保存学习安排'));
+    await ioTap(tester, find.text('保存学习安排'));
     expect(f.applied, 1);
     expect(f.blocks.single['minutes'], 20);
+    await capture(tester, 'gap-saved');
     await tester.pumpWidget(const SizedBox());
     f.c.dispose();
     app.dispose();

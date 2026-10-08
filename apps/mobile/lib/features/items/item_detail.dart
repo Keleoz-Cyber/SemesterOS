@@ -15,6 +15,8 @@ import 'items_controller.dart';
 import 'item_form.dart';
 import 'item_widgets.dart';
 import 'task_surfaces.dart';
+import 'detail_surfaces.dart';
+import '../../ui/v2/shiri_tokens.dart' as v2;
 import '../notices/notice_fields.dart';
 import 'reminder_editor.dart';
 import 'reminder_settings.dart';
@@ -381,6 +383,9 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
         data?['reminders'] ?? [],
       );
       final time = Map<String, dynamic>.from(data?['time'] ?? {});
+      final palette = v2.CoursePalette.forTitle(
+        '${data?['course_title'] ?? data?['title'] ?? ''}',
+      );
       final overdue =
           active && itemDeadline(data ?? {})?.isBefore(DateTime.now()) == true;
       return Scaffold(
@@ -460,7 +465,8 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                   children: [
-                    RecordHeading(
+                    DetailHero(
+                      heroTag: 'item-surface-${data['id']}',
                       title: '${data['title']}',
                       label:
                           '${kindLabel(data['kind'])} · ${data['lifecycle'] == 'completed'
@@ -478,42 +484,71 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                           ? Icons.task_alt_rounded
                           : Icons.block_rounded,
                       subtitle: data['course_title'],
+                      background: exam
+                          ? v2.ShiriColors.light.dangerSoft
+                          : palette.background,
+                      foreground: exam
+                          ? v2.ShiriColors.light.danger
+                          : palette.foreground,
                     ),
-                    if (noticeTimePresent(time))
-                      TaskFactStrip(
-                        label: exam
-                            ? '考试时间'
-                            : time['meaning'] == 'window'
-                            ? '办理时间'
-                            : time['meaning'] == 'start'
-                            ? '开始时间'
-                            : time['precision'] == 'unknown'
-                            ? '时间说明'
-                            : '截止时间',
-                        value: itemTimeLabel(
-                          data,
-                          includeMissing: false,
-                        ).replaceFirst(RegExp(r' (截止|开始)(?= ·|$)'), ''),
-                        icon: Icons.schedule_rounded,
-                        accent: overdue
-                            ? CampusColors.error
-                            : CampusColors.primary,
+                    if (noticeTimePresent(time) ||
+                        '${data['location'] ?? ''}'.trim().isNotEmpty)
+                      DetailGroup(
+                        title: '时间与地点',
+                        revealKey:
+                            'item/${widget.controller.owner}/${data['id']}/time',
+                        index: 1,
+                        children: [
+                          if (noticeTimePresent(time))
+                            TaskFactStrip(
+                              label: exam
+                                  ? '考试时间'
+                                  : time['meaning'] == 'window'
+                                  ? '办理时间'
+                                  : time['meaning'] == 'start'
+                                  ? '开始时间'
+                                  : time['precision'] == 'unknown'
+                                  ? '时间说明'
+                                  : '截止时间',
+                              value: itemTimeLabel(
+                                data,
+                                includeMissing: false,
+                              ).replaceFirst(RegExp(r' (截止|开始)(?= ·|$)'), ''),
+                              icon: Icons.schedule_rounded,
+                              accent: overdue
+                                  ? CampusColors.error
+                                  : CampusColors.primary,
+                            ),
+                          if (overdue)
+                            Text(
+                              exam ? '开始时间已过' : '已过截止时间',
+                              style: const TextStyle(color: CampusColors.error),
+                            ),
+                          if ('${data['location'] ?? ''}'.trim().isNotEmpty)
+                            TaskFactStrip(
+                              label: '地点',
+                              value: data['location'],
+                              icon: Icons.place_outlined,
+                            ),
+                        ],
                       ),
-                    if (overdue)
-                      Text(
-                        exam ? '开始时间已过' : '已过截止时间',
-                        style: const TextStyle(color: CampusColors.error),
-                      ),
-                    NoticeDetails(
+                    if (noticeDetailRows(
                       data['details'],
                       location: data['location'],
                       title: data['title'],
-                    ),
-                    if ('${data['location'] ?? ''}'.trim().isNotEmpty)
-                      TaskFactStrip(
-                        label: '地点',
-                        value: data['location'],
-                        icon: Icons.place_outlined,
+                    ).isNotEmpty)
+                      DetailGroup(
+                        title: '通知要求',
+                        revealKey:
+                            'item/${widget.controller.owner}/${data['id']}/details',
+                        index: 2,
+                        children: [
+                          NoticeDetails(
+                            data['details'],
+                            location: data['location'],
+                            title: data['title'],
+                          ),
+                        ],
                       ),
                     if (active && !exam) ...[
                       TaskActionRail(
@@ -556,48 +591,62 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                         child: OperationFailed(operation: '操作', reason: error!),
                       ),
                     const SizedBox(height: 16),
-                    if ((active || reminders.isNotEmpty) && !(active && !exam))
-                      RecordActionTile(
-                        title: reminders.isEmpty
-                            ? '添加提醒'
-                            : '提醒 · ${reminders.length}条',
-                        subtitle: reminders.length == 1
-                            ? '${reminderLabel(reminders.first)} · ${reminderState(reminders.first['schedule_state'])}'
-                            : null,
-                        icon: Icons.notifications_outlined,
-                        onTap: busy
-                            ? null
-                            : () => reminders.isEmpty
-                                  ? reminder()
-                                  : showReminders(data),
-                      ),
-                    if (active)
-                      RecordActionTile(
-                        title: '询问或修改',
-                        icon: Icons.auto_awesome_outlined,
-                        onTap: busy
-                            ? null
-                            : () => openAssistantSheet(
-                                context,
-                                controller: widget.controller,
-                                semester: widget.semester,
-                                initialText: '关于“${data['title']}”：',
-                                selectedRecordIds: [data['id']],
+                    if (active ||
+                        reminders.isNotEmpty ||
+                        data['review_exam_id'] != null ||
+                        data['course_id'] != null)
+                      DetailGroup(
+                        title: '相关操作',
+                        revealKey:
+                            'item/${widget.controller.owner}/${data['id']}/actions',
+                        index: 3,
+                        children: [
+                          if ((active || reminders.isNotEmpty) &&
+                              !(active && !exam))
+                            RecordActionTile(
+                              title: reminders.isEmpty
+                                  ? '添加提醒'
+                                  : '提醒 · ${reminders.length}条',
+                              subtitle: reminders.length == 1
+                                  ? '${reminderLabel(reminders.first)} · ${reminderState(reminders.first['schedule_state'])}'
+                                  : null,
+                              icon: Icons.notifications_outlined,
+                              onTap: busy
+                                  ? null
+                                  : () => reminders.isEmpty
+                                        ? reminder()
+                                        : showReminders(data),
+                            ),
+                          if (active)
+                            RecordActionTile(
+                              title: '询问或修改',
+                              icon: Icons.auto_awesome_outlined,
+                              onTap: busy
+                                  ? null
+                                  : () => openAssistantSheet(
+                                      context,
+                                      controller: widget.controller,
+                                      semester: widget.semester,
+                                      initialText: '关于“${data['title']}”：',
+                                      selectedRecordIds: [data['id']],
+                                    ),
+                            ),
+                          if (data['review_exam_id'] != null)
+                            RecordActionTile(
+                              title: '关联考试',
+                              icon: Icons.school_outlined,
+                              onTap: () => context.push(
+                                '/exams/${data['review_exam_id']}',
                               ),
-                      ),
-                    if (data['review_exam_id'] != null)
-                      RecordActionTile(
-                        title: '关联考试',
-                        icon: Icons.school_outlined,
-                        onTap: () =>
-                            context.push('/exams/${data['review_exam_id']}'),
-                      ),
-                    if (data['course_id'] != null)
-                      RecordActionTile(
-                        title: '课程事务',
-                        icon: Icons.menu_book_outlined,
-                        onTap: () =>
-                            context.push('/courses/${data['course_id']}'),
+                            ),
+                          if (data['course_id'] != null)
+                            RecordActionTile(
+                              title: '课程事务',
+                              icon: Icons.menu_book_outlined,
+                              onTap: () =>
+                                  context.push('/courses/${data['course_id']}'),
+                            ),
+                        ],
                       ),
                     if ('${data['notes'] ?? ''}'.trim().isNotEmpty) ...[
                       const SizedBox(height: 16),

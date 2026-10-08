@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../ui/motion.dart' show AppMotion;
+import '../../ui/v2/shiri_tokens.dart';
 
 /// A real snapshot arriving may reveal once. The child is never truncated,
 /// delayed or size-animated, and remains readable/interactive immediately.
@@ -16,8 +17,8 @@ class AssistantArrival extends StatefulWidget {
     this.revision,
     this.animateInitial = false,
     this.onInitialConsumed,
-    this.duration = const Duration(milliseconds: 220),
-    this.shift = 6,
+    this.duration = ShiriMotion.standard,
+    this.shift = 12,
   });
   @override
   State<AssistantArrival> createState() => _AssistantArrivalState();
@@ -36,7 +37,7 @@ class _AssistantArrivalState extends State<AssistantArrival>
       duration: widget.duration,
       value: 1,
     );
-    _opacity = _motion.drive(CurveTween(curve: Curves.easeOutCubic));
+    _opacity = _motion.drive(CurveTween(curve: ShiriMotion.easeReveal));
     _pending = widget.animateInitial;
     if (_pending) widget.onInitialConsumed?.call();
     _foreground =
@@ -90,15 +91,17 @@ class _AssistantArrivalState extends State<AssistantArrival>
   }
 
   @override
-  Widget build(BuildContext context) => FadeTransition(
-    opacity: _opacity,
-    alwaysIncludeSemantics: true,
-    child: AnimatedBuilder(
-      animation: _opacity,
-      child: widget.child,
-      builder: (context, child) => Transform.translate(
-        offset: Offset(0, widget.shift * (1 - _opacity.value)),
-        child: child,
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: FadeTransition(
+      opacity: _opacity,
+      alwaysIncludeSemantics: true,
+      child: AnimatedBuilder(
+        animation: _opacity,
+        child: widget.child,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, widget.shift * (1 - _opacity.value)),
+          child: child,
+        ),
       ),
     ),
   );

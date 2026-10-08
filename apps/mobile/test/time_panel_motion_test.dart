@@ -32,9 +32,9 @@ void main() {
     );
     final motion = find.descendant(
       of: find.byType(TabEntrance),
-      matching: find.byType(SlideTransition),
+      matching: find.byType(ScaleTransition),
     );
-    expect(tester.widget<SlideTransition>(motion).position.value, Offset.zero);
+    expect(tester.widget<ScaleTransition>(motion).scale.value, 1);
     await tester.enterText(find.byType(TextField), '未发送的通知');
     final editor = tester.state(find.byType(EditableText));
     update(() => active = false);
@@ -42,15 +42,9 @@ void main() {
     update(() => active = true);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
-    expect(
-      tester.widget<SlideTransition>(motion).position.value.dx,
-      greaterThan(0),
-    );
+    expect(tester.widget<ScaleTransition>(motion).scale.value, lessThan(1));
     await tester.pumpAndSettle();
-    expect(
-      tester.widget<SlideTransition>(motion).position.value.dx,
-      closeTo(0, .01),
-    );
+    expect(tester.widget<ScaleTransition>(motion).scale.value, closeTo(1, .01));
     expect(tester.state(find.byType(EditableText)), same(editor));
     expect(draft.text, '未发送的通知');
 
@@ -62,10 +56,7 @@ void main() {
     });
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
-    expect(
-      tester.widget<SlideTransition>(motion).position.value.dx,
-      lessThan(0),
-    );
+    expect(tester.widget<ScaleTransition>(motion).scale.value, lessThan(1));
     await tester.pumpAndSettle();
     expect(tester.state(find.byType(EditableText)), same(editor));
     expect(draft.text, '未发送的通知');
@@ -78,7 +69,7 @@ void main() {
     await tester.pump();
     update(() => active = true);
     await tester.pump();
-    expect(tester.widget<SlideTransition>(motion).position.value, Offset.zero);
+    expect(tester.widget<ScaleTransition>(motion).scale.value, 1);
     expect(
       AppMotion.page(tester.element(find.byType(TabEntrance))),
       Duration.zero,

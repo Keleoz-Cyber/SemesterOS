@@ -35,6 +35,13 @@ class TimetableScale {
         r.start.clamp(first, last),
         r.end.clamp(first, last),
       ],
+      // These are drawing boundaries from saved occurrences, not invented
+      // teaching periods. A course outside local bell times is still occupied.
+      for (final r in occupied)
+        if (r.end > first && r.start < last && r.end > r.start) ...[
+          r.start.clamp(first, last),
+          r.end.clamp(first, last),
+        ],
     }.toList()..sort();
     final ys = <double>[0];
     for (var i = 1; i < boundaries.length; i++) {
@@ -42,11 +49,16 @@ class TimetableScale {
       final period = ranges
           .where((p) => p.start <= a && p.end >= b)
           .firstOrNull;
-      final hasOther = occupied.any((r) => r.start < b && r.end > a);
+      final hasOccupancy = occupied.any((r) => r.start < b && r.end > a);
       final extent = period != null
           ? (b - a) / (period.end - period.start) * 52 * textScale.clamp(1, 1.6)
-          : hasOther
-          ? ((b - a) * minuteHeight).clamp(44, 120).toDouble()
+          : hasOccupancy
+          ? ((b - a) * minuteHeight)
+                .clamp(
+                  44 * textScale.clamp(1, 1.6),
+                  120 * textScale.clamp(1, 1.6),
+                )
+                .toDouble()
           : ((b - a) * minuteHeight).clamp(8, 18).toDouble();
       ys.add(ys.last + extent);
     }

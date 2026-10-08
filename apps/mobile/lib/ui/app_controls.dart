@@ -7,6 +7,7 @@ import 'motion.dart';
 import 'accessibility.dart';
 import 'performance_widgets.dart';
 import 'campus_theme.dart';
+import 'v2/shiri_tokens.dart';
 
 /// A list row owns its spacing. Forui still supplies focus and pressed states.
 FItemStyleDelta appRowStyle({
@@ -44,20 +45,29 @@ FItemStyleDelta appRowStyle({
 }
 
 FButtonStyleDelta _buttonVisualStyle(BuildContext context, ButtonStyle? style) {
+  style = ButtonStyle(
+    shape: const WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: ShiriRadius.mdAll),
+    ),
+    textStyle: WidgetStatePropertyAll(context.shiri.text.bodyStrong),
+    padding: const WidgetStatePropertyAll(
+      EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    ),
+  ).merge(style);
   final touch = FTappableStyleDelta.delta(
     motion: AppMotion.allowed(context)
         ? const FTappableMotion(
-            bounceDownDuration: Duration(milliseconds: 85),
-            bounceUpDuration: Duration(milliseconds: 170),
+            bounceDownDuration: ShiriMotion.tap,
+            bounceUpDuration: ShiriMotion.quick,
             bounceUpCurve: Curves.easeOutCubic,
-            bounceFloor: 1.5,
+            bounceFloor: 3,
           )
         : FTappableMotion.none,
   );
-  final background = style?.backgroundColor?.resolve({});
-  final padding = style?.padding?.resolve({});
-  final shape = style?.shape?.resolve({});
-  final side = style?.side?.resolve({});
+  final background = style.backgroundColor?.resolve({});
+  final padding = style.padding?.resolve({});
+  final shape = style.shape?.resolve({});
+  final side = style.side?.resolve({});
   final content = padding == null
       ? null
       : FButtonContentStyleDelta.delta(
@@ -100,7 +110,7 @@ FButtonStyleDelta _buttonVisualStyle(BuildContext context, ButtonStyle? style) {
         {FTappableVariant.selected},
         DecorationDelta.boxDelta(
           color:
-              style?.backgroundColor?.resolve({WidgetState.selected}) ??
+              style.backgroundColor?.resolve({WidgetState.selected}) ??
               background,
         ),
       ),
@@ -108,7 +118,7 @@ FButtonStyleDelta _buttonVisualStyle(BuildContext context, ButtonStyle? style) {
         {FTappableVariant.disabled},
         DecorationDelta.boxDelta(
           color:
-              style?.backgroundColor?.resolve({WidgetState.disabled}) ??
+              style.backgroundColor?.resolve({WidgetState.disabled}) ??
               background.withValues(alpha: .5),
         ),
       ),
@@ -505,6 +515,43 @@ class AppField extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: FTextField(
+      style: FTextFieldStyleDelta.delta(
+        color: FVariantsValueDelta.delta([
+          FVariantValueDeltaOperation.all(context.shiri.colors.surfaceSunken),
+        ]),
+        cursorColor: context.shiri.colors.primary,
+        border: FVariantsValueDelta.delta([
+          FVariantValueDeltaOperation.all(
+            OutlineInputBorder(
+              borderRadius: ShiriRadius.smAll,
+              borderSide: BorderSide(color: context.shiri.colors.line),
+            ),
+          ),
+          FVariantValueDeltaOperation.exact(
+            {FTextFieldVariant.focused},
+            OutlineInputBorder(
+              borderRadius: ShiriRadius.smAll,
+              borderSide: BorderSide(
+                color: context.shiri.colors.primary,
+                width: 2,
+              ),
+            ),
+          ),
+          FVariantValueDeltaOperation.exact(
+            {FTextFieldVariant.error},
+            OutlineInputBorder(
+              borderRadius: ShiriRadius.smAll,
+              borderSide: BorderSide(
+                color: context.shiri.colors.danger,
+                width: 2,
+              ),
+            ),
+          ),
+        ]),
+        contentPadding: const EdgeInsetsGeometryDelta.value(
+          EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+      ),
       control: FTextFieldControl.managed(
         controller: controller,
         onChange: (value) => onChanged?.call(value.text),
@@ -1181,13 +1228,16 @@ class AppFilterChip extends StatelessWidget {
     this.onSelected,
   });
   @override
-  Widget build(BuildContext context) => FButton(
-    variant: selected ? FButtonVariant.secondary : FButtonVariant.outline,
-    selected: selected,
-    onPress: onSelected == null ? null : () => onSelected!(!selected),
-    prefix: selected ? const Icon(Icons.check_rounded, size: 16) : null,
-    mainAxisSize: MainAxisSize.min,
-    child: Flexible(child: label),
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 48),
+    child: FButton(
+      variant: selected ? FButtonVariant.secondary : FButtonVariant.outline,
+      selected: selected,
+      onPress: onSelected == null ? null : () => onSelected!(!selected),
+      prefix: selected ? const Icon(Icons.check_rounded, size: 16) : null,
+      mainAxisSize: MainAxisSize.min,
+      child: Flexible(child: label),
+    ),
   );
 }
 

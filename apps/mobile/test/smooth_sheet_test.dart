@@ -4,6 +4,51 @@ import 'package:semester_os/ui/app_sheet.dart';
 import 'package:smooth_sheets/smooth_sheets.dart';
 
 void main() {
+  testWidgets('pill sheet footer accepts taps at its painted position', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(412, 915);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    var taps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showAppSheet<void>(
+                context: context,
+                heightFactor: .9,
+                originRect: const Rect.fromLTWH(350, 754, 48, 48),
+                builder: (_) => Column(
+                  children: [
+                    const Expanded(child: Text('Conversation')),
+                    SizedBox(
+                      height: 72,
+                      child: IconButton(
+                        tooltip: 'Keyboard',
+                        onPressed: () => taps++,
+                        icon: const Icon(Icons.keyboard),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Keyboard'));
+    await tester.pumpAndSettle();
+    expect(taps, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'one smooth sheet disposes content after swipe, barrier and back',
     (tester) async {
@@ -124,7 +169,6 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
-
 }
 
 class _DisposableBody extends StatefulWidget {

@@ -12,6 +12,8 @@ import '../items/item_widgets.dart';
 import '../items/task_surfaces.dart';
 import 'risk_widgets.dart';
 import 'plan_change_confirmation.dart';
+import '../../ui/v2/motion/skeleton.dart';
+import '../items/detail_surfaces.dart';
 
 class ProgressPage extends StatefulWidget {
   final ItemsController controller;
@@ -212,10 +214,16 @@ class _ProgressPageState extends State<ProgressPage> {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(20),
         children: [
-          RecordHeading(
+          DetailHero(
             label: '任务进度',
             icon: Icons.track_changes_rounded,
             title: '${widget.item['title']}',
+            background: CoursePalette.forTitle(
+              '${widget.item['title']}',
+            ).background,
+            foreground: CoursePalette.forTitle(
+              '${widget.item['title']}',
+            ).foreground,
           ),
           EditorSection(
             title: '剩余工作',
@@ -291,14 +299,16 @@ class _ProgressPageState extends State<ProgressPage> {
                 duration: AppMotion.feedback(context),
                 switchInCurve: Curves.easeOutCubic,
                 child: historyLoading && history == null
-                    ? const Column(
-                        key: ValueKey('progress-history-loading'),
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SkeletonLoader(width: 144, height: 16),
-                          SizedBox(height: 10),
-                          SkeletonLoader(width: 200, height: 12),
-                        ],
+                    ? const SkeletonScope(
+                        child: Column(
+                          key: ValueKey('progress-history-loading'),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SkeletonLine(widthFactor: .5),
+                            SizedBox(height: 10),
+                            SkeletonLine(widthFactor: .7),
+                          ],
+                        ),
                       )
                     : historyError != null
                     ? Row(

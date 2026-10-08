@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../ui/accessibility.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/v2/shiri_tokens.dart';
 
 /// Progress through the configured academic calendar, with no inferred exam
 /// dates or study-completion milestones.
@@ -47,11 +48,7 @@ class SemesterProgressCard extends StatelessWidget {
     final last = end.subtract(const Duration(days: 1));
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: CampusColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CampusColors.line),
-      ),
+      decoration: context.shiri.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

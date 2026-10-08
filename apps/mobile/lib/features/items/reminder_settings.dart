@@ -7,6 +7,7 @@ import 'reminder_sync.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/app_picker_field.dart';
 import '../../ui/campus_theme.dart';
+import '../../ui/detail_widgets.dart';
 
 class ReminderSettingsPage extends StatefulWidget {
   final ItemsController controller;
@@ -123,124 +124,142 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
     final choices = {0, 15, 30, 60, settings.classLeadMinutes}.toList()..sort();
     return Scaffold(
       appBar: AppBar(title: const Text('提醒设置')),
+      bottomNavigationBar: ActionFooter(
+        label: '同步提醒',
+        icon: Icons.sync_rounded,
+        onPressed: busy ? null : () => _run(controller.refreshOwnerReminders),
+      ),
       body: AppLoadingOverlay(
         loading: busy,
         label: '正在更新',
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           children: [
-            const Text('上课提醒仅在这台设备生效。'),
-            const SizedBox(height: 16),
-            AppSwitchRow(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('上课提醒'),
-              subtitle: const Text('停课、调课后自动更新'),
-              value: settings.classReminders,
-              onChanged: busy
-                  ? null
-                  : (enabled) => _run(() async {
-                      await controller.saveReminderPreferences(
-                        ReminderPreferences(
-                          classReminders: enabled,
-                          classLeadMinutes: settings.classLeadMinutes,
-                        ),
-                      );
-                      if (enabled) {
-                        await controller.syncNotifications(
-                          requestPermission: true,
-                        );
-                      }
-                    }),
-            ),
-            if (settings.classReminders)
-              AppPickerField<int>(
-                key: ValueKey(settings.classLeadMinutes),
-                initialValue: settings.classLeadMinutes,
-                decoration: const InputDecoration(labelText: '课程提前多久提醒'),
-                items: [
-                  for (final minutes in choices)
-                    DropdownMenuItem(
-                      value: minutes,
-                      child: Text(minutes == 0 ? '上课时' : '提前$minutes分钟'),
-                    ),
-                ],
-                onChanged: busy || !settings.classReminders
-                    ? null
-                    : (lead) {
-                        if (lead != null) {
-                          _run(
-                            () => controller.saveReminderPreferences(
-                              ReminderPreferences(
-                                classReminders: true,
-                                classLeadMinutes: lead,
-                              ),
+            EditorSection(
+              title: '课程提醒',
+              icon: Icons.school_outlined,
+              children: [
+                const Text('上课提醒仅在这台设备生效。'),
+                const SizedBox(height: 16),
+                AppSwitchRow(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('上课提醒'),
+                  subtitle: const Text('停课、调课后自动更新'),
+                  value: settings.classReminders,
+                  onChanged: busy
+                      ? null
+                      : (enabled) => _run(() async {
+                          await controller.saveReminderPreferences(
+                            ReminderPreferences(
+                              classReminders: enabled,
+                              classLeadMinutes: settings.classLeadMinutes,
                             ),
                           );
-                        }
-                      },
-              ),
-            const SizedBox(height: 24),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: Text(
-                '系统权限',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-              ),
+                          if (enabled) {
+                            await controller.syncNotifications(
+                              requestPermission: true,
+                            );
+                          }
+                        }),
+                ),
+                if (settings.classReminders)
+                  AppPickerField<int>(
+                    key: ValueKey(settings.classLeadMinutes),
+                    initialValue: settings.classLeadMinutes,
+                    decoration: const InputDecoration(labelText: '课程提前多久提醒'),
+                    items: [
+                      for (final minutes in choices)
+                        DropdownMenuItem(
+                          value: minutes,
+                          child: Text(minutes == 0 ? '上课时' : '提前$minutes分钟'),
+                        ),
+                    ],
+                    onChanged: busy || !settings.classReminders
+                        ? null
+                        : (lead) {
+                            if (lead != null) {
+                              _run(
+                                () => controller.saveReminderPreferences(
+                                  ReminderPreferences(
+                                    classReminders: true,
+                                    classLeadMinutes: lead,
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                  ),
+              ],
             ),
-            AppTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('系统通知'),
-              leading: Icon(
-                notificationAllowed == true
-                    ? Icons.notifications_active_outlined
-                    : Icons.notifications_none_rounded,
-                color: notificationAllowed == true
-                    ? CampusColors.teal
-                    : CampusColors.muted,
-              ),
-              subtitle: notificationAllowed == null
-                  ? Text(error == null ? '正在检查通知权限' : '暂未读取到权限状态')
-                  : Text(notificationAllowed! ? '已允许' : '未开启'),
-              trailing: AppTextButton(
-                onPressed: busy ? null : () => _run(_openNotifications),
-                child: Text(notificationAllowed == true ? '设置' : '开启'),
-              ),
-            ),
-            AppTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('准时提醒'),
-              leading: Icon(
-                preciseAllowed == true
-                    ? Icons.alarm_on_rounded
-                    : Icons.alarm_rounded,
-                color: preciseAllowed == true
-                    ? CampusColors.teal
-                    : CampusColors.muted,
-              ),
-              subtitle: preciseAllowed == true
-                  ? const Text('已开启')
-                  : notificationAllowed == false
-                  ? const Text('先开启系统通知')
-                  : preciseAllowed == false
-                  ? const Text('未开启时，系统可能延迟提醒')
-                  : Text(error == null ? '正在检查准时提醒权限' : '暂未读取到权限状态'),
-              trailing: preciseAllowed == true
-                  ? const Icon(Icons.check_circle_outline)
-                  : AppTextButton(
-                      onPressed:
-                          busy ||
-                              notificationAllowed != true ||
-                              controller.reminders.port
-                                  is! PreciseNotificationPort
-                          ? null
-                          : () => _run(() async {
-                              await (controller.reminders.port
-                                      as PreciseNotificationPort)
-                                  .precisePermission(request: true);
-                              await controller.syncNotifications();
-                            }),
-                      child: const Text('开启'),
+            EditorSection(
+              title: '系统权限',
+              icon: Icons.notifications_outlined,
+              accent: CampusColors.teal,
+              children: [
+                AppTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('系统通知'),
+                  leading: Icon(
+                    notificationAllowed == true
+                        ? Icons.notifications_active_outlined
+                        : Icons.notifications_none_rounded,
+                    color: notificationAllowed == true
+                        ? CampusColors.teal
+                        : CampusColors.muted,
+                  ),
+                  subtitle: notificationAllowed == null
+                      ? Text(error == null ? '正在检查通知权限' : '暂未读取到权限状态')
+                      : Text(notificationAllowed! ? '已允许' : '未开启'),
+                  trailing: AppTextButton(
+                    style: AppTextButton.styleFrom(
+                      backgroundColor: CampusColors.blueSoft,
+                      foregroundColor: CampusColors.primary,
                     ),
+                    onPressed: busy ? null : () => _run(_openNotifications),
+                    child: Text(notificationAllowed == true ? '设置' : '开启'),
+                  ),
+                ),
+                AppTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('准时提醒'),
+                  leading: Icon(
+                    preciseAllowed == true
+                        ? Icons.alarm_on_rounded
+                        : Icons.alarm_rounded,
+                    color: preciseAllowed == true
+                        ? CampusColors.teal
+                        : CampusColors.muted,
+                  ),
+                  subtitle: preciseAllowed == true
+                      ? const Text('已开启')
+                      : notificationAllowed == false
+                      ? const Text('先开启系统通知')
+                      : preciseAllowed == false
+                      ? const Text('未开启时，系统可能延迟提醒')
+                      : Text(error == null ? '正在检查准时提醒权限' : '暂未读取到权限状态'),
+                  trailing: preciseAllowed == true
+                      ? const Icon(Icons.check_circle_outline)
+                      : AppTextButton(
+                          style: AppTextButton.styleFrom(
+                            backgroundColor: CampusColors.blueSoft,
+                            foregroundColor: CampusColors.primary,
+                          ),
+                          onPressed:
+                              busy ||
+                                  notificationAllowed != true ||
+                                  controller.reminders.port
+                                      is! PreciseNotificationPort
+                              ? null
+                              : () => _run(() async {
+                                  await (controller.reminders.port
+                                          as PreciseNotificationPort)
+                                      .precisePermission(request: true);
+                                  await controller.syncNotifications();
+                                }),
+                          child: const Text('开启'),
+                        ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             if (error != null)
@@ -257,14 +276,6 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-            const SizedBox(height: 12),
-            AppOutlineButton.icon(
-              onPressed: busy
-                  ? null
-                  : () => _run(controller.refreshOwnerReminders),
-              icon: const Icon(Icons.sync),
-              label: const Text('同步提醒'),
-            ),
           ],
         ),
       ),

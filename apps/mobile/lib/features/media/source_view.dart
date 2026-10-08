@@ -17,7 +17,9 @@ import '../../ui/motion.dart';
 import '../../ui/performance_widgets.dart';
 import '../items/item_widgets.dart' show displayInstant;
 import '../items/items_controller.dart';
-import 'notice_paper.dart';
+import '../../ui/detail_widgets.dart';
+import '../items/detail_surfaces.dart';
+import '../../ui/v2/shiri_tokens.dart' show ShiriColors, ShiriRadius;
 
 class SourceViewPage extends StatefulWidget {
   final ItemsController controller;
@@ -295,53 +297,16 @@ class _SourceViewPageState extends State<SourceViewPage> {
               if (source != null)
                 SemanticCard(
                   label: '原始来源',
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: CampusColors.blueSoft,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            source!['kind'] == 'image'
-                                ? Icons.image_outlined
-                                : Icons.mic_none_rounded,
-                            size: 22,
-                            color: CampusColors.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                source!['kind'] == 'image' ? '图片通知' : '语音记录',
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                displayInstant(
-                                  source!['reference_at'] ??
-                                      source!['created_at'],
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: CampusColors.muted,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                  child: DetailHero(
+                    title: source!['kind'] == 'image' ? '图片通知' : '语音记录',
+                    label: displayInstant(
+                      source!['reference_at'] ?? source!['created_at'],
                     ),
+                    icon: source!['kind'] == 'image'
+                        ? Icons.image_outlined
+                        : Icons.mic_none_rounded,
+                    background: ShiriColors.light.primarySoft,
+                    foreground: ShiriColors.light.primary,
                   ),
                 ),
               if (error != null)
@@ -410,13 +375,27 @@ class _SourceViewPageState extends State<SourceViewPage> {
                   ),
                 ),
               if (bytes != null)
-                InteractiveViewer(
-                  child: OptimizedImage.memory(
-                    bytes: bytes!,
-                    ownerGeneration: imageOwner,
-                    semanticLabel: '通知原图',
-                    fit: BoxFit.contain,
-                    errorWidget: ErrorState(message: '原图暂时无法显示', onRetry: load),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: CampusColors.surface,
+                    borderRadius: ShiriRadius.lgAll,
+                    border: Border.all(color: CampusColors.line),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: ShiriRadius.smAll,
+                    child: InteractiveViewer(
+                      child: OptimizedImage.memory(
+                        bytes: bytes!,
+                        ownerGeneration: imageOwner,
+                        semanticLabel: '通知原图',
+                        fit: BoxFit.contain,
+                        errorWidget: ErrorState(
+                          message: '原图暂时无法显示',
+                          onRetry: load,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               if (source?['is_image_batch'] == true &&
@@ -481,7 +460,7 @@ class _SourceViewPageState extends State<SourceViewPage> {
               if (source != null) ...[
                 const SizedBox(height: 20),
                 if ((source!['text'] ?? '').toString().trim().isNotEmpty)
-                  NoticePaper(title: '通知文字', text: source!['text']),
+                  DocumentPanel(title: '通知文字', text: source!['text']),
                 if ((source!['original_text'] ?? '')
                         .toString()
                         .trim()

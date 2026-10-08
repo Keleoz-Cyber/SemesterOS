@@ -7,6 +7,7 @@ import '../home/day_brief_controller.dart';
 import '../../ui/assistant_scope.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/app_loading.dart';
+import '../../ui/v2/shiri_tokens.dart' as v2;
 
 class DayContextPanel extends StatefulWidget {
   final ItemsController items;
@@ -98,11 +99,41 @@ class _DayContextPanelState extends State<DayContextPanel>
         c.data?['date'] == calendarDate(widget.day);
     if (!fresh && !sameDay) {
       return c.error != null
-          ? Align(
-              alignment: Alignment.centerLeft,
-              child: AppTextButton(
-                onPressed: c.busy ? null : reload,
-                child: const Text('更新当天建议'),
+          ? Container(
+              margin: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: CampusColors.surface,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        color: CampusColors.muted,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          c.error!,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: CampusColors.muted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  AppTextButton.icon(
+                    onPressed: c.busy ? null : reload,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('更新当天建议'),
+                  ),
+                ],
               ),
             )
           : const SizedBox();
@@ -146,16 +177,13 @@ class _DayContextPanelState extends State<DayContextPanel>
           for (final r in c.suggestions.take(3))
             Container(
               margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: r['kind'] == 'free_window'
-                        ? CampusColors.teal
-                        : CampusColors.primary,
-                    width: 2,
-                  ),
-                ),
+                color: r['kind'] == 'free_window' ? null : CampusColors.surface,
+                gradient: r['kind'] == 'free_window'
+                    ? v2.ShiriGradients.brandSoft
+                    : null,
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,6 +1,8 @@
 import 'app_controls.dart';
 import 'package:flutter/material.dart';
 import 'campus_theme.dart';
+import 'v2/shiri_tokens.dart';
+import 'empty_scene.dart';
 
 class CampusPanel extends StatelessWidget {
   final Widget child;
@@ -13,14 +15,18 @@ class CampusPanel extends StatelessWidget {
     this.padding = const EdgeInsets.all(18),
   });
   @override
-  Widget build(BuildContext context) => Material(
-    color: color ?? Colors.white,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(20),
-      side: const BorderSide(color: CampusColors.line),
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: color ?? context.shiri.colors.surface,
+      borderRadius: ShiriRadius.lgAll,
+      boxShadow: context.shiri.shadows.card,
     ),
-    clipBehavior: Clip.antiAlias,
-    child: Padding(padding: padding, child: child),
+    child: Material(
+      type: MaterialType.transparency,
+      borderRadius: ShiriRadius.lgAll,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    ),
   );
 }
 
@@ -72,7 +78,7 @@ class SectionHeading extends StatelessWidget {
   const SectionHeading(this.title, {super.key, this.action, this.onAction});
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 24, bottom: 12),
+    padding: const EdgeInsets.only(top: 28, bottom: 12),
     child: OverflowBar(
       alignment: MainAxisAlignment.spaceBetween,
       overflowAlignment: OverflowBarAlignment.start,
@@ -231,14 +237,8 @@ class EmptyPanel extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: CampusColors.blueSoft,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: Icon(icon, color: CampusColors.primary, size: 27),
+        const Center(
+          child: AppEmptyScene(kind: EmptySceneKind.semester, size: 180),
         ),
         const SizedBox(height: 17),
         Text(

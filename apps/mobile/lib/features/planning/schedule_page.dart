@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/app_selection.dart';
 import '../../ui/detail_widgets.dart';
+import '../../ui/v2/motion/skeleton.dart';
+import '../../ui/v2/shiri_tokens.dart' show ShiriRadius, ShiriGradients;
+import '../../ui/empty_scene.dart';
 import '../../ui/campus_theme.dart';
 import '../../core/api.dart' show userError;
 import '../items/items_controller.dart';
@@ -198,159 +201,191 @@ class _SchedulePageState extends State<SchedulePage> {
           ? '确认时段并生成安排'
           : '生成安排',
     ),
-    body: AppLoadingOverlay(
-      loading: loading,
-      label: '正在读取',
-      child: ListView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                error!,
-                style: const TextStyle(color: CampusColors.warning),
-              ),
-            ),
-          if (!loading && setup == null)
-            AppTextButton(onPressed: load, child: const Text('重试')),
-          if (setup != null) ...[
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    '安排范围',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                AppTextButton(
-                  onPressed: busy
-                      ? null
-                      : () => setState(() => days = days == 7 ? 14 : 7),
-                  child: Text('未来$days天'),
-                ),
+    body: loading && setup == null
+        ? SkeletonScope(
+            semanticLabel: '正在读取',
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: const [
+                SkeletonLine(widthFactor: .4),
+                SizedBox(height: 16),
+                SkeletonBox(height: 152, borderRadius: ShiriRadius.lgAll),
+                SizedBox(height: 28),
+                SkeletonLine(widthFactor: .5),
+                SizedBox(height: 16),
+                SkeletonBox(height: 96, borderRadius: ShiriRadius.smAll),
+                SizedBox(height: 12),
+                SkeletonBox(height: 96, borderRadius: ShiriRadius.smAll),
               ],
             ),
-            if (needsHours)
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: CampusColors.tealSoft,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      '可以学习的时间',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      '先用这些时段？可以直接修改。',
-                      style: TextStyle(fontSize: 13, color: CampusColors.muted),
-                    ),
-                    for (final row in weekly) hourSetting(row),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 20),
-            Text(
-              '任务 · ${selected.length}项',
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              '预计用时可修改；保存后仍可调整。',
-              style: TextStyle(fontSize: 13, color: CampusColors.muted),
-            ),
-            for (final t in tasks)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Container(
-                  padding: const EdgeInsets.only(left: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      left: BorderSide(
-                        color: selected.contains('${t['id']}')
-                            ? CampusColors.primary
-                            : CampusColors.line,
-                        width: selected.contains('${t['id']}') ? 3 : 1,
-                      ),
+          )
+        : AppLoadingOverlay(
+            loading: loading,
+            label: '正在读取',
+            child: ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.all(20),
+              children: [
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      error!,
+                      style: const TextStyle(color: CampusColors.warning),
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                if (!loading && setup == null)
+                  AppTextButton(onPressed: load, child: const Text('重试')),
+                if (setup != null) ...[
+                  Row(
                     children: [
-                      AppCheckRow(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text('${t['title']}'),
-                        value: selected.contains('${t['id']}'),
-                        onChanged: busy || t['can_schedule'] == false
-                            ? null
-                            : (v) => setState(() {
-                                v == true
-                                    ? selected.add('${t['id']}')
-                                    : selected.remove('${t['id']}');
-                              }),
+                      const Expanded(
+                        child: Text(
+                          '安排范围',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
-                      if (selected.contains('${t['id']}'))
-                        Padding(
-                          padding: const EdgeInsets.only(left: 12),
-                          child: AppField(
-                            controller: estimates['${t['id']}'],
-                            enabled: !busy,
-                            textInputAction: TextInputAction.next,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: t['remaining_minutes'] == null
-                                  ? '建议用时'
-                                  : '剩余用时',
-                              suffixText: '分钟',
-                              isDense: true,
+                      AppTextButton(
+                        onPressed: busy
+                            ? null
+                            : () => setState(() => days = days == 7 ? 14 : 7),
+                        child: Text('未来$days天'),
+                      ),
+                    ],
+                  ),
+                  if (needsHours)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: ShiriGradients.brandSoft,
+                        borderRadius: ShiriRadius.lgAll,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            '可以学习的时间',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            '先用这些时段？可以直接修改。',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: CampusColors.muted,
+                            ),
+                          ),
+                          for (final row in weekly) hourSetting(row),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  Text(
+                    '任务 · ${selected.length}项',
+                    style: const TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    '预计用时可修改；保存后仍可调整。',
+                    style: TextStyle(fontSize: 13, color: CampusColors.muted),
+                  ),
+                  for (final t in tasks)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: CampusColors.surface,
+                          borderRadius: ShiriRadius.smAll,
+                          border: Border(
+                            left: BorderSide(
+                              color: selected.contains('${t['id']}')
+                                  ? CampusColors.primary
+                                  : CampusColors.line,
+                              width: selected.contains('${t['id']}') ? 3 : 1,
                             ),
                           ),
                         ),
-                      if (t['start_policy'] == 'at')
-                        Text(
-                          '从 ${displayInstant(t['earliest_start_at'])} 起安排',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: CampusColors.muted,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            AppCheckRow(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('${t['title']}'),
+                              value: selected.contains('${t['id']}'),
+                              onChanged: busy || t['can_schedule'] == false
+                                  ? null
+                                  : (v) => setState(() {
+                                      v == true
+                                          ? selected.add('${t['id']}')
+                                          : selected.remove('${t['id']}');
+                                    }),
+                            ),
+                            if (selected.contains('${t['id']}'))
+                              Padding(
+                                padding: const EdgeInsets.only(left: 12),
+                                child: AppField(
+                                  controller: estimates['${t['id']}'],
+                                  enabled: !busy,
+                                  textInputAction: TextInputAction.next,
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                    labelText: t['remaining_minutes'] == null
+                                        ? '建议用时'
+                                        : '剩余用时',
+                                    suffixText: '分钟',
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                            if (t['start_policy'] == 'at')
+                              Text(
+                                '从 ${displayInstant(t['earliest_start_at'])} 起安排',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: CampusColors.muted,
+                                ),
+                              ),
+                            if (t['waiting_reason'] != null)
+                              Text(
+                                '${t['waiting_reason']}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: CampusColors.warning,
+                                ),
+                              ),
+                            const Divider(height: 20, color: CampusColors.line),
+                          ],
                         ),
-                      if (t['waiting_reason'] != null)
-                        Text(
-                          '${t['waiting_reason']}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: CampusColors.warning,
-                          ),
-                        ),
-                      const Divider(height: 20, color: CampusColors.line),
+                      ),
+                    ),
+                  if (tasks.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 28),
+                      child: Column(
+                        children: [
+                          AppEmptyScene(kind: EmptySceneKind.tasks, size: 160),
+                          SizedBox(height: 12),
+                          Text('还没有待安排的任务'),
+                        ],
+                      ),
+                    ),
+                  AppDisclosure(
+                    title: const Text('每次学习时长'),
+                    children: [
+                      AppSegmentedControl<int>(
+                        value: chunk,
+                        options: const {30: '30分钟', 45: '45分钟', 60: '1小时'},
+                        onChanged: (v) => setState(() => chunk = v),
+                      ),
                     ],
                   ),
-                ),
-              ),
-            if (tasks.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 28),
-                child: Text('还没有待安排的任务'),
-              ),
-            AppDisclosure(
-              title: const Text('每次学习时长'),
-              children: [
-                AppSegmentedControl<int>(
-                  value: chunk,
-                  options: const {30: '30分钟', 45: '45分钟', 60: '1小时'},
-                  onChanged: (v) => setState(() => chunk = v),
-                ),
+                ],
               ],
             ),
-          ],
-        ],
-      ),
-    ),
+          ),
   );
 }

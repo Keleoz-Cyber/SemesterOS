@@ -18,6 +18,9 @@ import '../changes/changes_page.dart';
 import '../changes/course_change_display.dart';
 import 'hub_data.dart';
 import 'exam_pages.dart';
+import '../../ui/v2/shiri_tokens.dart' as v2;
+import '../../ui/v2/motion/staggered_reveal.dart';
+import '../../ui/v2/motion/skeleton.dart';
 export 'semester_timeline.dart' show SemesterHome, SemesterHomeState;
 
 Future<void> openHubItem(
@@ -77,12 +80,19 @@ class CourseHubPage extends StatelessWidget {
   final ItemsController controller;
   final String courseId;
   final String? occurrenceId;
+  final String? surfaceTitle;
+  final String? surfaceTag;
   const CourseHubPage({
     super.key,
     required this.controller,
     required this.courseId,
     this.occurrenceId,
+    this.surfaceTitle,
+    this.surfaceTag,
   });
+  String? get _surfaceTag =>
+      surfaceTag ??
+      (occurrenceId == null ? null : 'course-surface-$occurrenceId');
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('课程事务')),
@@ -91,6 +101,62 @@ class CourseHubPage extends StatelessWidget {
       child: HubData(
         controller: controller,
         path: '/courses/$courseId/hub',
+        placeholder: surfaceTitle?.trim().isNotEmpty == true
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_surfaceTag != null)
+                    Hero(
+                      tag: _surfaceTag!,
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: AcademicRecordHeading(
+                          title: surfaceTitle!,
+                          label: '课程',
+                          icon: Icons.menu_book_rounded,
+                          color: CoursePalette.forTitle(
+                            surfaceTitle!.replaceFirst(
+                              RegExp(r'^(?:已请假|待请假|免听)\s*·\s*'),
+                              '',
+                            ),
+                          ).ink,
+                        ),
+                      ),
+                    )
+                  else
+                    AcademicRecordHeading(
+                      title: surfaceTitle!,
+                      label: '课程',
+                      icon: Icons.menu_book_rounded,
+                      color: CoursePalette.forTitle(surfaceTitle!).ink,
+                    ),
+                  const SkeletonScope(
+                    semanticLabel: '正在读取课程资料',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SkeletonBox(
+                          height: 148,
+                          borderRadius: BorderRadius.all(Radius.circular(20)),
+                        ),
+                        SizedBox(height: 20),
+                        SkeletonBox(
+                          height: 52,
+                          borderRadius: BorderRadius.all(Radius.circular(16)),
+                        ),
+                        SizedBox(height: 28),
+                        SkeletonLine(widthFactor: .35),
+                        SizedBox(height: 12),
+                        SkeletonBox(
+                          height: 120,
+                          borderRadius: BorderRadius.all(Radius.circular(20)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : null,
         builder: (context, data, fresh, reload) {
           final course = data['course'];
           final all = controller.rows(data['items']);
@@ -267,73 +333,86 @@ class CourseHubPage extends StatelessWidget {
             }
           }
 
+          final palette = CoursePalette.forTitle(course['title']);
+          Widget heading = AcademicRecordHeading(
+            label: '',
+            title: course['title'],
+            icon: Icons.menu_book_rounded,
+            color: palette.ink,
+          );
+          if (_surfaceTag != null) {
+            heading = Hero(
+              tag: _surfaceTag!,
+              child: Material(type: MaterialType.transparency, child: heading),
+            );
+          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AcademicRecordHeading(
-                label: '',
-                title: course['title'],
-                icon: Icons.menu_book_rounded,
-                color: CoursePalette.forTitle(course['title']).ink,
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: CoursePalette.forTitle(course['title']).background,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Wrap(
-                      spacing: 18,
-                      runSpacing: 8,
-                      children: [
-                        if ('${course['teacher'] ?? ''}'.trim().isNotEmpty)
+              heading,
+              StaggeredReveal(
+                revealKey: 'course-focus-$courseId-${focus?['id']}',
+                index: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: CampusColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: v2.ShiriShadows.light.card,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Wrap(
+                        spacing: 18,
+                        runSpacing: 8,
+                        children: [
+                          if ('${course['teacher'] ?? ''}'.trim().isNotEmpty)
+                            _CourseMeta(
+                              icon: Icons.person_outline_rounded,
+                              text: '${course['teacher']}',
+                            ),
                           _CourseMeta(
-                            icon: Icons.person_outline_rounded,
-                            text: '${course['teacher']}',
+                            icon: Icons.calendar_view_week_rounded,
+                            text:
+                                '${controller.rows(data['occurrences']).length} 次上课安排',
                           ),
-                        _CourseMeta(
-                          icon: Icons.calendar_view_week_rounded,
-                          text:
-                              '${controller.rows(data['occurrences']).length} 次上课安排',
-                        ),
-                      ],
-                    ),
-                    if (focus != null) ...[
-                      const Divider(height: 24),
-                      Text(
-                        selected != null
-                            ? '这次上课'
-                            : next != null
-                            ? '下次上课'
-                            : '最近一次上课',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: CampusColors.muted,
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        displayInterval(focus['start_at'], focus['end_at']),
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
+                      if (focus != null) ...[
+                        const Divider(height: 24),
+                        Text(
+                          selected != null
+                              ? '这次上课'
+                              : next != null
+                              ? '下次上课'
+                              : '最近一次上课',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: CampusColors.muted,
+                          ),
                         ),
-                      ),
-                      if ('${focus['location'] ?? ''}'.trim().isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(
-                          '${focus['location']}',
-                          style: const TextStyle(fontSize: 15),
+                          displayInterval(focus['start_at'], focus['end_at']),
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
+                        if ('${focus['location'] ?? ''}'.trim().isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            '${focus['location']}',
+                            style: const TextStyle(fontSize: 15),
+                          ),
+                        ],
                       ],
                     ],
-                  ],
+                  ),
                 ),
               ),
               const SizedBox(height: 16),

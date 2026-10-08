@@ -4,11 +4,13 @@ import '../../core/api.dart' show userError;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../ui/campus_widgets.dart';
+import '../../ui/v2/motion/skeleton.dart';
 import '../items/items_controller.dart';
 
 class HubData extends StatefulWidget {
   final ItemsController controller;
   final String path;
+  final Widget? placeholder;
   final Widget Function(
     BuildContext,
     Map<String, dynamic>,
@@ -21,6 +23,7 @@ class HubData extends StatefulWidget {
     required this.controller,
     required this.path,
     required this.builder,
+    this.placeholder,
   });
   @override
   HubDataState createState() => HubDataState();
@@ -149,10 +152,18 @@ class HubDataState extends State<HubData> with WidgetsBindingObserver {
         until != null &&
         DateTime.parse(until).isAfter(DateTime.now());
     if (value == null && busy) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: AppLoadingIndicator(label: '正在读取安排'),
-      );
+      return widget.placeholder ??
+          const SkeletonScope(
+            child: Column(
+              children: [
+                SkeletonBox(height: 112),
+                SizedBox(height: 20),
+                SkeletonBox(height: 80),
+                SizedBox(height: 12),
+                SkeletonBox(height: 80),
+              ],
+            ),
+          );
     }
     return AppLoadingOverlay(
       loading: busy,

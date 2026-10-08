@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/motion.dart' show SuccessCheckmark, AppMotion;
 import '../../ui/app_loading.dart';
 import 'agent_motion.dart';
+import 'agent_surfaces.dart';
+import '../../ui/v2/shiri_tokens.dart';
 
 /// Keep the practical risk visible; the complete server explanation stays available.
 class PlanWarningNote extends StatelessWidget {
@@ -102,10 +105,20 @@ class AssistantWelcome extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 20, bottom: 24),
+    padding: const EdgeInsets.only(top: 12, bottom: 24),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Center(
+          child: ExcludeSemantics(
+            child: SvgPicture.asset(
+              'assets/illustrations/assistant-hello.svg',
+              width: 180,
+              height: 135,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         const Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -190,15 +203,15 @@ class _AssistantUserMessageState extends State<AssistantUserMessage> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Material(
-            color: CampusColors.blueSoft,
+            color: CampusColors.primary,
             borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(18),
-              topRight: Radius.circular(18),
-              bottomLeft: Radius.circular(18),
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+              bottomLeft: Radius.circular(20),
               bottomRight: Radius.circular(6),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: AnimatedSize(
                 duration: AppMotion.allowed(context)
                     ? const Duration(milliseconds: 220)
@@ -214,19 +227,35 @@ class _AssistantUserMessageState extends State<AssistantUserMessage> {
                         widget.text,
                         maxLines: 4,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 16, height: 1.45),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          height: 1.5,
+                          color: Colors.white,
+                        ),
                       )
                     else
                       SelectableText(
                         widget.text,
-                        style: const TextStyle(fontSize: 16, height: 1.45),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          height: 1.5,
+                          color: Colors.white,
+                        ),
                       ),
                     if (longMessage)
-                      AppTextButton(
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(48, 48),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                        ),
                         onPressed: () => setState(() => expanded = !expanded),
                         child: Text(
                           expanded ? '收起' : '展开消息',
-                          style: const TextStyle(fontSize: 13),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                   ],
@@ -350,70 +379,76 @@ class AssistantSavedAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final actions = [
-          if (onOpen != null)
-            AppTextButton(onPressed: onOpen, child: const Text('查看')),
-          if (onUndo != null)
-            AppTextButton(onPressed: onUndo, child: const Text('撤销')),
-        ];
-        final status = Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child:
-                  context
-                          .dependOnInheritedWidgetOfExactType<_ReceiptMotion>()
-                          ?.animate ==
-                      true
-                  ? const SuccessCheckmark(size: 20, color: CampusColors.teal)
-                  : const Icon(
-                      Icons.check_circle_rounded,
-                      color: CampusColors.teal,
-                      size: 20,
-                    ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1.5,
-                  fontWeight: FontWeight.w600,
+    child: AgentSurface(
+      color: context.shiri.colors.successSoft,
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final actions = [
+            if (onOpen != null)
+              AppTextButton(onPressed: onOpen, child: const Text('查看')),
+            if (onUndo != null)
+              AppTextButton(onPressed: onUndo, child: const Text('撤销')),
+          ];
+          final status = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child:
+                    context
+                            .dependOnInheritedWidgetOfExactType<
+                              _ReceiptMotion
+                            >()
+                            ?.animate ==
+                        true
+                    ? const SuccessCheckmark(size: 20, color: CampusColors.teal)
+                    : const Icon(
+                        Icons.check_circle_rounded,
+                        color: CampusColors.teal,
+                        size: 20,
+                      ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    height: 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-          ],
-        );
-        if (constraints.maxWidth < 320 ||
-            MediaQuery.textScalerOf(context).scale(16) > 21) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              status,
-              if (actions.isNotEmpty)
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: actions,
-                ),
             ],
           );
-        }
-        return Row(
-          children: [
-            Expanded(child: status),
-            for (var i = 0; i < actions.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              actions[i],
+          if (constraints.maxWidth < 320 ||
+              MediaQuery.textScalerOf(context).scale(16) > 21) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                status,
+                if (actions.isNotEmpty)
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: actions,
+                  ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: status),
+              for (var i = 0; i < actions.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                actions[i],
+              ],
             ],
-          ],
-        );
-      },
+          );
+        },
+      ),
     ),
   );
 }

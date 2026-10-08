@@ -1,7 +1,7 @@
 import 'dart:ui' show SemanticsAction, Tristate;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:forui/forui.dart';
+import 'package:semester_os/ui/v2/motion/spring_segmented.dart';
 import 'package:semester_os/ui/app_selection.dart';
 import 'package:semester_os/ui/forui_theme.dart';
 
@@ -59,17 +59,25 @@ void main() {
             .isSelected,
         Tristate.isFalse,
       );
-      expect(find.byType(FTabs), findsOneWidget);
-      expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 1);
+      expect(find.byType(SpringSegmented<String>), findsOneWidget);
+      expect(
+        tester
+            .widget<SpringSegmented<String>>(
+              find.byType(SpringSegmented<String>),
+            )
+            .selected,
+        'week',
+      );
       expect(find.byIcon(Icons.check), findsNothing);
       expect(find.byType(ChoiceChip), findsNothing);
-      final tabs = tester.widget<TabBar>(find.byType(TabBar));
-      expect(tabs.tabs, hasLength(2));
-      for (final target in tabs.tabs) {
-        // Forui supplies each label; TabBar expands the surrounding InkWell
-        // into the full interactive cell. Measure that hit area, not the text.
+      final tabs = tester.widget<SpringSegmented<String>>(
+        find.byType(SpringSegmented<String>),
+      );
+      expect(tabs.segments, hasLength(2));
+      for (final target in tabs.segments) {
+        // Measure the whole spring control's hit cell, not its text glyphs.
         final hitArea = find.ancestor(
-          of: find.byWidget(target),
+          of: find.text(target.$2),
           matching: find.byType(InkWell),
         );
         expect(hitArea, findsOneWidget);
@@ -78,7 +86,6 @@ void main() {
         expect(size.width, greaterThanOrEqualTo(48));
         expect(size.height, greaterThanOrEqualTo(48));
       }
-
     } finally {
       semantics.dispose();
     }
@@ -97,35 +104,48 @@ void main() {
                 textScaler: TextScaler.linear(2.5),
                 disableAnimations: true,
               ),
-              child: StatefulBuilder(builder: (context, update) => SizedBox(
-                width: 280,
-                child: AppSegmentedControl<String>(
-                  value: selected,
-                  options: const {
-                    'week': '本周',
-                    'month': '近4周',
-                    'term': '本学期',
-                    'custom': '自选日期',
-                  },
-                  onChanged: (value) => update(() => selected = value),
+              child: StatefulBuilder(
+                builder: (context, update) => SizedBox(
+                  width: 280,
+                  child: AppSegmentedControl<String>(
+                    value: selected,
+                    options: const {
+                      'week': '本周',
+                      'month': '近4周',
+                      'term': '本学期',
+                      'custom': '自选日期',
+                    },
+                    onChanged: (value) => update(() => selected = value),
+                  ),
                 ),
-              )),
+              ),
             ),
           ),
         ),
       );
       expect(tester.takeException(), isNull);
-      final tabs = tester.widget<FTabs>(find.byType(FTabs));
-      // Forui's lifted control has no public concrete class, but its motion
-      // is passed directly to the underlying TabController.
-      expect(tabs.control, isNot(isA<FTabManagedControl>()));
-      expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.animationDuration, Duration.zero);
+      final tabs = tester.widget<SpringSegmented<String>>(
+        find.byType(SpringSegmented<String>),
+      );
+      expect(tabs.segments, hasLength(4));
       await tester.ensureVisible(find.text('自选日期'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('自选日期'));
       await tester.pumpAndSettle();
       expect(selected, 'custom');
-      expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 3);
+      expect(
+        tester
+            .widget<SpringSegmented<String>>(
+              find.byType(SpringSegmented<String>),
+            )
+            .selected,
+        'custom',
+      );
+      // Reduced motion puts the actual indicator in its final slot immediately.
+      expect(
+        tester.getCenter(find.byKey(const Key('spring-selection-surface'))).dx,
+        closeTo(tester.getCenter(find.text('自选日期')).dx, 1),
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -148,6 +168,11 @@ void main() {
     await tester.tap(find.text('周视图'));
     await tester.pumpAndSettle();
     expect(calls, 0);
-    expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 0);
+    expect(
+      tester
+          .widget<SpringSegmented<bool>>(find.byType(SpringSegmented<bool>))
+          .selected,
+      false,
+    );
   });
 }

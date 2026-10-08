@@ -17,6 +17,13 @@ import 'exam_pages.dart';
 import '../tags/tag_management_page.dart';
 import '../../ui/date_labels.dart';
 import 'semester_centers.dart' show CourseHubPage, openHubItem, changeCard;
+import 'package:flutter/physics.dart' show SpringSimulation;
+import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import '../../ui/v2/shiri_tokens.dart' as v2;
+import '../../ui/v2/motion/rolling_number.dart';
+import '../../ui/v2/motion/pressable.dart';
+import 'semester_horizon.dart';
 
 String semesterActivityTimeLabel(Map<String, dynamic> row) {
   if (row['start_at'] == null || calendarMeaning(row) == 'window') {
@@ -59,7 +66,49 @@ class SemesterHomeState extends State<SemesterHome>
   int _calendarRequest = 0;
   int _weekDirection = 1;
   bool _foreground = true;
-  double get _weekWidth => MediaQuery.textScalerOf(context).scale(44) + 28;
+  double get _weekWidth {
+    final base = DefaultTextStyle.of(context).style;
+    final scaler = MediaQuery.textScalerOf(context);
+    double measure(String text, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: base.merge(style)),
+        textDirection: Directionality.of(context),
+        textScaler: scaler,
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return width;
+    }
+
+    var width = 64.0;
+    for (final week in widget.controller.rows(_adopted?['weeks'])) {
+      width = math.max(
+        width,
+        measure(
+              '${week['week']}',
+              const TextStyle(
+                fontSize: 28,
+                height: 1.15,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ) +
+            24,
+      );
+      width = math.max(
+        width,
+        measure(
+              _nodeDate(week['start_date']),
+              const TextStyle(
+                fontSize: 12,
+                height: 1.25,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ) +
+            24,
+      );
+    }
+    return width;
+  }
 
   @override
   void initState() {
@@ -234,129 +283,93 @@ class SemesterHomeState extends State<SemesterHome>
     required VoidCallback onTap,
     bool warning = false,
     dynamic at,
-  }) => Semantics(
-    button: true,
-    label: '${at == null ? '' : '${_nodeDate(at)}，'}$label，$title，$time',
-    onTap: onTap,
-    child: ExcludeSemantics(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  width: MediaQuery.textScalerOf(context).scale(42) + 14,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 13),
-                    child: Text(
-                      at == null
-                          ? (RegExp(r'第\d+周').firstMatch(time)?.group(0) ?? '')
-                          : _nodeDate(at),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: CampusColors.ink,
+  }) {
+    final accent = warning ? CampusColors.warning : CampusColors.teal;
+    final details = [
+      if (at != null) _nodeDate(at),
+      if (time.isNotEmpty && !(at == null && RegExp(r'^第\d+周$').hasMatch(time)))
+        time,
+      label,
+    ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Semantics(
+        button: true,
+        label: '${at == null ? '' : '${_nodeDate(at)}，'}$label，$title，$time',
+        onTap: onTap,
+        child: ExcludeSemantics(
+          child: Material(
+            color: CampusColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            child: Pressable(
+              onPressed: onTap,
+              haptic: true,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: .08),
+                        borderRadius: BorderRadius.circular(9),
                       ),
+                      child: Icon(icon, color: accent, size: 21),
                     ),
-                  ),
-                ),
-                SizedBox(
-                  width: 20,
-                  child: Stack(
-                    children: [
-                      const Positioned(
-                        top: 0,
-                        bottom: 0,
-                        left: 9,
-                        child: SizedBox(
-                          width: 2,
-                          child: ColoredBox(color: CampusColors.line),
-                        ),
-                      ),
-                      Positioned(
-                        top: 15,
-                        left: 2,
-                        child: Container(
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: CampusColors.background,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: warning
-                                  ? CampusColors.warning
-                                  : CampusColors.teal,
-                              width: 2,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          child: Icon(
-                            icon,
-                            size: 10,
-                            color: warning
-                                ? CampusColors.warning
-                                : CampusColors.teal,
+                          const SizedBox(height: 5),
+                          Text(
+                            details,
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.4,
+                              color: warning
+                                  ? CampusColors.warning
+                                  : CampusColors.muted,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 10, 4, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          time.isEmpty ||
-                                  at == null &&
-                                      RegExp(r'^第\d+周$').hasMatch(time)
-                              ? label
-                              : '$label · $time',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: warning
-                                ? CampusColors.warning
-                                : CampusColors.muted,
-                          ),
-                        ),
-                      ],
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 5),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: CampusColors.muted,
+                      ),
+                    ),
+                  ],
                 ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 12, right: 2),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    size: 18,
-                    color: CampusColors.muted,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _semesterCaption(String name) {
     const style = TextStyle(
-      fontSize: 20,
-      color: CampusColors.ink,
+      fontSize: 16,
+      color: CampusColors.primary,
       fontWeight: FontWeight.w700,
     );
     final standard = RegExp(
@@ -442,29 +455,51 @@ class SemesterHomeState extends State<SemesterHome>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _semesterCaption('${semester['name']}'),
-                const SizedBox(height: 4),
-                Text(
-                  '${current < 1
-                      ? '学期尚未开始'
-                      : current > total
-                      ? '本学期已结束'
-                      : '现在第$current周'} · 共$total周',
-                  style: const TextStyle(
-                    color: CampusColors.muted,
-                    fontSize: 14,
-                  ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (current >= 1 && current <= total)
+                      RollingNumber.text(
+                        '第$current周',
+                        style: const TextStyle(
+                          fontSize: 44,
+                          height: 1.1,
+                          fontWeight: FontWeight.w700,
+                          color: CampusColors.ink,
+                        ),
+                      )
+                    else
+                      Text(
+                        current < 1 ? '学期尚未开始' : '本学期已结束',
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    Text(
+                      '共$total周 · 还剩${(total - current.clamp(0, total)).clamp(0, total)}周',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: CampusColors.muted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: total <= 0
-                        ? 0
-                        : ((current - 1) / total).clamp(0.0, 1.0),
-                    minHeight: 6,
-                    color: CampusColors.primary,
-                    backgroundColor: CampusColors.line,
-                  ),
+                SemesterHorizon(
+                  current: current,
+                  total: total,
+                  examWeeks: {
+                    for (final w in weeks)
+                      if (widget.controller
+                          .rows(w['items'])
+                          .any((i) => i['kind'] == 'exam'))
+                        w['week'] as int,
+                  },
                 ),
               ],
             ),
@@ -587,11 +622,23 @@ class SemesterHomeState extends State<SemesterHome>
                         ),
                       if (events.isEmpty &&
                           widget.controller.rows(selected['changes']).isEmpty)
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Text(
-                            '这一周还没有记录截止事项、考试或活动',
-                            style: TextStyle(color: CampusColors.muted),
+                          child: Column(
+                            children: [
+                              SvgPicture.asset(
+                                'assets/illustrations/empty-week.svg',
+                                width: 180,
+                                height: 135,
+                                excludeFromSemantics: true,
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                '这一周还没有记录截止事项、考试或活动',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: CampusColors.muted),
+                              ),
+                            ],
                           ),
                         ),
                     ],
@@ -644,8 +691,8 @@ class SemesterHomeState extends State<SemesterHome>
                 },
               ),
           ],
-          const SizedBox(height: 8),
-          const SizedBox(height: 20),
+          const SizedBox(height: 28),
+          const SectionHeading('学期资料'),
           Material(
             color: CampusColors.surface,
             borderRadius: BorderRadius.circular(20),
@@ -657,6 +704,9 @@ class SemesterHomeState extends State<SemesterHome>
                   onPressed: () => _courses(data),
                   icon: const Icon(Icons.menu_book_outlined),
                   label: Text('课程'),
+                  detail: data['courses'] is List
+                      ? '${widget.controller.rows(data['courses']).length} 门'
+                      : null,
                 ),
                 _SemesterAction(
                   onPressed: () async {
@@ -673,6 +723,9 @@ class SemesterHomeState extends State<SemesterHome>
                   },
                   icon: const Icon(Icons.school_outlined),
                   label: const Text('考试'),
+                  detail: data['exams'] is List
+                      ? '${widget.controller.rows(data['exams']).length} 场'
+                      : null,
                 ),
                 _SemesterAction(
                   primary: true,
@@ -695,6 +748,11 @@ class SemesterHomeState extends State<SemesterHome>
                   label: const Text('标签'),
                 ),
                 _SemesterAction(
+                  onPressed: () => context.push('/import'),
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('导入课表'),
+                ),
+                _SemesterAction(
                   onPressed: widget.onManage,
                   icon: const Icon(Icons.settings_outlined),
                   label: const Text('管理'),
@@ -708,7 +766,7 @@ class SemesterHomeState extends State<SemesterHome>
   );
 }
 
-class _SemesterWeekStrip extends StatelessWidget {
+class _SemesterWeekStrip extends StatefulWidget {
   final List<Map<String, dynamic>> weeks;
   final int? selected;
   final int current;
@@ -716,7 +774,6 @@ class _SemesterWeekStrip extends StatelessWidget {
   final bool animate;
   final String Function(dynamic) dateLabel;
   final ValueChanged<int> onSelected;
-
   const _SemesterWeekStrip({
     required this.weeks,
     required this.selected,
@@ -728,15 +785,60 @@ class _SemesterWeekStrip extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final base = DefaultTextStyle.of(context).style;
-    final labelStyle = base.merge(
-      const TextStyle(fontSize: 11, height: 1.2, fontWeight: FontWeight.w500),
+  State<_SemesterWeekStrip> createState() => _SemesterWeekStripState();
+}
+
+class _SemesterWeekStripState extends State<_SemesterWeekStrip>
+    with SingleTickerProviderStateMixin {
+  int get index => math.max(
+    0,
+    widget.weeks.indexWhere((week) => week['week'] == widget.selected),
+  );
+  late final AnimationController position;
+
+  @override
+  void initState() {
+    super.initState();
+    position = AnimationController.unbounded(
+      vsync: this,
+      value: index.toDouble(),
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant _SemesterWeekStrip old) {
+    super.didUpdateWidget(old);
+    if (old.selected == null || !widget.animate) {
+      position
+        ..stop()
+        ..value = index.toDouble();
+    } else if (position.value != index.toDouble()) {
+      position.animateWith(
+        SpringSimulation(
+          v2.ShiriMotion.snappy,
+          position.value,
+          index.toDouble(),
+          position.velocity,
+          snapToEnd: true,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    position.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context);
+    final base = DefaultTextStyle.of(context).style;
     final numberStyle = base.merge(
       const TextStyle(
-        fontSize: 20,
-        height: 1,
+        fontSize: 28,
+        height: 1.15,
         fontWeight: FontWeight.w700,
         fontFeatures: [FontFeature.tabularFigures()],
       ),
@@ -744,107 +846,104 @@ class _SemesterWeekStrip extends StatelessWidget {
     final dateStyle = base.merge(
       const TextStyle(
         fontSize: 12,
-        height: 1.2,
+        height: 1.25,
         fontWeight: FontWeight.w500,
         fontFeatures: [FontFeature.tabularFigures()],
       ),
     );
-    Size measure(String text, TextStyle style) {
+    final labelStyle = base.merge(
+      const TextStyle(fontSize: 11, height: 1.2, fontWeight: FontWeight.w600),
+    );
+    double textHeight(String text, TextStyle style) {
       final painter = TextPainter(
         text: TextSpan(text: text, style: style),
         textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout();
-      final size = painter.size;
+        textScaler: scale,
+      )..layout(maxWidth: widget.slotWidth - 8);
+      final height = painter.height;
       painter.dispose();
-      return size;
+      return height;
     }
 
-    final labelHeight = measure('本周', labelStyle).height;
-    final dateHeight = measure('11/30', dateStyle).height;
-    var diskSize = 44.0;
-    for (final week in weeks) {
-      final size = measure('${week['week']}', numberStyle);
-      diskSize = math.max(diskSize, math.max(size.width, size.height) + 18);
-    }
-    final selectedIndex = weeks.indexWhere((week) => week['week'] == selected);
-    final height = 4 + labelHeight + 4 + diskSize + 6 + dateHeight + 8;
-    final duration = animate
-        ? const Duration(milliseconds: 240)
-        : Duration.zero;
-    final feedback = animate ? motionQuick : Duration.zero;
+    final numberHeight = widget.weeks.fold<double>(
+      0,
+      (height, week) =>
+          math.max(height, textHeight('${week['week']}', numberStyle)),
+    );
+    final dateHeight = widget.weeks.fold<double>(
+      0,
+      (height, week) => math.max(
+        height,
+        textHeight(widget.dateLabel(week['start_date']), dateStyle),
+      ),
+    );
+    final height =
+        textHeight('本周', labelStyle) + numberHeight + dateHeight + 44;
+    Widget face(Map<String, dynamic> week, {required bool selected}) => Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          week['week'] == widget.current ? '本周' : ' ',
+          style: labelStyle.copyWith(
+            color: selected ? Colors.white : v2.ShiriBrand.sunInk,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '${week['week']}',
+          maxLines: 1,
+          softWrap: false,
+          style: numberStyle.copyWith(
+            color: selected ? Colors.white : CampusColors.ink,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          widget.dateLabel(week['start_date']),
+          maxLines: 1,
+          softWrap: false,
+          style: dateStyle.copyWith(
+            color: selected ? Colors.white : CampusColors.muted,
+          ),
+        ),
+      ],
+    );
     return RepaintBoundary(
       child: SizedBox(
-        width: weeks.length * slotWidth,
+        width: widget.weeks.length * widget.slotWidth,
         height: height,
         child: Stack(
           children: [
             Row(
               children: [
-                for (final week in weeks)
+                for (final week in widget.weeks)
                   SizedBox(
-                    width: slotWidth,
+                    width: widget.slotWidth,
                     height: height,
                     child: Semantics(
                       key: ValueKey('semester-week-${week['week']}'),
                       button: true,
-                      selected: selected == week['week'],
+                      selected: widget.selected == week['week'],
                       label:
-                          '第${week['week']}周，${dateLabel(week['start_date'])}开始${week['week'] == current ? '，本周' : ''}',
-                      onTap: () => onSelected(week['week'] as int),
+                          '第${week['week']}周，${widget.dateLabel(week['start_date'])}开始${week['week'] == widget.current ? '，本周' : ''}',
+                      onTap: () => widget.onSelected(week['week'] as int),
                       child: ExcludeSemantics(
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => onSelected(week['week'] as int),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 4, bottom: 8),
-                              child: Column(
-                                children: [
-                                  SizedBox(
-                                    height: labelHeight,
-                                    child: Text(
-                                      week['week'] == current ? '本周' : '周',
-                                      style: labelStyle.copyWith(
-                                        color: week['week'] == current
-                                            ? CampusColors.teal
-                                            : CampusColors.muted,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  SizedBox(
-                                    height: diskSize,
-                                    child: Center(
-                                      child: Text(
-                                        '${week['week']}',
-                                        style: numberStyle.copyWith(
-                                          color: CampusColors.ink,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  SizedBox(
-                                    height: dateHeight,
-                                    child: AnimatedDefaultTextStyle(
-                                      key: ValueKey(
-                                        'semester-week-date-$animate',
-                                      ),
-                                      duration: feedback,
-                                      style: dateStyle.copyWith(
-                                        color: selected == week['week']
-                                            ? CampusColors.primary
-                                            : CampusColors.muted,
-                                      ),
-                                      child: Text(
-                                        dateLabel(week['start_date']),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                        child: Pressable(
+                          onPressed: () {
+                            HapticFeedback.selectionClick();
+                            widget.onSelected(week['week'] as int);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 3,
+                            ),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: CampusColors.surface,
+                                borderRadius: BorderRadius.circular(20),
                               ),
+                              child: face(week, selected: false),
                             ),
                           ),
                         ),
@@ -853,64 +952,96 @@ class _SemesterWeekStrip extends StatelessWidget {
                   ),
               ],
             ),
-            if (selectedIndex >= 0)
-              TweenAnimationBuilder<double>(
-                key: ValueKey('semester-week-position-$animate'),
-                tween: Tween<double>(
-                  end: selectedIndex * slotWidth + (slotWidth - diskSize) / 2,
-                ),
-                duration: duration,
-                curve: Curves.easeOutCubic,
-                builder: (context, position, _) => PositionedDirectional(
-                  start: position,
-                  top: 8 + labelHeight,
-                  width: diskSize,
-                  height: diskSize,
-                  child: IgnorePointer(
-                    child: ExcludeSemantics(
-                      child: ClipOval(
-                        child: DecoratedBox(
-                          key: const Key('semester-week-indicator'),
-                          decoration: const BoxDecoration(
-                            color: CampusColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          // Numerals stay in their slots. The white projection
-                          // is clipped by the moving disk, so contrast follows
-                          // its actual position even when a tap interrupts it.
-                          child: Stack(
-                            children: [
-                              PositionedDirectional(
-                                start: -position,
-                                top: 0,
-                                width: weeks.length * slotWidth,
-                                height: diskSize,
-                                child: Row(
-                                  children: [
-                                    for (final week in weeks)
-                                      SizedBox(
-                                        width: slotWidth,
-                                        height: diskSize,
-                                        child: Center(
-                                          child: Text(
-                                            '${week['week']}',
-                                            style: numberStyle.copyWith(
-                                              color: Colors.white,
-                                            ),
-                                          ),
+            if (widget.weeks.any((w) => w['week'] == widget.selected))
+              AnimatedBuilder(
+                animation: position,
+                builder: (context, _) {
+                  final x = position.value * widget.slotWidth + 4;
+                  return PositionedDirectional(
+                    start: x,
+                    top: 3,
+                    width: widget.slotWidth - 8,
+                    height: height - 6,
+                    child: IgnorePointer(
+                      child: ExcludeSemantics(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: DecoratedBox(
+                            key: const Key('semester-week-indicator'),
+                            decoration: const BoxDecoration(
+                              color: CampusColors.primary,
+                            ),
+                            child: Stack(
+                              children: [
+                                PositionedDirectional(
+                                  start: -x,
+                                  top: 0,
+                                  width: widget.weeks.length * widget.slotWidth,
+                                  height: height - 6,
+                                  child: Row(
+                                    children: [
+                                      for (final week in widget.weeks)
+                                        SizedBox(
+                                          width: widget.slotWidth,
+                                          child: face(week, selected: true),
                                         ),
-                                      ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
+            Row(
+              children: [
+                for (final week in widget.weeks)
+                  SizedBox(
+                    width: widget.slotWidth,
+                    height: height,
+                    child: IgnorePointer(
+                      child: ExcludeSemantics(
+                        child: Stack(
+                          children: [
+                            if (week['week'] == widget.current)
+                              Positioned(
+                                top: 9,
+                                right: 12,
+                                child: Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                    color: v2.ShiriBrand.sun500,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            if ((week['items'] as List? ?? [])
+                                .whereType<Map>()
+                                .any((i) => i['kind'] == 'exam'))
+                              Positioned(
+                                bottom: 8,
+                                left: (widget.slotWidth - 5) / 2,
+                                child: Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: v2.ShiriColors.light.dangerAccent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -940,19 +1071,19 @@ class _SemesterWeekContent extends StatelessWidget {
         child: KeyedSubtree(key: currentKey, child: child),
       );
     }
-    const duration = Duration(milliseconds: 230);
+    const duration = v2.ShiriMotion.standard;
     return AnimatedSize(
       key: ValueKey('semester-week-size-$animate'),
       duration: duration,
-      curve: Curves.easeOutCubic,
+      curve: v2.ShiriMotion.easeStandard,
       alignment: Alignment.topCenter,
       child: ClipRect(
         child: AnimatedSwitcher(
           key: ValueKey('semester-week-switch-$animate'),
           duration: duration,
-          reverseDuration: const Duration(milliseconds: 150),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
+          reverseDuration: v2.ShiriMotion.quick,
+          switchInCurve: v2.ShiriMotion.easeDecelerate,
+          switchOutCurve: v2.ShiriMotion.easeAccelerate,
           transitionBuilder: (child, animation) {
             return FadeTransition(
               opacity: Tween<double>(begin: .65, end: 1).animate(animation),
@@ -978,36 +1109,66 @@ class _SemesterAction extends StatelessWidget {
   final VoidCallback onPressed;
   final Widget icon, label;
   final bool primary;
+  final String? detail;
   const _SemesterAction({
     required this.onPressed,
     required this.icon,
     required this.label,
     this.primary = false,
+    this.detail,
   });
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: (MediaQuery.sizeOf(context).width - 40) / 5,
+    width:
+        (MediaQuery.sizeOf(context).width - 40) /
+        (MediaQuery.textScalerOf(context).scale(1) > 1.3 ? 2 : 3),
     child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              IconTheme(
-                data: const IconThemeData(
-                  color: CampusColors.primary,
-                  size: 22,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: primary
+                      ? CampusColors.blueSoft
+                      : CampusColors.background,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: icon,
+                child: IconTheme(
+                  data: const IconThemeData(
+                    color: CampusColors.primary,
+                    size: 22,
+                  ),
+                  child: icon,
+                ),
               ),
               const SizedBox(height: 8),
               DefaultTextStyle.merge(
-                style: const TextStyle(fontSize: 12, color: CampusColors.ink),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: CampusColors.ink,
+                  fontWeight: FontWeight.w600,
+                ),
                 child: label,
               ),
+              if (detail != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  detail!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: CampusColors.muted,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
             ],
           ),
         ),

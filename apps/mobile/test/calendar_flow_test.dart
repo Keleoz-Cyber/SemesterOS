@@ -43,7 +43,7 @@ void main() {
       final app =
           AppController(fixture.api, store, clearSchoolSession: () async {})
             ..semester = semester()
-             ..week = 4;
+            ..week = 4;
       final preferenceKey = 'calendar-view:${app.user['id']}';
       store.data[preferenceKey] = {'mode': 'list'};
       final panel = GlobalKey<CalendarPanelState>();
