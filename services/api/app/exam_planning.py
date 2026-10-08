@@ -7,7 +7,7 @@ from .database import get_db
 from .models import StudyItem,User,CourseMeeting
 from .auth import current_user,error
 from .academics import owned_semester,replay,remember,fingerprint
-from .items import owned_item,check_version,serialize_item,audit,rules_for,serialize_rule
+from .items import owned_item,check_version,serialize_item,audit,rules_for,serialize_rule,preserve_notice_time
 from .item_schemas import ItemFields,ItemTime
 from .exam_schemas import ReviewInput,ExamChangeInput,ExamChangeApply
 from .reminder_rules import utcnow,anchor_at,notice_arrival_at
@@ -72,6 +72,7 @@ def exam_change_context(db,user,e,body):
     if e.lifecycle!='active':error(422,'INACTIVE_EXAM','请先核对考试状态')
     s=owned_semester(db,user,e.semester_id);source=snapshot(db,user,s);now=utcnow()
     updated={**e.payload,'time':body.time.model_dump(mode='json'),'certainty':body.certainty,'location':body.location,'reserve_time':body.reserve_time}
+    preserve_notice_time(e.payload['time'],body.time,updated['time'])
     if body.details is not None:
         updated['details']={**e.payload.get('details',{}),
                             **body.details.model_dump(mode='json',exclude_unset=True)}
@@ -98,9 +99,9 @@ def exam_change_context(db,user,e,body):
     for i,row in enumerate(after):
         if row['id']==e.id:after[i]={**row,**updated}
         elif row['id'] in after_tasks:after[i]={**row,**after_tasks[row['id']]}
-    c=calendar_context(*source[:3],after,now);_,issues=classify(source[4],after,c['free'].spans,c['begin'])
+    c=calendar_context(*source[:3],after,now);_,issues=classify(source[4],after,c['free'].spans,c['begin'],obligation_points=c['obligation_points'])
     before_context=calendar_context(*source[:4],now)
-    from .conflict_changes import introduced_conflicts
+    from .conflict_changes import introduced_conflicts, introduced_time_warnings
     new_conflicts=introduced_conflicts(before_context['conflicts'],c['conflicts'])
     ids={r['block_id'] for r in issues}
     before_risk=analyze(*source[:4],now,source[4]);after_risk=analyze(*source[:3],after,now,source[4])
@@ -130,7 +131,13 @@ def exam_change_context(db,user,e,body):
             'after_time':after_tasks.get(r.id,r.payload)['time'],'will_align':r.id in after_tasks} for r in active],
         'affected_blocks':[b for b in source[4] if b['id'] in ids],'risk_changes':risk_changes,
         'fixed_conflicts':c['conflicts'],'fixed_conflict_count':len(c['conflicts']),
-        'new_fixed_conflicts':new_conflicts,'new_fixed_conflict_count':len(new_conflicts)}
+        'new_fixed_conflicts':new_conflicts,'new_fixed_conflict_count':len(new_conflicts),
+        'blocking_fixed_conflicts':c['conflicts'],'new_blocking_fixed_conflicts':new_conflicts,
+        'time_warnings':[w for w in c['time_warnings'] if w.get('id')==e.id or e.id in w.get('item_ids',[])],
+        'new_time_warnings':[w for w in introduced_time_warnings(before_context['time_warnings'],c['time_warnings'])
+            if w.get('id')==e.id or e.id in w.get('item_ids',[])]}
+    from .agent_attendance import conflict_courses
+    result['course_conflicts']=conflict_courses(source[0],source[2],new_conflicts)
     return s,updated,after_tasks,result,now
 
 

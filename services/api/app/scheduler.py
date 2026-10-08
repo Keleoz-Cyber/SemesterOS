@@ -4,7 +4,7 @@ import time
 
 from ortools.sat.python import cp_model
 from ortools import __version__ as solver_version
-from .capacity import calendar_context, merge, subtract, uncertainty_affects_window
+from .capacity import calendar_context, merge, subtract, uncertainty_affects_window, minute_free_spans
 from .plan_rules import classify, future_minutes
 from .reminder_rules import instant, anchor_at
 from .task_readiness import start_policy
@@ -48,7 +48,8 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
     future=[b for b in plans if b['status']=='active' and instant(b['end_at']).timestamp()>now.timestamp()]
     if len(request['tasks'])>100 or len(future)>300:
         base.update(status='INPUT_LIMIT',messages=['一次最多安排100项任务、300段计划，请分批安排']);return base,None
-    valid,issues=classify(plans,items,context['free'].spans,context['begin'])
+    valid,issues=classify(plans,items,context['free'].spans,context['begin'],
+                          obligation_points=context['obligation_points'])
     if issues:
         base.update(messages=['已有计划不符合当前安排，请核对、取消或在后续重排中处理'],invalid_blocks=issues);return base,None
     by_id={i['id']:i for i in items};selected=[]
@@ -83,7 +84,7 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
     if not selected:base['messages']=['请选择至少一项任务'];return base,None
     busy=merge([(max(context['begin'],instant(b['start_at']).timestamp()),instant(b['end_at']).timestamp()) for b in valid])
     free=subtract(context['free'].spans,busy)
-    free=[(max(start,ceil(a/60)),min(end,floor(b/60))) for a,b in free]
+    free=[(max(start,a),min(end,b)) for a,b in minute_free_spans(free,context['obligation_points'])]
     free=merge(free)
     if len(future)+sum(chunk_count(s['need'],request['chunk_minutes'],s['item'].get('splittable',True)) for s in selected)>300:
         base.update(status='INPUT_LIMIT',messages=['计划段数超过300，请缩短安排的日期范围，或增加单次学习时长']);return base,None
@@ -99,7 +100,8 @@ def prepare(calendar, preferences, courses, items, plans, request, now):
         'target_minutes':s['target'],'existing_minutes':s['existing'],'outside_minutes':s['outside'],
         'new_minutes':0,'unarranged_minutes':s['need'],'later_minutes':s['item']['remaining_minutes']-s['outside']-s['target']} for s in selected]
     base['solver_version']=solver_version
-    return base,{'selected':selected,'blocks':blocks,'free':free,'preserved':valid,'start':start,'end':end}
+    return base,{'selected':selected,'blocks':blocks,'free':free,'preserved':valid,'start':start,'end':end,
+                 'obligation_points':context['obligation_points']}
 
 
 def validate_result(context, result, allow_partial):
@@ -110,6 +112,7 @@ def validate_result(context, result, allow_partial):
         task=selected.get(block['item_id']);a=instant(block['start_at']).timestamp()/60;b=instant(block['end_at']).timestamp()/60
         if not task or not a.is_integer() or not b.is_integer() or b-a!=block['minutes'] or b<=a:return False
         if a<task['release'] or b>task['deadline'] or not any(x<=a and b<=y for x,y in context['free']):return False
+        if any(a*60<=point<b*60 for point in context.get('obligation_points',[])):return False
         if block['minutes'] not in lengths[block['item_id']]:return False
         lengths[block['item_id']].remove(block['minutes'])
         spans.append((a,b));counts[block['item_id']]+=block['minutes']

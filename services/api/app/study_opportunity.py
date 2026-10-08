@@ -1,6 +1,6 @@
 """One useful match between a real study gap and known unfinished work."""
 from math import ceil, floor
-from .capacity import subtract, merge, iso, local_day, uncertainty_affects_window
+from .capacity import subtract, merge, iso, local_day, uncertainty_affects_window, minute_free_spans
 from .plan_rules import classify, future_minutes
 from .reminder_rules import anchor_at, instant
 from .task_readiness import start_policy
@@ -8,13 +8,14 @@ from .task_readiness import start_policy
 
 def study_opportunity(source, context, now, day_start, day_end, entries):
     if not source[1].get('configured'): return None
-    valid, issues = classify(source[4], source[3], context['free'].spans, context['begin'])
+    valid, issues = classify(source[4], source[3], context['free'].spans, context['begin'],
+                            obligation_points=context['obligation_points'])
     if issues: return None  # Existing broken plans need a real decision first.
     occupied = merge([(instant(p['start_at']).timestamp(), instant(p['end_at']).timestamp())
                       for p in source[4] if p['status'] == 'active'])
     gaps = subtract(context['free'].spans, occupied)
     matches = []
-    for a, b in gaps:
+    for a, b in [(a*60,b*60) for a,b in minute_free_spans(gaps,context['obligation_points'])]:
         start = ceil(max(a, now.timestamp(), day_start) / 60) * 60
         end = floor(min(b, day_end) / 60) * 60
         if end <= start: continue

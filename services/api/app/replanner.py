@@ -4,7 +4,7 @@ from copy import deepcopy
 import time
 from ortools.sat.python import cp_model
 from ortools import __version__
-from .capacity import calendar_context,merge,uncertainty_affects_window
+from .capacity import calendar_context,merge,uncertainty_affects_window,minute_free_spans
 from .plan_rules import classify,future_minutes
 from .reminder_rules import instant,anchor_at
 from .scheduler import stamp
@@ -23,7 +23,8 @@ def prepare(calendar,preferences,courses,items,plans,request,now):
     if len(future)>300 or len({b['item_id'] for b in future})>100:
         base.update(status='INPUT_LIMIT',messages=['一次最多调整100项任务、300段计划，请减少任务数量']);return base,None
     tasks={i['id']:i for i in items}
-    _,issues=classify(future,items,context['free'].spans,context['begin'])
+    _,issues=classify(future,items,context['free'].spans,context['begin'],
+                      obligation_points=context['obligation_points'])
     bad={i['block_id']:i for i in issues}
     specs=[];locked=[]
     for b in future:
@@ -37,7 +38,8 @@ def prepare(calendar,preferences,courses,items,plans,request,now):
         due=anchor_at(item) if item.get('certainty')=='formal' else None
         deadline=min(end,floor(due.timestamp()/60)) if due else end
         domains=[(int(original),int(original))] if fixed else [(a,z-1) for a,z in merge([
-            (max(release,ceil(a/60)),min(deadline,floor(z/60))-b['minutes']+1) for a,z in context['free'].spans])]
+            (max(release,a),min(deadline,z)-b['minutes']+1)
+            for a,z in minute_free_spans(context['free'].spans,context['obligation_points'])])]
         specs.append({'before':b,'fixed':fixed,'original':int(original),'domains':domains})
     if locked:
         base.update(locked_conflicts=locked,messages=['锁定、已开始、即将开始或未选中的计划与现实安排冲突，请明确处理或调整范围后再重排']);return base,None
@@ -57,7 +59,8 @@ def validate(context,blocks):
         if any(b.get(k)!=old[k] for k in ('item_id','minutes','locked','version','status')):return False
         if not a.is_integer() or z-a!=old['minutes'] or not any(x<=a<=y for x,y in spec['domains']):return False
     c=calendar_context(context['calendar'],context['preferences'],context['courses'],context['items'],context['now'])
-    _,issues=classify(blocks,context['items'],c['free'].spans,c['begin'])
+    _,issues=classify(blocks,context['items'],c['free'].spans,c['begin'],
+                      obligation_points=c['obligation_points'])
     return not issues
 
 

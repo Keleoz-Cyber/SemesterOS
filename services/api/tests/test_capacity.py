@@ -84,26 +84,28 @@ def test_unknown_exam_end_masks_precise_capacity_and_tentative_unreserved_does_n
           'reserve_time':True,'time':{'precision':'exact','at':at('10:00').isoformat()}}
     result=run([task(),exam]);row=result['items'][0]
     assert row['task_slack_minutes'] is None and 'uncertain_exam' in row['reason_codes']
-    assert row['capacity_after_fixed_minutes']==60 and row['uncertainty_excluded_minutes']==180
+    assert row['capacity_after_fixed_minutes']==240 and row['uncertainty_excluded_minutes']==0
+    assert row['capacity_is_upper_bound']
     assert row['fixed_occupied_minutes']==0 and row['level']=='medium'
     assert row['window_gap_minutes']==0 and row['data_complete']
-    assert result['uncertainty_warnings'][0]['exclusion_applied']
+    assert not result['uncertainty_warnings'][0]['exclusion_applied']
+    assert result['uncertainty_warnings'][0]['end_at'] is None
     assert exam['time'].get('end_at') is None
     row=run([task(),{**exam,'reserve_time':False}])['items'][0]
     assert row['task_slack_minutes']==60
     assert row['level']=='medium' and 'uncertain_exam' in row['reason_codes']
 
 
-def test_unknown_end_stays_uncertain_later_but_known_shortage_and_fixed_conflict_remain_high():
+def test_unknown_end_reminders_are_date_scoped_and_known_shortage_and_conflict_remain_high():
     exam={'id':'exam','kind':'exam','lifecycle':'active','title':'结束待核对考试','certainty':'formal',
           'reserve_time':True,'time':{'precision':'exact','at':'2026-09-20T23:00:00+08:00'}}
     row=run([task(minutes=60),exam])['items'][0]
-    assert row['task_slack_minutes'] is None and row['level']=='medium'
+    assert row['task_slack_minutes'] == 180 and row['level']=='low'
     assert row['capacity_after_fixed_minutes']==240 and row['uncertainty_excluded_minutes']==0
-    assert row['capacity_is_upper_bound'] and 'uncertain_exam' in row['reason_codes']
+    assert not row['capacity_is_upper_bound'] and 'uncertain_exam' not in row['reason_codes']
     shortage=run([task(minutes=300),exam])['items'][0]
     assert shortage['level']=='high' and shortage['window_gap_minutes']==60
-    assert shortage['critical_window']['capacity_is_upper_bound']
+    assert not shortage['critical_window']['capacity_is_upper_bound']
     course={'id':'course','title':'已知课程','weekday':1,'weeks':[1], 'sections':[1]}
     exact={**exam,'id':'exact-exam','time':{'precision':'exact','at':at('09:00').isoformat(),'end_at':at('10:00').isoformat()}}
     conflict=run([task(minutes=30),exam,exact],courses=[course])['items'][0]
@@ -167,6 +169,33 @@ def test_interval_capacity_matches_an_independent_minute_bitmap():
         index=CapacityIndex(subtract([(a*60,b*60) for a,b in allowed],merge([(a*60,b*60) for a,b in blocked])))
         a,b=sorted(randomizer.sample(range(241),2))
         assert index.minutes(a*60,b*60)==len(expected & set(range(a,b)))
+
+
+def test_point_capacity_is_duration_upper_bound_but_contiguous_minutes_match_solver_grid():
+    start,end = at('09:00').timestamp(),at('12:00').timestamp()
+    index = CapacityIndex([(start,end)],points=[start])
+    assert index.minutes(start,end) == 180  # A point has no inferred duration.
+    assert index.longest(start,end) == 179  # Minute candidates start after 09:00.
+    assert index.longest(start+30,end-30) == 178
+    before = CapacityIndex([(at('08:00').timestamp(),start)],points=[start])
+    assert before.longest(at('08:00').timestamp(),start) == 60  # Ending at the point is valid.
+    seconds_point = start+30
+    seconds = CapacityIndex([(start,end)],points=[seconds_point])
+    assert seconds.minutes(start,end) == 180 and seconds.longest(start,end) == 179
+
+
+def test_unsplittable_capacity_reports_grid_shortage_even_with_duration_upper_bound():
+    meeting = {'id':'meeting','title':'九点会议','certainty':'formal','reserve_time':True,
+               'time':{'precision':'exact','at':at('09:00').isoformat()}}
+    item = task(minutes=180,due='12:00',splittable=False,start_policy='at',
+                earliest_start_at=at('09:00').isoformat())
+    prefs = {**AVAILABILITY,'weekly':[{'weekday':1,'start':'09:00','end':'12:00'}]}
+    result = analyze({**SEMESTER,'fixed_events':[meeting]},prefs,[],[item],at('08:00'))
+    row = result['items'][0]
+    assert row['capacity_after_fixed_minutes'] == 180 and row['capacity_is_upper_bound']
+    assert row['fixed_occupied_minutes'] == row['uncertainty_excluded_minutes'] == 0
+    assert row['max_contiguous_minutes'] == 179
+    assert row['level'] == 'high' and 'no_contiguous_slot' in row['reason_codes']
 
 
 def test_real_plans_deduct_only_other_tasks_and_never_duplicate_window_demand():

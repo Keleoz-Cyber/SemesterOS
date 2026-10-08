@@ -214,7 +214,7 @@ def undo_replan(db,user,s,p):
         if not row or row.version!=p.payload['applied_versions'][id] or row.locked or instant(row.start_at)<=now or instant(b['start_at'])<=now:
             error(409,'UNDO_BLOCK_CHANGED','有关计划已修改、锁定或开始，不能撤销')
     restored=[old.get(b['id'],b) for b in source[4]]
-    c=calendar_context(*source[:4],now);_,issues=classify(restored,source[3],c['free'].spans,c['begin'])
+    c=calendar_context(*source[:4],now);_,issues=classify(restored,source[3],c['free'].spans,c['begin'],obligation_points=c['obligation_points'])
     if issues:error(409,'UNDO_REALITY_CONFLICT','旧计划已不符合最新现实安排，不能恢复；请重新规划')
     for id,b in old.items():
         rows[id].start_at=b['start_at'];rows[id].end_at=b['end_at'];rows[id].version+=1;rows[id].updated_at=now.isoformat()
@@ -227,7 +227,7 @@ def undo_replan(db,user,s,p):
 def list_plans(sid:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
     s=owned_semester(db,user,sid,lock=True);source=snapshot(db,user,s);now=utcnow()
     context=calendar_context(*source[:4],now)
-    _,issues=classify(source[4],source[3],context['free'].spans,context['begin'])
+    _,issues=classify(source[4],source[3],context['free'].spans,context['begin'],obligation_points=context['obligation_points'])
     latest=db.scalar(select(PlanProposal).where(PlanProposal.user_id==user.id,PlanProposal.semester_id==sid).order_by(PlanProposal.created_at.desc(),PlanProposal.id.desc()))
     applied=db.scalar(select(PlanProposal).where(PlanProposal.user_id==user.id,PlanProposal.semester_id==sid,PlanProposal.phase=='applied').order_by(PlanProposal.base_revision.desc(),PlanProposal.applied_at.desc(),PlanProposal.id.desc()))
     latest_data=proposal_value(latest) if latest else None

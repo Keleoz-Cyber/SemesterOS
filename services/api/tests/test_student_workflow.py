@@ -293,7 +293,7 @@ def test_lookahead_and_task_state_statistics_use_recorded_dates_and_linked_progr
     assert filtered['task_summary']['completed']==0 and filtered['course_summary']==[]
 
 
-def test_incomplete_fixed_time_only_excludes_its_known_day_for_manual_agent_and_replan(client,monkeypatch):
+def test_incomplete_fixed_time_keeps_later_candidates_for_manual_agent_and_replan(client,monkeypatch):
     from datetime import datetime
     from app import planning,schedule_api,briefs,reminder_rules
     from test_schedule_api import accept
@@ -313,7 +313,10 @@ def test_incomplete_fixed_time_only_excludes_its_known_day_for_manual_agent_and_
     manual=client.post(f'/api/v1/semesters/{sid}/plan-proposals',headers=h,
         json={'days':14,'tasks':[{'item_id':item['id']}]}).json()
     assert manual['status']=='FEASIBLE_COMPLETE',manual
-    assert manual['uncertainty_warnings'] and all('2026-10-03' not in b['start_at'] for b in manual['blocks'])
+    assert manual['uncertainty_warnings'] and any('2026-10-03' in b['start_at'] for b in manual['blocks'])
+    point=datetime.fromisoformat(event['time']['at'])
+    assert all(not (datetime.fromisoformat(b['start_at'])<=point<datetime.fromisoformat(b['end_at']))
+        for b in manual['blocks'])
     request=turn(client,h,thread(client,h,sid),'安排实验报告')
     def provider(messages,tools):
         if messages[-1]['role']=='user':return call('find_records',{'query':'实验报告'})
@@ -328,7 +331,7 @@ def test_incomplete_fixed_time_only_excludes_its_known_day_for_manual_agent_and_
     risk=client.get(f'/api/v1/semesters/{sid}/risk',headers=h).json()
     row=next(r for r in risk['items'] if r['item_id']==item['id'])
     assert row['data_complete'] and row['capacity_after_fixed_minutes'] is not None
-    assert row['uncertainty_excluded_minutes']>0 and row['capacity_is_upper_bound']
+    assert row['uncertainty_excluded_minutes']==0 and row['capacity_is_upper_bound']
     brief=client.get(f'/api/v1/semesters/{sid}/day-brief?day=2026-10-06',headers=h).json()
     assert brief['available_windows'] and brief['uncertainty_warnings']
     saved=client.get('/api/v1/events/'+event['id'],headers=h).json()

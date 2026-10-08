@@ -109,8 +109,7 @@ class WeekHeatmap extends StatelessWidget {
         ),
     ];
     final dateOnly = <int, int>{};
-    for (final original in items) {
-      final row = calendarDisplayEntry(original);
+    for (final row in calendarScheduleEntries(items)) {
       if (row['start_at'] != null || row['due_at'] != null) continue;
       final date = DateTime.tryParse(
         '${row['date'] ?? calendarTime(row)['date']}',

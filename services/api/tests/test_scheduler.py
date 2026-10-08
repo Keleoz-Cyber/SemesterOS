@@ -77,17 +77,19 @@ def test_unknown_deadline_uses_known_remaining_effort_and_accepts_explicit_round
     assert result['tasks'][0]['later_minutes']==120
 
 
-def test_reserved_unknown_exam_excludes_known_day_and_overallocated_plans_remain_invalid():
+def test_reserved_unknown_exam_protects_start_but_keeps_later_candidates_and_overallocation_invalid():
     exam={'id':'exam','kind':'exam','lifecycle':'active','title':'待核对考试','certainty':'tentative',
           'reserve_time':True,'time':{'precision':'exact','at':at('10:00').isoformat()}}
     result=run([task(),exam],request('a'))
-    assert result['status']=='INFEASIBLE' and result['blocks']==[]
-    assert result['uncertainty_warnings'][0]['exclusion_applied']
+    assert result['status']=='FEASIBLE_COMPLETE' and result['blocks']
+    assert not result['uncertainty_warnings'][0]['exclusion_applied']
+    assert all(not (datetime.fromisoformat(b['start_at'])<=at('10:00')<datetime.fromisoformat(b['end_at']))
+               for b in result['blocks'])
     later=task(time={'precision':'exact','at':'2026-09-28T13:00:00+08:00'},
         start_policy='at',earliest_start_at=at('10:00').isoformat())
     result=run([later,exam],{**request('a'),'days':14})
     assert result['status']=='FEASIBLE_COMPLETE'
-    assert all(datetime.fromisoformat(b['start_at']).astimezone(at('08:00').tzinfo).date().isoformat()=='2026-09-28' for b in result['blocks'])
+    assert any(datetime.fromisoformat(b['start_at']).astimezone(at('08:00').tzinfo).date().isoformat()=='2026-09-21' for b in result['blocks'])
     assert result['uncertainty_warnings'] and exam['time'].get('end_at') is None
     plan={'id':'p','item_id':'a','start_at':at('09:00').isoformat(),'end_at':at('11:00').isoformat(),
           'minutes':120,'status':'active','locked':False,'version':1}

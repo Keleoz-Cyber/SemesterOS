@@ -285,7 +285,7 @@ def test_undo_title_change_does_not_treat_existing_overlap_as_new_conflict(clien
     assert client.get('/api/v1/events/'+a['id'],headers=h).json()['title']=='A'
 
 
-def test_undo_does_not_turn_possible_overlap_into_confirmed_overlap_silently(client):
+def test_undo_does_not_expand_confirmed_point_into_longer_confirmed_overlap_silently(client):
     _, h = register(client); s = semester(client, h)
     when = {'precision': 'exact', 'at': '2026-12-01T09:00:00+08:00',
             'end_at': '2026-12-01T10:00:00+08:00'}
@@ -296,7 +296,9 @@ def test_undo_does_not_turn_possible_overlap_into_confirmed_overlap_silently(cli
         'semester_id': s['id'], 'title': 'A', 'time': {**when, 'end_at': None},
         'expected_version': 1, 'expected_revision': before['revision'], 'change_reason': '结束时间需核对'})
     assert response.status_code == 200, response.text
-    assert response.json()['fixed_conflicts'][0]['certainty'] == 'possible'
+    assert response.json()['fixed_conflicts'][0]['certainty'] == 'confirmed'
+    assert response.json()['fixed_conflicts'][0]['evidence_kind'] == 'start_point'
+    assert response.json()['event']['time']['end_at'] is None
     rid = record(client, s['id'], before, 'event')
     with pytest.raises(HTTPException) as failure:
         prepare(client, s['id'], rid)

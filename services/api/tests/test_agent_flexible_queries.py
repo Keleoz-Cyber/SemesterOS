@@ -56,7 +56,7 @@ def test_unknown_end_is_a_checkable_candidate_not_definite_future_occupation(cli
         data=client.get('/api/v1/agent/runs/'+req['id'],headers=h).json()['cards'][0]['data']
         assert len(data['windows'])==1
         if day=='2026-10-07':
-            assert data['windows'][0]['needs_check'] is True and '待核对' in data['overview_answer']
+            assert data['windows'][0]['needs_check'] is True and '候选' in data['overview_answer']
             assert data['confirmed_count']==0
         else:
             assert not data['windows'][0].get('needs_check') and data['uncertainty_warnings']==[]

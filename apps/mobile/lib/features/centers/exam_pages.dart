@@ -958,8 +958,8 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
           p['before']['semester_id'],
           p['base_revision'],
         );
-    final conflicts = p['new_fixed_conflicts'] ?? p['fixed_conflicts'] ?? [];
-    final conflict = conflicts.isNotEmpty;
+    final conflict = eventConflicts(p).isNotEmpty;
+    final timeWarnings = eventTimeWarnings(p);
     final timeChanged =
         itemTimeLabel(p['before'], includeMissing: false) !=
         itemTimeLabel(p['after'], includeMissing: false);
@@ -1066,7 +1066,7 @@ class _ExamChangePreviewPageState extends State<ExamChangePreviewPage> {
                   ),
               ],
             ),
-          if (conflict)
+          if (conflict || timeWarnings.isNotEmpty)
             EventConflictReview(
               impact: Map<String, dynamic>.from(p),
               leaveTargets: const {},

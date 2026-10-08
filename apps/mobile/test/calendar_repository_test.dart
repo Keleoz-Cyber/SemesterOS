@@ -7,6 +7,22 @@ import 'controller_test.dart' show MemoryStore;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('date-level and start-only records display known information', () {
+    final allDay = calendarTimeLabel({
+      'time': {'precision': 'date', 'date': '2026-10-09', 'meaning': 'all_day'},
+    });
+    expect(allDay, contains('全天'));
+    expect(allDay, isNot(contains('00:00')));
+    final startOnly = calendarTimeLabel({
+      'start_at': '2026-10-09T09:00:00+08:00',
+    }, includeMissing: true);
+    expect(startOnly, contains('09:00'));
+    expect(startOnly, isNot(contains('结束时间待定')));
+    final dateOnly = calendarTimeLabel({
+      'date': '2026-10-09',
+    }, includeMissing: true);
+    expect(dateOnly, contains('仅日期'));
+  });
   test(
     'cross-day fixed event is split for display without changing source times',
     () {

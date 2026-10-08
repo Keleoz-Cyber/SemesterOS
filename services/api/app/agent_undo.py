@@ -176,8 +176,10 @@ def validate_restore(db, user, s, data):
     restored = restored_snapshot(db, user, s, data)
     before_context = calendar_context(*current[:4], utcnow())
     after_context = calendar_context(*restored[:4], utcnow())
-    _, before_issues = classify(current[4], current[3], before_context['free'].spans, before_context['begin'])
-    _, after_issues = classify(restored[4], restored[3], after_context['free'].spans, after_context['begin'])
+    _, before_issues = classify(current[4], current[3], before_context['free'].spans, before_context['begin'],
+        obligation_points=before_context['obligation_points'])
+    _, after_issues = classify(restored[4], restored[3], after_context['free'].spans, after_context['begin'],
+        obligation_points=after_context['obligation_points'])
     if {fingerprint(i) for i in after_issues} - {fingerprint(i) for i in before_issues}:
         error(409, 'UNDO_REALITY_CONFLICT', '恢复后会影响当前个人计划，请先核对或重新规划')
     from .conflict_changes import introduced_conflicts

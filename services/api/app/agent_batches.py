@@ -16,10 +16,13 @@ def impact(db,user,s):
     from .plan_rules import classify
     data=snapshot(db,user,s)
     context=calendar_context(*data[:4],utcnow())
-    _,issues=classify(data[4],data[3],context['free'].spans,context['begin'])
+    _,issues=classify(data[4],data[3],context['free'].spans,context['begin'],
+                      obligation_points=context['obligation_points'])
     conflicts=context['conflicts']
     from .agent_attendance import conflict_courses
-    return {'fixed_conflicts':conflicts,'affected_plan_count':len({i['block_id'] for i in issues}),
+    return {'fixed_conflicts':conflicts,'blocking_fixed_conflicts':conflicts,
+            'time_warnings':context['time_warnings'],
+            'affected_plan_count':len({i['block_id'] for i in issues}),
             'course_conflicts':conflict_courses(data[0],data[2],conflicts)}
 
 
@@ -67,7 +70,7 @@ def simulate(db,user,s,groups,base):
     try:
         applied = run_children(db,user,s,groups,base)
         result=impact(db,user,s)
-        from .conflict_changes import introduced_conflicts
+        from .conflict_changes import introduced_conflicts, introduced_time_warnings
         from .fixed_conflict_guard import without_draft_ids
         from .agent_attendance import conflict_courses
         drafts = []
@@ -79,11 +82,16 @@ def simulate(db,user,s,groups,base):
                     if created:
                         drafts.append(('event:' if field == 'event' else '') + created['id'])
         introduced = introduced_conflicts(before['fixed_conflicts'], result['fixed_conflicts'])
+        new_warnings = introduced_time_warnings(before['time_warnings'], result['time_warnings'])
         current = snapshot(db, user, s)
         drafts.extend(e['id'] for e in expand(current[0], current[2]) if e['id'] not in actionable_courses)
+        blockers = without_draft_ids(result['fixed_conflicts'], drafts)
+        new_blockers = without_draft_ids(introduced, drafts)
         return {**result,
-                'fixed_conflicts': without_draft_ids(result['fixed_conflicts'], drafts),
-                'new_fixed_conflicts': without_draft_ids(introduced, drafts),
+                'fixed_conflicts': blockers, 'blocking_fixed_conflicts': blockers,
+                'new_fixed_conflicts': new_blockers, 'new_blocking_fixed_conflicts': new_blockers,
+                'time_warnings': without_draft_ids(result['time_warnings'], drafts),
+                'new_time_warnings': without_draft_ids(new_warnings, drafts),
                 'course_conflicts': [e for e in conflict_courses(current[0], current[2], introduced)
                                      if e['occurrence_id'] in actionable_courses]}
     finally:
@@ -126,7 +134,7 @@ def apply_batch(db,user,s,preview,ids,confirm_fixed_conflicts):
     groups=selected_groups(preview,ids)
     guard_dependencies(db,user,s,[p for g in groups for p in g['operations']])
     summary=simulate(db,user,s,groups,preview['expected_revision'])
-    if summary['new_fixed_conflicts'] and not confirm_fixed_conflicts:
-        error(422,'CONFIRM_FIXED_CONFLICTS','这些安排存在时间冲突，请核对后勾选确认')
+    from .fixed_conflict_guard import require_fixed_confirmation
+    require_fixed_confirmation(summary,confirm_fixed_conflicts)
     results=run_children(db,user,s,groups,preview['expected_revision'])
     return {'semester_id':s.id,'revision':s.revision,'groups':results,'impact':summary}

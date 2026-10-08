@@ -24,7 +24,7 @@ class TimeRiverView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows =
-        events.map(calendarDisplayEntry).where((row) {
+        calendarScheduleEntries(events).where((row) {
           final start = trackTime(row['start_at']);
           final end = trackTime(row['end_at']);
           final from = DateTime.utc(day.year, day.month, day.day);

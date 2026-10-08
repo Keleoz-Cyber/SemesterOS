@@ -97,7 +97,7 @@ def preference_conflicts(db,user,s,payload):
     items=[{**i.payload,'id':i.id,'lifecycle':i.lifecycle} for i in db.scalars(select(StudyItem).where(StudyItem.user_id==user.id,StudyItem.semester_id==s.id))]
     plans=[block_value(b) for b in plan_rows(db,user,s.id)]
     context=calendar_context(calendar,{**payload,'configured':True},courses,items,utcnow())
-    _,issues=classify(plans,items,context['free'].spans,context['begin'])
+    _,issues=classify(plans,items,context['free'].spans,context['begin'],obligation_points=context['obligation_points'])
     bad={i['block_id'] for i in issues}
     return [b for b in plans if b['id'] in bad]
 

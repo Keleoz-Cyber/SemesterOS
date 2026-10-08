@@ -37,8 +37,8 @@ class ItemTime(Input):
     end_date: CalendarDate | None = None
     day_end_confirmed: bool = False
     expression: str = Field(default='', max_length=500)
-    meaning: Literal['unspecified', 'deadline', 'start', 'window', 'candidate', 'course_anchor'] = Field(default='unspecified',
-        description='时间用途；未说明用途时省略或unspecified。unknown仅属于precision，不能填写为meaning。')
+    meaning: Literal['unspecified', 'deadline', 'start', 'window', 'candidate', 'course_anchor', 'all_day'] = Field(default='unspecified',
+        description='时间用途；未说明用途时省略或unspecified。all_day仅用于明确声明全天占用的date/range，保留日期精度、不补午夜钟点。unknown仅属于precision，不能填写为meaning。')
     candidate_dates: list[CalendarDate] = Field(default_factory=list, max_length=12)
     course_anchor: CourseAnchor | None = None
 
@@ -76,6 +76,8 @@ class ItemTime(Input):
             raise ValueError('课程节点需要保留课节口径')
         if self.meaning in ('candidate', 'course_anchor') and self.precision != 'unknown':
             raise ValueError('候选日期或课节节点不能同时作为已经确定的时间')
+        if self.meaning == 'all_day' and self.precision not in ('date', 'range'):
+            raise ValueError('全天占用使用日期或日期范围，不能补造具体开始时刻')
         if self.day_end_confirmed and self.meaning not in ('unspecified', 'deadline'):
             raise ValueError('只有明确截止可以使用日末口径')
         return self

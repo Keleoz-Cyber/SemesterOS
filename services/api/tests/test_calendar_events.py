@@ -70,7 +70,7 @@ def test_event_cancel_restores_capacity_and_removes_reminders(client, monkeypatc
     assert proposal(client, h, s, item)['status'] == 'FEASIBLE_COMPLETE'
 
 
-def test_partial_time_is_preserved_and_requires_clarification_for_planning(client, monkeypatch):
+def test_partial_time_is_preserved_and_planning_returns_candidates(client, monkeypatch):
     h, s, item = setup(client, monkeypatch)
     result = create_event(client, h, s['id'], time={'precision': 'date', 'date': '2026-09-21'}, certainty='tentative')
     assert result.status_code == 201, result.text
@@ -78,7 +78,8 @@ def test_partial_time_is_preserved_and_requires_clarification_for_planning(clien
     assert event['time']['at'] is None and event['time']['end_at'] is None
     assert event['reminders'][0]['schedule_state'] == 'pending_anchor'
     p = proposal(client, h, s, item)
-    assert not p['can_apply']
+    assert p['can_apply'] and p['uncertainty_warnings']
+    assert all(not w['exclusion_applied'] for w in p['uncertainty_warnings'])
 
 
 def test_calendar_projection_distinguishes_deadline_and_event_and_clips_cross_day(client):

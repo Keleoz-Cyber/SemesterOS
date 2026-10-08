@@ -124,7 +124,9 @@ class _ScheduleGridState extends State<ScheduleGrid>
 
   List<_GridPart> parts() {
     final result = <_GridPart>[];
-    for (final row in pages[calendarDate(widget.firstDay)] ?? widget.entries) {
+    for (final row in calendarScheduleEntries(
+      pages[calendarDate(widget.firstDay)] ?? widget.entries,
+    )) {
       if (row['resource_type'] == 'deadline' ||
           calendarMeaning(row) == 'window' ||
           (widget.resourceFilter != 'all' &&

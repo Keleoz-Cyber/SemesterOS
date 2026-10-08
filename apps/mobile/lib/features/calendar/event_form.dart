@@ -314,8 +314,14 @@ class _EventFormPageState extends State<EventFormPage> {
       }
       final time = <String, dynamic>{
         'meaning':
-            precision != 'unknown' &&
-                {'candidate', 'course_anchor'}.contains(originalTime['meaning'])
+            originalTime['meaning'] == 'all_day' &&
+                !{'date', 'range'}.contains(precision)
+            ? 'unspecified'
+            : precision != 'unknown' &&
+                  {
+                    'candidate',
+                    'course_anchor',
+                  }.contains(originalTime['meaning'])
             ? 'start'
             : originalTime['meaning'] ?? 'unspecified',
         'expression': expression.text.trim(),

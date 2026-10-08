@@ -218,11 +218,16 @@ def test_free_windows_respect_known_day_and_keep_unknown_end_warning(client, mon
     value=client.get('/api/v1/agent/runs/'+req['id'],headers=h).json()
     result=value['cards'][0]['data']
     assert value['status']=='completed'
-    assert result['windows']==[{'start_at':'2026-09-21T01:00:00+00:00',
+    expected=[{'start_at':'2026-09-21T01:00:00+00:00',
         'end_at':datetime.fromisoformat(expected_end).astimezone(timezone.utc).isoformat()}]
     if datetime.fromisoformat(start_at).date().isoformat()=='2026-09-21':
+        expected.append({'start_at':'2026-09-21T02:01:00+00:00',
+            'end_at':'2026-09-21T05:00:00+00:00','needs_check':True})
+    assert result['windows']==expected
+    if datetime.fromisoformat(start_at).date().isoformat()=='2026-09-21':
         warning=next(x for x in result['uncertainty_warnings'] if x['id']=='event:'+e['id'])
-        assert warning['exclusion_applied'] and warning['end_unknown'] and '结束时间' in warning['message']
+        assert not warning['exclusion_applied'] and warning['end_unknown'] and '结束时间' in warning['message']
+        assert warning['end_at'] is None
     else:
         assert result['uncertainty_warnings']==[]  # The previous day is not invented as continuing occupation.
     assert result['needs_input']==[]

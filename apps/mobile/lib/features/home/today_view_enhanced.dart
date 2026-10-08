@@ -132,10 +132,25 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
     super.dispose();
   }
 
+  List<Map<String, dynamic>> get _timeline =>
+      calendarScheduleEntries(widget.timeline);
+  List<Map<String, dynamic>> get _otherEntries =>
+      calendarScheduleEntries(widget.otherEntries);
+  bool get _dayFinished {
+    final rows = _timeline;
+    if (rows.length == widget.timeline.length) return widget.dayFinished;
+    return rows.isNotEmpty &&
+        rows.every(
+          (row) =>
+              row['end_at'] != null &&
+              !schoolTime(row['end_at']).isAfter(widget.now),
+        );
+  }
+
   TodayViewMode get _mode =>
       widget.preferences?.todayView ??
       defaultTodayViewMode(
-        events: widget.timeline.length + widget.otherEntries.length,
+        events: _timeline.length + _otherEntries.length,
         tasks: widget.tasks.length,
       );
   Future<void> _save({required List<String> order}) async {
@@ -192,7 +207,8 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
   );
 
   Widget _overview() {
-    final upcoming = widget.timeline.where((row) {
+    final timeline = _timeline;
+    final upcoming = timeline.where((row) {
       final start = schoolTime(row['start_at']);
       final end = row['end_at'] == null ? null : schoolTime(row['end_at']);
       return end == null ||
@@ -204,7 +220,7 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
       (row) => row['id'] == widget.priorityTaskId,
     );
     if (priorityIndex > 0) tasks.insert(0, tasks.removeAt(priorityIndex));
-    final otherEntries = widget.otherEntries
+    final otherEntries = _otherEntries
         .where(
           (row) =>
               !const [
@@ -226,7 +242,7 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
           widget.onAllEvents,
           const Key('today-events-action'),
         ),
-        if (!widget.scheduleAvailable && widget.timeline.isEmpty)
+        if (!widget.scheduleAvailable && timeline.isEmpty)
           widget.scheduleLoading
               ? const AgendaLoadingRail()
               : Padding(
@@ -236,19 +252,19 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
                     style: const TextStyle(color: CampusColors.muted),
                   ),
                 )
-        else if (widget.timeline.isEmpty && widget.otherEntries.isEmpty)
+        else if (timeline.isEmpty && _otherEntries.isEmpty)
           const _TodayEmptyView(kind: EmptySceneKind.agenda, title: '今天没有安排')
-        else if (upcoming.isEmpty && widget.timeline.isNotEmpty)
+        else if (upcoming.isEmpty && timeline.isNotEmpty)
           AppDisclosure(
-            title: Text('今天已结束 · ${widget.timeline.length}项'),
-            children: [for (final row in widget.timeline) _agendaRow(row)],
+            title: Text('今天已结束 · ${timeline.length}项'),
+            children: [for (final row in timeline) _agendaRow(row)],
           )
         else
           TimeRiverView(
-            events: widget.timeline,
+            events: timeline,
             now: widget.now,
             day: widget.day,
-            showNow: !widget.dayFinished,
+            showNow: !_dayFinished,
             onEventTap: widget.onEventTap,
           ),
         for (final row in otherEntries.take(2))
@@ -340,9 +356,10 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
   }
 
   Widget _schedule() {
-    if (!widget.scheduleAvailable &&
-        widget.timeline.isEmpty &&
-        widget.otherEntries.isEmpty) {
+    final timeline = _timeline;
+    final otherEntries = _otherEntries;
+    final dayFinished = _dayFinished;
+    if (!widget.scheduleAvailable && timeline.isEmpty && otherEntries.isEmpty) {
       if (widget.scheduleLoading) return const AgendaLoadingRail();
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -352,31 +369,31 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
         ),
       );
     }
-    final rail = widget.timeline.isEmpty
-        ? widget.otherEntries.isEmpty
+    final rail = timeline.isEmpty
+        ? otherEntries.isEmpty
               ? const _TodayEmptyView(
                   kind: EmptySceneKind.agenda,
                   title: '今天没有安排',
                 )
               : const SizedBox.shrink()
         : TimeRiverView(
-            events: widget.timeline,
+            events: timeline,
             now: widget.now,
             day: widget.day,
-            showNow: !widget.dayFinished,
+            showNow: !dayFinished,
             onEventTap: widget.onEventTap,
           );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.dayFinished)
+        if (dayFinished)
           AppDisclosure(
-            title: Text('今天已结束 · ${widget.timeline.length}项'),
+            title: Text('今天已结束 · ${timeline.length}项'),
             children: [rail],
           )
         else
           rail,
-        if (widget.otherEntries.isNotEmpty) ...[
+        if (otherEntries.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.only(top: 16, bottom: 8),
             child: Text(
@@ -384,7 +401,7 @@ class _TodayViewSwitchState extends State<TodayViewSwitch>
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
-          for (final row in widget.otherEntries)
+          for (final row in otherEntries)
             AppTile(
               onTap: () => widget.onEventTap(row),
               title: Text('${row['title'] ?? ''}'),

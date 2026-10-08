@@ -30,7 +30,7 @@ DEFINITIONS = {
 }
 LIMITATIONS = [
     '计划时长不等于实际投入；剩余预计耗时不作为已完成时长。',
-    '仅有日期、周次或日期范围时，不推定全天占用，也不均分时长到各天。',
+    '普通日期、周次或日期范围不推定全天占用；明确全天按日期另计，不补造钟点时长。',
     '实际分钟数未记录工作起止时间，无法与日程计算真实投入的重叠或效率。',
     '取消的日程、事项和计划不计安排；历史进度记录仍保留。分类按当前状态回溯，不是历史分类快照。',
 ]
@@ -82,7 +82,8 @@ def source_records(db, user, semester):
             course_id=p.get('course_id'),item_kind=p.get('kind'),
             reserve_time=reserved if kind in ('event','exam') else p.get('reserve_time', True),
             arrival_at=arrival.isoformat() if arrival else None,
-            occupancy_start_at=(arrival.isoformat() if arrival else t.get('at')) if fixed else None))
+            occupancy_start_at=(arrival.isoformat() if arrival else t.get('at')) if fixed else None,
+            all_day=t.get('meaning')=='all_day'))
     for p in db.scalars(select(PlanBlock).where(PlanBlock.user_id == user.id,
             PlanBlock.semester_id == semester.id, PlanBlock.status == 'active')):
         if p.item_id not in by_id or by_id[p.item_id].lifecycle == 'cancelled':
@@ -173,7 +174,7 @@ def insights(sid: str, from_date: date = Query(), to_date: date = Query(),
                 daily[day][key] += (boundary - cursor).total_seconds() / 60
                 spans[day].append((cursor.timestamp(), boundary.timestamp()))
                 cursor = boundary.astimezone(SHANGHAI)
-        elif r['fixed']:
+        elif r['fixed'] and not r.get('all_day'):
             unknown += 1
         actual = r['actual_minutes']
         if actual is not None:
@@ -186,7 +187,8 @@ def insights(sid: str, from_date: date = Query(), to_date: date = Query(),
         'fixed_scheduled_minutes', 'personal_planned_minutes', 'occupied_union_minutes')}
     actual_values = [r['actual_minutes'] for r in daily.values() if r['actual_minutes'] is not None]
     summary.update(entry_count=len(records), actual_minutes=sum(actual_values) if actual_values else None,
-                   unknown_duration_count=unknown, undated_count=len(undated))
+                   unknown_duration_count=unknown, undated_count=len(undated),
+                   all_day_count=sum(bool(r.get('all_day')) and r['fixed'] for r in records))
     current=utcnow();today=current.astimezone(SHANGHAI).date()
     tasks=[r for r in records if r['resource_type']=='deadline']
     def past_deadline(r):

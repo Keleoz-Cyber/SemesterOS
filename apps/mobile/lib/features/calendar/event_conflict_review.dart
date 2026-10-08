@@ -9,9 +9,50 @@ List<Map<String, dynamic>> _rows(dynamic value) => value is List
     ? value.whereType<Map>().map((r) => Map<String, dynamic>.from(r)).toList()
     : [];
 
-/// Conflicts describe an overlap, never an invented event duration.
-List<Map<String, dynamic>> eventConflicts(Map<String, dynamic> impact) =>
+List<Map<String, dynamic>> _legacyConflicts(Map<String, dynamic> impact) =>
     _rows(impact['new_fixed_conflicts'] ?? impact['fixed_conflicts']);
+
+bool eventConflictIsBlocking(Map<String, dynamic> conflict) {
+  if (conflict['blocking'] is bool) return conflict['blocking'] == true;
+  if (conflict['certainty'] == 'confirmed' ||
+      conflict['overlap_at_start'] == true ||
+      conflict['overlap_at_arrival'] == true ||
+      {
+        'point',
+        'start_point',
+        'arrival_interval',
+        'interval',
+      }.contains(conflict['evidence_kind'])) {
+    return true;
+  }
+  // Older previews put comparison windows in the conflict list. Incomplete
+  // time alone proves no overlap, while unannotated legacy intervals do.
+  return conflict['certainty'] != 'possible' &&
+      conflict['time_incomplete'] != true &&
+      conflict['window_is_comparison'] != true;
+}
+
+/// Only proven overlaps require a decision. An explicit empty list is final.
+List<Map<String, dynamic>> eventConflicts(Map<String, dynamic> impact) {
+  for (final key in [
+    'new_blocking_fixed_conflicts',
+    'new_blocking_conflicts',
+    'blocking_fixed_conflicts',
+    'blocking_conflicts',
+  ]) {
+    if (impact[key] is List) return _rows(impact[key]);
+  }
+  return _legacyConflicts(impact).where(eventConflictIsBlocking).toList();
+}
+
+List<Map<String, dynamic>> eventTimeWarnings(Map<String, dynamic> impact) {
+  for (final key in ['new_time_warnings', 'time_warnings']) {
+    if (impact[key] is List) return _rows(impact[key]);
+  }
+  return _legacyConflicts(
+    impact,
+  ).where((conflict) => !eventConflictIsBlocking(conflict)).toList();
+}
 
 List<Map<String, dynamic>> eventConflictCourses(Map<String, dynamic> impact) {
   final ids = eventConflicts(
@@ -63,7 +104,8 @@ class EventConflictReview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final conflicts = eventConflicts(impact);
-    if (conflicts.isEmpty) return const SizedBox.shrink();
+    final warnings = eventTimeWarnings(impact);
+    if (conflicts.isEmpty && warnings.isEmpty) return const SizedBox.shrink();
     final courses = eventConflictCourses(impact);
     final unresolved = unresolvedEventConflicts(impact, leaveTargets);
     final possible = conflicts.any(eventConflictIsPossible);
@@ -71,121 +113,152 @@ class EventConflictReview extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              unresolved.isEmpty && leaveTargets.isNotEmpty
-                  ? Icons.check_circle_outline_rounded
-                  : Icons.event_busy_rounded,
-              color: unresolved.isEmpty && leaveTargets.isNotEmpty
-                  ? CampusColors.teal
-                  : CampusColors.warning,
-              size: 21,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                unresolved.isEmpty && leaveTargets.isNotEmpty
-                    ? '已选请假处理'
-                    : possible
-                    ? '可能有时间冲突'
-                    : '有时间冲突',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ),
-        if (possible) ...[
-          const SizedBox(height: 8),
-          Text(
-            conflicts.any(_hasUnknownEnd)
-                ? '结束时间未明确，以下安排可能受影响。建议补充结束时间后重新核对。'
-                : '具体时间尚不完整，以下安排可能受影响。建议补充时间后重新核对。',
-          ),
-        ],
-        const SizedBox(height: 10),
-        for (final conflict in conflicts.take(6))
-          _ConflictLine(conflict: conflict, courses: courses),
-        if (conflicts.length > 6)
-          AppDisclosure(
-            tilePadding: EdgeInsets.zero,
-            title: Text('其余 ${conflicts.length - 6} 处冲突'),
+        if (conflicts.isNotEmpty) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final conflict in conflicts.skip(6))
-                _ConflictLine(conflict: conflict, courses: courses),
+              Icon(
+                unresolved.isEmpty && leaveTargets.isNotEmpty
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.event_busy_rounded,
+                color: unresolved.isEmpty && leaveTargets.isNotEmpty
+                    ? CampusColors.teal
+                    : CampusColors.warning,
+                size: 21,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  unresolved.isEmpty && leaveTargets.isNotEmpty
+                      ? '已选请假处理'
+                      : '有时间冲突',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
             ],
           ),
-        if (courses.isNotEmpty && (!editable || onLeaveChanged == null)) ...[
-          const SizedBox(height: 8),
-          const Text('涉及课程', style: TextStyle(fontWeight: FontWeight.w700)),
-          for (final course in courses)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                '${course['title']} · ${displayInterval(course['start_at'], course['end_at'])}',
-              ),
+          const SizedBox(height: 10),
+          for (final conflict in conflicts.take(6))
+            _ConflictLine(conflict: conflict, courses: courses),
+          if (conflicts.length > 6)
+            AppDisclosure(
+              tilePadding: EdgeInsets.zero,
+              title: Text('其余 ${conflicts.length - 6} 处冲突'),
+              children: [
+                for (final conflict in conflicts.skip(6))
+                  _ConflictLine(conflict: conflict, courses: courses),
+              ],
             ),
-        ],
-        if (editable) ...[
-          const SizedBox(height: 14),
-          const Text('先选择处理方式', style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(
-            courses.isNotEmpty
-                ? onLeaveChanged != null
-                      ? '能调整时间时，建议避开课程；必须参加时，先办理对应课次的请假。'
-                      : '能调整时间时，建议避开课程；若已办好请假，先在课程详情记录本次已请假，再重新核对。'
-                : '建议调整时间，避免同时保留无法兼顾的安排。',
-          ),
-          if (onAdjustTime != null) ...[
+          if (courses.isNotEmpty && (!editable || onLeaveChanged == null)) ...[
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppTextButton.icon(
-                onPressed: enabled ? onAdjustTime : null,
-                icon: const Icon(Icons.edit_calendar_outlined, size: 18),
-                label: Text(possible ? '补充或调整时间' : '调整时间重新核对'),
-              ),
-            ),
-          ],
-          if (courses.isNotEmpty && onLeaveChanged != null) ...[
-            const SizedBox(height: 8),
-            const Text(
-              '仅勾选已办好请假的课次；准备请假仍保留占用。这里不代办或审批请假。',
-              style: TextStyle(fontSize: 13, color: CampusColors.muted),
-            ),
+            const Text('涉及课程', style: TextStyle(fontWeight: FontWeight.w700)),
             for (final course in courses)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '${course['title']} · ${displayInterval(course['start_at'], course['end_at'])}',
+                ),
+              ),
+          ],
+          if (editable) ...[
+            const SizedBox(height: 14),
+            Text(
+              courses.isNotEmpty
+                  ? onLeaveChanged != null
+                        ? '可调整时间避开课程，或记录已办好的请假。'
+                        : '可调整时间避开课程；已办好请假时，先在课程详情记录本次已请假。'
+                  : '建议调整时间，避免同时保留无法兼顾的安排。',
+            ),
+            if (onAdjustTime != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppTextButton.icon(
+                  onPressed: enabled ? onAdjustTime : null,
+                  icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+                  label: Text(possible ? '补充或调整时间' : '调整时间重新核对'),
+                ),
+              ),
+            ],
+            if (courses.isNotEmpty && onLeaveChanged != null) ...[
+              const SizedBox(height: 8),
+              const Text(
+                '仅勾选已办好请假的课次；准备请假仍保留占用。这里仅记录状态。',
+                style: TextStyle(fontSize: 13, color: CampusColors.muted),
+              ),
+              for (final course in courses)
+                AppCheckRow(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: Text('${course['title']} · 我已请假'),
+                  subtitle: Text(
+                    displayInterval(course['start_at'], course['end_at']),
+                  ),
+                  value: leaveTargets.contains(course['occurrence_id']),
+                  onChanged: !enabled
+                      ? null
+                      : (v) => onLeaveChanged!(
+                          course['occurrence_id'] as String,
+                          v == true,
+                        ),
+                ),
+              if (leaveTargets.isNotEmpty)
+                const Text(
+                  '保存时记录所选课次已请假。',
+                  style: TextStyle(fontSize: 13, color: CampusColors.teal),
+                ),
+            ],
+            if (unresolved.isNotEmpty && onAcknowledged != null)
               AppCheckRow(
                 contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: Text('${course['title']} · 我已请假'),
-                subtitle: Text(
-                  displayInterval(course['start_at'], course['end_at']),
-                ),
-                value: leaveTargets.contains(course['occurrence_id']),
-                onChanged: !enabled
-                    ? null
-                    : (v) => onLeaveChanged!(
-                        course['occurrence_id'] as String,
-                        v == true,
-                      ),
-              ),
-            if (leaveTargets.isNotEmpty)
-              const Text(
-                '保存时仅标记所选课次已请假，原课程和其他周次保留。',
-                style: TextStyle(fontSize: 13, color: CampusColors.teal),
+                title: const Text('保留这些重叠安排'),
+                subtitle: const Text('我已核对并自行处理冲突，课程保持原状态。'),
+                value: acknowledged,
+                onChanged: !enabled ? null : (v) => onAcknowledged!(v == true),
               ),
           ],
-          if (unresolved.isNotEmpty && onAcknowledged != null)
-            AppCheckRow(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('保留这些重叠安排'),
-              subtitle: const Text('我已核对并自行处理冲突，课程保持原状态。'),
-              value: acknowledged,
-              onChanged: !enabled ? null : (v) => onAcknowledged!(v == true),
-            ),
         ],
+        if (warnings.isNotEmpty) ...[
+          if (conflicts.isNotEmpty) const SizedBox(height: 16),
+          _TimeWarningReview(warnings: warnings),
+        ],
+      ],
+    );
+  }
+}
+
+class _TimeWarningReview extends StatelessWidget {
+  final List<Map<String, dynamic>> warnings;
+  const _TimeWarningReview({required this.warnings});
+
+  @override
+  Widget build(BuildContext context) {
+    final tentativeOnly = warnings.every(
+      (warning) =>
+          (warning['uncertainty_reasons'] as List? ?? []).contains('tentative'),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Row(
+          children: [
+            Icon(
+              Icons.info_outline_rounded,
+              size: 20,
+              color: CampusColors.muted,
+            ),
+            SizedBox(width: 8),
+            Text('时间待核对', style: TextStyle(fontWeight: FontWeight.w700)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          warnings.every(_hasUnknownEnd)
+              ? '结束时间未说明，可先保存；其他课程仍按原安排保留。'
+              : tentativeOnly
+              ? '安排仍为暂定，可先保存；时间或参加情况变化后再核对。'
+              : '时间信息不完整，暂不能判断是否重叠，可先保存。',
+        ),
       ],
     );
   }
@@ -195,6 +268,15 @@ class _ConflictLine extends StatelessWidget {
   final Map<String, dynamic> conflict;
   final List<Map<String, dynamic>> courses;
   const _ConflictLine({required this.conflict, required this.courses});
+
+  bool get hasCourse => courses.any(
+    (course) =>
+        (conflict['item_ids'] as List? ?? []).contains(course['occurrence_id']),
+  );
+
+  bool get isPoint =>
+      {'point', 'start_point'}.contains(conflict['evidence_kind']) ||
+      conflict['overlap_at_start'] == true && _hasUnknownEnd(conflict);
 
   bool get courseAtStart {
     final start = DateTime.tryParse('${conflict['event_start_at']}');
@@ -222,8 +304,8 @@ class _ConflictLine extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         Text(
-          eventConflictIsPossible(conflict)
-              ? '需核对的时段 · ${displayInterval(conflict['start_at'], conflict['end_at'])}'
+          isPoint
+              ? '开始时间 · ${displayInstant(conflict['event_start_at'] ?? conflict['start_at'])}'
               : '重叠时段 · ${displayInterval(conflict['start_at'], conflict['end_at'])}',
           style: const TextStyle(fontSize: 13, color: CampusColors.muted),
         ),
@@ -232,6 +314,9 @@ class _ConflictLine extends StatelessWidget {
           Text(
             '日程在 ${displayInstant(conflict['event_start_at'])} 开始时已有${courseAtStart ? '课程' : '安排'}${_hasUnknownEnd(conflict) ? '，结束时间未说明' : ''}。',
           ),
+        if (conflict['overlap_at_arrival'] == true &&
+            conflict['overlap_at_start'] != true)
+          Text('已知的提前到场时段与${hasCourse ? '课程' : '安排'}重叠。'),
       ],
     ),
   );

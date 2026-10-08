@@ -49,7 +49,8 @@ def receipt(db, user, s, row, reason):
     from .plan_rules import classify
     source = snapshot(db, user, s)
     c = calendar_context(*source[:4], utcnow())
-    _, issues = classify(source[4], source[3], c['free'].spans, c['begin'])
+    _, issues = classify(source[4], source[3], c['free'].spans, c['begin'],
+        obligation_points=c['obligation_points'])
     return {'event': record(db, row, reason), 'semester_id': s.id, 'revision': s.revision,
             'affected_plan_ids': sorted({i['block_id'] for i in issues}), 'fixed_conflicts': c['conflicts']}
 
@@ -258,7 +259,7 @@ def calendar(sid: str, from_date: date = Query(), to_date: date = Query(),
              user: User = Depends(current_user), db: Session = Depends(get_db)):
     from .schedule_api import snapshot
     from .occurrences import expand
-    from .capacity import local_day, exam_window, calendar_context
+    from .capacity import local_day, exam_window, calendar_context, iso
     s = owned_semester(db, user, sid, lock=True)
     if to_date < from_date or (to_date - from_date).days > 366:
         error(422, 'INVALID_RANGE', '请核对查询日期，范围不能超过一年')
@@ -294,8 +295,13 @@ def calendar(sid: str, from_date: date = Query(), to_date: date = Query(),
                  'time': t, 'details': e.get('details', {}), 'reserve_time': reserved if kind in ('event','exam') else e.get('reserve_time', True)}
         entry['arrival_at'] = arrival.isoformat() if arrival else None
         entry['occupancy_start_at'] = (entry['arrival_at'] or entry['start_at']) if fixed else None
+        if t.get('meaning') == 'all_day':
+            entry['all_day'] = True
         if t['precision'] == 'unknown': undated.append(entry); continue
         a, b = exam_window(e, term_start, term_end)
+        if fixed and t.get('meaning') == 'all_day':
+            entry['occupancy_start_at'] = iso(a)
+            entry['occupancy_end_at'] = iso(b)
         if arrival: a = arrival.timestamp()
         if exact and ((not fixed_time and t.get('meaning') != 'window') or not t.get('end_at')):
             b = instant(t['at']).timestamp() + .000001
@@ -317,7 +323,16 @@ def calendar(sid: str, from_date: date = Query(), to_date: date = Query(),
             return local_day(entry['date']).timestamp(), entry['id']
         return term_start + ((entry.get('week') or 1) - 1) * 7 * 86400, entry['id']
     result.sort(key=ordering)
+    def in_visible_range(value):
+        a=value.get('comparison_start_at') or value.get('start_at')
+        b=value.get('comparison_end_at') or value.get('end_at')
+        if a is None: return False
+        start=instant(a).timestamp()
+        if b is not None and instant(b).timestamp()==start:
+            return begin<=start<end
+        return start<end and (b is None or instant(b).timestamp()>begin)
+    conflicts=[c for c in context['conflicts'] if in_visible_range(c)]
     return {'semester_id': sid, 'revision': s.revision, 'from_date': from_date.isoformat(), 'to_date': to_date.isoformat(),
             'entries': result, 'undated': undated,
-            'fixed_conflicts': [c for c in context['conflicts'] if instant(c['start_at']).timestamp() < end
-                                and instant(c['end_at']).timestamp() > begin], 'categories': CATEGORIES}
+            'fixed_conflicts':conflicts,'blocking_fixed_conflicts':conflicts,
+            'time_warnings':[w for w in context['time_warnings'] if in_visible_range(w)], 'categories': CATEGORIES}

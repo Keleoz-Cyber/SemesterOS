@@ -9,7 +9,7 @@ from .models import User
 from .reminder_rules import SHANGHAI, utcnow, instant
 from .calendar_events import calendar
 from .schedule_api import snapshot
-from .capacity import calendar_context, local_day, subtract, merge, iso, uncertainty_affects_window
+from .capacity import calendar_context, local_day, subtract, merge, iso, uncertainty_affects_window, minute_free_spans
 
 router = APIRouter()
 
@@ -29,21 +29,37 @@ def day_brief(sid: str, day: date | None = Query(default=None),
     warnings=[w for w in context['uncertainty_warnings'] if uncertainty_affects_window(w,begin,end)]
     uncertain=[w['id'] for w in warnings if w['could_affect_occupancy']]
     plans=[p for p in source[4] if p['status']=='active' and instant(p['start_at']).timestamp()<end and instant(p['end_at']).timestamp()>future]
-    fixed=[r for r in data['entries'] if r.get('fixed') and r.get('start_at') and r.get('end_at')]
+    fixed=[{**r, 'start_at':r.get('occupancy_start_at') or r['start_at'],
+             'end_at':r.get('occupancy_end_at') or r['end_at']}
+        for r in data['entries'] if r.get('fixed')
+        and (r.get('occupancy_start_at') or r.get('start_at'))
+        and (r.get('occupancy_end_at') or r.get('end_at'))]
     overlaps=[]
     for plan in plans:
         a,b=instant(plan['start_at']).timestamp(),instant(plan['end_at']).timestamp()
         conflict=[r for r in fixed if instant(r.get('occupancy_start_at') or r['start_at']).timestamp()<b
                   and instant(r['end_at']).timestamp()>max(a,future)]
+        for r in data['entries']:
+            if not r.get('fixed') or not r.get('start_at') or r.get('end_at'):
+                continue
+            point=instant(r['start_at']).timestamp()
+            arrival=instant(r['occupancy_start_at']).timestamp() if r.get('occupancy_start_at') else point
+            if max(a,future)<=point<b or arrival<b and point>max(a,future) and arrival<point:
+                conflict.append(r)
         if conflict:overlaps.append({'plan_id':plan['id'],'item_id':plan['item_id'],'title':plan['title'],
             'start_at':plan['start_at'],'end_at':plan['end_at'],'with':[{'id':r['id'],'title':r['title']} for r in conflict]})
     occupied=[(instant(p['start_at']).timestamp(),instant(p['end_at']).timestamp()) for p in source[4] if p['status']=='active']
     configured=source[1].get('configured',False)
     windows=[]
     if configured:
-        for a,b in subtract(context['free'].spans,merge(occupied)):
+        for left,right in minute_free_spans(subtract(context['free'].spans,merge(occupied)),context['obligation_points']):
+            a,b=left*60,right*60
             a,b=max(a,future),min(b,end)
-            if b-a>=30*60:windows.append({'start_at':iso(a),'end_at':iso(b),'minutes':int((b-a)//60)})
+            if b-a>=30*60:
+                needs_check=any(w['could_affect_occupancy'] and not w['unbounded']
+                    and uncertainty_affects_window(w,a,b) for w in warnings)
+                windows.append({'start_at':iso(a),'end_at':iso(b),'minutes':int((b-a)//60),
+                    **({'needs_check':True} if needs_check else {})})
     suggestions=[]
     if overlaps:
         suggestions.append({'kind':'plan_conflict','title':f'{len(overlaps)}段个人计划与固定安排重叠',
@@ -51,19 +67,19 @@ def day_brief(sid: str, day: date | None = Query(default=None),
             'source_ids':[p['plan_id'] for p in overlaps], 'action_label':'查看调整建议',
             'request':f'请检查{day}与固定安排冲突的个人计划，提出调整建议，固定课程和活动保持原位。'})
     if data['fixed_conflicts']:
-        possible_only = all(c.get('certainty') == 'possible' for c in data['fixed_conflicts'])
-        detail = '；'.join(' / '.join(c['titles']) + ('（时段未完整说明，可能重叠）'
-            if c.get('certainty') == 'possible' else '') for c in data['fixed_conflicts'][:3])
-        suggestions.append({'kind':'fixed_conflict','title':'有安排时间待核对' if possible_only else '固定安排时间重叠','detail':detail,
+        points_only = all(c.get('evidence_kind') == 'start_point' for c in data['fixed_conflicts'])
+        detail = '；'.join(' / '.join(c['titles']) + ('（开始时刻重叠）'
+            if c.get('evidence_kind') == 'start_point' else '') for c in data['fixed_conflicts'][:3])
+        suggestions.append({'kind':'fixed_conflict','title':'开始时刻已有其他安排' if points_only else '固定安排时间重叠','detail':detail,
             'source_ids':list({id for c in data['fixed_conflicts'] for id in c['item_ids']}),'action_label':'核对这一天',
             'request':f'请核对{day}的固定安排冲突，说明哪些通知需要我确认，不自动移动课程或活动。'})
     if uncertain:
-        suggestions.append({'kind':'missing_time','title':'有安排的时间还没确定','detail':'排程避开已知日期范围；没有日期的事项单独保留，不封锁全部学习时间',
+        suggestions.append({'kind':'missing_time','title':'有安排的时间待核对','detail':'仅按已知开始和到场时间避让；未说明的时长不作为全天占用',
             'source_ids':uncertain,'action_label':'查看记录','request':f'请列出可能影响{day}的时间不完整安排，并说明现有信息，未知部分先保留。'})
     if windows:
         first=windows[0]
         a=instant(first['start_at']).astimezone(SHANGHAI);b=instant(first['end_at']).astimezone(SHANGHAI)
-        detail=f"按你的学习时间设置，连续{first['minutes']}分钟"+('；有安排时间待核对，这是候选时段' if uncertain else '')
+        detail=f"按你的学习时间设置，连续{first['minutes']}分钟"+('；有安排时间待核对，这是候选时段' if first.get('needs_check') else '')
         suggestions.append({'kind':'free_window','title':f"{a:%H:%M}—{b:%H:%M} 可安排任务",'detail':detail,
             'source_ids':[], 'action_label':'安排一下','request':f'请查看我未完成的任务，建议如何利用{day} {a:%H:%M}至{b:%H:%M}这段空闲时间，先给我预览。'})
     tomorrow=day+timedelta(days=1)

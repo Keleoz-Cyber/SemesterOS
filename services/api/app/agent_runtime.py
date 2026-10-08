@@ -86,12 +86,16 @@ NOTICE_INPUT_SYSTEM='''本轮是用户主动提交的外部通知整理输入。
 
 SYSTEM += '\n用户说“已请假”“老师已经允许不去这次课”时，记录具体课次的个人请假，而不是停课或整门课免听。先查询具体课次，再prepare_course_change kind=leave；“会请假/打算请假/还没请假”用plan_leave，仍保留课程占用；撤销请假恢复上课用attend。自述已经请假是个人记录依据，不要求额外校方证明。已有待确认活动时，把活动和请假放在同一prepare_batch里核对，不要丢失原安排，不只口头说已记录。用户只是询问保存状态时，核对previous_preview_status和receipt；needs_confirmation只代表待保存，superseded/cancelled是失效，不得说已写入。查询或补充说明不会自动保存，也不会自动取消原预览；只有新的实际预览替代旧预览。\n候场、集合、提前到场与正式开始是不同时间。“14:40候场，15:00正式开始”应time.at=15:00、end_at留空、details.early_arrival_minutes=20；不得把15:00当结束时间。通知包含分节目时段时，按用户明确的节目/职责与共同要求组织个人安排；未知本人节目时问一个必要问题，不能宣称全天排练都是本人必须占用。'
 
-SYSTEM += '\n新增、修改或恢复本人参加的会议、活动和考试时，先核对工具返回的impact冲突，不能把缺少结束时间当成没有冲突。开始时刻已落在课内要直接说明该时刻有课；只可能延续到其他课程的情况明确说可能冲突，不把核对范围当实际结束。让用户选择调整或补充时间、已请假课次或明确保留重叠后再保存。开会、考试、参加活动都不代表课程停课或已经请假，不自动修改出勤；准备请假仍占用，已请假才解除个人占用。仅参考、不参加且不预留的记录不要求请假，也不为未知日期封锁整个学期。今天和明天仍按真实上海日期，浏览周次只解释明确页面指代。'
+SYSTEM += '\n只给开始时间是正常、合法的日程记录，结束时间未知不代表持续到午夜、持续整个上午或占用当天剩余时间。新增、修改或恢复时只把工具返回的实际开始点、明确提前到场区间或已知起止区间的重叠作为需要处理的冲突；只有这些实际涉及的课次才推荐请假。time_warnings仅说明时间信息，不要求用户给后面的课逐一请假、确认保留冲突或补齐结束才可保存。只有日期、周次和未定时间也可正常保存，不能当作全天固定占用；用户明确说全天时才按该日期完整一天记录，单说上午9点绝不是整个上午。开会不等于已经请假，准备请假仍保留课程占用；已请假的课不计入本人待参加的日程。查询原课表或请假历史时保留其原课程信息。空档和学习安排按已知时间事实给候选，不把时间未说明说成当天没有空闲；不能安排学习块跨过一个明确会议开始点。今天和明天仍按真实上海日期，浏览周次只解释明确页面指代。'
+
+
+SYSTEM += '\n明确全天使用precision=date或range及meaning=all_day，保留原话，不把午夜当成实际开始或相对提醒锚点；普通日期不等于全天占用。记录活动并核对课表不是记录已请假；只有用户明确已请假、老师允许或直接要求记录该状态才用leave，申请中用plan_leave。新增前核对当前对话或查询中是否已有同名同日期时刻的日程；重复说明已保存的同一活动时先find_records并更新已有记录，不另外新增，用户明确另一场才单独创建。'
 
 
 def preview_confirmation_answer(preview):
     impact = preview.get('impact') or {}
-    conflicts = impact.get('new_fixed_conflicts', impact.get('fixed_conflicts', []))
+    conflicts = impact.get('new_blocking_fixed_conflicts',
+        impact.get('new_fixed_conflicts', impact.get('blocking_fixed_conflicts', impact.get('fixed_conflicts', []))))
     if not conflicts:
         return '请核对这次修改，确认后保存。'
     courses = impact.get('course_conflicts', [])
@@ -164,7 +168,8 @@ def initial_state(db,user,thread,text,now,exclude_run_id=None,input_kind='messag
     if not source and (thread.context or {}).get('source'):
         source = thread.context['source']
     if source: draft_source=source['text']
-    return {'messages':messages,'turn_messages':[current_message], 'cards':[], 'known_ids':list(set(known)),
+    return {'messages':messages,'turn_messages':[current_message], 'current_user_text':text,
+            'cards':[], 'known_ids':list(set(known)),
             'ambiguous_ids': history[0].state.get('ambiguous_ids',[]) if history else [],
             'known_action_ids': history[0].state.get('known_action_ids',[]) if history else [],
             'occurrence_records': history[0].state.get('occurrence_records',{}) if history else {},

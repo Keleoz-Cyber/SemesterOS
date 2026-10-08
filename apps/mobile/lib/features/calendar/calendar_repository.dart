@@ -19,6 +19,33 @@ bool calendarReservesTime(Map<String, dynamic> row) =>
     row['reserve_time'] != false &&
     calendarMeaning(row) != 'window';
 
+bool _calendarIsCourseOccurrence(Map<String, dynamic> row) {
+  final resource = row['resource_type'];
+  if (resource != null) return resource == 'course';
+  final reality = row['reality_kind'];
+  if (reality != null) return reality == 'course';
+  // Older timetable rows lack the projection's resource discriminator.
+  // A course association alone also appears on exams and tasks.
+  return row['course_id'] is String &&
+      (row['course_id'] as String).isNotEmpty &&
+      row['weekday'] is int &&
+      row['weeks'] is List &&
+      row['sections'] is List;
+}
+
+/// Current arrangements omit an excused occurrence; source records remain
+/// available in course details and change receipts for restoring attendance.
+List<Map<String, dynamic>> calendarScheduleEntries(
+  Iterable<Map<String, dynamic>> entries,
+) => entries
+    .where(
+      (row) =>
+          !_calendarIsCourseOccurrence(row) ||
+          row['attendance_status'] != 'leave',
+    )
+    .map(calendarDisplayEntry)
+    .toList();
+
 Map<String, dynamic> calendarDisplayEntry(Map<String, dynamic> row) {
   final time = calendarTime(row);
   return {
@@ -70,12 +97,11 @@ List<Map<String, dynamic>> calendarGridEntries(
   DateTime firstDay,
 ) {
   final result = <Map<String, dynamic>>[];
-  for (final entry in entries) {
+  for (final entry in calendarScheduleEntries(entries)) {
     if (entry['start_at'] == null ||
         entry['end_at'] == null ||
         calendarMeaning(entry) == 'window' ||
-        (!calendarReservesTime(entry) &&
-            entry['attendance_status'] != 'leave')) {
+        !calendarReservesTime(entry)) {
       continue;
     }
     final start = DateTime.parse(
@@ -129,12 +155,19 @@ String calendarTimeLabel(
 
   if (row['start_at'] != null) {
     return row['end_at'] == null
-        ? '${at(row['start_at'])}${includeMissing ? ' · 结束时间待定' : ''}'
+        ? '${at(row['start_at'])}${includeMissing ? ' · 开始' : ''}'
         : '${at(row['start_at'])}—${at(row['end_at'])}';
   }
   if (row['due_at'] != null) return '${at(row['due_at'])} 截止';
-  if (row['date'] != null) {
-    return '${studentDate(DateTime.parse(row['date']))}${row['end_date'] == null ? '' : ' 至 ${studentDate(DateTime.parse(row['end_date']))}'}${includeMissing ? ' · 时刻待定' : ''}';
+  final date = row['date'] ?? time['date'];
+  final endDate = row['end_date'] ?? time['end_date'];
+  if (date != null) {
+    final allDay = calendarMeaning(row) == 'all_day' || row['all_day'] == true;
+    return '${studentDate(DateTime.parse(date))}${endDate == null ? '' : ' 至 ${studentDate(DateTime.parse(endDate))}'}${allDay
+        ? ' · 全天'
+        : includeMissing
+        ? ' · 仅日期'
+        : ''}';
   }
   if (row['week'] != null) {
     return '第${row['week']}周${includeMissing ? ' · 日期待定' : ''}';
@@ -156,11 +189,12 @@ class CalendarRepository extends ChangeNotifier {
   bool busy = false, offline = false, _disposed = false;
   String? error, _key;
   int _request = 0;
-  List<Map<String, dynamic>> get entries => List<Map<String, dynamic>>.from(
-    data?['entries'] ?? [],
-  ).map(calendarDisplayEntry).toList();
-  List<Map<String, dynamic>> get undated =>
-      List<Map<String, dynamic>>.from(data?['undated'] ?? []);
+  List<Map<String, dynamic>> get entries => calendarScheduleEntries(
+    List<Map<String, dynamic>>.from(data?['entries'] ?? []),
+  );
+  List<Map<String, dynamic>> get undated => calendarScheduleEntries(
+    List<Map<String, dynamic>>.from(data?['undated'] ?? []),
+  );
   int? get revision => data?['revision'] as int?;
   void changed() {
     if (!_disposed) notifyListeners();

@@ -9,6 +9,25 @@ import '../items/items_controller.dart';
 import '../items/item_widgets.dart';
 import '../items/task_surfaces.dart' show TaskTimeBudget;
 
+String fixedConflictNotice(Map<String, dynamic> conflict) {
+  final title = (conflict['titles'] as List? ?? []).join(' / ');
+  final point = {'point', 'start_point'}.contains(conflict['evidence_kind']);
+  if (point) {
+    return '$title · 开始时刻重叠\n${displayInstant(conflict['start_at'])}';
+  }
+  final blocking =
+      conflict['blocking'] == true ||
+      conflict['overlap_at_start'] == true ||
+      conflict['overlap_at_arrival'] == true;
+  final possible = conflict['certainty'] == 'possible' && !blocking;
+  final label = conflict['evidence_kind'] == 'arrival_interval'
+      ? '提前到场时间重叠'
+      : possible
+      ? '时间待核对'
+      : '时间重叠';
+  return '$title · $label\n${displayInterval(conflict['start_at'], conflict['end_at'])}';
+}
+
 String minutesLabel(dynamic value) {
   if (value == null) return '待补齐信息';
   final n = (value as num).toInt(), m = n.abs();
@@ -176,10 +195,7 @@ class RiskOverview extends StatelessWidget {
         for (final conflict in conflicts.take(3))
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: SoftNotice(
-              '${(conflict['titles'] as List).join(' / ')} ${conflict['certainty'] == 'possible' ? '可能有时间冲突（时间未完整）' : '时间重叠'}\n${conflict['certainty'] == 'possible' ? '需核对的时段：' : ''}${displayInterval(conflict['start_at'], conflict['end_at'])}',
-              warning: true,
-            ),
+            child: SoftNotice(fixedConflictNotice(conflict), warning: true),
           ),
         if ((summary?['plan_conflict_count'] ?? 0) > 0)
           SoftNotice(
@@ -371,7 +387,9 @@ Future<void> showRiskDetails(
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: SoftNotice(
-                          '${(conflict['titles'] as List).join(' / ')}${conflict['certainty'] == 'possible' ? ' · 可能冲突（时间未完整）' : ''}\n${conflict['certainty'] == 'possible' ? '需核对的时段：' : ''}${displayInterval(conflict['start_at'], conflict['end_at'])}',
+                          fixedConflictNotice(
+                            Map<String, dynamic>.from(conflict),
+                          ),
                           warning: true,
                         ),
                       ),

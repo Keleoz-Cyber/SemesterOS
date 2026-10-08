@@ -32,23 +32,33 @@ def context(events, courses=(COURSE,), exams=()):
                             list(courses), list(exams), NOW)
 
 
+def test_stated_start_inside_course_is_protected_without_inventing_end():
+    entry = event()
+    before = deepcopy(entry)
+    conflicts = context([entry])['conflicts']
+    assert len(conflicts) == 1
+    conflict = conflicts[0]
+    assert conflict['certainty'] == 'confirmed' and conflict['blocking'] is True
+    assert conflict['evidence_kind'] == 'start_point'
+    assert conflict['time_incomplete'] is True
+    assert conflict['uncertain_item_ids'] == ['event:meeting']
+    assert '软件工程' in conflict['titles']
+    assert entry == before and 'end_at' not in entry['time']
+
+
 @pytest.mark.parametrize('time', [
-    {'precision': 'exact', 'at': clock('09:00')},
     {'precision': 'exact', 'at': clock('07:30')},
     {'precision': 'date', 'date': DAY},
     {'precision': 'week', 'week': 6},
     {'precision': 'range', 'date': '2026-10-08', 'end_date': DAY},
 ])
-def test_incomplete_event_prompts_possible_course_conflict_without_inventing_end(time):
+def test_incomplete_dates_or_possible_continuation_only_warn_without_inventing_end(time):
     entry = event(time=time)
     before = deepcopy(entry)
-    conflicts = context([entry])['conflicts']
-    assert len(conflicts) == 1
-    conflict = conflicts[0]
-    assert conflict['certainty'] == 'possible'
-    assert conflict['time_incomplete'] is True
-    assert conflict['uncertain_item_ids'] == ['event:meeting']
-    assert '软件工程' in conflict['titles']
+    result = context([entry])
+    assert result['conflicts'] == []
+    assert result['time_warnings']
+    assert all(w['blocking'] is False for w in result['time_warnings'])
     assert entry == before and 'end_at' not in entry['time']
 
 
@@ -60,15 +70,17 @@ def test_unknown_start_after_course_and_unknown_dates_do_not_claim_course_overla
 def test_early_arrival_is_checked_before_stated_start_even_with_unknown_end():
     conflicts = context([event(time={'precision': 'exact', 'at': clock('10:00')},
                                details={'early_arrival_minutes': 30})])['conflicts']
-    assert len(conflicts) == 1 and conflicts[0]['certainty'] == 'possible'
+    assert len(conflicts) == 1 and conflicts[0]['certainty'] == 'confirmed'
     assert datetime.fromisoformat(conflicts[0]['start_at']) == datetime.fromisoformat(clock('09:30'))
 
 
-def test_two_incomplete_events_same_known_day_require_review():
-    conflicts = context([event(), event('second', title='实验室会议',
-        time={'precision': 'exact', 'at': clock('11:00')})], courses=[])['conflicts']
-    assert len(conflicts) == 1 and conflicts[0]['certainty'] == 'possible'
-    assert set(conflicts[0]['uncertain_item_ids']) == {'event:meeting', 'event:second'}
+def test_two_incomplete_events_with_different_starts_only_need_information_review():
+    result = context([event(), event('second', title='实验室会议',
+        time={'precision': 'exact', 'at': clock('11:00')})], courses=[])
+    assert result['conflicts'] == []
+    assert len(result['time_warnings']) == 2
+    assert all(len(w['uncertain_item_ids']) == 1 and w['blocking'] is False for w in result['time_warnings'])
+    assert [w['titles'] for w in result['time_warnings']] == [['班主任会议'],['实验室会议']]
 
 
 @pytest.mark.parametrize('course_patch', [{'attendance_status': 'leave'}, {'attendance_exempt': True}])
@@ -81,21 +93,22 @@ def test_planned_leave_still_requires_review_and_reference_event_does_not():
     assert context([event(reserve_time=False)])['conflicts'] == []
 
 
-def test_incomplete_exam_uses_same_possible_conflict_path():
+def test_incomplete_exam_uses_same_confirmed_start_conflict_path():
     exam = {**event('exam'), 'kind': 'exam', 'lifecycle': 'active', 'title': '考试'}
     conflict = context([], exams=[exam])['conflicts'][0]
-    assert conflict['certainty'] == 'possible' and conflict['uncertain_item_ids'] == ['exam']
+    assert conflict['certainty'] == 'confirmed' and conflict['uncertain_item_ids'] == ['exam']
 
 
-def test_possible_overlap_is_not_reported_as_proven_high_risk():
+def test_confirmed_point_overlap_is_high_risk_and_longer_overlap_is_new_evidence():
     result = analyze({**CALENDAR, 'fixed_events': [event()]}, PREFERENCES, [COURSE], [], NOW)
-    assert result['summary']['level'] == 'medium'
-    assert result['summary']['possible_fixed_conflict_count'] == 1
+    assert result['summary']['level'] == 'high'
+    assert result['summary']['fixed_conflict_count'] == 1
+    assert result['summary']['possible_fixed_conflict_count'] == 0
     definite = context([event(time={'precision': 'exact', 'at': clock('09:00'), 'end_at': clock('09:30')})])['conflicts']
     assert len(definite) == 1 and definite[0]['certainty'] == 'confirmed'
-    possible = context([event()])['conflicts']
-    assert introduced_conflicts(possible, definite) == definite
-    assert introduced_conflicts(possible, deepcopy(possible)) == []
+    point = context([event()])['conflicts']
+    assert introduced_conflicts(point, definite) == definite
+    assert introduced_conflicts(point, deepcopy(point)) == []
 
 
 def api_setup(c, monkeypatch):
@@ -124,7 +137,7 @@ def test_raw_create_conflict_is_blocked_before_save_and_explicit_choice_is_idemp
     body = api_body(sid, 1)
     blocked = client.post('/api/v1/events', headers=headers, json=body)
     assert blocked.status_code == 422 and blocked.json()['code'] == 'CONFIRM_FIXED_CONFLICTS'
-    assert blocked.json()['new_fixed_conflicts'][0]['certainty'] == 'possible'
+    assert blocked.json()['new_fixed_conflicts'][0]['certainty'] == 'confirmed'
     assert not client.get('/api/v1/taxonomy', headers=headers).json()['tags']
     url = f'/api/v1/semesters/{sid}/calendar?from_date={DAY}&to_date={DAY}'
     assert not any(e['resource_type'] == 'event' for e in client.get(url, headers=headers).json()['entries'])
@@ -165,7 +178,7 @@ def test_conflict_preview_is_read_only_and_identifies_real_course_targets(client
     impact = response.json()['impact']
     assert len(impact['new_fixed_conflicts']) == len(impact['course_conflicts']) == 1
     conflict = impact['new_fixed_conflicts'][0]
-    assert conflict['certainty'] == 'possible' and conflict['overlap_at_start'] is True
+    assert conflict['certainty'] == 'confirmed' and conflict['overlap_at_start'] is True
     assert datetime.fromisoformat(conflict['event_start_at']) == datetime.fromisoformat(clock('09:00'))
     target = impact['course_conflicts'][0]['occurrence_id']
     assert conflict['item_ids'] == [target]
@@ -241,7 +254,7 @@ def test_atomic_manual_edit_preserves_omitted_metadata_and_failed_choice_rolls_b
         assert after[field] == first['event'][field], field
 
 
-def test_day_brief_does_not_describe_possible_conflict_as_proven_overlap(client, monkeypatch):
+def test_day_brief_describes_confirmed_point_without_claiming_event_duration(client, monkeypatch):
     from app import briefs
     headers, sid = api_setup(client, monkeypatch)
     monkeypatch.setattr(briefs, 'utcnow', lambda: NOW)
@@ -251,5 +264,5 @@ def test_day_brief_does_not_describe_possible_conflict_as_proven_overlap(client,
     response = client.get(f'/api/v1/semesters/{sid}/day-brief?day={DAY}', headers=headers)
     assert response.status_code == 200, response.text
     suggestion = next(s for s in response.json()['suggestions'] if s['kind'] == 'fixed_conflict')
-    assert suggestion['title'] == '有安排时间待核对'
-    assert '可能重叠' in suggestion['detail'] and '班主任会议' in suggestion['detail']
+    assert suggestion['title'] == '开始时刻已有其他安排'
+    assert '开始时刻' in suggestion['detail'] and '班主任会议' in suggestion['detail']

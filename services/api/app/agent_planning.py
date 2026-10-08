@@ -101,7 +101,7 @@ def prepare_agent_plan(db, user, semester, state, args: PlanRequest):
         context=calendar_context(*projected[:4],now)
         occupied=merge([(instant(b['start_at']).timestamp(),instant(b['end_at']).timestamp())
                         for b in source[4] if b['status']=='active'])
-        available=CapacityIndex(subtract(context['free'].spans,occupied))
+        available=CapacityIndex(subtract(context['free'].spans,occupied),points=context['obligation_points'])
         longest=available.longest(instant(result['window_start']).timestamp(),instant(result['window_end']).timestamp())
         required=min(args.chunk_minutes,max((i.get('remaining_minutes') or 0 for i in projected[3]
                                             if i['id'] in args.task_ids),default=0))

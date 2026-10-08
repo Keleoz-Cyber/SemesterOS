@@ -95,6 +95,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
           : (selectedImpact ?? p['impact'] ?? {}),
     );
     final conflicts = eventConflicts(impact);
+    final timeWarnings = eventTimeWarnings(impact);
     final unresolved = unresolvedEventConflicts(impact, leaveTargets);
     final saved = rows(
       widget.run['receipt']?['groups'],
@@ -212,7 +213,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
                   '${review['title']}：${review['will_align'] == true ? '复习截止跟随考试调整' : '保留原复习截止'}',
                 ),
             ],
-            if (conflicts.isNotEmpty) ...[
+            if (conflicts.isNotEmpty || timeWarnings.isNotEmpty) ...[
               const Divider(height: 28),
               EventConflictReview(
                 impact: impact,

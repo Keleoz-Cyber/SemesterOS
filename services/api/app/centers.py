@@ -97,7 +97,7 @@ def course_hub(id:str,user:User=Depends(current_user),db:Session=Depends(get_db)
 def semester_hub(sid:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
     s=owned_semester(db,user,sid,lock=True);now,source,items,risk,events,changes=data_snapshot(db,user,s)
     active=[i for i in items if i['lifecycle']=='active'];c=calendar_context(*source[:4],now)
-    valid,_=classify(source[4],source[3],c['free'].spans,c['begin'])
+    valid,_=classify(source[4],source[3],c['free'].spans,c['begin'],obligation_points=c['obligation_points'])
     first=local_day(s.first_monday);finish=first+timedelta(weeks=s.total_weeks)
     risks={r['item_id']:r for r in risk['items']};weeks=[];undated=[];outside=[]
     spans={i['id']:item_span(i,s) for i in active}

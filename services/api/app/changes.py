@@ -62,7 +62,7 @@ def impact(source,patch,now):
     c=calendar_context(source[0],source[1],changed,source[3],now)
     old_context=calendar_context(*source[:4],now)
     from .conflict_changes import introduced_conflicts
-    _,issues=classify(source[4],source[3],c['free'].spans,c['begin']);bad={i['block_id'] for i in issues}
+    _,issues=classify(source[4],source[3],c['free'].spans,c['begin'],obligation_points=c['obligation_points']);bad={i['block_id'] for i in issues}
     return {'affected_blocks':[b for b in source[4] if b['id'] in bad],'risk_changes':deltas,
         'before_summary':before['summary'],'after_summary':after['summary'],'fixed_conflicts':c['conflicts'],
         'new_fixed_conflicts':introduced_conflicts(old_context['conflicts'],c['conflicts'])}

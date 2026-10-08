@@ -805,17 +805,17 @@ class TodayDashboardState extends State<TodayDashboard>
         timeline.every(
           (r) => at(r['end_at']) != null && !at(r['end_at'])!.isAfter(now),
         );
-    final tomorrow = briefRows(brief.data?['next_day']?['entries'])
-        .where(
-          (r) => const [
-            'course',
-            'event',
-            'exam',
-            'plan',
-          ].contains(r['resource_type']),
-        )
-        .map(calendarDisplayEntry)
-        .toList();
+    final tomorrow =
+        calendarScheduleEntries(briefRows(brief.data?['next_day']?['entries']))
+            .where(
+              (r) => const [
+                'course',
+                'event',
+                'exam',
+                'plan',
+              ].contains(r['resource_type']),
+            )
+            .toList();
     final nextDate = day.add(const Duration(days: 1));
     final tomorrowTasks = tasks.where((t) {
       final due = deadline(t);

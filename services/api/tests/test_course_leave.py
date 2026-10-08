@@ -78,7 +78,9 @@ def test_attendance_group_uses_verified_occurrence_query(client, monkeypatch, ki
             from_date=date(2026, 9, 1), to_date=date(2026, 10, 2), query=old['title']))
         targets = [e['id'] for e in result['occurrences']]
         assert len(targets) == 3
-        preview = prepare_course(db, user, term, state, CourseChange(kind=kind, targets=targets), '这些课次全部调整出席')
+        source = '这些课次我已经请好假，请记录为已请假' if kind == 'leave' else '这些课次全部调整出席'
+        state['current_user_text'] = source
+        preview = prepare_course(db, user, term, state, CourseChange(kind=kind, targets=targets), source)
         assert len(preview['before']) == 3 and len(preview['after']) == 3
         assert all(e.get('attendance_status') == (None if kind == 'attend' else kind) for e in preview['after'])
 

@@ -7,7 +7,9 @@ from .occurrences import expand, effective_courses
 
 
 def conflict_courses(calendar, courses, conflicts):
-    ids = {rid for conflict in conflicts for rid in conflict.get('item_ids', [])}
+    from .conflict_changes import is_blocking_conflict
+    ids = {rid for conflict in conflicts if is_blocking_conflict(conflict)
+           for rid in conflict.get('item_ids', [])}
     return [{'occurrence_id': e['id'], 'title': e['title'],
              'start_at': e['start_at'], 'end_at': e['end_at'],
              'location': e.get('location', ''),

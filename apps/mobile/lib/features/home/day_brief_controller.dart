@@ -12,7 +12,7 @@ class DayBriefController extends ChangeNotifier {
   bool busy = false, offline = false, _closed = false;
   int _request = 0;
   List<Map<String, dynamic>> get entries =>
-      briefRows(data?['entries']).map(calendarDisplayEntry).toList();
+      calendarScheduleEntries(briefRows(data?['entries']));
   List<Map<String, dynamic>> get suggestions => briefRows(
     data?['suggestions'],
   ).where((row) => row['kind'] != 'missing_time').toList();

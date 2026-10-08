@@ -9,7 +9,7 @@ def future_minutes(block, now, start=None, end=None):
     return max(0,floor((b-a)/60))
 
 
-def classify(plans, items, free_spans, now):
+def classify(plans, items, free_spans, now, *, obligation_points=()):
     tasks={i['id']:i for i in items}
     future=[b for b in plans if b['status']=='active' and instant(b['end_at']).timestamp()>now]
     valid,issues=[],[]
@@ -19,7 +19,9 @@ def classify(plans, items, free_spans, now):
         tail=max(start,now)
         if not item or item['kind']=='exam' or item['lifecycle']!='active':reasons.append('inactive_task')
         if end<=start or b['minutes']*60!=end-start:reasons.append('invalid_duration')
-        if not any(a<=tail and end<=z for a,z in free_spans):reasons.append('outside_free_time')
+        if (not any(a<=tail and end<=z for a,z in free_spans)
+                or any(tail<=point<end for point in obligation_points)):
+            reasons.append('outside_free_time')
         if item:
             if not item.get('splittable',True) and sum(o['item_id']==b['item_id'] for o in future)>1:reasons.append('unsplittable_multiple_blocks')
             if item.get('remaining_minutes') is None:reasons.append('needs_estimate')

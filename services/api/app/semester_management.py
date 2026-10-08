@@ -109,7 +109,8 @@ def update_semester(sid: str, body: SemesterUpdate,
         from .plan_rules import classify
         source = snapshot(db, user, semester)
         context = calendar_context(*source[:4], utcnow())
-        _, issues = classify(source[4], source[3], context['free'].spans, context['begin'])
+        _, issues = classify(source[4], source[3], context['free'].spans, context['begin'],
+            obligation_points=context['obligation_points'])
         response['affected_plan_count'] = len({i['block_id'] for i in issues})
     remember(db, user, f'update-semester:{sid}', idempotency_key, request, response)
     db.commit()

@@ -3,6 +3,8 @@ from copy import deepcopy
 from datetime import date, datetime
 from typing import Literal
 from collections import Counter
+import json
+import re
 from pydantic import Field, field_validator, model_validator
 from .schemas import Input
 from .item_schemas import ItemTime, NoticeDetails
@@ -90,7 +92,106 @@ def query_occurrences(db,user,s,state,args):
         'navigation_query':{'semester_id':s.id, **args.model_dump(mode='json')}})
     return {**value, 'occurrences': records[:100], 'total_count': len(records),
             'truncated': len(records) > 100, 'query_scope': args.model_dump(mode='json'),
-            'next_step': '用户肯定陈述这个范围没课/停课时准备scope停课预览；用户已请假/自行确认不上课用leave，打算申请用plan_leave，恢复出席用attend。出席调整保留学校课次时间地点；只提问时回答结论。'}
+            'next_step': '用户肯定陈述这个范围没课/停课时准备scope停课预览；用户明确已请假或直接要求记录已请假状态才用leave，打算申请用plan_leave。外出、开会、不能上课本身不代表已请假；要求记录活动时先prepare_event再核对实际冲突，不擅自修改出勤。恢复出席用attend。出席调整保留学校课次时间地点；只提问时回答结论。'}
+
+
+def leave_record_intent(text):
+    """Return the latest explicit attendance decision, including a withdrawal."""
+    decision = None
+    clauses = re.split(r'[，。；;\n]|但是|不过|其实|现在|后来', text)
+    for clause in clauses:
+        denied = re.search(
+            r'(?:不|未|没(?:有)?|尚未|还(?:没|未)|并未|没有).{0,4}'
+            r'(?:请.{0,12}假|准假|获准|获批|批准|同意|允许|批|通过)'
+            r'|(?:拒绝|驳回|否决|撤销|撤回|收回|取消).{0,12}(?:请假|准假|批准|同意|允许|申请)'
+            r'|(?:请假|申请).{0,8}(?:被拒|被驳回|被撤销|已取消|不准确|不算|没通过|未通过)'
+            r'|不用请假|无需请假|恢复.{0,6}(?:上课|出席)', clause)
+        if denied:
+            decision = False
+            continue
+        if not re.search(r'请[^，。；;\n]{0,20}假|准假|获准|获批|批(?:了|好|准)|批准|同意|允许', clause):
+            continue
+        uncertain = re.search(r'怎么|如何|是否|能否|可否|是不是|不确定|不清楚|可能|也许|如果|假如|要是', clause)
+        status_question = re.search(r'(?:请.{0,20}假|准假|获准|获批|批准|同意|允许).{0,12}(?:吗|么)', clause)
+        record_command = re.search(r'(?:标记|记录|登记|设为|改为|记为).{0,12}请.{0,12}假', clause)
+        if uncertain or status_question and not record_command:
+            decision = False
+            continue
+        planned = re.search(r'(?:准备|打算|想|需要|要|会|申请)请[^，。；;\n]{0,20}假|请假申请|提交.{0,4}请假|等待.{0,6}(?:批准|审批|同意)|还没|尚未|未获|没批|没请|未请|没有请假|没有批准|不用请假|无需请假', clause)
+        completed = re.search(r'已(?:经)?(?:请[^，。；;\n]{0,20}假|获准|获批|批准)|请(?:了|过)[^，。；;\n]{0,20}假|获准|获批|批了|批准了|同意了|允许了|(?:申请|审批|请假).{0,6}(?:已(?:经)?通过|通过了)', clause)
+        decision = bool(not planned or completed)
+    return decision
+
+
+def has_leave_record_intent(text):
+    """Activities alone never authorize an AI-proposed excused attendance record."""
+    return leave_record_intent(text) is True
+
+
+def leave_target_clarification(text):
+    """A target answer can continue the same request, never an unrelated activity."""
+    if len(text) > 120 or re.search(r'外出|出差|开会|会议|参会|参加|活动|旅游|申请|准备|打算|撤销|取消|恢复', text):
+        return False
+    return bool(re.fullmatch(r'\s*(?:对|是的|没错|嗯|好|好的|确认)[，,。.!！\s]*', text)
+                or re.search(r'(?:这|那|该).{0,8}(?:节|次|课)|上午|下午|晚上|早上|周[一二三四五六日天]'
+                             r'|星期[一二三四五六日天]|第[一二三四五六七八九十0-9]+(?:节|次|个)|全部|都记录', text))
+
+
+def human_request(content):
+    """Unwrap the server's request envelope without reading quoted source data."""
+    ids = set()
+    for _ in range(8):
+        if not isinstance(content, str):
+            return None
+        try:
+            value = json.loads(content)
+        except (ValueError, TypeError):
+            return {'text': content, 'occurrence_ids': ids}
+        if not isinstance(value, dict) or not isinstance(value.get('request'), str):
+            return None  # Profile and preview-status messages are server context.
+        ids.update(value.get('selected_record_ids', []))
+        ids.update(e['id'] for e in value.get('context_records', [])
+                   if e.get('resource_type') == 'course_occurrence' and e.get('id'))
+        content = value['request']
+    return None
+
+
+def leave_record_authorized(state, targets):
+    """Only human requests authorize leave; read results can bind their targets."""
+    if state.get('input_kind', 'message') != 'message':
+        return False
+    requests = []
+    for message in state.get('messages', []):
+        if message.get('role') == 'user':
+            request = human_request(message.get('content'))
+            if request is not None:
+                requests.append(request)
+        elif message.get('role') == 'tool' and requests:
+            try:
+                result = json.loads(message.get('content', ''))
+            except (ValueError, TypeError):
+                continue
+            if isinstance(result, dict):
+                requests[-1]['occurrence_ids'].update(e['id'] for e in result.get('occurrences', [])
+                                                      if isinstance(e, dict) and e.get('id'))
+    current = state.get('current_user_text')
+    if current is None:
+        current = requests[-1]['text'] if requests else ''
+    decision = leave_record_intent(current)
+    if decision is not None:
+        return decision
+    if not leave_target_clarification(current):
+        return False
+    if requests and requests[-1]['text'] == current:
+        requests.pop()
+    for request in reversed(requests):
+        previous = request['text']
+        decision = leave_record_intent(previous)
+        if decision is not None:
+            return decision and bool(targets) and set(targets).issubset(request['occurrence_ids'])
+        if not leave_target_clarification(previous):
+            return False
+    return False
 
 
 def prepare_course(db,user,s,state,args,source):
@@ -104,6 +205,9 @@ def prepare_course(db,user,s,state,args,source):
         if not targets: error(422, 'NO_OCCURRENCES', '这个范围没有可调整的课次')
         if args.kind in ('move', 'cancel') and len(targets) != 1:
             error(422, 'AMBIGUOUS_TARGET', '这个范围有多次课，请补充原上课日期，或使用范围停课')
+    if args.kind == 'leave' and not leave_record_authorized(state, targets):
+        error(422, 'ATTENDANCE_INTENT_REQUIRED',
+            '这条请求没有已请假或记录请假状态的陈述。外出、开会不代表已请假；请先记录活动并核对实际冲突，打算申请时用plan_leave。无需索取学校证明。')
     if not set(targets).issubset(known):error(422,'READ_FIRST','请先查询并核对具体日期的课次')
     if any(known[id].get('queried_revision')!=s.revision for id in targets):
         error(409,'COURSE_QUERY_STALE','查询后安排已有变化，请重新查询原课次再准备修改')
