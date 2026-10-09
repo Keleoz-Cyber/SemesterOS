@@ -55,6 +55,9 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
   late final AndroidNotifications notifications;
   late final ProfileController profile;
   late final IncomingNoticeController incoming;
+  // Controller and route refreshes do not represent a theme change.
+  late final _lightTheme = shiriLightTheme();
+  late final _highContrastTheme = HighContrastTheme.theme(campusTheme());
   NotificationTarget? pendingNotification;
   String? openedDraftId;
   String? notificationOwner;
@@ -633,8 +636,8 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
     ],
     debugShowCheckedModeBanner: false,
     routerConfig: router,
-    theme: shiriLightTheme(),
-    highContrastTheme: HighContrastTheme.theme(campusTheme()),
+    theme: _lightTheme,
+    highContrastTheme: _highContrastTheme,
     builder: (context, child) => HighContrastDetector(
       child: ShiriForuiTheme(
         child: ProfileScope(

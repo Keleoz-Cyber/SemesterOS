@@ -1,21 +1,74 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../ui/v2/shiri_tokens.dart' as v2;
+import '../../ui/v2/motion/reduced_motion.dart';
 
 /// A visual projection of the saved semester. Exam dots come from real items;
 /// the horizon never invents holidays or an academic calendar.
-class SemesterHorizon extends StatelessWidget {
+class SemesterHorizon extends StatefulWidget {
   final int current, total;
   final Set<int> examWeeks;
+  final bool active;
+  final int entryEpoch;
   const SemesterHorizon({
     super.key,
     required this.current,
     required this.total,
     required this.examWeeks,
+    this.active = true,
+    this.entryEpoch = 0,
   });
 
   @override
+  State<SemesterHorizon> createState() => _SemesterHorizonState();
+}
+
+class _SemesterHorizonState extends State<SemesterHorizon>
+    with SingleTickerProviderStateMixin {
+  int? _startedEntry;
+  late final AnimationController _rise = AnimationController(
+    vsync: this,
+    duration: v2.ShiriMotion.slow,
+    value: 1,
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotion();
+  }
+
+  @override
+  void didUpdateWidget(covariant SemesterHorizon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncMotion();
+  }
+
+  void _syncMotion() {
+    if (reduceMotion(context)) {
+      _rise.stop();
+      _rise.value = 1;
+      _startedEntry = widget.entryEpoch;
+    } else if (!widget.active || !motionAllowed(context)) {
+      _rise.stop();
+    } else if (_startedEntry != widget.entryEpoch) {
+      _startedEntry = widget.entryEpoch;
+      _rise.forward(from: 0);
+    } else if (_rise.value < 1 && !_rise.isAnimating) {
+      _rise.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _rise.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final current = widget.current, total = widget.total;
+    final examWeeks = widget.examWeeks;
     final scale = MediaQuery.textScalerOf(context);
     final textScale = scale.scale(1).clamp(1.0, 1.6);
     return Semantics(
@@ -32,13 +85,17 @@ class SemesterHorizon extends StatelessWidget {
           child: SizedBox(
             height: 136 * textScale,
             width: double.infinity,
-            child: CustomPaint(
-              painter: _HorizonPainter(
-                current,
-                total,
-                examWeeks,
-                scale,
-                Theme.of(context).textTheme.bodySmall?.fontFamily,
+            child: AnimatedBuilder(
+              animation: _rise,
+              builder: (context, _) => CustomPaint(
+                painter: _HorizonPainter(
+                  current,
+                  total,
+                  examWeeks,
+                  scale,
+                  Theme.of(context).textTheme.bodySmall?.fontFamily,
+                  v2.ShiriMotion.easeStandard.transform(_rise.value),
+                ),
               ),
             ),
           ),
@@ -53,12 +110,14 @@ class _HorizonPainter extends CustomPainter {
   final Set<int> examWeeks;
   final TextScaler textScale;
   final String? fontFamily;
+  final double rise;
   const _HorizonPainter(
     this.current,
     this.total,
     this.examWeeks,
     this.textScale,
     this.fontFamily,
+    this.rise,
   );
 
   @override
@@ -75,6 +134,15 @@ class _HorizonPainter extends CustomPainter {
     final fraction = total <= 1
         ? (current > total ? 1.0 : 0.0)
         : ((current - 1) / (total - 1)).clamp(0.0, 1.0).toDouble();
+    // A short continuation below the horizon gives even week 1 an arrival.
+    // After this lead-in, both coordinates follow the saved week's rail.
+    final approach = Path()
+      ..moveTo(left.dx - 26, left.dy + 34)
+      ..quadraticBezierTo(left.dx - 12, left.dy + 18, left.dx, left.dy);
+    final approachMetric = approach.computeMetrics().first;
+    final journey = approachMetric.length + metric.length * fraction;
+    final traveled = journey * rise;
+    final railTraveled = math.max(0.0, traveled - approachMetric.length);
     final rail = Paint()
       ..color = v2.ShiriColors.light.lineStrong
       ..style = PaintingStyle.stroke
@@ -87,7 +155,7 @@ class _HorizonPainter extends CustomPainter {
       );
     }
     canvas.drawPath(
-      metric.extractPath(0, metric.length * fraction),
+      metric.extractPath(0, railTraveled),
       Paint()
         ..shader = v2.ShiriGradients.brand.createShader(Offset.zero & size)
         ..style = PaintingStyle.stroke
@@ -119,7 +187,17 @@ class _HorizonPainter extends CustomPainter {
       }
     }
     if (current >= 1 && current <= total) {
-      final p = at(fraction).translate(0, -16);
+      final onApproach = traveled < approachMetric.length;
+      final p =
+          (onApproach
+                  ? approachMetric.getTangentForOffset(traveled)!.position
+                  : metric.getTangentForOffset(railTraveled)!.position)
+              .translate(0, -16);
+      canvas.saveLayer(
+        Offset.zero & size,
+        Paint()
+          ..color = Color.fromRGBO(0, 0, 0, (.25 + rise * .75).clamp(0, 1)),
+      );
       final disc = Rect.fromCircle(center: p, radius: 11);
       canvas.drawCircle(
         p,
@@ -151,6 +229,7 @@ class _HorizonPainter extends CustomPainter {
           ..strokeWidth = 2
           ..strokeCap = StrokeCap.round,
       );
+      canvas.restore();
     }
     void label(String text, double x, bool alignRight) {
       final painter = TextPainter(
@@ -187,5 +266,6 @@ class _HorizonPainter extends CustomPainter {
       old.examWeeks.length != examWeeks.length ||
       !old.examWeeks.containsAll(examWeeks) ||
       old.textScale != textScale ||
-      old.fontFamily != fontFamily;
+      old.fontFamily != fontFamily ||
+      old.rise != rise;
 }

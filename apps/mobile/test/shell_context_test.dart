@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:semester_os/app/controller.dart';
 import 'package:semester_os/features/timetable/shell_page.dart';
+import 'package:semester_os/features/home/today_sky_header.dart';
 import 'package:semester_os/features/centers/semester_centers.dart';
 import 'package:semester_os/ui/assistant_scope.dart';
 import 'package:semester_os/features/agent/assistant_sheet.dart';
@@ -116,8 +117,24 @@ void main() {
         ),
       );
       await settleIo(tester);
+      expect(
+        tester.widget<TodaySkyHeader>(find.byType(TodaySkyHeader)).active,
+        isTrue,
+      );
+      expect(
+        tester.widget<TodaySkyHeader>(find.byType(TodaySkyHeader)).entryEpoch,
+        0,
+      );
       await ioTap(tester, find.text('学期').last);
       await settleIo(tester);
+      expect(
+        tester.widget<SemesterHome>(find.byType(SemesterHome)).active,
+        isTrue,
+      );
+      expect(
+        tester.widget<SemesterHome>(find.byType(SemesterHome)).entryEpoch,
+        1,
+      );
       await tester.tap(find.byKey(const ValueKey('semester-week-3')));
       await settleIo(tester);
       final home = find.byType(SemesterHome);
@@ -129,15 +146,44 @@ void main() {
       final before = tester.state<ScrollableState>(scroll).position.pixels;
       expect(before, greaterThan(100));
       await ioTap(tester, find.text('今日').last);
+      expect(
+        tester.widget<TodaySkyHeader>(find.byType(TodaySkyHeader)).entryEpoch,
+        1,
+      );
+      expect(
+        tester
+            .widget<SemesterHome>(
+              find.byType(SemesterHome, skipOffstage: false),
+            )
+            .active,
+        isFalse,
+      );
       await ioTap(tester, find.text('学期').last);
+      expect(
+        tester.widget<SemesterHome>(find.byType(SemesterHome)).entryEpoch,
+        2,
+      );
       expect(
         tester.state<ScrollableState>(scroll).position.pixels,
         closeTo(before, 1),
       );
       await ioTap(tester, find.byKey(const Key('assistant-dock-input')));
       await settleIo(tester);
+      final coveredHome = tester.widget<SemesterHome>(
+        find.byType(SemesterHome, skipOffstage: false),
+      );
+      expect(coveredHome.active, isFalse);
+      expect(coveredHome.entryEpoch, 2);
       await tester.enterText(find.byType(TextField).first, '还没写完的通知');
       await ioTap(tester, find.byTooltip('收起输入'));
+      expect(
+        tester.widget<SemesterHome>(find.byType(SemesterHome)).active,
+        isTrue,
+      );
+      expect(
+        tester.widget<SemesterHome>(find.byType(SemesterHome)).entryEpoch,
+        2,
+      );
       expect(
         tester.state<ScrollableState>(scroll).position.pixels,
         closeTo(before, 1),

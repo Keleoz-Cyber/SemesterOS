@@ -236,6 +236,219 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+  for (final screen in [('phone', 390.0, 1.0), ('large text', 360.0, 1.6)]) {
+    testWidgets(
+      'a lunch start point stays separate from the afternoon course on ${screen.$1}',
+      (tester) async {
+        final gathering = {
+          ...event(
+            'gathering',
+            '到6108集合',
+            '2026-10-09T12:10:00+08:00',
+            '2026-10-09T13:00:00+08:00',
+          ),
+          'end_at': null,
+        };
+        final course = {
+          ...event(
+            'afternoon',
+            '形势与政策（五）',
+            '2026-10-09T14:00:00+08:00',
+            '2026-10-09T15:50:00+08:00',
+          ),
+          'resource_type': 'course',
+        };
+        Map<String, dynamic>? opened;
+        await mount(
+          tester,
+          Scaffold(
+            body: ScheduleGrid(
+              firstDay: DateTime.utc(2026, 10, 5),
+              entries: [gathering, course],
+              periods: const [
+                {'number': 1, 'start': '08:00', 'end': '08:50'},
+                {'number': 2, 'start': '09:00', 'end': '09:50'},
+                {'number': 3, 'start': '10:10', 'end': '11:00'},
+                {'number': 4, 'start': '11:10', 'end': '12:00'},
+                {'number': 5, 'start': '14:00', 'end': '14:50'},
+                {'number': 6, 'start': '15:00', 'end': '15:50'},
+              ],
+              refreshClock: false,
+              now: () => DateTime.utc(2026, 10, 9, 12, 52),
+              onOpen: (row) => opened = row,
+            ),
+          ),
+          width: screen.$2,
+          height: 844,
+          textScale: screen.$3,
+        );
+        await tester.pumpAndSettle();
+        final point = find.byKey(
+          const ValueKey('schedule-start-gathering/2026-10-09'),
+        );
+        final interval = find.byKey(
+          const ValueKey('schedule-tile-afternoon/2026-10-09'),
+        );
+        expect(point, findsOneWidget);
+        expect(interval, findsOneWidget);
+        expect(find.text('到6108集合'), findsOneWidget);
+        expect(find.text('形势与政策（五）'), findsOneWidget);
+        expect(find.text('12:10'), findsOneWidget);
+        expect(find.text('2项'), findsNothing);
+        expect(
+          tester.getRect(point).bottom,
+          lessThanOrEqualTo(tester.getRect(interval).top),
+        );
+        expect(tester.getRect(point).height, greaterThanOrEqualTo(48));
+        expect(tester.takeException(), isNull);
+        await tester.tap(point);
+        await tester.pump();
+        expect(opened?['resource_id'], 'gathering');
+        expect(opened?['start_at'], '2026-10-09T12:10:00+08:00');
+        expect(opened?['end_at'], isNull);
+        await capture(tester, 'calendar-lunch-point-${screen.$1}');
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+  testWidgets(
+    'same-start points group together but a later point remains independent',
+    (tester) async {
+      final rows = [
+        for (final row in [
+          event(
+            'first',
+            '到6108集合',
+            '2026-10-09T12:10:00+08:00',
+            '2026-10-09T13:00:00+08:00',
+          ),
+          event(
+            'same',
+            '领取材料',
+            '2026-10-09T12:10:00+08:00',
+            '2026-10-09T13:00:00+08:00',
+          ),
+          event(
+            'later',
+            '取快递',
+            '2026-10-09T12:20:00+08:00',
+            '2026-10-09T13:00:00+08:00',
+          ),
+        ])
+          {...row, 'end_at': null},
+      ];
+      Map<String, dynamic>? opened;
+      await mount(
+        tester,
+        Scaffold(
+          body: ScheduleGrid(
+            firstDay: DateTime.utc(2026, 10, 5),
+            entries: rows,
+            periods: const [
+              {'number': 4, 'start': '11:10', 'end': '12:00'},
+              {'number': 5, 'start': '14:00', 'end': '14:50'},
+            ],
+            refreshClock: false,
+            now: () => DateTime.utc(2026, 10, 9, 12, 52),
+            onOpen: (row) => opened = row,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('2项重叠'), findsOneWidget);
+      expect(find.text('取快递'), findsOneWidget);
+      final together = find.byKey(
+        const ValueKey('schedule-start-first/2026-10-09'),
+      );
+      final later = find.byKey(
+        const ValueKey('schedule-start-later/2026-10-09'),
+      );
+      expect(
+        tester.getRect(together).bottom,
+        lessThanOrEqualTo(tester.getRect(later).top),
+      );
+      await tester.tap(together);
+      await tester.pumpAndSettle();
+      expect(find.text('到6108集合'), findsOneWidget);
+      expect(find.text('领取材料'), findsOneWidget);
+      await tester.tap(find.text('领取材料'));
+      await tester.pumpAndSettle();
+      expect(opened?['resource_id'], 'same');
+      expect(opened?['end_at'], isNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'a point inside a course is a real overlap but its ending boundary is not',
+    (tester) async {
+      final rows = [
+        {
+          ...event(
+            'course',
+            '软件工程',
+            '2026-10-09T08:00:00+08:00',
+            '2026-10-09T09:50:00+08:00',
+          ),
+          'resource_type': 'course',
+        },
+        {
+          ...event(
+            'during',
+            '班主任会议',
+            '2026-10-09T09:00:00+08:00',
+            '2026-10-09T10:00:00+08:00',
+          ),
+          'end_at': null,
+        },
+        {
+          ...event(
+            'boundary',
+            '领取资料',
+            '2026-10-09T09:50:00+08:00',
+            '2026-10-09T10:00:00+08:00',
+          ),
+          'end_at': null,
+        },
+        {
+          'id': 'date-only',
+          'resource_type': 'event',
+          'title': '只有日期的活动',
+          'date': '2026-10-09',
+          'start_at': null,
+          'end_at': null,
+        },
+      ];
+      await mount(
+        tester,
+        Scaffold(
+          body: ScheduleGrid(
+            firstDay: DateTime.utc(2026, 10, 5),
+            entries: rows,
+            periods: const [
+              {'number': 1, 'start': '08:00', 'end': '08:50'},
+              {'number': 2, 'start': '09:00', 'end': '09:50'},
+              {'number': 3, 'start': '10:10', 'end': '11:00'},
+            ],
+            refreshClock: false,
+            now: () => DateTime.utc(2026, 10, 9, 9, 20),
+            onOpen: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('2项重叠'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('schedule-start-boundary/2026-10-09')),
+        findsOneWidget,
+      );
+      expect(find.text('领取资料'), findsOneWidget);
+      expect(find.text('只有日期的活动'), findsNothing);
+      expect(find.text('3项重叠'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets(
     'hidden calendar suspends its minute clock and restores its scroll',
     (tester) async {

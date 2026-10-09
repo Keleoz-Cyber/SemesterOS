@@ -11,8 +11,10 @@ class TimetableScale {
     List<Map<String, dynamic>> periods,
     double minuteHeight,
     double textScale,
-    List<({int start, int end})> occupied,
-  ) {
+    List<({int start, int end})> occupied, {
+    Iterable<int> markerStarts = const [],
+    double markerHeight = 0,
+  }) {
     final ranges = <({int start, int end})>[];
     int? clock(dynamic value) {
       final pieces = '$value'.split(':');
@@ -25,12 +27,16 @@ class TimetableScale {
       final a = clock(period['start']), b = clock(period['end']);
       if (a != null && b != null && b > a) ranges.add((start: a, end: b));
     }
-    if (ranges.isEmpty) {
+    final markers = markerStarts
+        .where((minute) => minute >= first && minute < last)
+        .toSet();
+    if (ranges.isEmpty && markers.isEmpty) {
       return TimetableScale([first, last], [0, (last - first) * minuteHeight]);
     }
     final boundaries = <int>{
       first,
       last,
+      ...markers,
       for (final r in ranges) ...[
         r.start.clamp(first, last),
         r.end.clamp(first, last),
@@ -50,7 +56,9 @@ class TimetableScale {
           .where((p) => p.start <= a && p.end >= b)
           .firstOrNull;
       final hasOccupancy = occupied.any((r) => r.start < b && r.end > a);
-      final extent = period != null
+      var extent = ranges.isEmpty
+          ? (b - a) * minuteHeight
+          : period != null
           ? (b - a) / (period.end - period.start) * 52 * textScale.clamp(1, 1.6)
           : hasOccupancy
           ? ((b - a) * minuteHeight)
@@ -60,6 +68,12 @@ class TimetableScale {
                 )
                 .toDouble()
           : ((b - a) * minuteHeight).clamp(8, 18).toDouble();
+      // A start-only record has no occupied interval. Give its real start
+      // anchor enough drawing room for a readable marker without claiming an
+      // end time or folding it into the next non-overlapping course.
+      if (markers.contains(a) && extent < markerHeight + 3) {
+        extent = markerHeight + 3;
+      }
       ys.add(ys.last + extent);
     }
     return TimetableScale(boundaries, ys);

@@ -17,12 +17,16 @@ class TodaySkyHeader extends StatelessWidget {
     required this.onSettings,
     this.collapse = 0,
     this.layoutExtent,
+    this.active = true,
+    this.entryEpoch = 0,
   });
   final DateTime now;
   final Map<String, dynamic> semester;
   final VoidCallback onProfile, onSettings;
   final double collapse;
   final double? layoutExtent;
+  final bool active;
+  final int entryEpoch;
 
   static double expandedExtent(BuildContext context, {DateTime? now}) {
     final date = now ?? schoolNow(), shiri = context.shiri;
@@ -83,11 +87,17 @@ class TodaySkyHeader extends StatelessWidget {
     final side = MediaQuery.sizeOf(context).width <= 360
         ? ShiriSpace.pageCompact
         : ShiriSpace.page;
+    final titleMix = ShiriMotion.easeStandard.transform(
+      ((t - .42) / .46).clamp(0.0, 1.0),
+    );
+    final compactDate = '${now.month}月${now.day}日';
     return SkyHeader(
       now: now,
       collapse: t,
       height: expandedExtent(context, now: now),
       layoutExtent: layoutExtent,
+      active: active,
+      entryEpoch: entryEpoch,
       child: Padding(
         padding: EdgeInsets.fromLTRB(side, 12, side, 20),
         child: Stack(
@@ -98,15 +108,19 @@ class TodaySkyHeader extends StatelessWidget {
               top: 0,
               child: Row(
                 children: [
-                  ClipRect(
-                    child: SizedBox(
-                      width: 30 * (1 - t),
-                      height: 30,
-                      child: OverflowBox(
-                        minWidth: 30,
-                        maxWidth: 30,
-                        child: Opacity(
-                          opacity: 1 - t,
+                  SizedBox(
+                    width: 30 * (1 - t),
+                    height: 30,
+                    child: OverflowBox(
+                      alignment: Alignment.centerLeft,
+                      minWidth: 30,
+                      maxWidth: 30,
+                      child: Opacity(
+                        opacity: 1 - t,
+                        child: Transform.scale(
+                          key: const ValueKey('sky-brand-mark'),
+                          scale: 1 - t,
+                          alignment: Alignment.centerLeft,
                           child: const BrandMark(size: 30),
                         ),
                       ),
@@ -114,9 +128,35 @@ class TodaySkyHeader extends StatelessWidget {
                   ),
                   SizedBox(width: 10 * (1 - t)),
                   Expanded(
-                    child: Text(
-                      t > .7 ? '${now.month}月${now.day}日' : appName,
-                      style: shiri.text.title.copyWith(color: ink),
+                    child: Semantics(
+                      label: titleMix < .5 ? appName : compactDate,
+                      child: ExcludeSemantics(
+                        child: Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [
+                            Opacity(
+                              key: const ValueKey('sky-brand-title'),
+                              opacity: (1 - titleMix * 2).clamp(0.0, 1.0),
+                              child: Text(
+                                appName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: shiri.text.title.copyWith(color: ink),
+                              ),
+                            ),
+                            Opacity(
+                              key: const ValueKey('sky-date-title'),
+                              opacity: (titleMix * 2 - 1).clamp(0.0, 1.0),
+                              child: Text(
+                                compactDate,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: shiri.text.title.copyWith(color: ink),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                   AppIconButton(

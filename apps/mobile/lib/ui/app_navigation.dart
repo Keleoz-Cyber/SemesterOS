@@ -115,6 +115,11 @@ class AssistantDock extends StatelessWidget {
         Tooltip(
           message: '语音输入',
           child: InkWell(
+            splashFactory: NoSplash.splashFactory,
+            highlightColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            hoverColor: Colors.transparent,
+            focusColor: context.shiri.colors.focusRing.withValues(alpha: .15),
             onTap: () => AssistantScope.open(
               context,
               mediaKind: 'audio',

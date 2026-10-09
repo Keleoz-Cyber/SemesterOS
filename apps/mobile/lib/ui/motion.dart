@@ -137,12 +137,14 @@ class _AppExpandRegionState extends State<AppExpandRegion>
   late final AnimationController _controller;
   late final Animation<double> _reveal;
   late bool _mountedChild;
+  late double _target;
   bool _foreground = true, _releaseScheduled = false;
 
   @override
   void initState() {
     super.initState();
     _mountedChild = widget.visible || widget.maintainState;
+    _target = widget.visible ? 1 : 0;
     _controller =
         AnimationController(
           vsync: this,
@@ -173,11 +175,18 @@ class _AppExpandRegionState extends State<AppExpandRegion>
   void _sync() {
     final target = widget.visible ? 1.0 : 0.0;
     if (!_foreground || !AppMotion.allowed(context)) {
+      _target = target;
       _controller.stop();
       _controller.value = target;
       if (target == 0) _releaseClosedChild();
-    } else if (_controller.value != target) {
-      _controller.animateTo(target);
+    } else if (_target != target || !_controller.isAnimating) {
+      _target = target;
+      if (_controller.value == target) {
+        _controller.stop();
+        if (target == 0) _releaseClosedChild();
+      } else {
+        target == 1 ? _controller.forward() : _controller.reverse();
+      }
     }
   }
 

@@ -167,7 +167,10 @@ class _ScheduleGridState extends State<ScheduleGrid>
         }
       }
     }
-    result.sort((a, b) => a.start.compareTo(b.start));
+    result.sort((a, b) {
+      final byStart = a.start.compareTo(b.start);
+      return byStart != 0 ? byStart : a.id.compareTo(b.id);
+    });
     return result;
   }
 
@@ -231,7 +234,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
 
   Widget tile(List<_GridPart> group, bool compact, double scaled) {
     final part = group.first;
-    final isShort = part.point || part.end - part.start < 25;
+    final isShort = group.every((p) => p.point || p.end - p.start < 25);
     final label = group.length > 1
         ? '${group.length}项${overlaps(group) ? '重叠' : ''}'
         : '${part.source['title']}';
@@ -295,6 +298,9 @@ class _ScheduleGridState extends State<ScheduleGrid>
                 ),
               );
             }
+            final pointLabel = participation.isNotEmpty
+                ? participation
+                : hhmm(schoolTime(part.source['start_at']));
             Widget body = Pressable(
               onPressed: () => openGroup(group),
               pressedScale: .96,
@@ -307,19 +313,60 @@ class _ScheduleGridState extends State<ScheduleGrid>
                     color: overlaps(group)
                         ? CampusColors.errorSoft
                         : visual.fill,
-                    border: Border(
-                      left: BorderSide(color: visual.accent, width: 3),
-                    ),
+                    border: part.point
+                        ? null
+                        : Border(
+                            left: BorderSide(color: visual.accent, width: 3),
+                          ),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (isShort)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 3),
+                            child: Row(
+                              children: [
+                                if (part.point) ...[
+                                  Container(
+                                    width: 4,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: visual.accent,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 3),
+                                ],
+                                Expanded(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      pointLabel,
+                                      maxLines: 1,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                        color: visual.foreground,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         Expanded(
                           child: Text(
                             label,
-                            maxLines: scaled > 1.3
+                            maxLines: part.point
+                                ? 3
+                                : scaled > 1.3
                                 ? 5
                                 : bounds.maxHeight > 45 * scaled
                                 ? 3
@@ -333,18 +380,6 @@ class _ScheduleGridState extends State<ScheduleGrid>
                             ),
                           ),
                         ),
-                        if (part.point && bounds.maxHeight > 38 * scaled)
-                          Text(
-                            participation.isNotEmpty
-                                ? participation
-                                : hhmm(schoolTime(part.source['start_at'])),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: visual.foreground,
-                            ),
-                          ),
                       ],
                     ),
                   ),
@@ -389,15 +424,23 @@ class _ScheduleGridState extends State<ScheduleGrid>
   }
 
   bool overlaps(List<_GridPart> group) {
-    if (group.length < 2 || group.any((part) => part.point)) return false;
+    if (group.length < 2) return false;
     return group.any(
       (part) => group.any(
         (other) =>
             !identical(part, other) &&
-            part.start < other.end &&
-            part.end > other.start,
+            calendarReservesTime(part.source) &&
+            calendarReservesTime(other.source) &&
+            shareTime(part, other),
       ),
     );
+  }
+
+  bool shareTime(_GridPart a, _GridPart b) {
+    if (a.point && b.point) return a.start == b.start;
+    if (a.point) return a.start >= b.start && a.start < b.end;
+    if (b.point) return b.start >= a.start && b.start < a.end;
+    return a.start < b.end && a.end > b.start;
   }
 
   @override
@@ -408,7 +451,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
       final compact = box.maxWidth < 540;
       final timeWidth = (compact ? 40.0 : 52.0) + 12 * scaled;
       final minuteHeight = scaled > 1.3 ? 1.4 : .95;
-      final markerHeight = scaled > 1.3 ? 72.0 : 44.0;
+      final markerHeight = 64.0 * scaled.clamp(1.0, 1.6);
       final current = now;
       final today = List.generate(
         7,
@@ -454,6 +497,10 @@ class _ScheduleGridState extends State<ScheduleGrid>
             .where((p) => !p.point)
             .map((p) => (start: p.start, end: p.end))
             .toList(),
+        markerStarts: entries
+            .where((p) => p.point || p.end - p.start < 25)
+            .map((p) => p.start),
+        markerHeight: markerHeight,
       );
       final height = scale.at(last);
       final weights = [
@@ -563,15 +610,7 @@ class _ScheduleGridState extends State<ScheduleGrid>
         final dayParts = entries.where((p) => p.day == day).toList();
         final groups = <List<_GridPart>>[];
         for (final part in dayParts) {
-          if (groups.isNotEmpty &&
-              groups.last.any(
-                (p) =>
-                    math.max(
-                      scale.at(p.end),
-                      scale.at(p.start) + markerHeight,
-                    ) >
-                    scale.at(part.start),
-              )) {
+          if (groups.isNotEmpty && groups.last.any((p) => shareTime(p, part))) {
             groups.last.add(part);
           } else {
             groups.add([part]);

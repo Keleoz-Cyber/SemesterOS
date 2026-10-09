@@ -66,6 +66,12 @@ class _ShellPageState extends State<ShellPage> with WidgetsBindingObserver {
   MinuteClock? skyClock;
   DateTime skyNow = schoolNow();
   bool foreground = true;
+  final _entryEpochs = List<int>.filled(4, 0);
+  bool visualActive(int index) =>
+      foreground &&
+      tab == index &&
+      TickerMode.valuesOf(context).enabled &&
+      ModalRoute.isCurrentOf(context) != false;
   void syncSkyClock() {
     final visible =
         foreground &&
@@ -136,6 +142,7 @@ class _ShellPageState extends State<ShellPage> with WidgetsBindingObserver {
     if (value == tab) return;
     setState(() {
       tab = value;
+      _entryEpochs[value]++;
       visitedTabs.add(value);
       pillCollapsed = false;
     });
@@ -521,6 +528,8 @@ class _ShellPageState extends State<ShellPage> with WidgetsBindingObserver {
         key: semesterKey,
         controller: widget.items,
         onManage: manageSemester,
+        active: visualActive(3),
+        entryEpoch: _entryEpochs[3],
       ),
       _ => TodayDashboard(
         showHeader: false,
@@ -626,10 +635,14 @@ class _ShellPageState extends State<ShellPage> with WidgetsBindingObserver {
                                   'tab-${c.user['id']}-${c.semester?['id']}-$index',
                                 ),
                                 child: TickerMode(
-                                  enabled: tab == index,
+                                  enabled: visualActive(index),
                                   child: Focus(
-                                    descendantsAreFocusable: tab == index,
-                                    descendantsAreTraversable: tab == index,
+                                    descendantsAreFocusable: visualActive(
+                                      index,
+                                    ),
+                                    descendantsAreTraversable: visualActive(
+                                      index,
+                                    ),
                                     child: HeroMode(
                                       enabled: tab == index,
                                       child: NotificationListener<UserScrollNotification>(
@@ -665,6 +678,8 @@ class _ShellPageState extends State<ShellPage> with WidgetsBindingObserver {
                                                   pinned: true,
                                                   delegate: _TodayHeaderDelegate(
                                                     now: skyNow,
+                                                    active: visualActive(0),
+                                                    entryEpoch: _entryEpochs[0],
                                                     semester: c.semester!,
                                                     extent:
                                                         TodaySkyHeader.expandedExtent(
@@ -757,54 +772,57 @@ class _ShellPageState extends State<ShellPage> with WidgetsBindingObserver {
               ),
             ),
           ),
-          bottomNavigationBar: AppNavigation(
-            selected: tab,
-            onAssistantOpen: () => unawaited(openDock()),
-            onAssistantImage: () => unawaited(openDock(mediaKind: 'image')),
-            onSelected: switchTab,
-            collapsed: pillCollapsed,
-            sourceKey: assistantDockKey,
-            browsingContext: tab == 1
-                ? calendarKey.currentState?.browsingContext
-                : null,
-            microphone: HoldVoiceButton(
-              key: ValueKey(
-                'dock-voice-${c.user['id']}-${c.semester?['id']}-${c.api.generation}',
+          bottomNavigationBar: TickerMode(
+            enabled: visualActive(tab),
+            child: AppNavigation(
+              selected: tab,
+              onAssistantOpen: () => unawaited(openDock()),
+              onAssistantImage: () => unawaited(openDock(mediaKind: 'image')),
+              onSelected: switchTab,
+              collapsed: pillCollapsed,
+              sourceKey: assistantDockKey,
+              browsingContext: tab == 1
+                  ? calendarKey.currentState?.browsingContext
+                  : null,
+              microphone: HoldVoiceButton(
+                key: ValueKey(
+                  'dock-voice-${c.user['id']}-${c.semester?['id']}-${c.api.generation}',
+                ),
+                compact: true,
+                enabled:
+                    voiceSemester != null &&
+                    widget.items.semesterId == voiceSemester['id'] &&
+                    widget.items.owner == voiceOwner,
+                onTap: () => unawaited(openDock(mediaKind: 'audio')),
+                onRecorded: (path) async {
+                  final semester = voiceSemester;
+                  if (!mounted ||
+                      semester == null ||
+                      c.semester?['id'] != semester['id'] ||
+                      '${c.user['id']}' != voiceOwner ||
+                      c.api.generation != voiceGeneration ||
+                      widget.items.semesterId != semester['id'] ||
+                      widget.items.owner != voiceOwner) {
+                    return;
+                  }
+                  await openAssistantSheet(
+                    assistantDockKey.currentContext ?? context,
+                    controller: widget.items,
+                    semester: semester,
+                    audioPath: path,
+                    browsingContext: tab == 1
+                        ? calendarKey.currentState?.browsingContext
+                        : null,
+                  );
+                },
+                onError: (error) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(error)));
+                  }
+                },
               ),
-              compact: true,
-              enabled:
-                  voiceSemester != null &&
-                  widget.items.semesterId == voiceSemester['id'] &&
-                  widget.items.owner == voiceOwner,
-              onTap: () => unawaited(openDock(mediaKind: 'audio')),
-              onRecorded: (path) async {
-                final semester = voiceSemester;
-                if (!mounted ||
-                    semester == null ||
-                    c.semester?['id'] != semester['id'] ||
-                    '${c.user['id']}' != voiceOwner ||
-                    c.api.generation != voiceGeneration ||
-                    widget.items.semesterId != semester['id'] ||
-                    widget.items.owner != voiceOwner) {
-                  return;
-                }
-                await openAssistantSheet(
-                  assistantDockKey.currentContext ?? context,
-                  controller: widget.items,
-                  semester: semester,
-                  audioPath: path,
-                  browsingContext: tab == 1
-                      ? calendarKey.currentState?.browsingContext
-                      : null,
-                );
-              },
-              onError: (error) {
-                if (mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(error)));
-                }
-              },
             ),
           ),
         ),
@@ -853,11 +871,15 @@ class _TodayHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.extent,
     required this.onProfile,
     required this.onSettings,
+    required this.active,
+    required this.entryEpoch,
   });
   final DateTime now;
   final Map<String, dynamic> semester;
   final double extent;
   final VoidCallback onProfile, onSettings;
+  final bool active;
+  final int entryEpoch;
   @override
   double get maxExtent => extent - ShiriLayout.heroOverlapNextCard;
   @override
@@ -869,6 +891,8 @@ class _TodayHeaderDelegate extends SliverPersistentHeaderDelegate {
     bool overlapsContent,
   ) => TodaySkyHeader(
     now: now,
+    active: active,
+    entryEpoch: entryEpoch,
     semester: semester,
     onProfile: onProfile,
     onSettings: onSettings,
@@ -877,5 +901,9 @@ class _TodayHeaderDelegate extends SliverPersistentHeaderDelegate {
   );
   @override
   bool shouldRebuild(_TodayHeaderDelegate old) =>
-      now != old.now || semester != old.semester || extent != old.extent;
+      now != old.now ||
+      semester != old.semester ||
+      extent != old.extent ||
+      active != old.active ||
+      entryEpoch != old.entryEpoch;
 }

@@ -43,10 +43,14 @@ String semesterActivityTimeLabel(Map<String, dynamic> row) {
 class SemesterHome extends StatefulWidget {
   final ItemsController controller;
   final VoidCallback onManage;
+  final bool active;
+  final int entryEpoch;
   const SemesterHome({
     super.key,
     required this.controller,
     required this.onManage,
+    this.active = true,
+    this.entryEpoch = 0,
   });
   @override
   SemesterHomeState createState() => SemesterHomeState();
@@ -400,11 +404,76 @@ class SemesterHomeState extends State<SemesterHome>
     return '${date.month}/${date.day}';
   }
 
+  Widget _semesterHeader(Map<String, dynamic> data) {
+    final semester = Map<String, dynamic>.from(data['semester']);
+    final weeks = widget.controller.rows(data['weeks']);
+    final current = _currentWeek(semester);
+    final total = semester['total_weeks'] as int;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 12, 2, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _semesterCaption('${semester['name']}'),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (current >= 1 && current <= total)
+                RollingNumber.text(
+                  '第$current周',
+                  style: const TextStyle(
+                    fontSize: 44,
+                    height: 1.1,
+                    fontWeight: FontWeight.w700,
+                    color: CampusColors.ink,
+                  ),
+                )
+              else
+                Text(
+                  current < 1 ? '学期尚未开始' : '本学期已结束',
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              Text(
+                '共$total周 · 还剩${(total - current.clamp(0, total)).clamp(0, total)}周',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: CampusColors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SemesterHorizon(
+            current: current,
+            total: total,
+            active: widget.active && _foreground,
+            entryEpoch: widget.entryEpoch,
+            examWeeks: {
+              for (final w in weeks)
+                if (widget.controller
+                    .rows(w['items'])
+                    .any((i) => i['kind'] == 'exam'))
+                  w['week'] as int,
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => HubData(
     key: _hub,
     controller: widget.controller,
     path: '/semesters/${widget.controller.semesterId}/hub',
+    headerBuilder: (context, data, fresh, load) => _semesterHeader(data),
     builder: (context, data, fresh, load) {
       if (!identical(_adopted, data)) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _adopt(data));
@@ -412,7 +481,6 @@ class SemesterHomeState extends State<SemesterHome>
       final semester = Map<String, dynamic>.from(data['semester']);
       final weeks = widget.controller.rows(data['weeks']);
       final current = _currentWeek(semester);
-      final total = semester['total_weeks'] as int;
       final selected = weeks.where((w) => w['week'] == _selected).firstOrNull;
       final weekItems = widget.controller.rows(selected?['items']);
       final weekChanges = widget.controller.rows(selected?['changes']);
@@ -449,62 +517,6 @@ class SemesterHomeState extends State<SemesterHome>
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(2, 12, 2, 2),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _semesterCaption('${semester['name']}'),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (current >= 1 && current <= total)
-                      RollingNumber.text(
-                        '第$current周',
-                        style: const TextStyle(
-                          fontSize: 44,
-                          height: 1.1,
-                          fontWeight: FontWeight.w700,
-                          color: CampusColors.ink,
-                        ),
-                      )
-                    else
-                      Text(
-                        current < 1 ? '学期尚未开始' : '本学期已结束',
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    Text(
-                      '共$total周 · 还剩${(total - current.clamp(0, total)).clamp(0, total)}周',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: CampusColors.muted,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SemesterHorizon(
-                  current: current,
-                  total: total,
-                  examWeeks: {
-                    for (final w in weeks)
-                      if (widget.controller
-                          .rows(w['items'])
-                          .any((i) => i['kind'] == 'exam'))
-                        w['week'] as int,
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
           SingleChildScrollView(
             controller: _weekStrip,
             scrollDirection: Axis.horizontal,

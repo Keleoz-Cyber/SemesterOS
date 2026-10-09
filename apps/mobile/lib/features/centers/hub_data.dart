@@ -1,5 +1,6 @@
 import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
+import '../../ui/motion.dart';
 import '../../core/api.dart' show userError;
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -11,6 +12,16 @@ class HubData extends StatefulWidget {
   final ItemsController controller;
   final String path;
   final Widget? placeholder;
+
+  /// Content whose position should remain stable across status changes.
+  /// Other hubs keep the default status-before-content layout.
+  final Widget Function(
+    BuildContext,
+    Map<String, dynamic>,
+    bool,
+    Future<void> Function(),
+  )?
+  headerBuilder;
   final Widget Function(
     BuildContext,
     Map<String, dynamic>,
@@ -24,6 +35,7 @@ class HubData extends StatefulWidget {
     required this.path,
     required this.builder,
     this.placeholder,
+    this.headerBuilder,
   });
   @override
   HubDataState createState() => HubDataState();
@@ -41,6 +53,7 @@ class HubDataState extends State<HubData> with WidgetsBindingObserver {
   DateTime? _loadedAt;
   bool _visible = false;
   bool _foreground = true;
+  Widget? _lastStatus;
   bool get active => _visible && _foreground;
   bool get stale =>
       data == null ||
@@ -165,28 +178,28 @@ class HubDataState extends State<HubData> with WidgetsBindingObserver {
             ),
           );
     }
-    return AppLoadingOverlay(
-      loading: busy,
-      label: '正在更新',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (error != null) ...[
-            SoftNotice(
-              value == null ? error! : '更新失败，保留上次记录。$error',
-              warning: true,
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppTextButton.icon(
-                onPressed: busy ? null : load,
-                icon: const Icon(Icons.refresh),
-                label: const Text('重试'),
+    final status = error != null
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SoftNotice(
+                value == null ? error! : '更新失败，保留上次记录。$error',
+                warning: true,
               ),
-            ),
-          ],
-          if (value != null) ...[
-            if (!fresh && error == null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppTextButton.icon(
+                  onPressed: busy ? null : load,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('重试'),
+                ),
+              ),
+            ],
+          )
+        : value != null && !fresh
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               const SoftNotice('安排已更新或分析过期，时间余量待更新。', warning: true),
               Align(
                 alignment: Alignment.centerLeft,
@@ -196,8 +209,26 @@ class HubDataState extends State<HubData> with WidgetsBindingObserver {
                 ),
               ),
             ],
-            widget.builder(context, value, fresh, load),
-          ],
+          )
+        : null;
+    // AppExpandRegion needs the last natural-size child throughout its exit.
+    // A fresh response updates body semantics immediately, while the outgoing
+    // status is no longer interactive or exposed to assistive technology.
+    if (status != null) _lastStatus = status;
+    return AppLoadingOverlay(
+      loading: busy,
+      label: '正在更新',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (value != null && widget.headerBuilder != null)
+            widget.headerBuilder!(context, value, fresh, load),
+          AppExpandRegion(
+            key: const ValueKey('hub-status-region'),
+            visible: status != null,
+            child: _lastStatus ?? const SizedBox.shrink(),
+          ),
+          if (value != null) widget.builder(context, value, fresh, load),
         ],
       ),
     );

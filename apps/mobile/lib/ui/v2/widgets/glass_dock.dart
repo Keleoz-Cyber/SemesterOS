@@ -127,9 +127,14 @@ class _GlassDockState extends State<GlassDock>
   @override
   void didUpdateWidget(covariant GlassDock old) {
     super.didUpdateWidget(old);
+    if (old.index == widget.index) return;
     final target = widget.index.toDouble();
-    if (_x.value == target) return;
-    if (reduceMotion(context)) {
+    if (_x.value == target) {
+      _x.stop();
+      return;
+    }
+    if (!motionAllowed(context)) {
+      _x.stop();
       _x.value = target;
     } else {
       _x.animateWith(
@@ -320,9 +325,14 @@ class _AssistantPillState extends State<AssistantPill>
   @override
   void didUpdateWidget(covariant AssistantPill old) {
     super.didUpdateWidget(old);
+    if (old.collapsed == widget.collapsed) return;
     final target = widget.collapsed ? 1.0 : 0.0;
-    if (_t.value == target) return;
-    if (reduceMotion(context)) {
+    if (_t.value == target) {
+      _t.stop();
+      return;
+    }
+    if (!motionAllowed(context)) {
+      _t.stop();
       _t.value = target;
     } else {
       _t.animateWith(
@@ -350,91 +360,140 @@ class _AssistantPillState extends State<AssistantPill>
   Widget build(BuildContext context) {
     final shiri = context.shiri;
     final pill = LayoutBuilder(
-      builder: (context, box) => AnimatedBuilder(
-        animation: _t,
-        builder: (context, _) {
-          final t = _t.value.clamp(0.0, 1.0);
-          final width = ui.lerpDouble(
-            box.maxWidth,
-            ShiriLayout.pillCollapsed,
-            t,
-          )!;
-          final extras = (1 - t * 2).clamp(0.0, 1.0);
-          return Align(
-            alignment: Alignment.centerRight,
-            child: SizedBox(
-              width: width,
-              height: ShiriLayout.pillHeight,
-              child: GlassSurface(
-                radius: ShiriLayout.pillRadius,
-                lowEnd: widget.lowEnd,
-                child: Row(
-                  children: [
-                    if (extras > 0)
-                      Expanded(
-                        child: Opacity(
-                          opacity: extras,
-                          child: InkWell(
-                            key: const Key('assistant-dock-input'),
-                            onTap: widget.onOpen,
-                            child: SizedBox(
+      builder: (context, box) {
+        final inputWidth = math.max(
+          0.0,
+          box.maxWidth - 16 - (widget.onImage == null ? 56 : 104),
+        );
+        return RepaintBoundary(
+          child: SizedBox(
+            height: ShiriLayout.pillHeight,
+            child: Stack(
+              children: [
+                AnimatedBuilder(
+                  animation: _t,
+                  builder: (context, _) {
+                    final t = _t.value.clamp(0.0, 1.0);
+                    final width = ui.lerpDouble(
+                      box.maxWidth,
+                      ShiriLayout.pillCollapsed,
+                      t,
+                    )!;
+                    // Fade the words first, then the image action, before the
+                    // glass reaches either target. Their layout never squeezes
+                    // the microphone or rebuilds its recording subtree.
+                    final inputOpacity = (1 - t / .28).clamp(0.0, 1.0);
+                    final imageOpacity = (1 - (t - .12) / .30).clamp(0.0, 1.0);
+                    return Positioned(
+                      right: 0,
+                      top: 0,
+                      width: width,
+                      height: ShiriLayout.pillHeight,
+                      child: GlassSurface(
+                        radius: ShiriLayout.pillRadius,
+                        lowEnd: widget.lowEnd,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: 16,
+                              top: 2,
+                              width: inputWidth,
                               height: 48,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 16),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.auto_awesome_rounded,
-                                      size: 20,
-                                      color: ShiriBrand.sky,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        widget.placeholder,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.fade,
-                                        softWrap: false,
-                                        style: shiri.text.body.copyWith(
-                                          fontSize: 15,
-                                          color: shiri.colors.ink400,
+                              child: _fadingAction(
+                                opacity: inputOpacity,
+                                child: InkWell(
+                                  key: const Key('assistant-dock-input'),
+                                  onTap: widget.onOpen,
+                                  highlightColor: Colors.transparent,
+                                  splashColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
+                                  splashFactory: NoSplash.splashFactory,
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.auto_awesome_rounded,
+                                        size: 20,
+                                        color: ShiriBrand.sky,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          widget.placeholder,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.fade,
+                                          softWrap: false,
+                                          style: shiri.text.body.copyWith(
+                                            fontSize: 15,
+                                            color: shiri.colors.ink400,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                            if (widget.onImage != null)
+                              Positioned(
+                                right: 54,
+                                top: 2,
+                                width: 48,
+                                height: 48,
+                                child: _fadingAction(
+                                  opacity: imageOpacity,
+                                  child: IconButton(
+                                    tooltip: '图片',
+                                    onPressed: widget.onImage,
+                                    style: IconButton.styleFrom(
+                                      overlayColor: Colors.transparent,
+                                    ),
+                                    icon: Icon(
+                                      Icons.image_outlined,
+                                      color: shiri.colors.ink500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                    if (extras > 0 && widget.onImage != null)
-                      Opacity(
-                        opacity: extras,
-                        child: IconButton(
-                          tooltip: '图片',
-                          onPressed: widget.onImage,
-                          icon: Icon(
-                            Icons.image_outlined,
-                            color: shiri.colors.ink500,
-                          ),
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.all(2),
-                      child: widget.microphone ?? _mic(context),
-                    ),
-                  ],
+                    );
+                  },
                 ),
-              ),
+                // Keep this element in the same slot and at the same global
+                // position for the entire animation, including reversal. A
+                // live HoldVoiceButton must not be reparented or disposed when
+                // text disappears halfway through a collapse.
+                Positioned(
+                  right: 2,
+                  top: 2,
+                  width: 48,
+                  height: 48,
+                  child: widget.microphone ?? _mic(context),
+                ),
+              ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
     return widget.heroTag == null
         ? pill
         : Hero(tag: widget.heroTag!, child: pill);
+  }
+
+  Widget _fadingAction({required double opacity, required Widget child}) {
+    final hidden = opacity <= .05;
+    return IgnorePointer(
+      ignoring: hidden,
+      child: ExcludeFocus(
+        excluding: hidden,
+        child: ExcludeSemantics(
+          excluding: hidden,
+          child: Opacity(opacity: opacity, child: child),
+        ),
+      ),
+    );
   }
 
   Widget _mic(BuildContext context) => Semantics(

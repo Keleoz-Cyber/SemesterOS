@@ -66,26 +66,38 @@ class _SpringSegmentedState<T> extends State<SpringSegmented<T>>
   @override
   void didUpdateWidget(covariant SpringSegmented<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scroll.hasClients) return;
-      final offset =
-          (_index * _slot - (_scroll.position.viewportDimension - _slot) / 2)
-              .clamp(0.0, _scroll.position.maxScrollExtent);
-      if (reduceMotion(context)) {
-        _scroll.jumpTo(offset);
-      } else {
-        _scroll.animateTo(
-          offset,
-          duration: ShiriMotion.standard,
-          curve: ShiriMotion.easeStandard,
+    final oldIndex = math.max(
+      0,
+      oldWidget.segments.indexWhere((s) => s.$1 == oldWidget.selected),
+    );
+    final targetChanged = oldIndex != _index;
+    final segmentsChanged =
+        oldWidget.segments.length != widget.segments.length ||
+        oldWidget.segments.asMap().entries.any(
+          (entry) => entry.value != widget.segments[entry.key],
         );
-      }
-    });
+    if (targetChanged || segmentsChanged) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients) return;
+        final offset =
+            (_index * _slot - (_scroll.position.viewportDimension - _slot) / 2)
+                .clamp(0.0, _scroll.position.maxScrollExtent);
+        if (!motionAllowed(context)) {
+          _scroll.jumpTo(offset);
+        } else {
+          _scroll.animateTo(
+            offset,
+            duration: ShiriMotion.standard,
+            curve: ShiriMotion.easeStandard,
+          );
+        }
+      });
+    }
     final target = _index.toDouble();
-    if (_position.value == target) return;
-    if (reduceMotion(context)) {
+    if (!motionAllowed(context)) {
+      _position.stop();
       _position.value = target;
-    } else {
+    } else if (targetChanged && _position.value != target) {
       _position.animateWith(
         SpringSimulation(
           ShiriMotion.snappy,
@@ -94,6 +106,8 @@ class _SpringSegmentedState<T> extends State<SpringSegmented<T>>
           _position.velocity,
         ),
       );
+    } else if (targetChanged) {
+      _position.stop();
     }
   }
 

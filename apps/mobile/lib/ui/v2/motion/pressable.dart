@@ -97,7 +97,7 @@ class _PressableState extends State<Pressable>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (reduceMotion(context)) _settle();
+    if (!motionAllowed(context)) _settle();
   }
 
   @override
@@ -115,7 +115,7 @@ class _PressableState extends State<Pressable>
   }
 
   void _handleTapDown(TapDownDetails _) {
-    if (!_enabled || reduceMotion(context)) return;
+    if (!_enabled || !motionAllowed(context)) return;
     _down = true;
     _pressIn = _scale.animateTo(
       widget.pressedScale,
@@ -125,6 +125,10 @@ class _PressableState extends State<Pressable>
   }
 
   void _handleTapEnd() {
+    if (!motionAllowed(context)) {
+      _settle();
+      return;
+    }
     if (!_down) return;
     _down = false;
     final pressIn = _pressIn;
@@ -141,6 +145,10 @@ class _PressableState extends State<Pressable>
   }
 
   void _springBack() {
+    if (!motionAllowed(context)) {
+      _settle();
+      return;
+    }
     _pressIn = null;
     _scale.animateWith(
       SpringSimulation(
@@ -161,7 +169,7 @@ class _PressableState extends State<Pressable>
 
   void _activateFromKeyboard() {
     if (widget.onPressed == null) return;
-    if (!reduceMotion(context)) {
+    if (motionAllowed(context)) {
       _scale.value = widget.pressedScale;
       _springBack();
     }
