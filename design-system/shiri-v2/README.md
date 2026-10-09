@@ -1,31 +1,12 @@
-# 拾日 · 晴日 v2 界面素材包
+# 拾日 · 晴日设计规范
 
-给 App 大改版用的完整素材：设计方向、设计变量、可交互原型、效果图、Flutter 参考代码、SVG 插画与图标，以及交给 Codex 的提示词。视觉语言来自新的 App 图标（天蓝→青→薄荷渐变、金色太阳、白色通透底板、柔和波浪）。
+此目录仅保留当前规范和变量；旧原型、截图、重复资源与参考代码已清理。
 
-## 怎么看
-1. **效果图**：`screens/`，2 倍分辨率。
-   - `today`、`dawn`、`dusk`、`night`：今日页一天中的四种天空；
-   - `today-gap-preview` / `today-gap-saved`：空档"安排这项"的就地预览和保存后；
-   - `schedule`、`list`、`detail`：周课表、列表、课程详情；
-   - `tasks`、`semester`、`assistant`：任务、学期、助手；
-   - `board-components`、`board-motion`：组件板和动效板。
-2. **可交互原型**：用 Chrome 打开 `prototype/index.html`。
-   - 每台手机都能点：切换页签、勾选完成、"安排这项"、点课程块进详情、点胶囊开助手、确认添加、按住麦克风；
-   - 顶部滑块可以拖动"今日时间"，看天空变化；
-   - "组件 / 动效"两页可以逐个播放动效。
-3. **矢量资源总览**：`assets/preview.png`。
-4. **Flutter 组件实拍**：`flutter/previews/`。
+- [MASTER](../shiri/MASTER.md)：产品、数据和无障碍约束。
+- [DESIGN](DESIGN.md)：视觉、布局和动效模式。
+- [tokens.json](tokens/tokens.json)：颜色、尺寸和动效数值。
+- [生产实现](../../apps/mobile/lib/ui/v2/)：唯一组件实现。
+- [运行素材](../../apps/mobile/assets/)：当前加载资源。
+- [生成器](../../apps/mobile/tool/build_assets.py)：13张插画、8个导航SVG，可用 `--output-dir` 隔离核对。
 
-## 目录
-| 路径 | 内容 |
-|---|---|
-| `DESIGN.md` | 设计规范：现状诊断、方向、色彩、字体、材质、动效（12 个编排模式）、组件、页面蓝图、插画与图标、护栏、验收 |
-| `tokens/tokens.json` | 设计变量，唯一的数值来源 |
-| `prototype/` | 原型（styles.css 就是可运行的视觉规范） |
-| `screens/` | 原型渲染图 |
-| `flutter/` | Flutter 参考实现（analyze 0 问题，渲染测试通过）及接入说明 |
-| `assets/` | 13 张插画、30 个图标、品牌标志、太阳/月亮/波浪，以及生成脚本 |
-| `CODEX-PROMPT.md` | 交给 Codex 的改版提示词 |
-
-## 和现有规范的关系
-`design-system/shiri/MASTER.md` 里的产品规则、数据语义、无障碍底线**继续有效**。v2 只替换外观、布局和动效。
+启动图标由 `apps/mobile/tool/export_brand.cjs` 从 `app_icon.svg` 导出，界面使用 `mark.svg`。调整素材后运行客户端检查，避免资源与实现不一致。

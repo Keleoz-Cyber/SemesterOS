@@ -1,7 +1,7 @@
 name: semester_os
 description: "学期OS：课程导入与学期事务管理"
 publish_to: 'none'
-version: 0.1.0+7
+version: 1.0.0+8
 
 environment:
   sdk: ^3.12.2
@@ -47,11 +47,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/brand/brand_mark.png
     - assets/brand/mark.svg
     - assets/illustrations/
     - assets/icons/
-    - assets/patterns/
     - assets/haut_reader.js
     - assets/hlju_reader.js
     - assets/hlju_browser_compat.js

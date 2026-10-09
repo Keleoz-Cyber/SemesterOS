@@ -63,7 +63,13 @@ def test_formal_exam_edit_preserves_omitted_reservation_and_allows_explicit_chan
         assert changed.json()['reserve_time'] is reserve
 
 
-def test_confirmation_update_reserves_and_legacy_create_still_defaults_true(client):
+def test_confirmation_update_reserves_and_legacy_create_still_defaults_true(client, monkeypatch):
+    from datetime import datetime
+    from app import calendar_events, reminder_rules
+    # Conflict confirmation compares upcoming occupancy, not expired events.
+    now = datetime.fromisoformat('2026-10-09T13:00:00+08:00')
+    monkeypatch.setattr(calendar_events, 'utcnow', lambda: now)
+    monkeypatch.setattr(reminder_rules, 'utcnow', lambda: now)
     _, h = register(client); s = semester(client,h)
     body = event_body(s['id'], details={'participation_status':'optional'})
     event = client.post('/api/v1/events', headers=h, json=body).json()['event']

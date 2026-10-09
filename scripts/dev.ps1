@@ -70,6 +70,8 @@ if ($Action -eq 'Test') {
     Check-Exit 'School reader JavaScript tests'
     Push-Location apps/mobile
     try {
+        & flutter --no-version-check pub get
+        Check-Exit 'Flutter dependencies'
         & flutter --no-version-check test --no-pub
         Check-Exit 'Flutter tests'
         & flutter --no-version-check analyze --no-pub

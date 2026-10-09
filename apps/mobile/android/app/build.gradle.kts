@@ -33,7 +33,8 @@ android {
 
     buildTypes {
         release {
-            // Release signing is intentionally not configured in this debug-only batch.
+            // scripts/build_release.py signs the aligned APK with the existing
+            // upgrade-compatible key; private signing material stays outside Git.
         }
     }
 }

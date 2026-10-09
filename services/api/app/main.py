@@ -20,6 +20,7 @@ from threading import Lock, BoundedSemaphore
 import os
 from .database import make_engine
 from .runtime_paths import PROJECT_ROOT
+from .version import VERSION
 
 
 def create_app(database_url: str | None = None, *, initialize: bool = False) -> FastAPI:
@@ -49,7 +50,7 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
                 except subprocess.TimeoutExpired:worker.kill();worker.wait()
             engine.dispose()
 
-    app = FastAPI(title="SemesterOS", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="SemesterOS", version=VERSION, lifespan=lifespan)
     app.state.engine = engine
     from .media_files import root
     app.state.media_root=root()
@@ -92,7 +93,7 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
     def health():
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"status": "ok", "version": "0.1.0", "database": engine.dialect.name}
+        return {"status": "ok", "version": VERSION, "database": engine.dialect.name}
 
     app.include_router(calendar_events.router, prefix="/api/v1")
     app.include_router(agent_api.router, prefix="/api/v1")

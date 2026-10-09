@@ -40,6 +40,12 @@ def register(client, username="student_a"):
     return data, {"Authorization": f"Bearer {data['access_token']}"}
 
 
+def test_public_release_version_matches_health_and_openapi(client):
+    assert client.app.version == '1.0.0'
+    assert client.get('/health').json()['version'] == '1.0.0'
+    assert client.get('/openapi.json').json()['info']['version'] == '1.0.0'
+
+
 def test_eight_character_password_registration_login_and_recovery(client):
     def signup(password):
         return client.post('/api/v1/auth/register',json={'username':'eight_chars','password':password})

@@ -244,13 +244,18 @@ def test_electronic_deadline_and_paper_window_are_independent_notice_steps(clien
     assert {i['time']['meaning'] for i in items} == {'window','deadline'}
 
 
-def test_explicit_arrival_is_displayed_and_complete_occupancy_includes_it(client):
+def test_explicit_arrival_is_displayed_and_complete_occupancy_includes_it(client, monkeypatch):
     from datetime import datetime
+    from app import calendar_events, reminder_rules
     from sqlalchemy.orm import Session
     from app.models import User
     from app.academics import owned_semester
     from app.schedule_api import snapshot
     from app.capacity import calendar_context
+    # Use the same pre-event clock for API writes and the direct context check.
+    now = datetime.fromisoformat('2026-10-09T13:00:00+08:00')
+    monkeypatch.setattr(calendar_events, 'utcnow', lambda: now)
+    monkeypatch.setattr(reminder_rules, 'utcnow', lambda: now)
     account, h = register(client); s = semester(client, h)
     event = client.post('/api/v1/events', headers=h, json={'semester_id':s['id'],
         'title':'说明会', 'expected_revision':0,
@@ -266,7 +271,7 @@ def test_explicit_arrival_is_displayed_and_complete_occupancy_includes_it(client
         snap = snapshot(db,user,term)
         snap[1]['weekly'] = [{'weekday':5,'start':'14:00','end':'17:00'}]
         snap[1]['configured'] = True
-        context = calendar_context(*snap[:4], datetime.fromisoformat('2026-10-09T13:00:00+08:00'))
+        context = calendar_context(*snap[:4], now)
         at_1445 = datetime.fromisoformat('2026-10-09T14:45:00+08:00').timestamp()
         assert not any(a <= at_1445 < b for a,b in context['free'].spans)
     second = client.post('/api/v1/events', headers=h, json={'semester_id':s['id'],

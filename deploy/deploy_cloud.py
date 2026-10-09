@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import urllib.request
+import runpy
 
 ROOT = Path('/opt/semesteros')
 
@@ -28,6 +29,7 @@ def main():
     assert os.geteuid() == 0, 'Run with sudo'
     release = Path(args.release).resolve()
     assert release.parent == ROOT / 'releases' and release.is_dir(), 'Unexpected release path'
+    expected_version = runpy.run_path(str(release / 'services/api/app/version.py'))['VERSION']
     assert re.fullmatch(r'[a-z0-9][a-z0-9.-]{1,70}', args.tag), 'Unexpected image tag'
     current = ROOT / 'current'
     assert current.is_symlink(), 'Current release must be a managed symlink'
@@ -58,7 +60,7 @@ def main():
         compose(release, 'up', '-d', '--no-deps', '--wait', '--wait-timeout', '100', 'api', 'worker', env=new_env)
         with urllib.request.urlopen('http://127.0.0.1:8871/health', timeout=10) as response:
             health = json.load(response)
-        assert health['status'] == 'ok' and health['version'] == '0.1.0', 'Unexpected API health'
+        assert health['status'] == 'ok' and health['version'] == expected_version, 'Unexpected API health'
         temporary = ROOT / ('current-' + stamp)
         temporary.symlink_to(release)
         os.replace(temporary, current)

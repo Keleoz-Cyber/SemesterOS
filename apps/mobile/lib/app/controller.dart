@@ -11,7 +11,13 @@ final appControllerProvider = Provider<AppController>((ref) {
   return controller;
 });
 
-DateTime schoolNow() => DateTime.now().toUtc().add(const Duration(hours: 8));
+/// 仅供测试与宣传渲染固定学校时钟（UTC+08:00 的钟面时间）；非调试构建忽略此值。
+@visibleForTesting
+DateTime Function()? debugSchoolClock;
+
+DateTime schoolNow() =>
+    (kDebugMode ? debugSchoolClock?.call() : null) ??
+    DateTime.now().toUtc().add(const Duration(hours: 8));
 DateTime schoolTime(String value) =>
     DateTime.parse(value).toUtc().add(const Duration(hours: 8));
 String hhmm(DateTime value) =>

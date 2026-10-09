@@ -3,7 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 const appName = '拾日';
 
-/// Shared export of assets/brand/app_icon.svg, also used by the launcher.
+/// Interface SVG mark. The launcher is generated from app_icon.svg separately.
 class BrandMark extends StatelessWidget {
   final double size;
   const BrandMark({super.key, this.size = 32});

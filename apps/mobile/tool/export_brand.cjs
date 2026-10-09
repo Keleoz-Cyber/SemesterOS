@@ -33,7 +33,6 @@ function exportPng(svg, pixels, destination) {
   fs.mkdirSync(path.dirname(destination), {recursive: true});
   fs.writeFileSync(destination, image.asPng());
 }
-exportPng(insetTile, 512, path.join(mobile, 'assets/brand/brand_mark.png'));
 for (const [density, scale] of Object.entries({mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4})) {
   const folder = path.join(res, `mipmap-${density}`);
   exportPng(insetTile, Math.round(48 * scale), path.join(folder, 'ic_launcher.png'));
@@ -41,4 +40,4 @@ for (const [density, scale] of Object.entries({mdpi: 1, hdpi: 1.5, xhdpi: 2, xxh
     exportPng(svg, Math.round(108 * scale), path.join(folder, `ic_launcher_${name}.png`));
   }
 }
-console.log('Exported shared brand and 5 Android launcher densities.');
+console.log('Exported 5 Android launcher densities.');
