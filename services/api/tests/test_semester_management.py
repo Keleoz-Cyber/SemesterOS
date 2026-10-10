@@ -164,7 +164,7 @@ def test_reimport_shows_exact_course_change_and_requires_explicit_replacement(cl
     assert applied.json()['replaced_count'] == 1
     after = client.get(f"/api/v1/semesters/{s['id']}/timetable?week=1", headers=headers).json()['events'][0]
     assert after['course_id'] == before['course_id']
-    assert after['start_at'] == '2026-09-02T09:00:00+08:00'
+    assert after['start_at'] == '2026-09-02T09:20:00+08:00'
     assert after['location'] == 'B404'
 
 

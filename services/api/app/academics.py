@@ -157,6 +157,7 @@ def summarize(db, batch):
             "unchanged_extra_count": extra_unchanged, "changed_extras": extra_changes,
             "protected_extras": protected, "protected_extra_count": len(protected),
             "source_first_monday": batch.source_first_monday,
+            "source_periods": batch.source_periods,
             "missing_count": len(missing_school), "missing_courses": missing_school,
             "applied": batch.receipt is not None}
 
@@ -174,7 +175,15 @@ def preview_import(body: ImportInput, user: User = Depends(current_user), db: Se
     cached = replay(db, user, "preview-import", idempotency_key, request)
     if cached is not None:
         return cached
-    known = {p["number"] for p in s.periods}
+    from .school_periods import import_periods
+    source_periods = import_periods(body.source, s.periods)
+    if source_periods:
+        from pydantic import ValidationError
+        try:
+            SemesterInput(name=s.name, first_monday=s.first_monday, total_weeks=s.total_weeks, periods=source_periods)
+        except ValidationError:
+            error(422, 'CALENDAR_MISMATCH', '额外节次与学校作息重叠，请核对第11节及之后的时间')
+    known = {p["number"] for p in source_periods or s.periods}
     courses = {}
     for c in body.courses:
         maximum = max(c.weeks)
@@ -203,7 +212,7 @@ def preview_import(body: ImportInput, user: User = Depends(current_user), db: Se
     batch = ImportBatch(user_id=user.id, semester_id=s.id, source=body.source, source_term=body.source_term,
                         courses=list(courses.values()), extras=list(extras.values()),
                         source_first_monday=body.source_first_monday.isoformat() if body.source_first_monday else None,
-                        base_revision=s.revision)
+                        base_revision=s.revision, source_periods=source_periods)
     db.add(batch)
     db.flush()
     response = summarize(db, batch)
@@ -286,13 +295,16 @@ def apply_import(batch_id: str, body: ApplyInput, user: User = Depends(current_u
             existing.add(key)
             count += 1
     extra_count, extra_replaced = apply_extras(db, user, s, batch, extra_changes, extra_new)
-    if count or changes or removed_count or extra_count or extra_replaced:
+    periods_changed = bool(batch.source_periods and s.periods != batch.source_periods)
+    if periods_changed:
+        s.periods = batch.source_periods
+    if count or changes or removed_count or extra_count or extra_replaced or periods_changed:
         s.revision += 1
     response = {"semester_id": s.id, "revision": s.revision, "imported_count": count,
                 "replaced_count": len(changes), "removed_count": removed_count,
                 "imported_extra_count": extra_count, "replaced_extra_count": extra_replaced,
                 "protected_extra_count": len(protected_extras),
-                "batch_id": batch.id}
+                "batch_id": batch.id, "periods_updated": periods_changed}
     batch.receipt = response
     remember(db, user, operation, idempotency_key, request, response)
     db.commit()

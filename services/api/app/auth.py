@@ -1,12 +1,16 @@
 from hashlib import sha256
+import base64
+import hmac
+import json
 import secrets
 import time
+from typing import Annotated
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,6 +36,31 @@ def public_user(user):
     return {"id": user.id, "username": user.username, "is_demo":user.username.startswith('demo_')}
 
 
+def limit_account(request, operation, principal, count=10):
+    if request is not None and not request.app.state.auth_limits.allow(operation, principal, count):
+        error(429, 'RATE_LIMITED', '操作过于频繁，请稍后再试')
+
+
+def clear_refresh_replay(row):
+    row.refresh_replay_hash = row.refresh_request_hash = row.refresh_replay_nonce = None
+    row.refresh_replay_until = 0
+
+
+def replay_tokens(old_token, row, request_id):
+    # HMAC is a PRF keyed by the client's high-entropy random refresh secret.
+    # The server nonce makes outputs unpredictable without the stored receipt.
+    # Only hashes and nonce persist: no plaintext/encrypted bearer tokens or new server key.
+    context = json.dumps([row.id, row.refresh_replay_nonce, request_id], separators=(',', ':')).encode()
+    def derive(purpose):
+        raw = hmac.new(old_token.encode(), purpose + b'\0' + context, sha256).digest()
+        return base64.urlsafe_b64encode(raw).decode().rstrip('=')
+    return derive(b'shiri-access-v1'), derive(b'shiri-refresh-v1')
+
+
+def session_result(user, access, refresh):
+    return {'user': public_user(user), 'access_token': access, 'refresh_token': refresh, 'expires_in': 900}
+
+
 def mint(db, user, existing=None):
     access, refresh = secrets.token_urlsafe(32), secrets.token_urlsafe(40)
     row = existing or LoginSession(user_id=user.id)
@@ -41,6 +70,7 @@ def mint(db, user, existing=None):
     row.access_hash, row.refresh_hash = digest(access), digest(refresh)
     row.access_expires = int(time.time()) + 900
     row.refresh_expires = int(time.time()) + 7 * 86400
+    clear_refresh_replay(row)
     db.add(row)
     return {"user": public_user(user), "access_token": access, "refresh_token": refresh, "expires_in": 900,
             **({"logout_token": logout} if logout else {})}
@@ -58,7 +88,8 @@ def current_user(login: LoginSession = Depends(current_session), db: Session = D
 
 
 @router.post("/auth/register", status_code=201)
-def register(body: Credentials, db: Session = Depends(get_db)):
+def register(body: Credentials, db: Session = Depends(get_db), request: Request = None):
+    limit_account(request, 'register-account', body.username)
     if body.username.startswith('demo_'):error(422,'RESERVED_USERNAME','此用户名用于体验账号，请换一个用户名')
     code = secrets.token_urlsafe(24)
     user = User(username=body.username, password_hash=hasher.hash(body.password), recovery_hash=digest(code))
@@ -120,25 +151,57 @@ def demo(db:Session=Depends(get_db)):
 
 
 @router.post("/auth/login")
-def login(body: Credentials, db: Session = Depends(get_db)):
+def login(body: Credentials, db: Session = Depends(get_db), request: Request = None):
+    limit_account(request, 'login-account', body.username)
     user = db.scalar(select(User).where(User.username == body.username))
+    observed = user.password_hash if user else dummy_hash
     try:
-        hasher.verify(user.password_hash if user else dummy_hash, body.password)
+        hasher.verify(observed, body.password)
     except VerificationError:
         error(401, "INVALID_CREDENTIALS", "用户名或密码不正确")
     if user is None:
         error(401, "INVALID_CREDENTIALS", "用户名或密码不正确")
+    user = db.scalar(select(User).where(User.id == user.id).with_for_update()
+        .execution_options(populate_existing=True))
+    if user is None or not secrets.compare_digest(user.password_hash, observed):
+        error(401, 'INVALID_CREDENTIALS', '密码已更新，请使用新密码重新登录')
     response = mint(db, user)
     db.commit()
     return response
 
 
 @router.post("/auth/refresh")
-def refresh(body: Refresh, db: Session = Depends(get_db)):
-    row = db.scalar(select(LoginSession).where(LoginSession.refresh_hash == digest(body.refresh_token)).with_for_update())
+def refresh(body: Refresh, db: Session = Depends(get_db), request: Request = None,
+            idempotency_key: Annotated[str | None, Header(min_length=20, max_length=120)] = None):
+    token_hash = digest(body.refresh_token)
+    row = db.scalar(select(LoginSession).where(or_(LoginSession.refresh_hash == token_hash,
+        LoginSession.refresh_replay_hash == token_hash)).with_for_update().execution_options(populate_existing=True))
     if row is None or row.refresh_expires <= time.time():
         error(401, "SESSION_EXPIRED", "请重新登录学期OS")
-    response = mint(db, db.get(User, row.user_id), row)
+    limit_account(request, 'refresh-session', row.id, 30)
+    user = db.get(User, row.user_id)
+    if user is None:
+        error(401, 'SESSION_EXPIRED', '请重新登录学期OS')
+    if row.refresh_hash != token_hash:
+        if not idempotency_key or row.refresh_replay_until <= time.time() or not secrets.compare_digest(
+                row.refresh_request_hash or '', digest(idempotency_key)):
+            error(401, 'SESSION_EXPIRED', '请重新登录学期OS')
+        access, new_refresh = replay_tokens(body.refresh_token, row, idempotency_key)
+        if digest(access) != row.access_hash or digest(new_refresh) != row.refresh_hash:
+            error(401, 'SESSION_EXPIRED', '请重新登录学期OS')
+        return session_result(user, access, new_refresh)
+    if idempotency_key:
+        row.refresh_replay_hash = token_hash
+        row.refresh_request_hash = digest(idempotency_key)
+        row.refresh_replay_nonce = secrets.token_hex(32)
+        row.refresh_replay_until = int(time.time()) + 120
+        access, new_refresh = replay_tokens(body.refresh_token, row, idempotency_key)
+        row.access_hash, row.refresh_hash = digest(access), digest(new_refresh)
+        row.access_expires = int(time.time()) + 900
+        row.refresh_expires = int(time.time()) + 7 * 86400
+        response = session_result(user, access, new_refresh)
+    else:
+        response = mint(db, user, row)
     db.commit()
     return response
 
@@ -157,8 +220,10 @@ def logout(body: Logout | None = None, credentials: HTTPAuthorizationCredentials
 
 
 @router.post("/auth/recover")
-def recover(body: Recovery, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.username == body.username.lower()).with_for_update())
+def recover(body: Recovery, db: Session = Depends(get_db), request: Request = None):
+    limit_account(request, 'recover-account', body.username.lower())
+    user = db.scalar(select(User).where(User.username == body.username.lower()).with_for_update()
+        .execution_options(populate_existing=True))
     if user is None or not secrets.compare_digest(user.recovery_hash, digest(body.recovery_code)):
         error(401, "INVALID_RECOVERY", "用户名或恢复码不正确")
     code = secrets.token_urlsafe(24)

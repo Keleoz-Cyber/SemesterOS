@@ -1,0 +1,257 @@
+{
+  "request": {
+    "semester_id": "4385d441-ab8d-413d-bb6a-5485ad31c6bd",
+    "source": "haut_webview",
+    "courses": [
+      {
+        "title": "导入示例课程",
+        "weekday": 7,
+        "weeks": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20
+        ],
+        "sections": [
+          9,
+          10
+        ],
+        "location": "A301"
+      }
+    ]
+  },
+  "preview": {
+    "id": "30609237-4edb-45b2-9a16-d76571ce18c6",
+    "semester_id": "4385d441-ab8d-413d-bb6a-5485ad31c6bd",
+    "base_revision": 5,
+    "source": "haut_webview",
+    "source_term": "",
+    "courses": [
+      {
+        "title": "导入示例课程",
+        "teacher": "",
+        "location": "A301",
+        "source_id": "",
+        "weekday": 7,
+        "weeks": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20
+        ],
+        "sections": [
+          9,
+          10
+        ]
+      }
+    ],
+    "new_count": 1,
+    "unchanged_count": 0,
+    "changed_count": 0,
+    "changed_courses": [],
+    "extras": [],
+    "new_extra_count": 0,
+    "unchanged_extra_count": 0,
+    "changed_extras": [],
+    "protected_extras": [],
+    "protected_extra_count": 0,
+    "source_first_monday": null,
+    "source_periods": [
+      {
+        "number": 1,
+        "start": "08:30",
+        "end": "09:15"
+      },
+      {
+        "number": 2,
+        "start": "09:20",
+        "end": "10:05"
+      },
+      {
+        "number": 3,
+        "start": "10:25",
+        "end": "11:05"
+      },
+      {
+        "number": 4,
+        "start": "11:10",
+        "end": "12:00"
+      },
+      {
+        "number": 5,
+        "start": "14:30",
+        "end": "15:15"
+      },
+      {
+        "number": 6,
+        "start": "15:20",
+        "end": "16:05"
+      },
+      {
+        "number": 7,
+        "start": "16:25",
+        "end": "17:10"
+      },
+      {
+        "number": 8,
+        "start": "17:15",
+        "end": "18:00"
+      },
+      {
+        "number": 9,
+        "start": "19:30",
+        "end": "20:15"
+      },
+      {
+        "number": 10,
+        "start": "20:20",
+        "end": "21:05"
+      }
+    ],
+    "missing_count": 0,
+    "missing_courses": [],
+    "applied": false
+  },
+  "before": {
+    "id": "4385d441-ab8d-413d-bb6a-5485ad31c6bd",
+    "name": "演示学期（合成数据）",
+    "first_monday": "2026-09-14",
+    "total_weeks": 20,
+    "periods": [
+      {
+        "number": 1,
+        "start": "09:00",
+        "end": "10:00"
+      },
+      {
+        "number": 2,
+        "start": "10:10",
+        "end": "11:00"
+      },
+      {
+        "number": 3,
+        "start": "14:00",
+        "end": "14:50"
+      },
+      {
+        "number": 4,
+        "start": "15:00",
+        "end": "15:50"
+      },
+      {
+        "number": 5,
+        "start": "19:00",
+        "end": "19:50"
+      },
+      {
+        "number": 6,
+        "start": "20:00",
+        "end": "20:50"
+      }
+    ],
+    "revision": 5
+  },
+  "receipt": {
+    "semester_id": "4385d441-ab8d-413d-bb6a-5485ad31c6bd",
+    "revision": 6,
+    "imported_count": 1,
+    "replaced_count": 0,
+    "removed_count": 0,
+    "imported_extra_count": 0,
+    "replaced_extra_count": 0,
+    "protected_extra_count": 0,
+    "batch_id": "30609237-4edb-45b2-9a16-d76571ce18c6",
+    "periods_updated": true
+  },
+  "after": {
+    "id": "4385d441-ab8d-413d-bb6a-5485ad31c6bd",
+    "name": "演示学期（合成数据）",
+    "first_monday": "2026-09-14",
+    "total_weeks": 20,
+    "periods": [
+      {
+        "number": 1,
+        "start": "08:30",
+        "end": "09:15"
+      },
+      {
+        "number": 2,
+        "start": "09:20",
+        "end": "10:05"
+      },
+      {
+        "number": 3,
+        "start": "10:25",
+        "end": "11:05"
+      },
+      {
+        "number": 4,
+        "start": "11:10",
+        "end": "12:00"
+      },
+      {
+        "number": 5,
+        "start": "14:30",
+        "end": "15:15"
+      },
+      {
+        "number": 6,
+        "start": "15:20",
+        "end": "16:05"
+      },
+      {
+        "number": 7,
+        "start": "16:25",
+        "end": "17:10"
+      },
+      {
+        "number": 8,
+        "start": "17:15",
+        "end": "18:00"
+      },
+      {
+        "number": 9,
+        "start": "19:30",
+        "end": "20:15"
+      },
+      {
+        "number": 10,
+        "start": "20:20",
+        "end": "21:05"
+      }
+    ],
+    "revision": 6
+  }
+}

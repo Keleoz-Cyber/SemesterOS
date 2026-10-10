@@ -1,6 +1,5 @@
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-import time
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -59,23 +58,21 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
     app.state.planner_lock=Lock()
     app.state.planner_users=set()
     app.state.planner_slots=BoundedSemaphore(2)
-    attempts = defaultdict(deque)
+    from .auth_limits import AuthLimits
+    app.state.auth_limits = AuthLimits()
 
     @app.middleware("http")
     async def limit_auth(request: Request, call_next):
-        if request.url.path.startswith("/api/v1/auth/"):
-            now = time.monotonic()
-            # A bounded, single-process guard; deployments use one API worker in this batch.
-            key = request.client.host if request.client else "unknown"
-            if len(attempts) > 4096:
-                for old in [k for k, v in attempts.items() if not v or v[-1] < now - 60]:
-                    attempts.pop(old, None)
-            q = attempts[key]
-            while q and q[0] < now - 60:
-                q.popleft()
-            if len(q) >= 30:
+        path = request.url.path
+        high_risk = {'/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/recover', '/api/v1/auth/demo'}
+        # A coarse, separate maintenance limit still bounds invalid-token abuse,
+        # without making a whole campus share the login quota.
+        limit = 30 if path in high_risk else 3000 if path in {
+            '/api/v1/auth/refresh', '/api/v1/auth/logout'} else None
+        if request.method == 'POST' and limit is not None:
+            key = request.client.host if request.client else 'unknown'
+            if not app.state.auth_limits.allow(path, key, limit):
                 return JSONResponse({"code": "RATE_LIMITED", "message": "操作过于频繁，请稍后再试"}, status_code=429)
-            q.append(now)
         return await call_next(request)
 
     @app.exception_handler(HTTPException)

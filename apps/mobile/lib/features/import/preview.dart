@@ -76,12 +76,18 @@ class _ImportPreviewState extends State<ImportPreview> {
   bool removeMissing = false;
   bool keepLocalCalendar = false;
   List<Map<String, dynamic>> get schoolPeriods => [
-    for (final p in widget.metadata['periods'] as List? ?? [])
-      if (p is Map &&
-          p['section'] is int &&
-          p['start'] is String &&
-          p['end'] is String)
-        Map<String, dynamic>.from(p),
+    for (final raw
+        in (batch?['source_periods'] ?? widget.metadata['periods']) as List? ??
+            [])
+      if (raw is Map)
+        for (final p in [
+          {
+            ...Map<String, dynamic>.from(raw),
+            'section': raw['section'] ?? raw['number'],
+          },
+        ])
+          if (p['section'] is int && p['start'] is String && p['end'] is String)
+            Map<String, dynamic>.from(p),
   ];
   List<Map<String, dynamic>> get changedCourses =>
       List<Map<String, dynamic>>.from(batch?['changed_courses'] ?? []);
@@ -377,30 +383,36 @@ class _ImportPreviewState extends State<ImportPreview> {
                 const SizedBox(height: 8),
               ],
               if (schoolPeriods.isNotEmpty) ...[
-                AppDisclosure(
-                  title: Text('校方作息 · ${schoolPeriods.length}个时段'),
-                  leading: const Icon(
-                    Icons.schedule_rounded,
-                    color: CampusColors.teal,
-                  ),
-                  subtitle: const Text('保留原始节次编号与课间间隔'),
-                  children: [
-                    for (final p in schoolPeriods)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        child: Row(
-                          children: [
-                            Expanded(child: Text('第${p['section']}节')),
-                            Text(
-                              '${p['start']}—${p['end']}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                CampusPanel(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        '每天的节次 · ${schoolPeriods.length}节',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                  ],
+                      if (widget.source == 'haut_webview')
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text('已按学校作息填好，确认导入时一并保存。'),
+                        ),
+                      for (final p in schoolPeriods)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          child: Row(
+                            children: [
+                              Expanded(child: Text('第${p['section']}节')),
+                              Text(
+                                '${p['start']}—${p['end']}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 14),
               ],

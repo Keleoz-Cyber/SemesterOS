@@ -1,0 +1,89 @@
+{
+  "files": {
+    "backend-full.txt": {
+      "bytes": 1218,
+      "sha256": "a7ba0051ee0e100305d7eb7041e03b3deaf793af5e858dd1250baf8703716246"
+    },
+    "backend-lock-order.txt": {
+      "bytes": 639,
+      "sha256": "e4263b2e2feb5920671fb5f128790ddf9d5d9f74d7d64d89d3af4e69f7bce305"
+    },
+    "cloud-verification.json": {
+      "bytes": 430,
+      "sha256": "1072ccd6af3233495c618742bb3a5469810ee8f22ba952aefb98e72ebdc3042e"
+    },
+    "flutter-result.txt": {
+      "bytes": 31,
+      "sha256": "b8dcab61c99d2d49f53384bad1168f4a4c704b26304d105dec67a54807e3c525"
+    },
+    "haut-import-confirmation.json": {
+      "bytes": 5027,
+      "sha256": "df93d0cf6294379f2acbb435b6b71e7721b5305ac498c0cb2138621c8c723b01"
+    },
+    "help-returned-verified.png": {
+      "bytes": 248778,
+      "sha256": "0e05f5316ae4765befbf06cce189286055ad8ad9c6db0a833ed80171b19ef87f"
+    },
+    "help-returned-verified.xml": {
+      "bytes": 10640,
+      "sha256": "55d3dffc5e4c33c33ef76caa224c788971474494a4fc5e0cd306c6f17a265cc8"
+    },
+    "import-visible-back-verified.png": {
+      "bytes": 143144,
+      "sha256": "1a76affb2cba8110d081e11943b7bb6372d18df2d183d4fa3f268c023da72d53"
+    },
+    "import-visible-back-verified.xml": {
+      "bytes": 10225,
+      "sha256": "af6b5ed5eb97e7d2101f805f3bc5bb3be6bc51b4bf059437a61b0fb8cab2a779"
+    },
+    "offline-snooze-applied.png": {
+      "bytes": 238491,
+      "sha256": "c91c99174c203dfcde47648570bb19daecfe2789f713728ae93793f804c21566"
+    },
+    "offline-snooze-applied.xml": {
+      "bytes": 15782,
+      "sha256": "bb7b30741bc1c9f871992c501c2c17ee8a6e66602442030a52b6d9a07339e527"
+    },
+    "offline-snooze-cold-applied.png": {
+      "bytes": 243090,
+      "sha256": "6e2bbf52b963c546ff04cb5b08e797a58ee63ce519773bf44c15ae48bd9fb2d4"
+    },
+    "offline-snooze-cold-applied.xml": {
+      "bytes": 16887,
+      "sha256": "11314a5e55bc95a37234dde7998692f2cd2010f155ef56ead3df5cd8723d0c7d"
+    },
+    "offline-snooze-cold.json": {
+      "bytes": 1620,
+      "sha256": "02723f9ed4c86b52a8bde5aaa0ef2ad500ad638980711601f4d6793f1c74f417"
+    },
+    "offline-snooze-native.json": {
+      "bytes": 1516,
+      "sha256": "2172854676ff0aca1294983487d25d170d7b4919452965c6e93b95841a304348"
+    },
+    "periods-preset-lower.png": {
+      "bytes": 120625,
+      "sha256": "129d73e33f121bdd1cb7cc87bde4bd4bb1aeeaae130131a53429066569ed2f1d"
+    },
+    "periods-preset-lower.xml": {
+      "bytes": 13767,
+      "sha256": "205a3e59244d8fd168abdc87172970903cdb9f627cc280502cfc70e511431f38"
+    },
+    "periods-preset-upper.png": {
+      "bytes": 170535,
+      "sha256": "0f62e64f353dc0d241467b8c5a37194ad64ebd62faee8004b4c6b78f7dba5f88"
+    },
+    "periods-preset-upper.xml": {
+      "bytes": 12461,
+      "sha256": "18356159b27f719b8fa3916637c1777adf91e7957b2186c9715e5c147b0c8905"
+    },
+    "README.md": {
+      "bytes": 1305,
+      "sha256": "d23ffd3f87a629e4f58ad448d51d98e89e136113fcdfd78bc74e487bb6fb515d"
+    },
+    "results.json": {
+      "bytes": 7561,
+      "sha256": "88295659869d23f8c9e6308204100073578eeb86b65b3ca12a90126c9f8d4cef"
+    }
+  },
+  "count": 21
+}

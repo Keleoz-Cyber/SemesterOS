@@ -36,11 +36,20 @@ class _AuthPageState extends State<AuthPage> {
   void initState() {
     super.initState();
     mode = widget.initialMode;
+    widget.controller.addListener(controllerChanged);
+  }
+
+  void controllerChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void didUpdateWidget(covariant AuthPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(controllerChanged);
+      widget.controller.addListener(controllerChanged);
+    }
     if (oldWidget.initialMode != widget.initialMode) {
       mode = widget.initialMode;
       error = null;
@@ -67,6 +76,7 @@ class _AuthPageState extends State<AuthPage> {
 
   @override
   void dispose() {
+    widget.controller.removeListener(controllerChanged);
     username.dispose();
     password.dispose();
     recovery.dispose();
@@ -298,6 +308,28 @@ class _AuthPageState extends State<AuthPage> {
                               : '密码需要8—128位',
                         ),
                         const SizedBox(height: 20),
+                        if (widget.controller.logoutCleanupFailed) ...[
+                          Text(
+                            widget.controller.notice ?? '退出清理未完成，请重试',
+                            style: const TextStyle(color: CampusColors.error),
+                          ),
+                          AppTextButton(
+                            onPressed: busy
+                                ? null
+                                : () async {
+                                    setState(() => busy = true);
+                                    try {
+                                      await widget.controller.logout(
+                                        remote: false,
+                                      );
+                                    } finally {
+                                      if (mounted) setState(() => busy = false);
+                                    }
+                                  },
+                            child: const Text('重试退出清理'),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         if (error != null || success != null)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 16),

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from .database import get_db
 from .models import MediaSource,User,new_id
-from .auth import current_user,error
+from .auth import current_user,error,bearer,current_session
 from .academics import owned_semester
 from .schemas import Input
 from .item_schemas import ItemTime
@@ -47,34 +47,77 @@ def version(row,expected):
     if row.version!=expected:error(409,'SOURCE_STALE','来源已更新，请刷新后核对')
 
 
-@router.post('/semesters/{sid}/sources',status_code=201)
-async def upload(sid:str,request:Request,kind:Literal['image','audio'],user:User=Depends(current_user),db:Session=Depends(get_db),idempotency_key:str=Header(min_length=1,max_length=120)):
-    owned_semester(db,user,sid)
-    limit=(10 if kind=='image' else 20)*1024*1024
-    data=bytearray()
+def authenticate_upload(engine, credentials):
+    with Session(engine) as db:
+        session = current_session(credentials, db)
+        return session.user_id
+
+
+async def upload_owner(request: Request, credentials=Depends(bearer)):
+    # Release the authentication connection too; many slow uploads must not
+    # exhaust the pool while waiting for a second connection to persist.
+    return await run_in_threadpool(authenticate_upload, request.app.state.engine, credentials)
+
+
+def authorize_upload(engine, owner_id, sid):
+    # A request Session is never moved between the event loop and worker threads.
+    with Session(engine) as db:
+        user = db.get(User, owner_id)
+        if user is None:error(401, 'SESSION_EXPIRED', '请重新登录')
+        owned_semester(db, user, sid)
+
+
+def save_upload(engine, owner_id, sid, kind, key, digest, sanitized, mime, ext, metadata, folder):
+    with Session(engine, expire_on_commit=False) as db:
+        user = db.get(User, owner_id)
+        if user is None:error(401, 'SESSION_EXPIRED', '请重新登录')
+        owned_semester(db, user, sid, lock=True)
+        # Match item/tag writes: Semester before User. NO KEY UPDATE serializes
+        # quotas across semesters without needlessly blocking FK KEY SHARE.
+        user = db.scalar(select(User).where(User.id == owner_id).with_for_update(key_share=True)
+            .execution_options(populate_existing=True))
+        if user is None:error(401, 'SESSION_EXPIRED', '请重新登录')
+        old = db.scalar(select(MediaSource).where(MediaSource.user_id == owner_id,
+            MediaSource.semester_id == sid, MediaSource.upload_key == key))
+        if old:
+            if old.input_hash != digest or old.kind != kind:
+                error(409, 'UPLOAD_KEY_CONFLICT', '上传的文件已变化，请重新选择文件后上传')
+            return value(old)
+        count, size = db.execute(select(func.count(), func.coalesce(func.sum(MediaSource.size), 0)).where(
+            MediaSource.user_id == owner_id, MediaSource.file_deleted == False)).one()
+        if count >= 500 or size + len(sanitized) > 1024**3:
+            error(422, 'MEDIA_QUOTA', '已保存来源较多，请删除不需要的原文件后再上传')
+        id = new_id(); storage_key = id + ext
+        folder.mkdir(parents=True, exist_ok=True)
+        path = path_for(folder, storage_key)
+        now = utcnow().isoformat()
+        row = MediaSource(id=id, user_id=owner_id, semester_id=sid, upload_key=key,
+            input_hash=digest, kind=kind, mime=mime, size=len(sanitized), storage_key=storage_key,
+            reference_at=now, created_at=now, metadata_json=metadata)
+        try:
+            path.write_bytes(sanitized)
+            db.add(row); db.flush(); result = value(row); db.commit()
+        except Exception:
+            path.unlink(missing_ok=True); raise
+        return result
+
+
+@router.post('/semesters/{sid}/sources', status_code=201)
+async def upload(sid: str, request: Request, kind: Literal['image', 'audio'],
+                 owner_id: str = Depends(upload_owner),
+                 idempotency_key: str = Header(min_length=1, max_length=120)):
+    engine = request.app.state.engine
+    await run_in_threadpool(authorize_upload, engine, owner_id, sid)
+    limit = (10 if kind == 'image' else 20) * 1024 * 1024
+    data = bytearray()
     async for part in request.stream():
-        if len(data)+len(part)>limit:error(413,'MEDIA_TOO_LARGE','来源文件超出大小限制')
+        if len(data) + len(part) > limit:
+            error(413, 'MEDIA_TOO_LARGE', '来源文件超出大小限制')
         data.extend(part)
-    digest=sha256(data).hexdigest()
-    owned_semester(db,user,sid,lock=True)
-    old=db.scalar(select(MediaSource).where(MediaSource.user_id==user.id,MediaSource.semester_id==sid,MediaSource.upload_key==idempotency_key))
-    if old:
-        if old.input_hash!=digest or old.kind!=kind:error(409,'UPLOAD_KEY_CONFLICT','上传的文件已变化，请重新选择文件后上传')
-        return value(old)
-    sanitized,mime,ext,metadata=await run_in_threadpool(sanitize,bytes(data),kind)
-    count,size=db.execute(select(func.count(),func.coalesce(func.sum(MediaSource.size),0)).where(MediaSource.user_id==user.id,MediaSource.file_deleted==False)).one()
-    if count>=500 or size+len(sanitized)>1024**3:error(422,'MEDIA_QUOTA','已保存来源较多，请删除不需要的原文件后再上传')
-    id=new_id();key=id+ext;folder=request.app.state.media_root;folder.mkdir(parents=True,exist_ok=True)
-    path=path_for(folder,key)
-    now=utcnow().isoformat()
-    row=MediaSource(id=id,user_id=user.id,semester_id=sid,upload_key=idempotency_key,input_hash=digest,kind=kind,mime=mime,size=len(sanitized),storage_key=key,
-        reference_at=now,created_at=now,metadata_json=metadata)
-    try:
-        path.write_bytes(sanitized)
-        db.add(row);db.flush();result=value(row);db.commit()
-    except Exception:
-        path.unlink(missing_ok=True);raise
-    return result
+    digest = sha256(data).hexdigest()
+    sanitized, mime, ext, metadata = await run_in_threadpool(sanitize, bytes(data), kind)
+    return await run_in_threadpool(save_upload, engine, owner_id, sid, kind, idempotency_key,
+        digest, sanitized, mime, ext, metadata, request.app.state.media_root)
 
 
 @router.get('/semesters/{sid}/sources')

@@ -1,7 +1,7 @@
 name: semester_os
 description: "学期OS：课程导入与学期事务管理"
 publish_to: 'none'
-version: 1.0.0+8
+version: 1.0.0+9
 
 environment:
   sdk: ^3.12.2

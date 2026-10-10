@@ -88,6 +88,10 @@ class LoginSession(Base):
     logout_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     access_expires: Mapped[int] = mapped_column()
     refresh_expires: Mapped[int] = mapped_column()
+    refresh_replay_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    refresh_request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    refresh_replay_nonce: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    refresh_replay_until: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
 
 
 class UserProfile(Base):
@@ -121,6 +125,7 @@ class ImportBatch(Base):
     courses: Mapped[list] = mapped_column(JSON)
     extras: Mapped[list] = mapped_column(JSON, default=list)
     source_first_monday: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    source_periods: Mapped[list | None] = mapped_column(JSON, nullable=True)
     base_revision: Mapped[int] = mapped_column(Integer)
     receipt: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 

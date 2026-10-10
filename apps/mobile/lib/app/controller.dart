@@ -27,6 +27,9 @@ class AppController extends ChangeNotifier {
   final SemesterApi api;
   final CalendarStore cache;
   final Future<void> Function() clearSchoolSession;
+  Future<void> Function()? clearNotifications;
+  bool logoutCleanupFailed = false;
+  String? _logoutOwner;
   int _weekRequest = 0;
   int _catalogRequest = 0;
   bool ready = false, busy = false, offline = false;
@@ -74,6 +77,10 @@ class AppController extends ChangeNotifier {
       if (loggedIn) await openSession();
     } catch (e) {
       notice = userError(e);
+      if (api.logoutPending) {
+        logoutCleanupFailed = true;
+        _logoutOwner = api.pendingLogoutOwner;
+      }
     }
     ready = true;
     notifyListeners();
@@ -313,12 +320,17 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> logout({bool remote = true}) async {
-    final owner = '${user['id']}';
+    final owner = user['id'] as String? ?? _logoutOwner;
+    _logoutOwner = owner;
     Future<dynamic>? revoking;
     if (remote && loggedIn) {
       revoking = api.revokeSession(Map<String, dynamic>.from(api.session!));
     }
-    final forgetting = api.forget();
+    // Catch immediately: clearNotifications/cache may also complete asynchronously.
+    final forgetting = api.forget().then<String?>(
+      (_) => null,
+      onError: (Object _) => '本机登录信息未清除，请重试退出',
+    );
     ready = false;
     _weekRequest++;
     _catalogRequest++;
@@ -331,12 +343,40 @@ class AppController extends ChangeNotifier {
     sessionLoading = false;
     notice = null;
     notifyListeners();
-    await forgetting;
-    await clearSchoolSession();
-    await cache.clear(owner);
-    ready = true;
-    notifyListeners();
-    if (revoking != null) unawaited(revoking);
+    final failures = <String>[];
+    Future<void> clean(Future<void> Function() action, String message) async {
+      try {
+        await action();
+      } catch (_) {
+        failures.add(message);
+      }
+    }
+
+    try {
+      final credentialsError = await forgetting;
+      if (credentialsError != null) failures.add(credentialsError);
+      await clean(clearSchoolSession, '学校登录信息清理失败');
+      if (owner != null) {
+        for (final key in [
+          owner,
+          'items:$owner',
+          'capture:$owner',
+          'profile:$owner',
+        ]) {
+          await clean(() => cache.clear(key), '本机缓存清理失败');
+        }
+      }
+      if (clearNotifications != null) {
+        await clean(clearNotifications!, '系统提醒清理失败');
+      }
+    } finally {
+      logoutCleanupFailed = failures.isNotEmpty;
+      notice = failures.isEmpty ? null : '${failures.toSet().join('；')}。请重试清理。';
+      if (failures.isEmpty) _logoutOwner = null;
+      ready = true;
+      notifyListeners();
+      if (revoking != null) unawaited(revoking.catchError((Object _) {}));
+    }
   }
 
   @override

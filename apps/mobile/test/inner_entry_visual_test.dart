@@ -178,10 +178,10 @@ void main() {
       await _shot(tester, 'semester-time-picker', size);
       await tester.tap(find.byTooltip('取消选择'));
       await tester.pumpAndSettle();
-      await _to(tester, find.text('查看全部 10 节'));
-      await tester.tap(find.text('查看全部 10 节'));
-      await tester.pumpAndSettle();
-      await _to(tester, find.text('收起节次'));
+      expect(find.textContaining('查看全部'), findsNothing);
+      expect(find.text('收起节次'), findsNothing);
+      await _to(tester, find.byKey(const ValueKey('period-10')));
+      expect(find.byKey(const ValueKey('period-10')), findsOneWidget);
       await _shot(tester, 'semester-periods-expanded', size);
       await _to(tester, find.byTooltip('添加一节'));
       await _shot(tester, 'semester-periods-controls', size);

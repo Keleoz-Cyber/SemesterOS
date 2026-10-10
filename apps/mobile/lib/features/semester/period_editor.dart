@@ -19,7 +19,6 @@ class PeriodEditor extends StatefulWidget {
 }
 
 class _PeriodEditorState extends State<PeriodEditor> {
-  bool expanded = false;
   String? lastValidDraft;
   final controlsKey = GlobalKey();
   @override
@@ -179,7 +178,6 @@ class _PeriodEditorState extends State<PeriodEditor> {
     final start = minuteOf(last['start'] as String);
     final end = minuteOf(last['end'] as String);
     final number = (last['number'] as int) + 1;
-    setState(() => expanded = true);
     write([
       ...periods,
       {
@@ -362,17 +360,7 @@ class _PeriodEditorState extends State<PeriodEditor> {
                 ],
               ),
             ),
-          for (
-            var i = 0;
-            i < (expanded ? periods.length : periods.length.clamp(0, 4));
-            i++
-          )
-            periodRow(periods, i),
-          if (periods.length > 4)
-            AppTextButton(
-              onPressed: () => setState(() => expanded = !expanded),
-              child: Text(expanded ? '收起节次' : '查看全部 ${periods.length} 节'),
-            ),
+          for (var i = 0; i < periods.length; i++) periodRow(periods, i),
           if (periods.isNotEmpty)
             Padding(
               key: controlsKey,

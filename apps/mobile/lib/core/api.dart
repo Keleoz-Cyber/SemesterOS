@@ -78,6 +78,8 @@ class SemesterApi {
   final Dio dio;
   final FlutterSecureStorage storage;
   Map<String, dynamic>? session;
+  bool logoutPending = false;
+  String? pendingLogoutOwner;
   Future<void>? _refreshing;
   Future<void> _storageWrites = Future.value();
   int generation = 0;
@@ -100,6 +102,12 @@ class SemesterApi {
 
   Future<void> restore() async {
     final stamp = generation;
+    final pendingLogout = await storage.read(key: 'semesteros_logout_pending');
+    if (pendingLogout != null) {
+      pendingLogoutOwner = pendingLogout == '1' ? null : pendingLogout;
+      await forget();
+      return;
+    }
     final value = await storage.read(key: 'semesteros_session');
     if (stamp == generation && value != null) {
       session = Map<String, dynamic>.from(jsonDecode(value));
@@ -127,6 +135,11 @@ class SemesterApi {
     _storageWrites = _storageWrites.catchError((Object _) {}).then((_) async {
       if (stamp == generation) {
         await storage.write(key: 'semesteros_session', value: encoded);
+        if (replacement) await storage.delete(key: 'semesteros_logout_pending');
+        if (replacement) {
+          logoutPending = false;
+          pendingLogoutOwner = null;
+        }
       }
     });
     await _storageWrites;
@@ -134,21 +147,52 @@ class SemesterApi {
   }
 
   Future<void> forget() async {
+    pendingLogoutOwner =
+        session?['user']?['id'] as String? ?? pendingLogoutOwner;
+    logoutPending = true;
     generation++;
     _refreshing = null;
     session = null;
-    _storageWrites = _storageWrites
-        .catchError((Object _) {})
-        .then((_) => storage.delete(key: 'semesteros_session'));
+    _storageWrites = _storageWrites.catchError((Object _) {}).then((_) async {
+      // A failed delete must not restore the old session on the next launch.
+      // If the marker cannot be written, still try deleting the credentials.
+      try {
+        await storage.write(
+          key: 'semesteros_logout_pending',
+          value: pendingLogoutOwner ?? '1',
+        );
+      } catch (_) {}
+      try {
+        await storage.delete(key: 'semesteros_session');
+      } catch (_) {
+        throw ApiFailure('无法清除本机登录信息，请重试退出');
+      }
+      try {
+        await storage.delete(key: 'semesteros_logout_pending');
+      } catch (_) {}
+      logoutPending = false;
+    });
     await _storageWrites;
   }
 
   Future<void> _refresh(int stamp) async {
     checkSession(stamp);
+    final pendingId =
+        session?['pending_refresh_id'] as String? ??
+        List.generate(
+          20,
+          (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+        ).join();
+    // Persist the operation before sending; a lost response/process restart can retry it.
+    await saveSession({
+      ...session!,
+      'pending_refresh_id': pendingId,
+    }, replacement: false);
     try {
       final result = await dio.post(
         '/api/v1/auth/refresh',
         data: {'refresh_token': session?['refresh_token']},
+        options: Options(headers: {'Idempotency-Key': pendingId}),
       );
       checkSession(stamp);
       await saveSession({
@@ -210,6 +254,10 @@ class SemesterApi {
             authenticated &&
             attempt == 0 &&
             session != null) {
+          if (e.requestOptions.headers['Authorization'] !=
+              'Bearer ${session?['access_token']}') {
+            continue; // A delayed 401 used an access token that has already rotated.
+          }
           final refresh = _refreshing ??= _refresh(stamp);
           try {
             await refresh;

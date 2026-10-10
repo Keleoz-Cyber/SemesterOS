@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:semester_os/core/api.dart';
@@ -27,6 +28,77 @@ class BlockingNotifications extends FakeNotifications {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  test(
+    'snooze works offline from the current owner cache but completion stays online',
+    () async {
+      var now = DateTime.utc(2026, 10, 1);
+      final api = SemesterApi()..session = account('a');
+      final port = FakeNotifications();
+      final reminder = {
+        ...rule('offline', at: now.add(const Duration(seconds: 1))),
+        'resource_type': 'item',
+        'resource_id': 'task',
+        'semester_id': 's',
+        'can_complete': true,
+      };
+      api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.path.endsWith('/reminders')) {
+          return body({
+            'owner_id': 'a',
+            'reminders': [reminder],
+          });
+        }
+        if (request.path.endsWith('/courses')) return body([]);
+        return body({'items': [], 'revision': 1, 'blocks': []});
+      });
+      final c = ItemsController(
+        api,
+        MemoryStore(),
+        ReminderSync(port, now: () => now),
+      );
+      await c.bind('s');
+      final id = port.scheduled.keys.single;
+      final payload = {...port.scheduled[id]!};
+      port.scheduled.clear();
+      port.active.add(id);
+      now = now.add(const Duration(seconds: 2));
+      var calls = 0;
+      api.dio.httpClientAdapter = ControlledTransport((request) async {
+        calls++;
+        throw DioException(
+          requestOptions: request,
+          type: DioExceptionType.connectionError,
+        );
+      });
+      NotificationTarget target(String action, {String owner = 'a'}) =>
+          NotificationTarget(
+            ownerId: owner,
+            resourceType: 'item',
+            resourceId: 'task',
+            semesterId: 's',
+            actionId: action,
+            notificationId: id,
+            data: payload,
+          );
+      expect(
+        await c.handleNotificationAction(target('snooze_10', owner: 'b')),
+        isFalse,
+      );
+      expect(await c.handleNotificationAction(target('snooze_10')), isTrue);
+      expect(calls, 0);
+      expect(
+        DateTime.parse(port.scheduled[id]!['trigger_at']),
+        now.add(const Duration(minutes: 10)),
+      );
+      expect(await c.handleNotificationAction(target('complete')), isFalse);
+      expect(calls, 1);
+      c.reminderFeed = [
+        {...reminder, 'version': 99},
+      ];
+      expect(await c.handleNotificationAction(target('snooze_10')), isFalse);
+      c.dispose();
+    },
+  );
   test(
     'notification completion requires the same account and resource then uses the live version',
     () async {

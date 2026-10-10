@@ -18,6 +18,7 @@ class ItemsController extends ChangeNotifier {
   bool offline = false;
   ReminderPreferences reminderPreferences = const ReminderPreferences();
   int _reminderRequest = 0;
+  bool _remindersLoaded = false;
   bool busy = false;
   String? notice, notificationStatus, syncedAt;
   String? _owner, semesterId;
@@ -118,6 +119,7 @@ class ItemsController extends ChangeNotifier {
     items = [];
     courses = [];
     reminderFeed = [];
+    _remindersLoaded = false;
     _saved = {};
     notice = null;
     notificationStatus = null;
@@ -155,6 +157,7 @@ class ItemsController extends ChangeNotifier {
       final old = await cache.read('items:$account') ?? {};
       if (!valid(epoch, generation)) return;
       reminderFeed = rows(old['reminders']);
+      _remindersLoaded = true;
       syncedAt = old['synced_at'];
       await cache.write('items:$account', {...old, 'semesters': {}});
       await syncNotifications();
@@ -178,6 +181,7 @@ class ItemsController extends ChangeNotifier {
     items = rows(selectedCache?['items']);
     courses = rows(selectedCache?['courses']);
     reminderFeed = rows(saved?['reminders']);
+    _remindersLoaded = true;
     syncedAt = saved?['synced_at'];
     changed();
     await refresh();
@@ -296,6 +300,7 @@ class ItemsController extends ChangeNotifier {
       throw ApiFailure('提醒清单账号不一致');
     }
     reminderFeed = rows(response['reminders']);
+    _remindersLoaded = true;
     final saved = await cache.read('items:$account') ?? {};
     if (!valid(epoch, generation)) return;
     await cache.write('items:$account', {
@@ -340,6 +345,59 @@ class ItemsController extends ChangeNotifier {
       final preferences = await ReminderPreferenceStore(cache).read(account);
       if (!valid(epoch, generation)) return false;
       reminderPreferences = preferences;
+      if (target.actionId == 'snooze_10' && target.notificationId != null) {
+        if (!_remindersLoaded) {
+          final saved = await cache.read('items:$account');
+          if (!valid(epoch, generation)) return false;
+          reminderFeed = rows(saved?['reminders']);
+          _remindersLoaded = true;
+        }
+        final source = reminderFeed
+            .where(reminderPreferences.accepts)
+            .where(
+              (rule) =>
+                  rule['enabled'] != false &&
+                  {'scheduled', 'expired'}.contains(rule['schedule_state']) &&
+                  rule['trigger_at'] != null &&
+                  reminderFingerprint(account, rule) ==
+                      target.data['fingerprint'] &&
+                  rule['resource_type'] == target.resourceType &&
+                  rule['resource_id'] == target.resourceId,
+            )
+            .firstOrNull;
+        if (source == null) {
+          notificationStatus = '这条提醒已变化，请查看最新详情';
+          changed();
+          return false;
+        }
+        final id = target.notificationId!;
+        final pending = (await reminders.port.pending())[id];
+        if (!valid(epoch, generation)) return false;
+        final active = await reminders.port.activeIds();
+        if (!valid(epoch, generation)) return false;
+        final matchesPending =
+            pending != null &&
+            pending['owner_id'] == account &&
+            pending['fingerprint'] == target.data['fingerprint'];
+        // A cold start can clear the clicked active notification. Its original
+        // system payload must still identify this exact cached reminder and ID.
+        if (!matchesPending &&
+            !active.contains(id) &&
+            target.data['notification_id'] != id) {
+          notificationStatus = '这条系统提醒已失效，请查看最新详情';
+          changed();
+          return false;
+        }
+        final saved = await reminders.snooze(account, id, {
+          ...source,
+          'fingerprint': target.data['fingerprint'],
+        });
+        if (valid(epoch, generation)) {
+          notificationStatus = saved ? '已设为10分钟后提醒；联网后会核对最新安排' : '请开启系统通知后重试';
+          changed();
+        }
+        return saved;
+      }
       await refreshOwnerReminders();
       if (!valid(epoch, generation)) return false;
       final source = reminderFeed
@@ -359,17 +417,6 @@ class ItemsController extends ChangeNotifier {
         notificationStatus = '安排已更新，这条旧提醒已失效，请查看最新详情';
         changed();
         return false;
-      }
-      if (target.actionId == 'snooze_10' && target.notificationId != null) {
-        final saved = await reminders.snooze(account, target.notificationId!, {
-          ...source,
-          'fingerprint': target.data['fingerprint'],
-        });
-        if (valid(epoch, generation)) {
-          notificationStatus = saved ? '已设为10分钟后提醒' : '请开启系统通知后重试';
-          changed();
-        }
-        return saved;
       }
       if (target.actionId == 'complete' &&
           target.resourceType == 'item' &&

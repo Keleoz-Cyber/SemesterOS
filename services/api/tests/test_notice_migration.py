@@ -61,7 +61,8 @@ def test_notice_migration_upgrade_downgrade_keeps_business_and_conversation_data
 def test_postgres_full_chain_and_notice_delta_preserve_populated_records(monkeypatch):
     pg = os.environ['POSTGRES_TEST_URL']
     parsed = make_url(pg)
-    assert parsed.host in ('127.0.0.1', 'localhost') and parsed.port == 55439
+    assert parsed.host in ('127.0.0.1', 'localhost') and (
+        parsed.port == 55439 or parsed.database == 'semesteros_test')
     schema = 'test_' + uuid.uuid4().hex
     admin = create_engine(pg)
     with admin.begin() as c: c.execute(text(f'CREATE SCHEMA {schema}'))

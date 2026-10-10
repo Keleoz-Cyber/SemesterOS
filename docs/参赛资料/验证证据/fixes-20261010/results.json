@@ -1,0 +1,112 @@
+{
+  "version": "1.0.0+9",
+  "backend_full_postgresql": {
+    "passed": 544,
+    "skipped": 0,
+    "seconds": 466.01
+  },
+  "final_lock_order_refinement": {
+    "passed": 35,
+    "description": "uploaded source/media, tags, auth, semester regressions after final lock order correction"
+  },
+  "flutter_full": {
+    "passed": 579,
+    "analyze": "no issues"
+  },
+  "native": {
+    "device": "Android 13 x86_64 emulator",
+    "haut_periods": 10,
+    "import_back_to_help": true,
+    "all_periods_without_disclosure": true,
+    "offline_snooze_warm": true,
+    "offline_snooze_after_process_death": true
+  },
+  "cloud": {
+    "release": "/opt/semesteros/releases/v1.0.0-build9-r1",
+    "source_files_verified": 92,
+    "container_code_matches": true,
+    "images": {
+      "semesteros-cloud-api-1": "semesteros-api:v1.0.0-build9-r1",
+      "semesteros-cloud-worker-1": "semesteros-api:v1.0.0-build9-r1"
+    },
+    "migration": "0017_auth_and_import",
+    "public_health": {
+      "status": "ok",
+      "version": "1.0.0",
+      "database": "postgresql"
+    },
+    "database_started_at": "2026-09-20T15:08:54.703522555Z"
+  },
+  "apk": {
+    "version": "1.0.0",
+    "build_number": 9,
+    "sha256": "cc25c9d9e8ea2b2cf2ac282568cae84eb3a5d2a181f09c2eff97951da4f08397",
+    "bytes": 81991743,
+    "certificate_sha256": "e19f8c3a6f68146814d9aebe08d98092aa7b724a54422e8d4ba89bd62a763b51",
+    "api_base_url": "https://semesteros.keleoz.com",
+    "abis": [
+      "arm64-v8a",
+      "armeabi-v7a",
+      "x86_64"
+    ],
+    "installed_on_emulator": true
+  },
+  "limits": [
+    "Emulator only; no physical phone/OEM validation",
+    "School time preset uses the supplied screenshot; real school login not repeated in this run"
+  ],
+  "test_notes": [
+    "First full PostgreSQL attempt exceeded the disposable tmpfs disk quota; recreated on a disposable volume and reran from start",
+    "Native UI automation was corrected to use merged accessibility labels, exact notification action buttons, and an explicit Home intent before background process termination"
+  ],
+  "source_sha256": {
+    "apps/mobile/lib/app/controller.dart": "719558d9ae19186004a1b6b186057974c4bc857c43ad6c7c7921d46662f1ac0d",
+    "apps/mobile/lib/app/semester_app.dart": "2124357349a2497dea5c81e620c687236e93fddb39622f467b11a62ee4205705",
+    "apps/mobile/lib/core/api.dart": "a6af3bc1534c8eb9e48ec90fb72f68d959cf0f89bc5933e49b5cf74848ba4de6",
+    "apps/mobile/lib/features/accounts/auth_page.dart": "115640b5e4e8424356424dbafa90cd52a909d95dc12c6401dbf2d322d9416cff",
+    "apps/mobile/lib/features/import/preview.dart": "32c60dc8ee632ada9ecc884ff6e7712fd3ad174f187a2c2ef73e861e791cf9ae",
+    "apps/mobile/lib/features/import/school_adapters.dart": "445488632094c3b02f455aca4fbc4b9acc95563d4d91d2335d697e338f84bf12",
+    "apps/mobile/lib/features/import/school_picker.dart": "2f931abc97c918fe90aac39ef0ce44d9e8688bd18ad53db470950267655f1d87",
+    "apps/mobile/lib/features/items/items_controller.dart": "4ef985ce967c0c0f5ccb98751c1e468542a9cce0b020c2579513758672a72146",
+    "apps/mobile/lib/features/semester/period_editor.dart": "2385992e75fcd40a6567af72b29cf51efb5c74fde767f2694022ea646a0f17b4",
+    "apps/mobile/pubspec.yaml": "54e30ac8b4c3f48f3bbefd32ab26eec050da4641682f9e9c8a3801d06c71965e",
+    "apps/mobile/test/auth_reliability_test.dart": "9c041397fd7ae872b345116e8925473d9434527e23fc6c0e793289972da462af",
+    "apps/mobile/test/closeout_import_ui_test.dart": "3164828b0f0fee8b9d39fa6d1b4781bd7c9c57ee649c24b93e387a23e26001b3",
+    "apps/mobile/test/inner_entry_visual_test.dart": "2953dfbb55aa79a64ac639af184983d5b24884d3c77309c075b700686dea0583",
+    "apps/mobile/test/items_controller_test.dart": "f04b6e3a0296f54fce2234467d7acb57ddb7420143f57cce14c1b0549f4af761",
+    "services/api/alembic/versions/0017_auth_refresh_and_import_periods.py": "bb59cd3749cf8c21bca15c4a97b5baa1f88966603a2df93c4a685bfc4d24ea82",
+    "services/api/app/academics.py": "d7f6320acfcbac76da72fe5c79799bf7aeb953256ff8f24ccd9811bb8e32436f",
+    "services/api/app/agent_api.py": "c74fe22555f14ba279695b2114afe9bda862bd32e95e6388814060006f416359",
+    "services/api/app/agent_batches.py": "e55c6ac6455bc6d83baf01a06e9ae773e0f907af1c43e379d3579510df3a5dfb",
+    "services/api/app/agent_media.py": "819148f3199f2933ff8da0537b59323f75483201e1df8d0f433ac4b58862dd00",
+    "services/api/app/agent_runtime.py": "4afc5370769730a5bd5381852e953d4275f2c109e16ffabcd26272cfbfb307e6",
+    "services/api/app/agent_tools.py": "ccf03487a04a553e6d97f6fbb99093cade7f08060dc1fd1476cef434266c80fd",
+    "services/api/app/auth.py": "0779c54a87b232641909e098eb939a57d0dd10328201bf8d6d75b1315571b70d",
+    "services/api/app/auth_limits.py": "24936e3d4840935564b601379c627970297c77dc4cb04b4a069f9129ccea76a6",
+    "services/api/app/calendar_events.py": "b1aac5cf4be3b7f4d2d3b38b0b615d8137d7f773bd0c3a03a65871648ea544d3",
+    "services/api/app/capacity.py": "a4742edf54860344954d6ed288bad815968a7f9218190b9466e27e15a7cb6c49",
+    "services/api/app/capture.py": "cb0b6391f569f0671ad96a6839668eb8bc8fbf16da3f3a129f3e44e53124f154",
+    "services/api/app/change_parser.py": "fe787eb833e0fab55b7f89bf08fbfdd8b43ffb077beb58d93a083eff49a88d81",
+    "services/api/app/changes.py": "c58da11eedb519c63117c662beb52859c4543b24f6fc23482b3c21b99e2ba13c",
+    "services/api/app/exam_planning.py": "7cc02ba9e998d21411c9d59b83939d5b9698f6f36717876a903cec7641ece3e3",
+    "services/api/app/items.py": "9a86920e3bca6a7d972d30a7ea275ee9b6f9025d16fe067d0fb6b2cf02059c37",
+    "services/api/app/main.py": "ac3ba21214bbd8b7bd8cb3da26ef9bd7187c10f5b5c018463abc34aa261bb30f",
+    "services/api/app/media.py": "be3668e5704fcd7c4c2317553a2ed5ed671875cd3f9c639a0fcd5514a34a4303",
+    "services/api/app/models.py": "b95d3e10d0b4723195546dc6ae5b0c9bc185797b2fbf373acfb0a543b08b4c2d",
+    "services/api/app/notice_event_time.py": "8dc7397e557ba08628959679679f7eddae01dc0adfbf0051a683c4e63dd9fbf1",
+    "services/api/app/operation_parser.py": "533f9ce3b4976c72a3ea43b34312866e539bf07cef4f476bd87f94d88289377f",
+    "services/api/app/operations.py": "4a53cad7b2123699fe3118d12732b62034c88a1f9af640e68d1a90be6c1765ee",
+    "services/api/app/plan_store.py": "189400eb7d7d8ae60dd6a1a6db9e0a79053bd43224e9a0bc01e99c65ef4f02f1",
+    "services/api/app/planning.py": "7e926d9ab5827a4625aab8b9f2d7e7ab3bf4b4266cdc3223fe1409772c83585d",
+    "services/api/app/replanner.py": "2c0cae773af223b24050e16580b64cf30ecf3deb9eea3e04aff8540e9ba04857",
+    "services/api/app/schedule_api.py": "7e5133ecb5c57e8af4f49e3cfa0b3368337aa462f9e79954991f51658d408a0f",
+    "services/api/app/scheduler.py": "93b493a82ee9025e3d252eb56d69b8e7e06dd08c80b23261706bdd2fb4b308e2",
+    "services/api/app/school_periods.py": "393c9f9019738c87c3384bd99e9ed3c33d63690528a34ed116de0770962fdcb5",
+    "services/api/app/text_model.py": "059173571edb2819c15749f58ab343bded308272f60c0bbaf1df2bd676a05531",
+    "services/api/tests/test_auth_reliability.py": "35e6a7ee16b62fee91e512da9fc40ed5808f8b7b65123204f8dc7cc716718dcc",
+    "services/api/tests/test_haut_periods.py": "e1eeb928a5ddc824f5c2dcb207205fd3896ae0709cafea4e9845a9dba2caf7dd",
+    "services/api/tests/test_notice_migration.py": "b5c78a98f72a6460d6d6e129fc42c42d21222203074d9733fda43eee327d959c",
+    "services/api/tests/test_semester_management.py": "5cb1ee401495911e756a7b8b38c0cd437e931ac44d181243b5c390b31de5c505",
+    "services/api/tests/test_upload_concurrency.py": "b91715ca5f8fb2a52d75ef7418cd13573fe0284ae6afa6c494ea44b71dc2e420"
+  }
+}

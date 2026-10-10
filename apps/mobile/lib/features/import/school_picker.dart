@@ -1,6 +1,7 @@
 import '../../ui/app_controls.dart';
 import '../../ui/empty_states.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../ui/campus_theme.dart';
 import 'school_adapters.dart';
 import '../centers/academic_visuals.dart';
@@ -35,7 +36,23 @@ class _SchoolPickerPageState extends State<SchoolPickerPage> {
         .where((school) => school.matches(query))
         .toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('导入课表')),
+      appBar: AppBar(
+        title: const Text('导入课表'),
+        leading: AppIconButton(
+          tooltip: '返回',
+          onPressed: () {
+            final router = GoRouter.maybeOf(context);
+            if (router?.canPop() == true) {
+              router!.pop();
+            } else if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              router?.go('/');
+            }
+          },
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, bounds) {

@@ -53,7 +53,22 @@ class SchoolAdapter {
 SchoolImportBundle _parseHaut(Map value) => SchoolImportBundle(
   courses: parseHautCourses(value['rows'] as List),
   sourceTerm: '${value['sourceTerm'] ?? ''}',
+  metadata: {'periods': hautPeriods},
 );
+
+// 河南工业大学作息，按用户提供的10节原始时间预填，不统一改成45分钟。
+const hautPeriods = [
+  {'section': 1, 'start': '08:30', 'end': '09:15'},
+  {'section': 2, 'start': '09:20', 'end': '10:05'},
+  {'section': 3, 'start': '10:25', 'end': '11:05'},
+  {'section': 4, 'start': '11:10', 'end': '12:00'},
+  {'section': 5, 'start': '14:30', 'end': '15:15'},
+  {'section': 6, 'start': '15:20', 'end': '16:05'},
+  {'section': 7, 'start': '16:25', 'end': '17:10'},
+  {'section': 8, 'start': '17:15', 'end': '18:00'},
+  {'section': 9, 'start': '19:30', 'end': '20:15'},
+  {'section': 10, 'start': '20:20', 'end': '21:05'},
+];
 
 SchoolImportBundle _parseHlju(Map value) {
   final parsed = parseHljuImport(value);

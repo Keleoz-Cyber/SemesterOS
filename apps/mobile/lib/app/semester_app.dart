@@ -81,6 +81,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
       ReminderSync(notifications),
     );
     items.onUnauthorized = () => controller.logout(remote: false);
+    controller.clearNotifications = items.reminders.clear;
     items.onRealityChanged = (receipt) async {
       await controller.acknowledgeImport(receipt);
       if (controller.semester?['id'] == receipt['semester_id']) {
@@ -226,10 +227,10 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
                 router.go('/');
               }
             },
-            onTimetable: () => router.go(
+            onTimetable: () => router.push(
               controller.semester == null ? '/semester/new' : '/import',
             ),
-            onNotice: () => router.go(
+            onNotice: () => router.push(
               controller.semester == null ? '/semester/new' : '/assistant',
             ),
             onPlanning: () => router.go('/?tab=2'),
