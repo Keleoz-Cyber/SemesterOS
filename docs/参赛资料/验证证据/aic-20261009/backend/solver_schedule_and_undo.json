@@ -1,0 +1,2582 @@
+{
+  "case": "solver_schedule_and_undo",
+  "expected": "real OR-Tools fits 150 minutes, avoids fixed course, previews read-only, preserves remaining work, confirms idempotently and safely undoes",
+  "passed": true,
+  "data": "synthetic disposable local account",
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "input": {
+        "username": "qa_aic_e78a902d8485ed",
+        "password": "[REDACTED]"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.079,
+      "actual": {
+        "user": {
+          "id": "c4a95fd7-f786-45c7-aaf8-db1eb47f365c",
+          "username": "qa_aic_e78a902d8485ed",
+          "is_demo": false
+        },
+        "access_token": "[REDACTED]",
+        "refresh_token": "[REDACTED]",
+        "expires_in": 900,
+        "logout_token": "[REDACTED]",
+        "recovery_code": "[REDACTED]"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters",
+      "input": {
+        "name": "AIC本轮合成验证·solver_schedule_and_undo",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "number": 2,
+            "start": "10:10",
+            "end": "11:00"
+          }
+        ]
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.015,
+      "actual": {
+        "id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "name": "AIC本轮合成验证·solver_schedule_and_undo",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "number": 2,
+            "start": "10:10",
+            "end": "11:00"
+          }
+        ],
+        "revision": 0
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/availability/preview",
+      "input": {
+        "expected_version": 0,
+        "weekly": [
+          {
+            "weekday": 6,
+            "start": "09:00",
+            "end": "13:00"
+          }
+        ],
+        "exclusions": []
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "before": {
+          "weekly": [],
+          "exclusions": [],
+          "configured": false,
+          "version": 0,
+          "revision": 0,
+          "timezone": "Asia/Shanghai"
+        },
+        "after": {
+          "weekly": [
+            {
+              "weekday": 6,
+              "start": "09:00",
+              "end": "13:00"
+            }
+          ],
+          "exclusions": []
+        },
+        "base_revision": 0,
+        "settings_version": 0,
+        "affected_plan_count": 0,
+        "affected_blocks": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/availability",
+      "input": {
+        "expected_version": 0,
+        "weekly": [
+          {
+            "weekday": 6,
+            "start": "09:00",
+            "end": "13:00"
+          }
+        ],
+        "exclusions": [],
+        "expected_revision": 0
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "weekly": [
+          {
+            "weekday": 6,
+            "start": "09:00",
+            "end": "13:00"
+          }
+        ],
+        "exclusions": [],
+        "configured": true,
+        "version": 1,
+        "revision": 1,
+        "timezone": "Asia/Shanghai"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/imports",
+      "input": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "source": "manual",
+        "courses": [
+          {
+            "title": "合成固定课",
+            "weekday": 6,
+            "weeks": [
+              1
+            ],
+            "sections": [
+              2
+            ]
+          }
+        ]
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.015,
+      "actual": {
+        "id": "77ea0bec-81e6-4f7d-8727-652615d61e1c",
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "base_revision": 1,
+        "source": "manual",
+        "source_term": "",
+        "courses": [
+          {
+            "title": "合成固定课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1
+            ],
+            "sections": [
+              2
+            ]
+          }
+        ],
+        "new_count": 1,
+        "unchanged_count": 0,
+        "changed_count": 0,
+        "changed_courses": [],
+        "extras": [],
+        "new_extra_count": 0,
+        "unchanged_extra_count": 0,
+        "changed_extras": [],
+        "protected_extras": [],
+        "protected_extra_count": 0,
+        "source_first_monday": null,
+        "missing_count": 0,
+        "missing_courses": [],
+        "applied": false
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/imports/77ea0bec-81e6-4f7d-8727-652615d61e1c/apply",
+      "input": {
+        "expected_revision": 1
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "revision": 2,
+        "imported_count": 1,
+        "replaced_count": 0,
+        "removed_count": 0,
+        "imported_extra_count": 0,
+        "replaced_extra_count": 0,
+        "protected_extra_count": 0,
+        "batch_id": "77ea0bec-81e6-4f7d-8727-652615d61e1c"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/timetable",
+      "input": null,
+      "params": {
+        "week": 1
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "week": 1,
+        "revision": 2,
+        "events": [
+          {
+            "title": "合成固定课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1
+            ],
+            "sections": [
+              2
+            ],
+            "id": "fb00578f-103f-44dc-a44f-ee2376427f71:2026-10-10:2",
+            "source_batch_id": "77ea0bec-81e6-4f7d-8727-652615d61e1c",
+            "course_id": "fb00578f-103f-44dc-a44f-ee2376427f71",
+            "start_at": "2026-10-10T10:10:00+08:00",
+            "end_at": "2026-10-10T11:00:00+08:00",
+            "reality_kind": "course",
+            "fixed": true,
+            "attendance_label": "",
+            "conflict": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/items",
+      "input": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "kind": "task",
+        "title": "合成排程任务A",
+        "certainty": "formal",
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T13:00:00+08:00"
+        },
+        "remaining_minutes": 90,
+        "splittable": true,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T09:00:00+08:00"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.016,
+      "actual": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "kind": "task",
+        "title": "合成排程任务A",
+        "course_id": null,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T05:00:00Z",
+          "end_at": null,
+          "date": null,
+          "week": null,
+          "end_date": null,
+          "day_end_confirmed": false,
+          "expression": "",
+          "meaning": "unspecified",
+          "candidate_dates": [],
+          "course_anchor": null
+        },
+        "certainty": "formal",
+        "remaining_minutes": 90,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T01:00:00Z",
+        "reserve_time": true,
+        "splittable": true,
+        "priority": "normal",
+        "location": "",
+        "notes": "",
+        "source_text": "",
+        "details": {
+          "recipient": "",
+          "materials": [],
+          "submission_channel": "",
+          "participation": "",
+          "participation_status": "unspecified",
+          "conditions": [],
+          "early_arrival_minutes": null,
+          "applicability": "",
+          "responsibility": ""
+        },
+        "candidate_id": null,
+        "source_id": null,
+        "category_id": null,
+        "course_title": "",
+        "tags": [],
+        "id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+        "version": 1,
+        "lifecycle": "active",
+        "review_state": "confirmed",
+        "control": "plannable",
+        "anchor_at": "2026-10-10T05:00:00+00:00",
+        "created_at": "2026-10-09T15:28:02.600971+00:00",
+        "updated_at": "2026-10-09T15:28:02.600971+00:00",
+        "reminders": [],
+        "arrival_at": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/items",
+      "input": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "kind": "task",
+        "title": "合成排程任务B",
+        "certainty": "formal",
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T13:00:00+08:00"
+        },
+        "remaining_minutes": 60,
+        "splittable": false,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T09:00:00+08:00"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.016,
+      "actual": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "kind": "task",
+        "title": "合成排程任务B",
+        "course_id": null,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T05:00:00Z",
+          "end_at": null,
+          "date": null,
+          "week": null,
+          "end_date": null,
+          "day_end_confirmed": false,
+          "expression": "",
+          "meaning": "unspecified",
+          "candidate_dates": [],
+          "course_anchor": null
+        },
+        "certainty": "formal",
+        "remaining_minutes": 60,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T01:00:00Z",
+        "reserve_time": true,
+        "splittable": false,
+        "priority": "normal",
+        "location": "",
+        "notes": "",
+        "source_text": "",
+        "details": {
+          "recipient": "",
+          "materials": [],
+          "submission_channel": "",
+          "participation": "",
+          "participation_status": "unspecified",
+          "conditions": [],
+          "early_arrival_minutes": null,
+          "applicability": "",
+          "responsibility": ""
+        },
+        "candidate_id": null,
+        "source_id": null,
+        "category_id": null,
+        "course_title": "",
+        "tags": [],
+        "id": "bc6c5059-c50e-4550-937e-93895b090445",
+        "version": 1,
+        "lifecycle": "active",
+        "review_state": "confirmed",
+        "control": "plannable",
+        "anchor_at": "2026-10-10T05:00:00+00:00",
+        "created_at": "2026-10-09T15:28:02.613521+00:00",
+        "updated_at": "2026-10-09T15:28:02.613521+00:00",
+        "reminders": [],
+        "arrival_at": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/plan-proposals",
+      "input": {
+        "days": 7,
+        "lead_minutes": 0,
+        "chunk_minutes": 60,
+        "allow_partial": false,
+        "tasks": [
+          {
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd"
+          },
+          {
+            "item_id": "bc6c5059-c50e-4550-937e-93895b090445"
+          }
+        ],
+        "window_start_at": "2026-10-10T09:00:00+08:00",
+        "window_end_at": "2026-10-10T13:00:00+08:00"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.109,
+      "actual": {
+        "window_start": "2026-10-10T01:00:00+00:00",
+        "window_end": "2026-10-10T05:00:00+00:00",
+        "blocks": [
+          {
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "title": "合成排程任务A",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60
+          },
+          {
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "title": "合成排程任务A",
+            "start_at": "2026-10-10T03:00:00+00:00",
+            "end_at": "2026-10-10T03:30:00+00:00",
+            "minutes": 30
+          },
+          {
+            "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+            "title": "合成排程任务B",
+            "start_at": "2026-10-10T03:30:00+00:00",
+            "end_at": "2026-10-10T04:30:00+00:00",
+            "minutes": 60
+          }
+        ],
+        "tasks": [
+          {
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "title": "合成排程任务A",
+            "remaining_minutes": 90,
+            "target_minutes": 90,
+            "existing_minutes": 0,
+            "outside_minutes": 0,
+            "new_minutes": 90,
+            "unarranged_minutes": 0,
+            "later_minutes": 0
+          },
+          {
+            "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+            "title": "合成排程任务B",
+            "remaining_minutes": 60,
+            "target_minutes": 60,
+            "existing_minutes": 0,
+            "outside_minutes": 0,
+            "new_minutes": 60,
+            "unarranged_minutes": 0,
+            "later_minutes": 0
+          }
+        ],
+        "status": "FEASIBLE_COMPLETE",
+        "messages": [
+          "保留已有计划，只为尚未安排的工作补充时间"
+        ],
+        "solver_status": "OPTIMAL",
+        "optimal": true,
+        "unarranged_minutes": 0,
+        "can_apply": true,
+        "existing_conflict_count": 0,
+        "uncertainty_warnings": [],
+        "solver_version": "9.15.6755",
+        "valid_until": "2026-10-10T01:00:00+00:00",
+        "phases": [
+          {
+            "status": "OPTIMAL",
+            "objective": 840.0,
+            "bound": 840.0
+          }
+        ],
+        "elapsed_ms": 78,
+        "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+        "version": 1,
+        "phase": "ready",
+        "base_revision": 4,
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "created_at": "2026-10-09T15:28:02.720817+00:00",
+        "request": {
+          "days": 7,
+          "lead_minutes": 0,
+          "chunk_minutes": 60,
+          "allow_partial": false,
+          "tasks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "target_minutes": null
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "target_minutes": null
+            }
+          ],
+          "window_start_at": "2026-10-10T01:00:00Z",
+          "window_end_at": "2026-10-10T05:00:00Z"
+        },
+        "receipt": null
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "revision": 4,
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "blocks": [],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T03:30:00+00:00",
+              "minutes": 30
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "start_at": "2026-10-10T03:30:00+00:00",
+              "end_at": "2026-10-10T04:30:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "remaining_minutes": 90,
+              "target_minutes": 90,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 90,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": true,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 840.0,
+              "bound": 840.0
+            }
+          ],
+          "elapsed_ms": 78,
+          "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "version": 1,
+          "phase": "ready",
+          "base_revision": 4,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "created_at": "2026-10-09T15:28:02.720817+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "target_minutes": null
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": null
+        },
+        "latest_applied": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/plan-proposals/73fd5ba6-e98d-4566-a861-6876a0df7020/accept",
+      "input": {
+        "expected_version": 1,
+        "expected_revision": 4
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+        "proposal_version": 2,
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "revision": 5,
+        "block_ids": [
+          "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+          "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+          "c8bcdcf3-6882-4099-9591-cc57aa039ff6"
+        ],
+        "unarranged_minutes": 0
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/plan-proposals/73fd5ba6-e98d-4566-a861-6876a0df7020/accept",
+      "input": {
+        "expected_version": 1,
+        "expected_revision": 4
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.015,
+      "actual": {
+        "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+        "proposal_version": 2,
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "revision": 5,
+        "block_ids": [
+          "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+          "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+          "c8bcdcf3-6882-4099-9591-cc57aa039ff6"
+        ],
+        "unarranged_minutes": 0
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "revision": 5,
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "blocks": [
+          {
+            "id": "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成排程任务A"
+          },
+          {
+            "id": "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "start_at": "2026-10-10T03:00:00+00:00",
+            "end_at": "2026-10-10T03:30:00+00:00",
+            "minutes": 30,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成排程任务A"
+          },
+          {
+            "id": "c8bcdcf3-6882-4099-9591-cc57aa039ff6",
+            "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+            "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "start_at": "2026-10-10T03:30:00+00:00",
+            "end_at": "2026-10-10T04:30:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成排程任务B"
+          }
+        ],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T03:30:00+00:00",
+              "minutes": 30
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "start_at": "2026-10-10T03:30:00+00:00",
+              "end_at": "2026-10-10T04:30:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "remaining_minutes": 90,
+              "target_minutes": 90,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 90,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": false,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 840.0,
+              "bound": 840.0
+            }
+          ],
+          "elapsed_ms": 78,
+          "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "version": 2,
+          "phase": "applied",
+          "base_revision": 4,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "created_at": "2026-10-09T15:28:02.720817+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "target_minutes": null
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": {
+            "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "proposal_version": 2,
+            "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+            "revision": 5,
+            "block_ids": [
+              "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+              "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+              "c8bcdcf3-6882-4099-9591-cc57aa039ff6"
+            ],
+            "unarranged_minutes": 0
+          }
+        },
+        "latest_applied": {
+          "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "version": 2
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/timetable",
+      "input": null,
+      "params": {
+        "week": 1
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "week": 1,
+        "revision": 5,
+        "events": [
+          {
+            "title": "合成固定课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1
+            ],
+            "sections": [
+              2
+            ],
+            "id": "fb00578f-103f-44dc-a44f-ee2376427f71:2026-10-10:2",
+            "source_batch_id": "77ea0bec-81e6-4f7d-8727-652615d61e1c",
+            "course_id": "fb00578f-103f-44dc-a44f-ee2376427f71",
+            "start_at": "2026-10-10T10:10:00+08:00",
+            "end_at": "2026-10-10T11:00:00+08:00",
+            "reality_kind": "course",
+            "fixed": true,
+            "attendance_label": "",
+            "conflict": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/items/f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "kind": "task",
+        "title": "合成排程任务A",
+        "course_id": null,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T05:00:00Z",
+          "end_at": null,
+          "date": null,
+          "week": null,
+          "end_date": null,
+          "day_end_confirmed": false,
+          "expression": "",
+          "meaning": "unspecified",
+          "candidate_dates": [],
+          "course_anchor": null
+        },
+        "certainty": "formal",
+        "remaining_minutes": 90,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T01:00:00Z",
+        "reserve_time": true,
+        "splittable": true,
+        "priority": "normal",
+        "location": "",
+        "notes": "",
+        "source_text": "",
+        "details": {
+          "recipient": "",
+          "materials": [],
+          "submission_channel": "",
+          "participation": "",
+          "participation_status": "unspecified",
+          "conditions": [],
+          "early_arrival_minutes": null,
+          "applicability": "",
+          "responsibility": ""
+        },
+        "candidate_id": null,
+        "source_id": null,
+        "category_id": null,
+        "course_title": "",
+        "tags": [],
+        "id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+        "version": 1,
+        "lifecycle": "active",
+        "review_state": "confirmed",
+        "control": "plannable",
+        "anchor_at": "2026-10-10T05:00:00+00:00",
+        "created_at": "2026-10-09T15:28:02.600971+00:00",
+        "updated_at": "2026-10-09T15:28:02.600971+00:00",
+        "reminders": [],
+        "arrival_at": null
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/items/bc6c5059-c50e-4550-937e-93895b090445",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "kind": "task",
+        "title": "合成排程任务B",
+        "course_id": null,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T05:00:00Z",
+          "end_at": null,
+          "date": null,
+          "week": null,
+          "end_date": null,
+          "day_end_confirmed": false,
+          "expression": "",
+          "meaning": "unspecified",
+          "candidate_dates": [],
+          "course_anchor": null
+        },
+        "certainty": "formal",
+        "remaining_minutes": 60,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T01:00:00Z",
+        "reserve_time": true,
+        "splittable": false,
+        "priority": "normal",
+        "location": "",
+        "notes": "",
+        "source_text": "",
+        "details": {
+          "recipient": "",
+          "materials": [],
+          "submission_channel": "",
+          "participation": "",
+          "participation_status": "unspecified",
+          "conditions": [],
+          "early_arrival_minutes": null,
+          "applicability": "",
+          "responsibility": ""
+        },
+        "candidate_id": null,
+        "source_id": null,
+        "category_id": null,
+        "course_title": "",
+        "tags": [],
+        "id": "bc6c5059-c50e-4550-937e-93895b090445",
+        "version": 1,
+        "lifecycle": "active",
+        "review_state": "confirmed",
+        "control": "plannable",
+        "anchor_at": "2026-10-10T05:00:00+00:00",
+        "created_at": "2026-10-09T15:28:02.613521+00:00",
+        "updated_at": "2026-10-09T15:28:02.613521+00:00",
+        "reminders": [],
+        "arrival_at": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/plan-proposals/73fd5ba6-e98d-4566-a861-6876a0df7020/undo",
+      "input": {
+        "expected_version": 2,
+        "expected_revision": 5
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+        "proposal_version": 3,
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "revision": 6,
+        "undone": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "revision": 6,
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "blocks": [],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T03:30:00+00:00",
+              "minutes": 30
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "start_at": "2026-10-10T03:30:00+00:00",
+              "end_at": "2026-10-10T04:30:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "remaining_minutes": 90,
+              "target_minutes": 90,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 90,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": false,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 840.0,
+              "bound": 840.0
+            }
+          ],
+          "elapsed_ms": 78,
+          "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "version": 3,
+          "phase": "undone",
+          "base_revision": 4,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "created_at": "2026-10-09T15:28:02.720817+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "target_minutes": null
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": {
+            "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "proposal_version": 3,
+            "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+            "revision": 6,
+            "undone": true
+          }
+        },
+        "latest_applied": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "input": {
+        "logout_token": "[REDACTED]"
+      },
+      "params": null,
+      "expected_status": 204,
+      "actual_status": 204,
+      "seconds": 0.0,
+      "actual": ""
+    }
+  ],
+  "checks": [
+    {
+      "expected": "POST /auth/register: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "user": {
+            "id": "c4a95fd7-f786-45c7-aaf8-db1eb47f365c",
+            "username": "qa_aic_e78a902d8485ed",
+            "is_demo": false
+          },
+          "access_token": "[REDACTED]",
+          "refresh_token": "[REDACTED]",
+          "expires_in": 900,
+          "logout_token": "[REDACTED]",
+          "recovery_code": "[REDACTED]"
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "name": "AIC本轮合成验证·solver_schedule_and_undo",
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [
+            {
+              "number": 1,
+              "start": "09:00",
+              "end": "10:00"
+            },
+            {
+              "number": 2,
+              "start": "10:10",
+              "end": "11:00"
+            }
+          ],
+          "revision": 0
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/availability/preview: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "before": {
+            "weekly": [],
+            "exclusions": [],
+            "configured": false,
+            "version": 0,
+            "revision": 0,
+            "timezone": "Asia/Shanghai"
+          },
+          "after": {
+            "weekly": [
+              {
+                "weekday": 6,
+                "start": "09:00",
+                "end": "13:00"
+              }
+            ],
+            "exclusions": []
+          },
+          "base_revision": 0,
+          "settings_version": 0,
+          "affected_plan_count": 0,
+          "affected_blocks": []
+        }
+      }
+    },
+    {
+      "expected": "PUT /semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/availability: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "weekly": [
+            {
+              "weekday": 6,
+              "start": "09:00",
+              "end": "13:00"
+            }
+          ],
+          "exclusions": [],
+          "configured": true,
+          "version": 1,
+          "revision": 1,
+          "timezone": "Asia/Shanghai"
+        }
+      }
+    },
+    {
+      "expected": "POST /imports: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "77ea0bec-81e6-4f7d-8727-652615d61e1c",
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "base_revision": 1,
+          "source": "manual",
+          "source_term": "",
+          "courses": [
+            {
+              "title": "合成固定课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1
+              ],
+              "sections": [
+                2
+              ]
+            }
+          ],
+          "new_count": 1,
+          "unchanged_count": 0,
+          "changed_count": 0,
+          "changed_courses": [],
+          "extras": [],
+          "new_extra_count": 0,
+          "unchanged_extra_count": 0,
+          "changed_extras": [],
+          "protected_extras": [],
+          "protected_extra_count": 0,
+          "source_first_monday": null,
+          "missing_count": 0,
+          "missing_courses": [],
+          "applied": false
+        }
+      }
+    },
+    {
+      "expected": "POST /imports/77ea0bec-81e6-4f7d-8727-652615d61e1c/apply: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "revision": 2,
+          "imported_count": 1,
+          "replaced_count": 0,
+          "removed_count": 0,
+          "imported_extra_count": 0,
+          "replaced_extra_count": 0,
+          "protected_extra_count": 0,
+          "batch_id": "77ea0bec-81e6-4f7d-8727-652615d61e1c"
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/timetable: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "week": 1,
+          "revision": 2,
+          "events": [
+            {
+              "title": "合成固定课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1
+              ],
+              "sections": [
+                2
+              ],
+              "id": "fb00578f-103f-44dc-a44f-ee2376427f71:2026-10-10:2",
+              "source_batch_id": "77ea0bec-81e6-4f7d-8727-652615d61e1c",
+              "course_id": "fb00578f-103f-44dc-a44f-ee2376427f71",
+              "start_at": "2026-10-10T10:10:00+08:00",
+              "end_at": "2026-10-10T11:00:00+08:00",
+              "reality_kind": "course",
+              "fixed": true,
+              "attendance_label": "",
+              "conflict": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "expected": "POST /items: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "kind": "task",
+          "title": "合成排程任务A",
+          "course_id": null,
+          "time": {
+            "precision": "exact",
+            "at": "2026-10-10T05:00:00Z",
+            "end_at": null,
+            "date": null,
+            "week": null,
+            "end_date": null,
+            "day_end_confirmed": false,
+            "expression": "",
+            "meaning": "unspecified",
+            "candidate_dates": [],
+            "course_anchor": null
+          },
+          "certainty": "formal",
+          "remaining_minutes": 90,
+          "start_policy": "at",
+          "earliest_start_at": "2026-10-10T01:00:00Z",
+          "reserve_time": true,
+          "splittable": true,
+          "priority": "normal",
+          "location": "",
+          "notes": "",
+          "source_text": "",
+          "details": {
+            "recipient": "",
+            "materials": [],
+            "submission_channel": "",
+            "participation": "",
+            "participation_status": "unspecified",
+            "conditions": [],
+            "early_arrival_minutes": null,
+            "applicability": "",
+            "responsibility": ""
+          },
+          "candidate_id": null,
+          "source_id": null,
+          "category_id": null,
+          "course_title": "",
+          "tags": [],
+          "id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+          "version": 1,
+          "lifecycle": "active",
+          "review_state": "confirmed",
+          "control": "plannable",
+          "anchor_at": "2026-10-10T05:00:00+00:00",
+          "created_at": "2026-10-09T15:28:02.600971+00:00",
+          "updated_at": "2026-10-09T15:28:02.600971+00:00",
+          "reminders": [],
+          "arrival_at": null
+        }
+      }
+    },
+    {
+      "expected": "POST /items: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "kind": "task",
+          "title": "合成排程任务B",
+          "course_id": null,
+          "time": {
+            "precision": "exact",
+            "at": "2026-10-10T05:00:00Z",
+            "end_at": null,
+            "date": null,
+            "week": null,
+            "end_date": null,
+            "day_end_confirmed": false,
+            "expression": "",
+            "meaning": "unspecified",
+            "candidate_dates": [],
+            "course_anchor": null
+          },
+          "certainty": "formal",
+          "remaining_minutes": 60,
+          "start_policy": "at",
+          "earliest_start_at": "2026-10-10T01:00:00Z",
+          "reserve_time": true,
+          "splittable": false,
+          "priority": "normal",
+          "location": "",
+          "notes": "",
+          "source_text": "",
+          "details": {
+            "recipient": "",
+            "materials": [],
+            "submission_channel": "",
+            "participation": "",
+            "participation_status": "unspecified",
+            "conditions": [],
+            "early_arrival_minutes": null,
+            "applicability": "",
+            "responsibility": ""
+          },
+          "candidate_id": null,
+          "source_id": null,
+          "category_id": null,
+          "course_title": "",
+          "tags": [],
+          "id": "bc6c5059-c50e-4550-937e-93895b090445",
+          "version": 1,
+          "lifecycle": "active",
+          "review_state": "confirmed",
+          "control": "plannable",
+          "anchor_at": "2026-10-10T05:00:00+00:00",
+          "created_at": "2026-10-09T15:28:02.613521+00:00",
+          "updated_at": "2026-10-09T15:28:02.613521+00:00",
+          "reminders": [],
+          "arrival_at": null
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/plan-proposals: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T03:30:00+00:00",
+              "minutes": 30
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "start_at": "2026-10-10T03:30:00+00:00",
+              "end_at": "2026-10-10T04:30:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "remaining_minutes": 90,
+              "target_minutes": 90,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 90,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": true,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 840.0,
+              "bound": 840.0
+            }
+          ],
+          "elapsed_ms": 78,
+          "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "version": 1,
+          "phase": "ready",
+          "base_revision": 4,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "created_at": "2026-10-09T15:28:02.720817+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "target_minutes": null
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": null
+        }
+      }
+    },
+    {
+      "expected": "production solver produces complete feasible proposal",
+      "passed": true,
+      "actual": {
+        "window_start": "2026-10-10T01:00:00+00:00",
+        "window_end": "2026-10-10T05:00:00+00:00",
+        "blocks": [
+          {
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "title": "合成排程任务A",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60
+          },
+          {
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "title": "合成排程任务A",
+            "start_at": "2026-10-10T03:00:00+00:00",
+            "end_at": "2026-10-10T03:30:00+00:00",
+            "minutes": 30
+          },
+          {
+            "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+            "title": "合成排程任务B",
+            "start_at": "2026-10-10T03:30:00+00:00",
+            "end_at": "2026-10-10T04:30:00+00:00",
+            "minutes": 60
+          }
+        ],
+        "tasks": [
+          {
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "title": "合成排程任务A",
+            "remaining_minutes": 90,
+            "target_minutes": 90,
+            "existing_minutes": 0,
+            "outside_minutes": 0,
+            "new_minutes": 90,
+            "unarranged_minutes": 0,
+            "later_minutes": 0
+          },
+          {
+            "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+            "title": "合成排程任务B",
+            "remaining_minutes": 60,
+            "target_minutes": 60,
+            "existing_minutes": 0,
+            "outside_minutes": 0,
+            "new_minutes": 60,
+            "unarranged_minutes": 0,
+            "later_minutes": 0
+          }
+        ],
+        "status": "FEASIBLE_COMPLETE",
+        "messages": [
+          "保留已有计划，只为尚未安排的工作补充时间"
+        ],
+        "solver_status": "OPTIMAL",
+        "optimal": true,
+        "unarranged_minutes": 0,
+        "can_apply": true,
+        "existing_conflict_count": 0,
+        "uncertainty_warnings": [],
+        "solver_version": "9.15.6755",
+        "valid_until": "2026-10-10T01:00:00+00:00",
+        "phases": [
+          {
+            "status": "OPTIMAL",
+            "objective": 840.0,
+            "bound": 840.0
+          }
+        ],
+        "elapsed_ms": 78,
+        "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+        "version": 1,
+        "phase": "ready",
+        "base_revision": 4,
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "created_at": "2026-10-09T15:28:02.720817+00:00",
+        "request": {
+          "days": 7,
+          "lead_minutes": 0,
+          "chunk_minutes": 60,
+          "allow_partial": false,
+          "tasks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "target_minutes": null
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "target_minutes": null
+            }
+          ],
+          "window_start_at": "2026-10-10T01:00:00Z",
+          "window_end_at": "2026-10-10T05:00:00Z"
+        },
+        "receipt": null
+      }
+    },
+    {
+      "expected": "GET /semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 4,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "blocks": [],
+          "invalid_blocks": [],
+          "history_days": 7,
+          "latest_proposal": {
+            "window_start": "2026-10-10T01:00:00+00:00",
+            "window_end": "2026-10-10T05:00:00+00:00",
+            "blocks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "title": "合成排程任务A",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60
+              },
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "title": "合成排程任务A",
+                "start_at": "2026-10-10T03:00:00+00:00",
+                "end_at": "2026-10-10T03:30:00+00:00",
+                "minutes": 30
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "title": "合成排程任务B",
+                "start_at": "2026-10-10T03:30:00+00:00",
+                "end_at": "2026-10-10T04:30:00+00:00",
+                "minutes": 60
+              }
+            ],
+            "tasks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "title": "合成排程任务A",
+                "remaining_minutes": 90,
+                "target_minutes": 90,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 90,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "title": "合成排程任务B",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              }
+            ],
+            "status": "FEASIBLE_COMPLETE",
+            "messages": [
+              "保留已有计划，只为尚未安排的工作补充时间"
+            ],
+            "solver_status": "OPTIMAL",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "can_apply": true,
+            "existing_conflict_count": 0,
+            "uncertainty_warnings": [],
+            "solver_version": "9.15.6755",
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "phases": [
+              {
+                "status": "OPTIMAL",
+                "objective": 840.0,
+                "bound": 840.0
+              }
+            ],
+            "elapsed_ms": 78,
+            "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "version": 1,
+            "phase": "ready",
+            "base_revision": 4,
+            "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+            "created_at": "2026-10-09T15:28:02.720817+00:00",
+            "request": {
+              "days": 7,
+              "lead_minutes": 0,
+              "chunk_minutes": 60,
+              "allow_partial": false,
+              "tasks": [
+                {
+                  "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                  "target_minutes": null
+                },
+                {
+                  "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                  "target_minutes": null
+                }
+              ],
+              "window_start_at": "2026-10-10T01:00:00Z",
+              "window_end_at": "2026-10-10T05:00:00Z"
+            },
+            "receipt": null
+          },
+          "latest_applied": null
+        }
+      }
+    },
+    {
+      "expected": "proposal does not create saved blocks",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "all blocks remain in requested window",
+      "passed": true,
+      "actual": [
+        {
+          "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+          "title": "合成排程任务A",
+          "start_at": "2026-10-10T01:00:00+00:00",
+          "end_at": "2026-10-10T02:00:00+00:00",
+          "minutes": 60
+        },
+        {
+          "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+          "title": "合成排程任务A",
+          "start_at": "2026-10-10T03:00:00+00:00",
+          "end_at": "2026-10-10T03:30:00+00:00",
+          "minutes": 30
+        },
+        {
+          "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+          "title": "合成排程任务B",
+          "start_at": "2026-10-10T03:30:00+00:00",
+          "end_at": "2026-10-10T04:30:00+00:00",
+          "minutes": 60
+        }
+      ]
+    },
+    {
+      "expected": "solver avoids fixed course 10:10–11:00",
+      "passed": true,
+      "actual": [
+        {
+          "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+          "title": "合成排程任务A",
+          "start_at": "2026-10-10T01:00:00+00:00",
+          "end_at": "2026-10-10T02:00:00+00:00",
+          "minutes": 60
+        },
+        {
+          "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+          "title": "合成排程任务A",
+          "start_at": "2026-10-10T03:00:00+00:00",
+          "end_at": "2026-10-10T03:30:00+00:00",
+          "minutes": 30
+        },
+        {
+          "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+          "title": "合成排程任务B",
+          "start_at": "2026-10-10T03:30:00+00:00",
+          "end_at": "2026-10-10T04:30:00+00:00",
+          "minutes": 60
+        }
+      ]
+    },
+    {
+      "expected": "scheduled blocks do not overlap",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /plan-proposals/73fd5ba6-e98d-4566-a861-6876a0df7020/accept: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "proposal_version": 2,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "revision": 5,
+          "block_ids": [
+            "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+            "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+            "c8bcdcf3-6882-4099-9591-cc57aa039ff6"
+          ],
+          "unarranged_minutes": 0
+        }
+      }
+    },
+    {
+      "expected": "POST /plan-proposals/73fd5ba6-e98d-4566-a861-6876a0df7020/accept: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "proposal_version": 2,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "revision": 5,
+          "block_ids": [
+            "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+            "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+            "c8bcdcf3-6882-4099-9591-cc57aa039ff6"
+          ],
+          "unarranged_minutes": 0
+        }
+      }
+    },
+    {
+      "expected": "plan acceptance is idempotent",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "GET /semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 5,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "blocks": [
+            {
+              "id": "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成排程任务A"
+            },
+            {
+              "id": "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T03:30:00+00:00",
+              "minutes": 30,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成排程任务A"
+            },
+            {
+              "id": "c8bcdcf3-6882-4099-9591-cc57aa039ff6",
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+              "start_at": "2026-10-10T03:30:00+00:00",
+              "end_at": "2026-10-10T04:30:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成排程任务B"
+            }
+          ],
+          "invalid_blocks": [],
+          "history_days": 7,
+          "latest_proposal": {
+            "window_start": "2026-10-10T01:00:00+00:00",
+            "window_end": "2026-10-10T05:00:00+00:00",
+            "blocks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "title": "合成排程任务A",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60
+              },
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "title": "合成排程任务A",
+                "start_at": "2026-10-10T03:00:00+00:00",
+                "end_at": "2026-10-10T03:30:00+00:00",
+                "minutes": 30
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "title": "合成排程任务B",
+                "start_at": "2026-10-10T03:30:00+00:00",
+                "end_at": "2026-10-10T04:30:00+00:00",
+                "minutes": 60
+              }
+            ],
+            "tasks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "title": "合成排程任务A",
+                "remaining_minutes": 90,
+                "target_minutes": 90,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 90,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "title": "合成排程任务B",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              }
+            ],
+            "status": "FEASIBLE_COMPLETE",
+            "messages": [
+              "保留已有计划，只为尚未安排的工作补充时间"
+            ],
+            "solver_status": "OPTIMAL",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "can_apply": false,
+            "existing_conflict_count": 0,
+            "uncertainty_warnings": [],
+            "solver_version": "9.15.6755",
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "phases": [
+              {
+                "status": "OPTIMAL",
+                "objective": 840.0,
+                "bound": 840.0
+              }
+            ],
+            "elapsed_ms": 78,
+            "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "version": 2,
+            "phase": "applied",
+            "base_revision": 4,
+            "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+            "created_at": "2026-10-09T15:28:02.720817+00:00",
+            "request": {
+              "days": 7,
+              "lead_minutes": 0,
+              "chunk_minutes": 60,
+              "allow_partial": false,
+              "tasks": [
+                {
+                  "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                  "target_minutes": null
+                },
+                {
+                  "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                  "target_minutes": null
+                }
+              ],
+              "window_start_at": "2026-10-10T01:00:00Z",
+              "window_end_at": "2026-10-10T05:00:00Z"
+            },
+            "receipt": {
+              "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+              "proposal_version": 2,
+              "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+              "revision": 5,
+              "block_ids": [
+                "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+                "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+                "c8bcdcf3-6882-4099-9591-cc57aa039ff6"
+              ],
+              "unarranged_minutes": 0
+            }
+          },
+          "latest_applied": {
+            "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "expected": "saved plan covers 150 minutes without invalid blocks",
+      "passed": true,
+      "actual": {
+        "revision": 5,
+        "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+        "blocks": [
+          {
+            "id": "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成排程任务A"
+          },
+          {
+            "id": "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+            "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+            "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "start_at": "2026-10-10T03:00:00+00:00",
+            "end_at": "2026-10-10T03:30:00+00:00",
+            "minutes": 30,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成排程任务A"
+          },
+          {
+            "id": "c8bcdcf3-6882-4099-9591-cc57aa039ff6",
+            "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+            "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "start_at": "2026-10-10T03:30:00+00:00",
+            "end_at": "2026-10-10T04:30:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成排程任务B"
+          }
+        ],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T03:30:00+00:00",
+              "minutes": 30
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "start_at": "2026-10-10T03:30:00+00:00",
+              "end_at": "2026-10-10T04:30:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+              "title": "合成排程任务A",
+              "remaining_minutes": 90,
+              "target_minutes": 90,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 90,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+              "title": "合成排程任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": false,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 840.0,
+              "bound": 840.0
+            }
+          ],
+          "elapsed_ms": 78,
+          "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "version": 2,
+          "phase": "applied",
+          "base_revision": 4,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "created_at": "2026-10-09T15:28:02.720817+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "target_minutes": null
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": {
+            "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "proposal_version": 2,
+            "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+            "revision": 5,
+            "block_ids": [
+              "7013a2db-97a0-4a9d-aea8-6fa05fd8b7bf",
+              "e86164bb-1cb0-4fd4-8074-f2baccd7b7b3",
+              "c8bcdcf3-6882-4099-9591-cc57aa039ff6"
+            ],
+            "unarranged_minutes": 0
+          }
+        },
+        "latest_applied": {
+          "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "version": 2
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/timetable: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "week": 1,
+          "revision": 5,
+          "events": [
+            {
+              "title": "合成固定课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1
+              ],
+              "sections": [
+                2
+              ],
+              "id": "fb00578f-103f-44dc-a44f-ee2376427f71:2026-10-10:2",
+              "source_batch_id": "77ea0bec-81e6-4f7d-8727-652615d61e1c",
+              "course_id": "fb00578f-103f-44dc-a44f-ee2376427f71",
+              "start_at": "2026-10-10T10:10:00+08:00",
+              "end_at": "2026-10-10T11:00:00+08:00",
+              "reality_kind": "course",
+              "fixed": true,
+              "attendance_label": "",
+              "conflict": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "expected": "scheduling retains fixed course facts",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "GET /items/f07e7b53-09d3-4a64-81c9-5ec9f8e227bd: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "kind": "task",
+          "title": "合成排程任务A",
+          "course_id": null,
+          "time": {
+            "precision": "exact",
+            "at": "2026-10-10T05:00:00Z",
+            "end_at": null,
+            "date": null,
+            "week": null,
+            "end_date": null,
+            "day_end_confirmed": false,
+            "expression": "",
+            "meaning": "unspecified",
+            "candidate_dates": [],
+            "course_anchor": null
+          },
+          "certainty": "formal",
+          "remaining_minutes": 90,
+          "start_policy": "at",
+          "earliest_start_at": "2026-10-10T01:00:00Z",
+          "reserve_time": true,
+          "splittable": true,
+          "priority": "normal",
+          "location": "",
+          "notes": "",
+          "source_text": "",
+          "details": {
+            "recipient": "",
+            "materials": [],
+            "submission_channel": "",
+            "participation": "",
+            "participation_status": "unspecified",
+            "conditions": [],
+            "early_arrival_minutes": null,
+            "applicability": "",
+            "responsibility": ""
+          },
+          "candidate_id": null,
+          "source_id": null,
+          "category_id": null,
+          "course_title": "",
+          "tags": [],
+          "id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+          "version": 1,
+          "lifecycle": "active",
+          "review_state": "confirmed",
+          "control": "plannable",
+          "anchor_at": "2026-10-10T05:00:00+00:00",
+          "created_at": "2026-10-09T15:28:02.600971+00:00",
+          "updated_at": "2026-10-09T15:28:02.600971+00:00",
+          "reminders": [],
+          "arrival_at": null
+        }
+      }
+    },
+    {
+      "expected": "GET /items/bc6c5059-c50e-4550-937e-93895b090445: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "kind": "task",
+          "title": "合成排程任务B",
+          "course_id": null,
+          "time": {
+            "precision": "exact",
+            "at": "2026-10-10T05:00:00Z",
+            "end_at": null,
+            "date": null,
+            "week": null,
+            "end_date": null,
+            "day_end_confirmed": false,
+            "expression": "",
+            "meaning": "unspecified",
+            "candidate_dates": [],
+            "course_anchor": null
+          },
+          "certainty": "formal",
+          "remaining_minutes": 60,
+          "start_policy": "at",
+          "earliest_start_at": "2026-10-10T01:00:00Z",
+          "reserve_time": true,
+          "splittable": false,
+          "priority": "normal",
+          "location": "",
+          "notes": "",
+          "source_text": "",
+          "details": {
+            "recipient": "",
+            "materials": [],
+            "submission_channel": "",
+            "participation": "",
+            "participation_status": "unspecified",
+            "conditions": [],
+            "early_arrival_minutes": null,
+            "applicability": "",
+            "responsibility": ""
+          },
+          "candidate_id": null,
+          "source_id": null,
+          "category_id": null,
+          "course_title": "",
+          "tags": [],
+          "id": "bc6c5059-c50e-4550-937e-93895b090445",
+          "version": 1,
+          "lifecycle": "active",
+          "review_state": "confirmed",
+          "control": "plannable",
+          "anchor_at": "2026-10-10T05:00:00+00:00",
+          "created_at": "2026-10-09T15:28:02.613521+00:00",
+          "updated_at": "2026-10-09T15:28:02.613521+00:00",
+          "reminders": [],
+          "arrival_at": null
+        }
+      }
+    },
+    {
+      "expected": "scheduled work is not marked completed",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /plan-proposals/73fd5ba6-e98d-4566-a861-6876a0df7020/undo: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+          "proposal_version": 3,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "revision": 6,
+          "undone": true
+        }
+      }
+    },
+    {
+      "expected": "latest unmodified plan can be undone",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "GET /semesters/e49e873e-9eb8-4ec3-80c9-4bbe51aab237/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 6,
+          "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+          "blocks": [],
+          "invalid_blocks": [],
+          "history_days": 7,
+          "latest_proposal": {
+            "window_start": "2026-10-10T01:00:00+00:00",
+            "window_end": "2026-10-10T05:00:00+00:00",
+            "blocks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "title": "合成排程任务A",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60
+              },
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "title": "合成排程任务A",
+                "start_at": "2026-10-10T03:00:00+00:00",
+                "end_at": "2026-10-10T03:30:00+00:00",
+                "minutes": 30
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "title": "合成排程任务B",
+                "start_at": "2026-10-10T03:30:00+00:00",
+                "end_at": "2026-10-10T04:30:00+00:00",
+                "minutes": 60
+              }
+            ],
+            "tasks": [
+              {
+                "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                "title": "合成排程任务A",
+                "remaining_minutes": 90,
+                "target_minutes": 90,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 90,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              },
+              {
+                "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                "title": "合成排程任务B",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              }
+            ],
+            "status": "FEASIBLE_COMPLETE",
+            "messages": [
+              "保留已有计划，只为尚未安排的工作补充时间"
+            ],
+            "solver_status": "OPTIMAL",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "can_apply": false,
+            "existing_conflict_count": 0,
+            "uncertainty_warnings": [],
+            "solver_version": "9.15.6755",
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "phases": [
+              {
+                "status": "OPTIMAL",
+                "objective": 840.0,
+                "bound": 840.0
+              }
+            ],
+            "elapsed_ms": 78,
+            "id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+            "version": 3,
+            "phase": "undone",
+            "base_revision": 4,
+            "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+            "created_at": "2026-10-09T15:28:02.720817+00:00",
+            "request": {
+              "days": 7,
+              "lead_minutes": 0,
+              "chunk_minutes": 60,
+              "allow_partial": false,
+              "tasks": [
+                {
+                  "item_id": "f07e7b53-09d3-4a64-81c9-5ec9f8e227bd",
+                  "target_minutes": null
+                },
+                {
+                  "item_id": "bc6c5059-c50e-4550-937e-93895b090445",
+                  "target_minutes": null
+                }
+              ],
+              "window_start_at": "2026-10-10T01:00:00Z",
+              "window_end_at": "2026-10-10T05:00:00Z"
+            },
+            "receipt": {
+              "proposal_id": "73fd5ba6-e98d-4566-a861-6876a0df7020",
+              "proposal_version": 3,
+              "semester_id": "e49e873e-9eb8-4ec3-80c9-4bbe51aab237",
+              "revision": 6,
+              "undone": true
+            }
+          },
+          "latest_applied": null
+        }
+      }
+    },
+    {
+      "expected": "safe undo leaves no active blocks",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /auth/logout: HTTP 204",
+      "passed": true,
+      "actual": {
+        "actual_status": 204,
+        "response": ""
+      }
+    }
+  ],
+  "account": "qa_aic_e78a902d8485ed",
+  "actual_summary": {
+    "scheduled_minutes": 150,
+    "solver_status": "OPTIMAL",
+    "solver_version": "9.15.6755",
+    "complete": true,
+    "safe_undo": true
+  },
+  "seconds": 0.329
+}

@@ -1,0 +1,2009 @@
+{
+  "case": "manual_atomic_leave",
+  "expected": "event+selected occurrence leave save atomically; invalid selection rolls back; future courses unchanged",
+  "passed": true,
+  "data": "synthetic disposable local account",
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "input": {
+        "username": "qa_aic_d70168685ce259",
+        "password": "[REDACTED]"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.063,
+      "actual": {
+        "user": {
+          "id": "87cdbfcf-da62-456c-a036-d8a37eaf8a82",
+          "username": "qa_aic_d70168685ce259",
+          "is_demo": false
+        },
+        "access_token": "[REDACTED]",
+        "refresh_token": "[REDACTED]",
+        "expires_in": 900,
+        "logout_token": "[REDACTED]",
+        "recovery_code": "[REDACTED]"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters",
+      "input": {
+        "name": "AIC本轮合成验证·manual_atomic_leave",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "number": 2,
+            "start": "10:10",
+            "end": "11:00"
+          }
+        ]
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.015,
+      "actual": {
+        "id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "name": "AIC本轮合成验证·manual_atomic_leave",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "number": 2,
+            "start": "10:10",
+            "end": "11:00"
+          }
+        ],
+        "revision": 0
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/imports",
+      "input": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "source": "manual",
+        "courses": [
+          {
+            "title": "合成第一课",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              1
+            ]
+          },
+          {
+            "title": "合成后续课",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              2
+            ]
+          }
+        ]
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.016,
+      "actual": {
+        "id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "base_revision": 0,
+        "source": "manual",
+        "source_term": "",
+        "courses": [
+          {
+            "title": "合成第一课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              1
+            ]
+          },
+          {
+            "title": "合成后续课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              2
+            ]
+          }
+        ],
+        "new_count": 2,
+        "unchanged_count": 0,
+        "changed_count": 0,
+        "changed_courses": [],
+        "extras": [],
+        "new_extra_count": 0,
+        "unchanged_extra_count": 0,
+        "changed_extras": [],
+        "protected_extras": [],
+        "protected_extra_count": 0,
+        "source_first_monday": null,
+        "missing_count": 0,
+        "missing_courses": [],
+        "applied": false
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/imports/b7b5db79-4ce1-49ad-958b-b657aa1f3118/apply",
+      "input": {
+        "expected_revision": 0
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.015,
+      "actual": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "revision": 1,
+        "imported_count": 2,
+        "replaced_count": 0,
+        "removed_count": 0,
+        "imported_extra_count": 0,
+        "replaced_extra_count": 0,
+        "protected_extra_count": 0,
+        "batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": [
+        {
+          "id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "name": "AIC本轮合成验证·manual_atomic_leave",
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [
+            {
+              "number": 1,
+              "start": "09:00",
+              "end": "10:00"
+            },
+            {
+              "number": 2,
+              "start": "10:10",
+              "end": "11:00"
+            }
+          ],
+          "revision": 1
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/events/conflict-preview",
+      "input": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "expected_revision": 1,
+        "title": "合成开始点会议",
+        "certainty": "formal",
+        "reserve_time": true,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T09:15:00+08:00"
+        },
+        "source_text": "只知道09:15开始，结束未定"
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "impact": {
+          "fixed_conflicts": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T01:15:00+00:00",
+              "titles": [
+                "合成第一课",
+                "合成开始点会议"
+              ],
+              "item_ids": [
+                "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+              ],
+              "certainty": "confirmed",
+              "blocking": true,
+              "time_incomplete": true,
+              "evidence_kind": "start_point",
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "overlap_at_start": true,
+              "overlap_at_arrival": false,
+              "window_is_comparison": false,
+              "pending_record": true
+            }
+          ],
+          "new_fixed_conflicts": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T01:15:00+00:00",
+              "titles": [
+                "合成第一课",
+                "合成开始点会议"
+              ],
+              "item_ids": [
+                "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+              ],
+              "certainty": "confirmed",
+              "blocking": true,
+              "time_incomplete": true,
+              "evidence_kind": "start_point",
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "overlap_at_start": true,
+              "overlap_at_arrival": false,
+              "window_is_comparison": false,
+              "pending_record": true
+            }
+          ],
+          "blocking_fixed_conflicts": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T01:15:00+00:00",
+              "titles": [
+                "合成第一课",
+                "合成开始点会议"
+              ],
+              "item_ids": [
+                "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+              ],
+              "certainty": "confirmed",
+              "blocking": true,
+              "time_incomplete": true,
+              "evidence_kind": "start_point",
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "overlap_at_start": true,
+              "overlap_at_arrival": false,
+              "window_is_comparison": false,
+              "pending_record": true
+            }
+          ],
+          "new_blocking_fixed_conflicts": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T01:15:00+00:00",
+              "titles": [
+                "合成第一课",
+                "合成开始点会议"
+              ],
+              "item_ids": [
+                "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+              ],
+              "certainty": "confirmed",
+              "blocking": true,
+              "time_incomplete": true,
+              "evidence_kind": "start_point",
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "overlap_at_start": true,
+              "overlap_at_arrival": false,
+              "window_is_comparison": false,
+              "pending_record": true
+            }
+          ],
+          "time_warnings": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T16:00:00+00:00",
+              "titles": [
+                "合成开始点会议"
+              ],
+              "item_ids": [],
+              "certainty": "possible",
+              "blocking": false,
+              "time_incomplete": true,
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "window_is_comparison": true,
+              "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+              "pending_record": true
+            }
+          ],
+          "new_time_warnings": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T16:00:00+00:00",
+              "titles": [
+                "合成开始点会议"
+              ],
+              "item_ids": [],
+              "certainty": "possible",
+              "blocking": false,
+              "time_incomplete": true,
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "window_is_comparison": true,
+              "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+              "pending_record": true
+            }
+          ],
+          "course_conflicts": [
+            {
+              "occurrence_id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+              "title": "合成第一课",
+              "start_at": "2026-10-10T09:00:00+08:00",
+              "end_at": "2026-10-10T10:00:00+08:00",
+              "location": "",
+              "attendance_status": "attend"
+            }
+          ],
+          "affected_plan_count": 0,
+          "affected_blocks": []
+        },
+        "expected_revision": 1
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": [
+        {
+          "id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "name": "AIC本轮合成验证·manual_atomic_leave",
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [
+            {
+              "number": 1,
+              "start": "09:00",
+              "end": "10:00"
+            },
+            {
+              "number": 2,
+              "start": "10:10",
+              "end": "11:00"
+            }
+          ],
+          "revision": 1
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/events",
+      "input": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "expected_revision": 1,
+        "title": "合成开始点会议",
+        "certainty": "formal",
+        "reserve_time": true,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T09:15:00+08:00"
+        },
+        "source_text": "只知道09:15开始，结束未定",
+        "course_leave_targets": [
+          "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+          "invalid-synthetic-occurrence"
+        ]
+      },
+      "params": null,
+      "expected_status": 422,
+      "actual_status": 422,
+      "seconds": 0.031,
+      "actual": {
+        "code": "INVALID_ATTENDANCE",
+        "message": "只能标记这次所选安排实际冲突的课次"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": [
+        {
+          "id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "name": "AIC本轮合成验证·manual_atomic_leave",
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [
+            {
+              "number": 1,
+              "start": "09:00",
+              "end": "10:00"
+            },
+            {
+              "number": 2,
+              "start": "10:10",
+              "end": "11:00"
+            }
+          ],
+          "revision": 1
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/bb782927-e7d4-4742-9fbb-7fc0819c656d/timetable",
+      "input": null,
+      "params": {
+        "week": 1
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "week": 1,
+        "revision": 1,
+        "events": [
+          {
+            "title": "合成第一课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              1
+            ],
+            "id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+            "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+            "course_id": "d8a6f709-112b-4a24-9dad-5644efd55409",
+            "start_at": "2026-10-10T09:00:00+08:00",
+            "end_at": "2026-10-10T10:00:00+08:00",
+            "reality_kind": "course",
+            "fixed": true,
+            "attendance_label": "",
+            "conflict": false
+          },
+          {
+            "title": "合成后续课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              2
+            ],
+            "id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408:2026-10-10:2",
+            "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+            "course_id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408",
+            "start_at": "2026-10-10T10:10:00+08:00",
+            "end_at": "2026-10-10T11:00:00+08:00",
+            "reality_kind": "course",
+            "fixed": true,
+            "attendance_label": "",
+            "conflict": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/bb782927-e7d4-4742-9fbb-7fc0819c656d/calendar",
+      "input": null,
+      "params": {
+        "from_date": "2026-10-10",
+        "to_date": "2026-10-10"
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "revision": 1,
+        "from_date": "2026-10-10",
+        "to_date": "2026-10-10",
+        "entries": [
+          {
+            "id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+            "resource_id": "d8a6f709-112b-4a24-9dad-5644efd55409",
+            "resource_type": "course",
+            "title": "合成第一课",
+            "start_at": "2026-10-10T09:00:00+08:00",
+            "end_at": "2026-10-10T10:00:00+08:00",
+            "location": "",
+            "category_id": "study",
+            "tags": [],
+            "time_precision": "exact",
+            "attendance_exempt": false,
+            "fixed": true,
+            "attendance_status": null,
+            "attendance_reason": "",
+            "attendance_label": ""
+          },
+          {
+            "id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408:2026-10-10:2",
+            "resource_id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408",
+            "resource_type": "course",
+            "title": "合成后续课",
+            "start_at": "2026-10-10T10:10:00+08:00",
+            "end_at": "2026-10-10T11:00:00+08:00",
+            "location": "",
+            "category_id": "study",
+            "tags": [],
+            "time_precision": "exact",
+            "attendance_exempt": false,
+            "fixed": true,
+            "attendance_status": null,
+            "attendance_reason": "",
+            "attendance_label": ""
+          }
+        ],
+        "undated": [],
+        "fixed_conflicts": [],
+        "blocking_fixed_conflicts": [],
+        "time_warnings": [],
+        "categories": [
+          {
+            "id": "study",
+            "name": "学业"
+          },
+          {
+            "id": "research",
+            "name": "科研"
+          },
+          {
+            "id": "affairs",
+            "name": "校园事务"
+          },
+          {
+            "id": "life",
+            "name": "生活"
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/events",
+      "input": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "expected_revision": 1,
+        "title": "合成开始点会议",
+        "certainty": "formal",
+        "reserve_time": true,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T09:15:00+08:00"
+        },
+        "source_text": "只知道09:15开始，结束未定",
+        "course_leave_targets": [
+          "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+        ]
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.062,
+      "actual": {
+        "event": {
+          "title": "合成开始点会议",
+          "time": {
+            "precision": "exact",
+            "at": "2026-10-10T01:15:00Z",
+            "end_at": null,
+            "date": null,
+            "week": null,
+            "end_date": null,
+            "day_end_confirmed": false,
+            "expression": "",
+            "meaning": "unspecified",
+            "candidate_dates": [],
+            "course_anchor": null
+          },
+          "certainty": "formal",
+          "reserve_time": true,
+          "location": "",
+          "notes": "",
+          "source_text": "只知道09:15开始，结束未定",
+          "details": {
+            "recipient": "",
+            "materials": [],
+            "submission_channel": "",
+            "participation": "",
+            "participation_status": "unspecified",
+            "conditions": [],
+            "early_arrival_minutes": null,
+            "applicability": "",
+            "responsibility": ""
+          },
+          "category_id": null,
+          "reminder_minutes": [],
+          "candidate_id": null,
+          "id": "029964eb-f6eb-42e5-ba4a-8d8dfcad5442",
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "version": 1,
+          "lifecycle": "active",
+          "control": "fixed",
+          "tags": [],
+          "reminders": [],
+          "created_at": "2026-10-09T15:27:47.707713+00:00",
+          "updated_at": "2026-10-09T15:27:47.707713+00:00",
+          "arrival_at": null
+        },
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "revision": 3,
+        "affected_plan_ids": [],
+        "fixed_conflicts": [],
+        "impact": {
+          "fixed_conflicts": [],
+          "blocking_fixed_conflicts": [],
+          "time_warnings": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T16:00:00+00:00",
+              "titles": [
+                "合成开始点会议"
+              ],
+              "item_ids": [],
+              "certainty": "possible",
+              "blocking": false,
+              "time_incomplete": true,
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "window_is_comparison": true,
+              "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+              "pending_record": true
+            }
+          ],
+          "affected_plan_count": 0,
+          "course_conflicts": [],
+          "new_fixed_conflicts": [],
+          "new_blocking_fixed_conflicts": [],
+          "new_time_warnings": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T16:00:00+00:00",
+              "titles": [
+                "合成开始点会议"
+              ],
+              "item_ids": [],
+              "certainty": "possible",
+              "blocking": false,
+              "time_incomplete": true,
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "window_is_comparison": true,
+              "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+              "pending_record": true
+            }
+          ]
+        },
+        "course_attendance": [
+          {
+            "occurrence_id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+            "title": "合成第一课",
+            "start_at": "2026-10-10T09:00:00+08:00",
+            "end_at": "2026-10-10T10:00:00+08:00",
+            "location": "",
+            "attendance_status": "leave"
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/events",
+      "input": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "expected_revision": 1,
+        "title": "合成开始点会议",
+        "certainty": "formal",
+        "reserve_time": true,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T09:15:00+08:00"
+        },
+        "source_text": "只知道09:15开始，结束未定",
+        "course_leave_targets": [
+          "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+        ]
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.016,
+      "actual": {
+        "event": {
+          "title": "合成开始点会议",
+          "time": {
+            "precision": "exact",
+            "at": "2026-10-10T01:15:00Z",
+            "end_at": null,
+            "date": null,
+            "week": null,
+            "end_date": null,
+            "day_end_confirmed": false,
+            "expression": "",
+            "meaning": "unspecified",
+            "candidate_dates": [],
+            "course_anchor": null
+          },
+          "certainty": "formal",
+          "reserve_time": true,
+          "location": "",
+          "notes": "",
+          "source_text": "只知道09:15开始，结束未定",
+          "details": {
+            "recipient": "",
+            "materials": [],
+            "submission_channel": "",
+            "participation": "",
+            "participation_status": "unspecified",
+            "conditions": [],
+            "early_arrival_minutes": null,
+            "applicability": "",
+            "responsibility": ""
+          },
+          "category_id": null,
+          "reminder_minutes": [],
+          "candidate_id": null,
+          "id": "029964eb-f6eb-42e5-ba4a-8d8dfcad5442",
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "version": 1,
+          "lifecycle": "active",
+          "control": "fixed",
+          "tags": [],
+          "reminders": [],
+          "created_at": "2026-10-09T15:27:47.707713+00:00",
+          "updated_at": "2026-10-09T15:27:47.707713+00:00",
+          "arrival_at": null
+        },
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "revision": 3,
+        "affected_plan_ids": [],
+        "fixed_conflicts": [],
+        "impact": {
+          "fixed_conflicts": [],
+          "blocking_fixed_conflicts": [],
+          "time_warnings": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T16:00:00+00:00",
+              "titles": [
+                "合成开始点会议"
+              ],
+              "item_ids": [],
+              "certainty": "possible",
+              "blocking": false,
+              "time_incomplete": true,
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "window_is_comparison": true,
+              "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+              "pending_record": true
+            }
+          ],
+          "affected_plan_count": 0,
+          "course_conflicts": [],
+          "new_fixed_conflicts": [],
+          "new_blocking_fixed_conflicts": [],
+          "new_time_warnings": [
+            {
+              "start_at": "2026-10-10T01:15:00+00:00",
+              "end_at": "2026-10-10T16:00:00+00:00",
+              "titles": [
+                "合成开始点会议"
+              ],
+              "item_ids": [],
+              "certainty": "possible",
+              "blocking": false,
+              "time_incomplete": true,
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T01:15:00Z",
+              "window_is_comparison": true,
+              "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+              "pending_record": true
+            }
+          ]
+        },
+        "course_attendance": [
+          {
+            "occurrence_id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+            "title": "合成第一课",
+            "start_at": "2026-10-10T09:00:00+08:00",
+            "end_at": "2026-10-10T10:00:00+08:00",
+            "location": "",
+            "attendance_status": "leave"
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/bb782927-e7d4-4742-9fbb-7fc0819c656d/timetable",
+      "input": null,
+      "params": {
+        "week": 1
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "week": 1,
+        "revision": 3,
+        "events": [
+          {
+            "title": "合成第一课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              1
+            ],
+            "id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+            "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+            "course_id": "d8a6f709-112b-4a24-9dad-5644efd55409",
+            "start_at": "2026-10-10T09:00:00+08:00",
+            "end_at": "2026-10-10T10:00:00+08:00",
+            "reality_kind": "course",
+            "attendance_status": "leave",
+            "attendance_reason": "用户在保存安排时确认这些具体课次已请假",
+            "fixed": false,
+            "attendance_label": "已请假",
+            "conflict": false
+          },
+          {
+            "title": "合成后续课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              2
+            ],
+            "id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408:2026-10-10:2",
+            "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+            "course_id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408",
+            "start_at": "2026-10-10T10:10:00+08:00",
+            "end_at": "2026-10-10T11:00:00+08:00",
+            "reality_kind": "course",
+            "fixed": true,
+            "attendance_label": "",
+            "conflict": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/bb782927-e7d4-4742-9fbb-7fc0819c656d/timetable",
+      "input": null,
+      "params": {
+        "week": 2
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+        "week": 2,
+        "revision": 3,
+        "events": [
+          {
+            "title": "合成第一课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              1
+            ],
+            "id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-17:1",
+            "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+            "course_id": "d8a6f709-112b-4a24-9dad-5644efd55409",
+            "start_at": "2026-10-17T09:00:00+08:00",
+            "end_at": "2026-10-17T10:00:00+08:00",
+            "reality_kind": "course",
+            "fixed": true,
+            "attendance_label": "",
+            "conflict": false
+          },
+          {
+            "title": "合成后续课",
+            "teacher": "",
+            "location": "",
+            "source_id": "",
+            "weekday": 6,
+            "weeks": [
+              1,
+              2
+            ],
+            "sections": [
+              2
+            ],
+            "id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408:2026-10-17:2",
+            "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+            "course_id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408",
+            "start_at": "2026-10-17T10:10:00+08:00",
+            "end_at": "2026-10-17T11:00:00+08:00",
+            "reality_kind": "course",
+            "fixed": true,
+            "attendance_label": "",
+            "conflict": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "input": {
+        "logout_token": "[REDACTED]"
+      },
+      "params": null,
+      "expected_status": 204,
+      "actual_status": 204,
+      "seconds": 0.016,
+      "actual": ""
+    }
+  ],
+  "checks": [
+    {
+      "expected": "POST /auth/register: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "user": {
+            "id": "87cdbfcf-da62-456c-a036-d8a37eaf8a82",
+            "username": "qa_aic_d70168685ce259",
+            "is_demo": false
+          },
+          "access_token": "[REDACTED]",
+          "refresh_token": "[REDACTED]",
+          "expires_in": 900,
+          "logout_token": "[REDACTED]",
+          "recovery_code": "[REDACTED]"
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "name": "AIC本轮合成验证·manual_atomic_leave",
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [
+            {
+              "number": 1,
+              "start": "09:00",
+              "end": "10:00"
+            },
+            {
+              "number": 2,
+              "start": "10:10",
+              "end": "11:00"
+            }
+          ],
+          "revision": 0
+        }
+      }
+    },
+    {
+      "expected": "POST /imports: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "base_revision": 0,
+          "source": "manual",
+          "source_term": "",
+          "courses": [
+            {
+              "title": "合成第一课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1,
+                2
+              ],
+              "sections": [
+                1
+              ]
+            },
+            {
+              "title": "合成后续课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1,
+                2
+              ],
+              "sections": [
+                2
+              ]
+            }
+          ],
+          "new_count": 2,
+          "unchanged_count": 0,
+          "changed_count": 0,
+          "changed_courses": [],
+          "extras": [],
+          "new_extra_count": 0,
+          "unchanged_extra_count": 0,
+          "changed_extras": [],
+          "protected_extras": [],
+          "protected_extra_count": 0,
+          "source_first_monday": null,
+          "missing_count": 0,
+          "missing_courses": [],
+          "applied": false
+        }
+      }
+    },
+    {
+      "expected": "POST /imports/b7b5db79-4ce1-49ad-958b-b657aa1f3118/apply: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "revision": 1,
+          "imported_count": 2,
+          "replaced_count": 0,
+          "removed_count": 0,
+          "imported_extra_count": 0,
+          "replaced_extra_count": 0,
+          "protected_extra_count": 0,
+          "batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118"
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": [
+          {
+            "id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+            "name": "AIC本轮合成验证·manual_atomic_leave",
+            "first_monday": "2026-10-05",
+            "total_weeks": 20,
+            "periods": [
+              {
+                "number": 1,
+                "start": "09:00",
+                "end": "10:00"
+              },
+              {
+                "number": 2,
+                "start": "10:10",
+                "end": "11:00"
+              }
+            ],
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "expected": "POST /events/conflict-preview: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "impact": {
+            "fixed_conflicts": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T01:15:00+00:00",
+                "titles": [
+                  "合成第一课",
+                  "合成开始点会议"
+                ],
+                "item_ids": [
+                  "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+                ],
+                "certainty": "confirmed",
+                "blocking": true,
+                "time_incomplete": true,
+                "evidence_kind": "start_point",
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "overlap_at_start": true,
+                "overlap_at_arrival": false,
+                "window_is_comparison": false,
+                "pending_record": true
+              }
+            ],
+            "new_fixed_conflicts": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T01:15:00+00:00",
+                "titles": [
+                  "合成第一课",
+                  "合成开始点会议"
+                ],
+                "item_ids": [
+                  "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+                ],
+                "certainty": "confirmed",
+                "blocking": true,
+                "time_incomplete": true,
+                "evidence_kind": "start_point",
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "overlap_at_start": true,
+                "overlap_at_arrival": false,
+                "window_is_comparison": false,
+                "pending_record": true
+              }
+            ],
+            "blocking_fixed_conflicts": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T01:15:00+00:00",
+                "titles": [
+                  "合成第一课",
+                  "合成开始点会议"
+                ],
+                "item_ids": [
+                  "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+                ],
+                "certainty": "confirmed",
+                "blocking": true,
+                "time_incomplete": true,
+                "evidence_kind": "start_point",
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "overlap_at_start": true,
+                "overlap_at_arrival": false,
+                "window_is_comparison": false,
+                "pending_record": true
+              }
+            ],
+            "new_blocking_fixed_conflicts": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T01:15:00+00:00",
+                "titles": [
+                  "合成第一课",
+                  "合成开始点会议"
+                ],
+                "item_ids": [
+                  "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+                ],
+                "certainty": "confirmed",
+                "blocking": true,
+                "time_incomplete": true,
+                "evidence_kind": "start_point",
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "overlap_at_start": true,
+                "overlap_at_arrival": false,
+                "window_is_comparison": false,
+                "pending_record": true
+              }
+            ],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成开始点会议"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "window_is_comparison": true,
+                "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成开始点会议"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "window_is_comparison": true,
+                "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "course_conflicts": [
+              {
+                "occurrence_id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+                "title": "合成第一课",
+                "start_at": "2026-10-10T09:00:00+08:00",
+                "end_at": "2026-10-10T10:00:00+08:00",
+                "location": "",
+                "attendance_status": "attend"
+              }
+            ],
+            "affected_plan_count": 0,
+            "affected_blocks": []
+          },
+          "expected_revision": 1
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": [
+          {
+            "id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+            "name": "AIC本轮合成验证·manual_atomic_leave",
+            "first_monday": "2026-10-05",
+            "total_weeks": 20,
+            "periods": [
+              {
+                "number": 1,
+                "start": "09:00",
+                "end": "10:00"
+              },
+              {
+                "number": 2,
+                "start": "10:10",
+                "end": "11:00"
+              }
+            ],
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "expected": "POST /events: HTTP 422",
+      "passed": true,
+      "actual": {
+        "actual_status": 422,
+        "response": {
+          "code": "INVALID_ATTENDANCE",
+          "message": "只能标记这次所选安排实际冲突的课次"
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": [
+          {
+            "id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+            "name": "AIC本轮合成验证·manual_atomic_leave",
+            "first_monday": "2026-10-05",
+            "total_weeks": 20,
+            "periods": [
+              {
+                "number": 1,
+                "start": "09:00",
+                "end": "10:00"
+              },
+              {
+                "number": 2,
+                "start": "10:10",
+                "end": "11:00"
+              }
+            ],
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "expected": "GET /semesters/bb782927-e7d4-4742-9fbb-7fc0819c656d/timetable: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "week": 1,
+          "revision": 1,
+          "events": [
+            {
+              "title": "合成第一课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1,
+                2
+              ],
+              "sections": [
+                1
+              ],
+              "id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+              "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+              "course_id": "d8a6f709-112b-4a24-9dad-5644efd55409",
+              "start_at": "2026-10-10T09:00:00+08:00",
+              "end_at": "2026-10-10T10:00:00+08:00",
+              "reality_kind": "course",
+              "fixed": true,
+              "attendance_label": "",
+              "conflict": false
+            },
+            {
+              "title": "合成后续课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1,
+                2
+              ],
+              "sections": [
+                2
+              ],
+              "id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408:2026-10-10:2",
+              "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+              "course_id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408",
+              "start_at": "2026-10-10T10:10:00+08:00",
+              "end_at": "2026-10-10T11:00:00+08:00",
+              "reality_kind": "course",
+              "fixed": true,
+              "attendance_label": "",
+              "conflict": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "expected": "invalid combined choice rolls back all changes",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "GET /semesters/bb782927-e7d4-4742-9fbb-7fc0819c656d/calendar: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "revision": 1,
+          "from_date": "2026-10-10",
+          "to_date": "2026-10-10",
+          "entries": [
+            {
+              "id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+              "resource_id": "d8a6f709-112b-4a24-9dad-5644efd55409",
+              "resource_type": "course",
+              "title": "合成第一课",
+              "start_at": "2026-10-10T09:00:00+08:00",
+              "end_at": "2026-10-10T10:00:00+08:00",
+              "location": "",
+              "category_id": "study",
+              "tags": [],
+              "time_precision": "exact",
+              "attendance_exempt": false,
+              "fixed": true,
+              "attendance_status": null,
+              "attendance_reason": "",
+              "attendance_label": ""
+            },
+            {
+              "id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408:2026-10-10:2",
+              "resource_id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408",
+              "resource_type": "course",
+              "title": "合成后续课",
+              "start_at": "2026-10-10T10:10:00+08:00",
+              "end_at": "2026-10-10T11:00:00+08:00",
+              "location": "",
+              "category_id": "study",
+              "tags": [],
+              "time_precision": "exact",
+              "attendance_exempt": false,
+              "fixed": true,
+              "attendance_status": null,
+              "attendance_reason": "",
+              "attendance_label": ""
+            }
+          ],
+          "undated": [],
+          "fixed_conflicts": [],
+          "blocking_fixed_conflicts": [],
+          "time_warnings": [],
+          "categories": [
+            {
+              "id": "study",
+              "name": "学业"
+            },
+            {
+              "id": "research",
+              "name": "科研"
+            },
+            {
+              "id": "affairs",
+              "name": "校园事务"
+            },
+            {
+              "id": "life",
+              "name": "生活"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "expected": "failed atomic save creates no event",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /events: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "event": {
+            "title": "合成开始点会议",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T01:15:00Z",
+              "end_at": null,
+              "date": null,
+              "week": null,
+              "end_date": null,
+              "day_end_confirmed": false,
+              "expression": "",
+              "meaning": "unspecified",
+              "candidate_dates": [],
+              "course_anchor": null
+            },
+            "certainty": "formal",
+            "reserve_time": true,
+            "location": "",
+            "notes": "",
+            "source_text": "只知道09:15开始，结束未定",
+            "details": {
+              "recipient": "",
+              "materials": [],
+              "submission_channel": "",
+              "participation": "",
+              "participation_status": "unspecified",
+              "conditions": [],
+              "early_arrival_minutes": null,
+              "applicability": "",
+              "responsibility": ""
+            },
+            "category_id": null,
+            "reminder_minutes": [],
+            "candidate_id": null,
+            "id": "029964eb-f6eb-42e5-ba4a-8d8dfcad5442",
+            "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+            "version": 1,
+            "lifecycle": "active",
+            "control": "fixed",
+            "tags": [],
+            "reminders": [],
+            "created_at": "2026-10-09T15:27:47.707713+00:00",
+            "updated_at": "2026-10-09T15:27:47.707713+00:00",
+            "arrival_at": null
+          },
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "revision": 3,
+          "affected_plan_ids": [],
+          "fixed_conflicts": [],
+          "impact": {
+            "fixed_conflicts": [],
+            "blocking_fixed_conflicts": [],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成开始点会议"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "window_is_comparison": true,
+                "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "affected_plan_count": 0,
+            "course_conflicts": [],
+            "new_fixed_conflicts": [],
+            "new_blocking_fixed_conflicts": [],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成开始点会议"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "window_is_comparison": true,
+                "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ]
+          },
+          "course_attendance": [
+            {
+              "occurrence_id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+              "title": "合成第一课",
+              "start_at": "2026-10-10T09:00:00+08:00",
+              "end_at": "2026-10-10T10:00:00+08:00",
+              "location": "",
+              "attendance_status": "leave"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "expected": "POST /events: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "event": {
+            "title": "合成开始点会议",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T01:15:00Z",
+              "end_at": null,
+              "date": null,
+              "week": null,
+              "end_date": null,
+              "day_end_confirmed": false,
+              "expression": "",
+              "meaning": "unspecified",
+              "candidate_dates": [],
+              "course_anchor": null
+            },
+            "certainty": "formal",
+            "reserve_time": true,
+            "location": "",
+            "notes": "",
+            "source_text": "只知道09:15开始，结束未定",
+            "details": {
+              "recipient": "",
+              "materials": [],
+              "submission_channel": "",
+              "participation": "",
+              "participation_status": "unspecified",
+              "conditions": [],
+              "early_arrival_minutes": null,
+              "applicability": "",
+              "responsibility": ""
+            },
+            "category_id": null,
+            "reminder_minutes": [],
+            "candidate_id": null,
+            "id": "029964eb-f6eb-42e5-ba4a-8d8dfcad5442",
+            "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+            "version": 1,
+            "lifecycle": "active",
+            "control": "fixed",
+            "tags": [],
+            "reminders": [],
+            "created_at": "2026-10-09T15:27:47.707713+00:00",
+            "updated_at": "2026-10-09T15:27:47.707713+00:00",
+            "arrival_at": null
+          },
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "revision": 3,
+          "affected_plan_ids": [],
+          "fixed_conflicts": [],
+          "impact": {
+            "fixed_conflicts": [],
+            "blocking_fixed_conflicts": [],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成开始点会议"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "window_is_comparison": true,
+                "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "affected_plan_count": 0,
+            "course_conflicts": [],
+            "new_fixed_conflicts": [],
+            "new_blocking_fixed_conflicts": [],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T01:15:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成开始点会议"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T01:15:00Z",
+                "window_is_comparison": true,
+                "message": "「合成开始点会议」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ]
+          },
+          "course_attendance": [
+            {
+              "occurrence_id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+              "title": "合成第一课",
+              "start_at": "2026-10-10T09:00:00+08:00",
+              "end_at": "2026-10-10T10:00:00+08:00",
+              "location": "",
+              "attendance_status": "leave"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "expected": "atomic save replay has identical receipt",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "GET /semesters/bb782927-e7d4-4742-9fbb-7fc0819c656d/timetable: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "week": 1,
+          "revision": 3,
+          "events": [
+            {
+              "title": "合成第一课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1,
+                2
+              ],
+              "sections": [
+                1
+              ],
+              "id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+              "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+              "course_id": "d8a6f709-112b-4a24-9dad-5644efd55409",
+              "start_at": "2026-10-10T09:00:00+08:00",
+              "end_at": "2026-10-10T10:00:00+08:00",
+              "reality_kind": "course",
+              "attendance_status": "leave",
+              "attendance_reason": "用户在保存安排时确认这些具体课次已请假",
+              "fixed": false,
+              "attendance_label": "已请假",
+              "conflict": false
+            },
+            {
+              "title": "合成后续课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1,
+                2
+              ],
+              "sections": [
+                2
+              ],
+              "id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408:2026-10-10:2",
+              "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+              "course_id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408",
+              "start_at": "2026-10-10T10:10:00+08:00",
+              "end_at": "2026-10-10T11:00:00+08:00",
+              "reality_kind": "course",
+              "fixed": true,
+              "attendance_label": "",
+              "conflict": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "expected": "only selected occurrence is marked leave",
+      "passed": true,
+      "actual": [
+        {
+          "title": "合成第一课",
+          "teacher": "",
+          "location": "",
+          "source_id": "",
+          "weekday": 6,
+          "weeks": [
+            1,
+            2
+          ],
+          "sections": [
+            1
+          ],
+          "id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1",
+          "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+          "course_id": "d8a6f709-112b-4a24-9dad-5644efd55409",
+          "start_at": "2026-10-10T09:00:00+08:00",
+          "end_at": "2026-10-10T10:00:00+08:00",
+          "reality_kind": "course",
+          "attendance_status": "leave",
+          "attendance_reason": "用户在保存安排时确认这些具体课次已请假",
+          "fixed": false,
+          "attendance_label": "已请假",
+          "conflict": false
+        },
+        {
+          "title": "合成后续课",
+          "teacher": "",
+          "location": "",
+          "source_id": "",
+          "weekday": 6,
+          "weeks": [
+            1,
+            2
+          ],
+          "sections": [
+            2
+          ],
+          "id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408:2026-10-10:2",
+          "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+          "course_id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408",
+          "start_at": "2026-10-10T10:10:00+08:00",
+          "end_at": "2026-10-10T11:00:00+08:00",
+          "reality_kind": "course",
+          "fixed": true,
+          "attendance_label": "",
+          "conflict": false
+        }
+      ]
+    },
+    {
+      "expected": "GET /semesters/bb782927-e7d4-4742-9fbb-7fc0819c656d/timetable: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "bb782927-e7d4-4742-9fbb-7fc0819c656d",
+          "week": 2,
+          "revision": 3,
+          "events": [
+            {
+              "title": "合成第一课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1,
+                2
+              ],
+              "sections": [
+                1
+              ],
+              "id": "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-17:1",
+              "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+              "course_id": "d8a6f709-112b-4a24-9dad-5644efd55409",
+              "start_at": "2026-10-17T09:00:00+08:00",
+              "end_at": "2026-10-17T10:00:00+08:00",
+              "reality_kind": "course",
+              "fixed": true,
+              "attendance_label": "",
+              "conflict": false
+            },
+            {
+              "title": "合成后续课",
+              "teacher": "",
+              "location": "",
+              "source_id": "",
+              "weekday": 6,
+              "weeks": [
+                1,
+                2
+              ],
+              "sections": [
+                2
+              ],
+              "id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408:2026-10-17:2",
+              "source_batch_id": "b7b5db79-4ce1-49ad-958b-b657aa1f3118",
+              "course_id": "ecb3239f-6ff9-40f7-a55f-4ba4725a8408",
+              "start_at": "2026-10-17T10:10:00+08:00",
+              "end_at": "2026-10-17T11:00:00+08:00",
+              "reality_kind": "course",
+              "fixed": true,
+              "attendance_label": "",
+              "conflict": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "expected": "same courses in next week retain attendance",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "atomic leave does not invent meeting end",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /auth/logout: HTTP 204",
+      "passed": true,
+      "actual": {
+        "actual_status": 204,
+        "response": ""
+      }
+    }
+  ],
+  "account": "qa_aic_d70168685ce259",
+  "actual_summary": {
+    "event_and_leave_saved": true,
+    "selected_occurrences": [
+      "d8a6f709-112b-4a24-9dad-5644efd55409:2026-10-10:1"
+    ],
+    "next_week_changed": false
+  },
+  "seconds": 0.282
+}

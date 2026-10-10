@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-10-10T01:03:36.445616+08:00",
+  "method": "independent native emulator UI preview/reject plus same-account API/AgentRun readback",
+  "data": "anonymous synthetic; target day 2026-10-11; distinct from 2026-10-10 main scene",
+  "passed": true,
+  "checks": {
+    "candidate_complete": true,
+    "candidate_three_blocks": true,
+    "candidate_90_minutes": true,
+    "needs_confirmation_before": true,
+    "no_formal_blocks_before": true,
+    "cancelled_after": true,
+    "proposal_rejected": true,
+    "no_formal_blocks_after": true,
+    "no_task_mutation": true,
+    "revision_unchanged": true,
+    "no_receipt": true,
+    "candidate_identity_preserved": true
+  },
+  "source_files": {
+    "scenario.json": "b8bfb2152a5e7af2220e5f831e6dbd742f295addc7ed919bdd840473735ece62",
+    "initial-plan-before-reject.json": "edc5a8ded270aa300ed7a64bfc5405d49320bfe0a185ea18cc5c81d35d05e0f7",
+    "initial-plan-after-reject.json": "9286adcc517a939cbe4f17a738ce69fdf7948551f706a16bfd15f142f2d6a0d6",
+    "initial-plan-ready.png": "f5dfaa9f43aac97f4ae2a9026e4a71bfab55059abb615f57179b6760ad62c37e",
+    "initial-plan-ready.xml": "97a1be3c40b011aeff80cbbef7cca97ee79d964a417287f59d60e7d9107392d8",
+    "initial-plan-rejected.png": "27be16e7e73aad0ff5159b539cb7555f3ed6ea5fa4b6a96475946f4ebf82d22d",
+    "initial-plan-rejected.xml": "67484421f00b403a6378acc47f18e60471a22f4f8b36384b29523cc6d6fed04e"
+  },
+  "boundaries": [
+    "No human timing or Release performance conclusion",
+    "This later independent screenshot does not replace the original main-scene processing screenshot"
+  ]
+}

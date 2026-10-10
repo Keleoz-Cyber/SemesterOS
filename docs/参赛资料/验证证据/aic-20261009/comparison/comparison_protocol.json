@@ -1,0 +1,21 @@
+{
+  "registered_before_execution": true,
+  "scenario": "请新增待办：整理实验资料，确实要完成，预计还需30分钟，现在起就能开始，截止时间还没确定。",
+  "environment": "Same Android 13 emulator, same QA build and local backend, distinct initially empty synthetic accounts with equivalent semester and learning preferences",
+  "groups": [
+    "manual native form",
+    "real model via native assistant"
+  ],
+  "primary_criteria": [
+    "title=整理实验资料",
+    "kind=task",
+    "remaining_minutes=30",
+    "start_policy=now",
+    "time.precision=unknown",
+    "lifecycle=active",
+    "no invented at/end/date/week"
+  ],
+  "extra_fields": "category, notes, source_text and tags are shown but not primary criteria; no performance or user-efficiency claim",
+  "action_metric": "UI tap and field-input macros after logged-in initial screen; exclude setup, login, keyboard dismissal, state dumps and screenshots; no real person timing",
+  "design_limit": "One pair, manual first then AI, automation delays and unbalanced order; no generalization or percent time saving"
+}

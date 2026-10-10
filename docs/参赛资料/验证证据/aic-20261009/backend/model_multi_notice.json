@@ -1,0 +1,4476 @@
+{
+  "case": "model_multi_notice",
+  "expected": "real DeepSeek retains early gathering vs formal start, unknown end and unknown independent task deadline",
+  "passed": true,
+  "data": "synthetic disposable local account",
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "input": {
+        "username": "qa_aic_d414ab28f6e9ee",
+        "password": "[REDACTED]"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.046,
+      "actual": {
+        "user": {
+          "id": "a5ed572e-e56f-441f-ac0c-06422c9899af",
+          "username": "qa_aic_d414ab28f6e9ee",
+          "is_demo": false
+        },
+        "access_token": "[REDACTED]",
+        "refresh_token": "[REDACTED]",
+        "expires_in": 900,
+        "logout_token": "[REDACTED]",
+        "recovery_code": "[REDACTED]"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters",
+      "input": {
+        "name": "AIC本轮合成验证·model_multi_notice",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "number": 2,
+            "start": "10:10",
+            "end": "11:00"
+          }
+        ]
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.016,
+      "actual": {
+        "id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+        "name": "AIC本轮合成验证·model_multi_notice",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "number": 2,
+            "start": "10:10",
+            "end": "11:00"
+          }
+        ],
+        "revision": 0
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/agent/threads",
+      "input": {
+        "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.0,
+      "actual": {
+        "id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+        "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+        "title": "新对话"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/agent/threads/7dad7458-c50b-43e6-8a6a-56466d161ba0/turns",
+      "input": {
+        "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+        "request_id": "aic_7350913938b686",
+        "input_kind": "notice"
+      },
+      "params": null,
+      "expected_status": 202,
+      "actual_status": 202,
+      "seconds": 0.016,
+      "actual": {
+        "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+        "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+        "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+        "status": "queued",
+        "created_at": "2026-10-09T15:27:51.488522+00:00",
+        "answer": "",
+        "answer_detail": null,
+        "stage": "等待处理",
+        "cards": [],
+        "preview": null,
+        "receipt": null,
+        "source": null,
+        "input_kind": "notice",
+        "context_record_ids": [],
+        "browsing_context": null,
+        "media_run_id": null,
+        "undo_available": false,
+        "undone_by": null,
+        "ambiguous_ids": [],
+        "error": null,
+        "sequence": 0,
+        "progress": [],
+        "answer_streaming": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/agent/runs/63b78aa2-aca9-4266-95f7-de0d39033680",
+      "actual_status": 200,
+      "actual": {
+        "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+        "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+        "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+        "status": "queued",
+        "created_at": "2026-10-09T15:27:51.488522+00:00",
+        "answer": "",
+        "answer_detail": null,
+        "stage": "等待处理",
+        "cards": [],
+        "preview": null,
+        "receipt": null,
+        "source": null,
+        "input_kind": "notice",
+        "context_record_ids": [],
+        "browsing_context": null,
+        "media_run_id": null,
+        "undo_available": false,
+        "undone_by": null,
+        "ambiguous_ids": [],
+        "error": null,
+        "sequence": 0,
+        "progress": [],
+        "answer_streaming": false
+      },
+      "since_turn_seconds": 0.016
+    },
+    {
+      "method": "GET",
+      "path": "/agent/runs/63b78aa2-aca9-4266-95f7-de0d39033680",
+      "actual_status": 200,
+      "actual": {
+        "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+        "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+        "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+        "status": "running",
+        "created_at": "2026-10-09T15:27:51.488522+00:00",
+        "answer": "",
+        "answer_detail": null,
+        "stage": "正在理解请求",
+        "cards": [],
+        "preview": null,
+        "receipt": null,
+        "source": null,
+        "input_kind": "notice",
+        "context_record_ids": [],
+        "browsing_context": null,
+        "media_run_id": null,
+        "undo_available": false,
+        "undone_by": null,
+        "ambiguous_ids": [],
+        "error": null,
+        "sequence": 1,
+        "progress": [
+          {
+            "stage": "understanding",
+            "message": "正在理解请求",
+            "at": "2026-10-09T15:27:51.648787+00:00"
+          }
+        ],
+        "answer_streaming": false
+      },
+      "since_turn_seconds": 0.531
+    },
+    {
+      "method": "GET",
+      "path": "/agent/runs/63b78aa2-aca9-4266-95f7-de0d39033680",
+      "actual_status": 200,
+      "actual": {
+        "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+        "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+        "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+        "status": "needs_confirmation",
+        "created_at": "2026-10-09T15:27:51.488522+00:00",
+        "answer": "请核对这次修改，确认后保存。",
+        "answer_detail": null,
+        "stage": "等待确认",
+        "cards": [
+          {
+            "card_id": "4ab2bdeb-de0a-40d4-97f5-f7b6e1a3d45d",
+            "kind": "records",
+            "total_count": 0,
+            "data": {
+              "total_count": 0,
+              "navigation_query": {
+                "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                "query": "合成项目交流会",
+                "resource_type": null,
+                "on_date": null,
+                "location": null,
+                "lifecycle": "active"
+              },
+              "cached_count": 0,
+              "records": []
+            },
+            "has_more": false,
+            "next_offset": null
+          },
+          {
+            "card_id": "4c4aaf4d-6364-4078-9e1b-d9f38219659c",
+            "kind": "records",
+            "total_count": 0,
+            "data": {
+              "total_count": 0,
+              "navigation_query": {
+                "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                "query": "合成共享表",
+                "resource_type": null,
+                "on_date": null,
+                "location": null,
+                "lifecycle": "active"
+              },
+              "cached_count": 0,
+              "records": []
+            },
+            "has_more": false,
+            "next_offset": null
+          }
+        ],
+        "preview": {
+          "kind": "batch",
+          "action": "batch",
+          "groups": [
+            {
+              "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+              "title": "合成项目交流会",
+              "operations": [
+                {
+                  "kind": "event",
+                  "action": "create",
+                  "target_id": null,
+                  "before": null,
+                  "after": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "tags": [
+                      "项目交流",
+                      "会议"
+                    ],
+                    "reminder_minutes": [],
+                    "expected_revision": 0,
+                    "candidate_id": null,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": []
+                  },
+                  "body": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "tags": [
+                      "项目交流",
+                      "会议"
+                    ],
+                    "reminder_minutes": [],
+                    "expected_revision": 0,
+                    "candidate_id": null,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": []
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "expected_revision": 0,
+                  "provided_fields": [
+                    "category_id",
+                    "certainty",
+                    "details",
+                    "location",
+                    "reserve_time",
+                    "tags",
+                    "time",
+                    "title"
+                  ],
+                  "token": "[REDACTED]",
+                  "impact": {
+                    "fixed_conflicts": [],
+                    "blocking_fixed_conflicts": [],
+                    "time_warnings": [
+                      {
+                        "start_at": "2026-10-10T06:40:00+00:00",
+                        "end_at": "2026-10-10T16:00:00+00:00",
+                        "titles": [
+                          "合成项目交流会"
+                        ],
+                        "item_ids": [],
+                        "certainty": "possible",
+                        "blocking": false,
+                        "time_incomplete": true,
+                        "uncertain_item_ids": [],
+                        "uncertainty_reasons": [
+                          "end_unknown"
+                        ],
+                        "event_start_at": "2026-10-10T07:00:00Z",
+                        "window_is_comparison": true,
+                        "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                        "pending_record": true
+                      }
+                    ],
+                    "affected_plan_count": 0,
+                    "course_conflicts": [],
+                    "new_fixed_conflicts": [],
+                    "new_blocking_fixed_conflicts": [],
+                    "new_time_warnings": [
+                      {
+                        "start_at": "2026-10-10T06:40:00+00:00",
+                        "end_at": "2026-10-10T16:00:00+00:00",
+                        "titles": [
+                          "合成项目交流会"
+                        ],
+                        "item_ids": [],
+                        "certainty": "possible",
+                        "blocking": false,
+                        "time_incomplete": true,
+                        "uncertain_item_ids": [],
+                        "uncertainty_reasons": [
+                          "end_unknown"
+                        ],
+                        "event_start_at": "2026-10-10T07:00:00Z",
+                        "window_is_comparison": true,
+                        "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                        "pending_record": true
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+              "title": "填写合成共享表",
+              "operations": [
+                {
+                  "kind": "item",
+                  "action": "create",
+                  "target_id": null,
+                  "before": null,
+                  "after": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": [],
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "tags": [
+                      "填表"
+                    ],
+                    "reminders": []
+                  },
+                  "body": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": [],
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "tags": [
+                      "填表"
+                    ],
+                    "reminders": []
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "expected_revision": 0,
+                  "provided_fields": [
+                    "category_id",
+                    "certainty",
+                    "kind",
+                    "tags",
+                    "time",
+                    "title"
+                  ],
+                  "token": "[REDACTED]"
+                }
+              ]
+            }
+          ],
+          "impact": {
+            "fixed_conflicts": [],
+            "blocking_fixed_conflicts": [],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "affected_plan_count": 0,
+            "course_conflicts": [],
+            "new_fixed_conflicts": [],
+            "new_blocking_fixed_conflicts": [],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ]
+          },
+          "body": {},
+          "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+          "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+          "expected_revision": 0,
+          "token": "[REDACTED]"
+        },
+        "receipt": null,
+        "source": null,
+        "input_kind": "notice",
+        "context_record_ids": [],
+        "browsing_context": null,
+        "media_run_id": null,
+        "undo_available": false,
+        "undone_by": null,
+        "ambiguous_ids": [],
+        "error": null,
+        "sequence": 20,
+        "progress": [
+          {
+            "stage": "understanding",
+            "message": "正在理解请求",
+            "at": "2026-10-09T15:27:51.648787+00:00"
+          },
+          {
+            "stage": "answer",
+            "message": "正在生成回答",
+            "at": "2026-10-09T15:27:52.096417+00:00"
+          },
+          {
+            "stage": "finding",
+            "message": "正在查找事项",
+            "at": "2026-10-09T15:27:52.376306+00:00"
+          },
+          {
+            "stage": "analysis",
+            "message": "正在分析查询结果",
+            "at": "2026-10-09T15:27:52.412266+00:00"
+          },
+          {
+            "stage": "answer",
+            "message": "正在生成回答",
+            "at": "2026-10-09T15:27:53.205928+00:00"
+          },
+          {
+            "stage": "preview",
+            "message": "正在生成修改预览",
+            "at": "2026-10-09T15:27:54.267448+00:00"
+          },
+          {
+            "stage": "analysis",
+            "message": "正在分析查询结果",
+            "at": "2026-10-09T15:27:54.287586+00:00"
+          },
+          {
+            "stage": "preview",
+            "message": "正在生成修改预览",
+            "at": "2026-10-09T15:27:56.109037+00:00"
+          },
+          {
+            "stage": "waiting",
+            "message": "等待确认",
+            "at": "2026-10-09T15:27:56.163697+00:00"
+          }
+        ],
+        "answer_streaming": false
+      },
+      "since_turn_seconds": 5.078
+    },
+    {
+      "method": "GET",
+      "path": "/semesters",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": [
+        {
+          "id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+          "name": "AIC本轮合成验证·model_multi_notice",
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [
+            {
+              "number": 1,
+              "start": "09:00",
+              "end": "10:00"
+            },
+            {
+              "number": 2,
+              "start": "10:10",
+              "end": "11:00"
+            }
+          ],
+          "revision": 0
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/semesters",
+      "input": {
+        "name": "AIC同源结构化API对照（合成）",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          }
+        ]
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.016,
+      "actual": {
+        "id": "4bd600d9-8f45-4b00-9cf5-841c0673ae4e",
+        "name": "AIC同源结构化API对照（合成）",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          }
+        ],
+        "revision": 0
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/events/conflict-preview",
+      "input": {
+        "semester_id": "4bd600d9-8f45-4b00-9cf5-841c0673ae4e",
+        "expected_revision": 0,
+        "title": "合成项目交流会",
+        "certainty": "formal",
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T15:00:00+08:00"
+        },
+        "details": {
+          "early_arrival_minutes": 20
+        },
+        "location": "示例楼A101",
+        "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。"
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "impact": {
+          "fixed_conflicts": [],
+          "new_fixed_conflicts": [],
+          "blocking_fixed_conflicts": [],
+          "new_blocking_fixed_conflicts": [],
+          "time_warnings": [
+            {
+              "start_at": "2026-10-10T06:40:00+00:00",
+              "end_at": "2026-10-10T16:00:00+00:00",
+              "titles": [
+                "合成项目交流会"
+              ],
+              "item_ids": [],
+              "certainty": "possible",
+              "blocking": false,
+              "time_incomplete": true,
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T07:00:00Z",
+              "window_is_comparison": true,
+              "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+              "pending_record": true
+            }
+          ],
+          "new_time_warnings": [
+            {
+              "start_at": "2026-10-10T06:40:00+00:00",
+              "end_at": "2026-10-10T16:00:00+00:00",
+              "titles": [
+                "合成项目交流会"
+              ],
+              "item_ids": [],
+              "certainty": "possible",
+              "blocking": false,
+              "time_incomplete": true,
+              "uncertain_item_ids": [],
+              "uncertainty_reasons": [
+                "end_unknown"
+              ],
+              "event_start_at": "2026-10-10T07:00:00Z",
+              "window_is_comparison": true,
+              "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+              "pending_record": true
+            }
+          ],
+          "course_conflicts": [],
+          "affected_plan_count": 0,
+          "affected_blocks": []
+        },
+        "expected_revision": 0
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/items/conflict-preview",
+      "input": {
+        "semester_id": "4bd600d9-8f45-4b00-9cf5-841c0673ae4e",
+        "expected_revision": 0,
+        "kind": "task",
+        "title": "填写合成共享表",
+        "certainty": "formal",
+        "time": {
+          "precision": "unknown"
+        },
+        "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。"
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.015,
+      "actual": {
+        "base_revision": 0,
+        "impact": {}
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/agent/runs/63b78aa2-aca9-4266-95f7-de0d39033680/decision",
+      "input": {
+        "decision": "confirm",
+        "token": "[REDACTED]",
+        "selected_group_ids": [
+          "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+          "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9"
+        ]
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.063,
+      "actual": {
+        "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+        "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+        "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+        "status": "applied",
+        "created_at": "2026-10-09T15:27:51.488522+00:00",
+        "answer": "已保存。",
+        "answer_detail": null,
+        "stage": "已保存",
+        "cards": [
+          {
+            "card_id": "4ab2bdeb-de0a-40d4-97f5-f7b6e1a3d45d",
+            "kind": "records",
+            "total_count": 0,
+            "data": {
+              "total_count": 0,
+              "navigation_query": {
+                "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                "query": "合成项目交流会",
+                "resource_type": null,
+                "on_date": null,
+                "location": null,
+                "lifecycle": "active"
+              },
+              "cached_count": 0,
+              "records": []
+            },
+            "has_more": false,
+            "next_offset": null
+          },
+          {
+            "card_id": "4c4aaf4d-6364-4078-9e1b-d9f38219659c",
+            "kind": "records",
+            "total_count": 0,
+            "data": {
+              "total_count": 0,
+              "navigation_query": {
+                "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                "query": "合成共享表",
+                "resource_type": null,
+                "on_date": null,
+                "location": null,
+                "lifecycle": "active"
+              },
+              "cached_count": 0,
+              "records": []
+            },
+            "has_more": false,
+            "next_offset": null
+          }
+        ],
+        "preview": {
+          "kind": "batch",
+          "action": "batch",
+          "groups": [
+            {
+              "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+              "title": "合成项目交流会",
+              "operations": [
+                {
+                  "kind": "event",
+                  "action": "create",
+                  "target_id": null,
+                  "before": null,
+                  "after": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "tags": [
+                      "项目交流",
+                      "会议"
+                    ],
+                    "reminder_minutes": [],
+                    "expected_revision": 0,
+                    "candidate_id": null,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": []
+                  },
+                  "body": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "tags": [
+                      "项目交流",
+                      "会议"
+                    ],
+                    "reminder_minutes": [],
+                    "expected_revision": 0,
+                    "candidate_id": null,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": []
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "expected_revision": 0,
+                  "provided_fields": [
+                    "category_id",
+                    "certainty",
+                    "details",
+                    "location",
+                    "reserve_time",
+                    "tags",
+                    "time",
+                    "title"
+                  ],
+                  "token": "[REDACTED]",
+                  "impact": {
+                    "fixed_conflicts": [],
+                    "blocking_fixed_conflicts": [],
+                    "time_warnings": [
+                      {
+                        "start_at": "2026-10-10T06:40:00+00:00",
+                        "end_at": "2026-10-10T16:00:00+00:00",
+                        "titles": [
+                          "合成项目交流会"
+                        ],
+                        "item_ids": [],
+                        "certainty": "possible",
+                        "blocking": false,
+                        "time_incomplete": true,
+                        "uncertain_item_ids": [],
+                        "uncertainty_reasons": [
+                          "end_unknown"
+                        ],
+                        "event_start_at": "2026-10-10T07:00:00Z",
+                        "window_is_comparison": true,
+                        "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                        "pending_record": true
+                      }
+                    ],
+                    "affected_plan_count": 0,
+                    "course_conflicts": [],
+                    "new_fixed_conflicts": [],
+                    "new_blocking_fixed_conflicts": [],
+                    "new_time_warnings": [
+                      {
+                        "start_at": "2026-10-10T06:40:00+00:00",
+                        "end_at": "2026-10-10T16:00:00+00:00",
+                        "titles": [
+                          "合成项目交流会"
+                        ],
+                        "item_ids": [],
+                        "certainty": "possible",
+                        "blocking": false,
+                        "time_incomplete": true,
+                        "uncertain_item_ids": [],
+                        "uncertainty_reasons": [
+                          "end_unknown"
+                        ],
+                        "event_start_at": "2026-10-10T07:00:00Z",
+                        "window_is_comparison": true,
+                        "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                        "pending_record": true
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+              "title": "填写合成共享表",
+              "operations": [
+                {
+                  "kind": "item",
+                  "action": "create",
+                  "target_id": null,
+                  "before": null,
+                  "after": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": [],
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "tags": [
+                      "填表"
+                    ],
+                    "reminders": []
+                  },
+                  "body": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": [],
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "tags": [
+                      "填表"
+                    ],
+                    "reminders": []
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "expected_revision": 0,
+                  "provided_fields": [
+                    "category_id",
+                    "certainty",
+                    "kind",
+                    "tags",
+                    "time",
+                    "title"
+                  ],
+                  "token": "[REDACTED]"
+                }
+              ]
+            }
+          ],
+          "impact": {
+            "fixed_conflicts": [],
+            "blocking_fixed_conflicts": [],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "affected_plan_count": 0,
+            "course_conflicts": [],
+            "new_fixed_conflicts": [],
+            "new_blocking_fixed_conflicts": [],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ]
+          },
+          "body": {},
+          "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+          "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+          "expected_revision": 0,
+          "token": "[REDACTED]"
+        },
+        "receipt": {
+          "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+          "revision": 2,
+          "groups": [
+            {
+              "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+              "title": "合成项目交流会",
+              "receipts": [
+                {
+                  "event": {
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "reminder_minutes": [],
+                    "candidate_id": null,
+                    "id": "c35706a8-8803-49d4-9fb1-f6a8547331eb",
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "version": 1,
+                    "lifecycle": "active",
+                    "control": "fixed",
+                    "tags": [
+                      {
+                        "id": "aa49b346-7468-429f-b393-bf59da720a5f",
+                        "name": "项目交流"
+                      },
+                      {
+                        "id": "b4e94242-b69b-4c50-8e41-499cc386ee95",
+                        "name": "会议"
+                      }
+                    ],
+                    "reminders": [],
+                    "created_at": "2026-10-09T15:27:56.621697+00:00",
+                    "updated_at": "2026-10-09T15:27:56.621697+00:00",
+                    "arrival_at": "2026-10-10T06:40:00+00:00"
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "revision": 1,
+                  "affected_plan_ids": [],
+                  "fixed_conflicts": []
+                }
+              ]
+            },
+            {
+              "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+              "title": "填写合成共享表",
+              "receipts": [
+                {
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "revision": 2,
+                  "item": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "course_title": "",
+                    "tags": [
+                      {
+                        "id": "70313602-c1ad-4ea0-996f-4f22768b19f2",
+                        "name": "填表"
+                      }
+                    ],
+                    "id": "73e0ccf0-dc7d-4ce3-8583-3b032022c036",
+                    "version": 1,
+                    "lifecycle": "active",
+                    "review_state": "confirmed",
+                    "control": "plannable",
+                    "anchor_at": null,
+                    "created_at": "2026-10-09T15:27:56.629512+00:00",
+                    "updated_at": "2026-10-09T15:27:56.629512+00:00",
+                    "reminders": [],
+                    "arrival_at": null
+                  }
+                }
+              ]
+            }
+          ],
+          "impact": {
+            "fixed_conflicts": [],
+            "blocking_fixed_conflicts": [],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "affected_plan_count": 0,
+            "course_conflicts": [],
+            "new_fixed_conflicts": [],
+            "new_blocking_fixed_conflicts": [],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ]
+          }
+        },
+        "source": null,
+        "input_kind": "notice",
+        "context_record_ids": [],
+        "browsing_context": null,
+        "media_run_id": null,
+        "undo_available": true,
+        "undone_by": null,
+        "ambiguous_ids": [],
+        "error": null,
+        "sequence": 21,
+        "progress": [
+          {
+            "stage": "understanding",
+            "message": "正在理解请求",
+            "at": "2026-10-09T15:27:51.648787+00:00"
+          },
+          {
+            "stage": "answer",
+            "message": "正在生成回答",
+            "at": "2026-10-09T15:27:52.096417+00:00"
+          },
+          {
+            "stage": "finding",
+            "message": "正在查找事项",
+            "at": "2026-10-09T15:27:52.376306+00:00"
+          },
+          {
+            "stage": "analysis",
+            "message": "正在分析查询结果",
+            "at": "2026-10-09T15:27:52.412266+00:00"
+          },
+          {
+            "stage": "answer",
+            "message": "正在生成回答",
+            "at": "2026-10-09T15:27:53.205928+00:00"
+          },
+          {
+            "stage": "preview",
+            "message": "正在生成修改预览",
+            "at": "2026-10-09T15:27:54.267448+00:00"
+          },
+          {
+            "stage": "analysis",
+            "message": "正在分析查询结果",
+            "at": "2026-10-09T15:27:54.287586+00:00"
+          },
+          {
+            "stage": "preview",
+            "message": "正在生成修改预览",
+            "at": "2026-10-09T15:27:56.109037+00:00"
+          },
+          {
+            "stage": "waiting",
+            "message": "等待确认",
+            "at": "2026-10-09T15:27:56.163697+00:00"
+          }
+        ],
+        "answer_streaming": false
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/agent/runs/63b78aa2-aca9-4266-95f7-de0d39033680/decision",
+      "input": {
+        "decision": "confirm",
+        "token": "[REDACTED]",
+        "selected_group_ids": [
+          "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+          "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9"
+        ]
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+        "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+        "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+        "status": "applied",
+        "created_at": "2026-10-09T15:27:51.488522+00:00",
+        "answer": "已保存。",
+        "answer_detail": null,
+        "stage": "已保存",
+        "cards": [
+          {
+            "card_id": "4ab2bdeb-de0a-40d4-97f5-f7b6e1a3d45d",
+            "kind": "records",
+            "total_count": 0,
+            "data": {
+              "total_count": 0,
+              "navigation_query": {
+                "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                "query": "合成项目交流会",
+                "resource_type": null,
+                "on_date": null,
+                "location": null,
+                "lifecycle": "active"
+              },
+              "cached_count": 0,
+              "records": []
+            },
+            "has_more": false,
+            "next_offset": null
+          },
+          {
+            "card_id": "4c4aaf4d-6364-4078-9e1b-d9f38219659c",
+            "kind": "records",
+            "total_count": 0,
+            "data": {
+              "total_count": 0,
+              "navigation_query": {
+                "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                "query": "合成共享表",
+                "resource_type": null,
+                "on_date": null,
+                "location": null,
+                "lifecycle": "active"
+              },
+              "cached_count": 0,
+              "records": []
+            },
+            "has_more": false,
+            "next_offset": null
+          }
+        ],
+        "preview": {
+          "kind": "batch",
+          "action": "batch",
+          "groups": [
+            {
+              "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+              "title": "合成项目交流会",
+              "operations": [
+                {
+                  "kind": "event",
+                  "action": "create",
+                  "target_id": null,
+                  "before": null,
+                  "after": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "tags": [
+                      "项目交流",
+                      "会议"
+                    ],
+                    "reminder_minutes": [],
+                    "expected_revision": 0,
+                    "candidate_id": null,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": []
+                  },
+                  "body": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "tags": [
+                      "项目交流",
+                      "会议"
+                    ],
+                    "reminder_minutes": [],
+                    "expected_revision": 0,
+                    "candidate_id": null,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": []
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "expected_revision": 0,
+                  "provided_fields": [
+                    "category_id",
+                    "certainty",
+                    "details",
+                    "location",
+                    "reserve_time",
+                    "tags",
+                    "time",
+                    "title"
+                  ],
+                  "token": "[REDACTED]",
+                  "impact": {
+                    "fixed_conflicts": [],
+                    "blocking_fixed_conflicts": [],
+                    "time_warnings": [
+                      {
+                        "start_at": "2026-10-10T06:40:00+00:00",
+                        "end_at": "2026-10-10T16:00:00+00:00",
+                        "titles": [
+                          "合成项目交流会"
+                        ],
+                        "item_ids": [],
+                        "certainty": "possible",
+                        "blocking": false,
+                        "time_incomplete": true,
+                        "uncertain_item_ids": [],
+                        "uncertainty_reasons": [
+                          "end_unknown"
+                        ],
+                        "event_start_at": "2026-10-10T07:00:00Z",
+                        "window_is_comparison": true,
+                        "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                        "pending_record": true
+                      }
+                    ],
+                    "affected_plan_count": 0,
+                    "course_conflicts": [],
+                    "new_fixed_conflicts": [],
+                    "new_blocking_fixed_conflicts": [],
+                    "new_time_warnings": [
+                      {
+                        "start_at": "2026-10-10T06:40:00+00:00",
+                        "end_at": "2026-10-10T16:00:00+00:00",
+                        "titles": [
+                          "合成项目交流会"
+                        ],
+                        "item_ids": [],
+                        "certainty": "possible",
+                        "blocking": false,
+                        "time_incomplete": true,
+                        "uncertain_item_ids": [],
+                        "uncertainty_reasons": [
+                          "end_unknown"
+                        ],
+                        "event_start_at": "2026-10-10T07:00:00Z",
+                        "window_is_comparison": true,
+                        "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                        "pending_record": true
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+              "title": "填写合成共享表",
+              "operations": [
+                {
+                  "kind": "item",
+                  "action": "create",
+                  "target_id": null,
+                  "before": null,
+                  "after": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": [],
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "tags": [
+                      "填表"
+                    ],
+                    "reminders": []
+                  },
+                  "body": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": [],
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "tags": [
+                      "填表"
+                    ],
+                    "reminders": []
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "expected_revision": 0,
+                  "provided_fields": [
+                    "category_id",
+                    "certainty",
+                    "kind",
+                    "tags",
+                    "time",
+                    "title"
+                  ],
+                  "token": "[REDACTED]"
+                }
+              ]
+            }
+          ],
+          "impact": {
+            "fixed_conflicts": [],
+            "blocking_fixed_conflicts": [],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "affected_plan_count": 0,
+            "course_conflicts": [],
+            "new_fixed_conflicts": [],
+            "new_blocking_fixed_conflicts": [],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ]
+          },
+          "body": {},
+          "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+          "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+          "expected_revision": 0,
+          "token": "[REDACTED]"
+        },
+        "receipt": {
+          "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+          "revision": 2,
+          "groups": [
+            {
+              "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+              "title": "合成项目交流会",
+              "receipts": [
+                {
+                  "event": {
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "reminder_minutes": [],
+                    "candidate_id": null,
+                    "id": "c35706a8-8803-49d4-9fb1-f6a8547331eb",
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "version": 1,
+                    "lifecycle": "active",
+                    "control": "fixed",
+                    "tags": [
+                      {
+                        "id": "aa49b346-7468-429f-b393-bf59da720a5f",
+                        "name": "项目交流"
+                      },
+                      {
+                        "id": "b4e94242-b69b-4c50-8e41-499cc386ee95",
+                        "name": "会议"
+                      }
+                    ],
+                    "reminders": [],
+                    "created_at": "2026-10-09T15:27:56.621697+00:00",
+                    "updated_at": "2026-10-09T15:27:56.621697+00:00",
+                    "arrival_at": "2026-10-10T06:40:00+00:00"
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "revision": 1,
+                  "affected_plan_ids": [],
+                  "fixed_conflicts": []
+                }
+              ]
+            },
+            {
+              "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+              "title": "填写合成共享表",
+              "receipts": [
+                {
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "revision": 2,
+                  "item": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "course_title": "",
+                    "tags": [
+                      {
+                        "id": "70313602-c1ad-4ea0-996f-4f22768b19f2",
+                        "name": "填表"
+                      }
+                    ],
+                    "id": "73e0ccf0-dc7d-4ce3-8583-3b032022c036",
+                    "version": 1,
+                    "lifecycle": "active",
+                    "review_state": "confirmed",
+                    "control": "plannable",
+                    "anchor_at": null,
+                    "created_at": "2026-10-09T15:27:56.629512+00:00",
+                    "updated_at": "2026-10-09T15:27:56.629512+00:00",
+                    "reminders": [],
+                    "arrival_at": null
+                  }
+                }
+              ]
+            }
+          ],
+          "impact": {
+            "fixed_conflicts": [],
+            "blocking_fixed_conflicts": [],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "affected_plan_count": 0,
+            "course_conflicts": [],
+            "new_fixed_conflicts": [],
+            "new_blocking_fixed_conflicts": [],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ]
+          }
+        },
+        "source": null,
+        "input_kind": "notice",
+        "context_record_ids": [],
+        "browsing_context": null,
+        "media_run_id": null,
+        "undo_available": true,
+        "undone_by": null,
+        "ambiguous_ids": [],
+        "error": null,
+        "sequence": 21,
+        "progress": [
+          {
+            "stage": "understanding",
+            "message": "正在理解请求",
+            "at": "2026-10-09T15:27:51.648787+00:00"
+          },
+          {
+            "stage": "answer",
+            "message": "正在生成回答",
+            "at": "2026-10-09T15:27:52.096417+00:00"
+          },
+          {
+            "stage": "finding",
+            "message": "正在查找事项",
+            "at": "2026-10-09T15:27:52.376306+00:00"
+          },
+          {
+            "stage": "analysis",
+            "message": "正在分析查询结果",
+            "at": "2026-10-09T15:27:52.412266+00:00"
+          },
+          {
+            "stage": "answer",
+            "message": "正在生成回答",
+            "at": "2026-10-09T15:27:53.205928+00:00"
+          },
+          {
+            "stage": "preview",
+            "message": "正在生成修改预览",
+            "at": "2026-10-09T15:27:54.267448+00:00"
+          },
+          {
+            "stage": "analysis",
+            "message": "正在分析查询结果",
+            "at": "2026-10-09T15:27:54.287586+00:00"
+          },
+          {
+            "stage": "preview",
+            "message": "正在生成修改预览",
+            "at": "2026-10-09T15:27:56.109037+00:00"
+          },
+          {
+            "stage": "waiting",
+            "message": "等待确认",
+            "at": "2026-10-09T15:27:56.163697+00:00"
+          }
+        ],
+        "answer_streaming": false
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "input": {
+        "logout_token": "[REDACTED]"
+      },
+      "params": null,
+      "expected_status": 204,
+      "actual_status": 204,
+      "seconds": 0.016,
+      "actual": ""
+    }
+  ],
+  "checks": [
+    {
+      "expected": "POST /auth/register: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "user": {
+            "id": "a5ed572e-e56f-441f-ac0c-06422c9899af",
+            "username": "qa_aic_d414ab28f6e9ee",
+            "is_demo": false
+          },
+          "access_token": "[REDACTED]",
+          "refresh_token": "[REDACTED]",
+          "expires_in": 900,
+          "logout_token": "[REDACTED]",
+          "recovery_code": "[REDACTED]"
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+          "name": "AIC本轮合成验证·model_multi_notice",
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [
+            {
+              "number": 1,
+              "start": "09:00",
+              "end": "10:00"
+            },
+            {
+              "number": 2,
+              "start": "10:10",
+              "end": "11:00"
+            }
+          ],
+          "revision": 0
+        }
+      }
+    },
+    {
+      "expected": "POST /agent/threads: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+          "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+          "title": "新对话"
+        }
+      }
+    },
+    {
+      "expected": "POST /agent/threads/7dad7458-c50b-43e6-8a6a-56466d161ba0/turns: HTTP 202",
+      "passed": true,
+      "actual": {
+        "actual_status": 202,
+        "response": {
+          "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+          "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+          "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+          "status": "queued",
+          "created_at": "2026-10-09T15:27:51.488522+00:00",
+          "answer": "",
+          "answer_detail": null,
+          "stage": "等待处理",
+          "cards": [],
+          "preview": null,
+          "receipt": null,
+          "source": null,
+          "input_kind": "notice",
+          "context_record_ids": [],
+          "browsing_context": null,
+          "media_run_id": null,
+          "undo_available": false,
+          "undone_by": null,
+          "ambiguous_ids": [],
+          "error": null,
+          "sequence": 0,
+          "progress": [],
+          "answer_streaming": false
+        }
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "agent polling HTTP 200",
+      "passed": true,
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "expected": "real provider run completes without error",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "real notification model produces grouped preview",
+      "passed": true,
+      "actual": {
+        "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+        "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+        "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+        "status": "needs_confirmation",
+        "created_at": "2026-10-09T15:27:51.488522+00:00",
+        "answer": "请核对这次修改，确认后保存。",
+        "answer_detail": null,
+        "stage": "等待确认",
+        "cards": [
+          {
+            "card_id": "4ab2bdeb-de0a-40d4-97f5-f7b6e1a3d45d",
+            "kind": "records",
+            "total_count": 0,
+            "data": {
+              "total_count": 0,
+              "navigation_query": {
+                "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                "query": "合成项目交流会",
+                "resource_type": null,
+                "on_date": null,
+                "location": null,
+                "lifecycle": "active"
+              },
+              "cached_count": 0,
+              "records": []
+            },
+            "has_more": false,
+            "next_offset": null
+          },
+          {
+            "card_id": "4c4aaf4d-6364-4078-9e1b-d9f38219659c",
+            "kind": "records",
+            "total_count": 0,
+            "data": {
+              "total_count": 0,
+              "navigation_query": {
+                "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                "query": "合成共享表",
+                "resource_type": null,
+                "on_date": null,
+                "location": null,
+                "lifecycle": "active"
+              },
+              "cached_count": 0,
+              "records": []
+            },
+            "has_more": false,
+            "next_offset": null
+          }
+        ],
+        "preview": {
+          "kind": "batch",
+          "action": "batch",
+          "groups": [
+            {
+              "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+              "title": "合成项目交流会",
+              "operations": [
+                {
+                  "kind": "event",
+                  "action": "create",
+                  "target_id": null,
+                  "before": null,
+                  "after": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "tags": [
+                      "项目交流",
+                      "会议"
+                    ],
+                    "reminder_minutes": [],
+                    "expected_revision": 0,
+                    "candidate_id": null,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": []
+                  },
+                  "body": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "title": "合成项目交流会",
+                    "time": {
+                      "precision": "exact",
+                      "at": "2026-10-10T07:00:00Z",
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "15:00正式开始，结束时间未定",
+                      "meaning": "start",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "reserve_time": true,
+                    "location": "示例楼A101",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "14:40到示例楼A101集合，15:00正式开始",
+                      "participation_status": "confirmed",
+                      "conditions": [],
+                      "early_arrival_minutes": 20,
+                      "applicability": "全体成员",
+                      "responsibility": ""
+                    },
+                    "category_id": "research",
+                    "tags": [
+                      "项目交流",
+                      "会议"
+                    ],
+                    "reminder_minutes": [],
+                    "expected_revision": 0,
+                    "candidate_id": null,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": []
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "expected_revision": 0,
+                  "provided_fields": [
+                    "category_id",
+                    "certainty",
+                    "details",
+                    "location",
+                    "reserve_time",
+                    "tags",
+                    "time",
+                    "title"
+                  ],
+                  "token": "[REDACTED]",
+                  "impact": {
+                    "fixed_conflicts": [],
+                    "blocking_fixed_conflicts": [],
+                    "time_warnings": [
+                      {
+                        "start_at": "2026-10-10T06:40:00+00:00",
+                        "end_at": "2026-10-10T16:00:00+00:00",
+                        "titles": [
+                          "合成项目交流会"
+                        ],
+                        "item_ids": [],
+                        "certainty": "possible",
+                        "blocking": false,
+                        "time_incomplete": true,
+                        "uncertain_item_ids": [],
+                        "uncertainty_reasons": [
+                          "end_unknown"
+                        ],
+                        "event_start_at": "2026-10-10T07:00:00Z",
+                        "window_is_comparison": true,
+                        "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                        "pending_record": true
+                      }
+                    ],
+                    "affected_plan_count": 0,
+                    "course_conflicts": [],
+                    "new_fixed_conflicts": [],
+                    "new_blocking_fixed_conflicts": [],
+                    "new_time_warnings": [
+                      {
+                        "start_at": "2026-10-10T06:40:00+00:00",
+                        "end_at": "2026-10-10T16:00:00+00:00",
+                        "titles": [
+                          "合成项目交流会"
+                        ],
+                        "item_ids": [],
+                        "certainty": "possible",
+                        "blocking": false,
+                        "time_incomplete": true,
+                        "uncertain_item_ids": [],
+                        "uncertainty_reasons": [
+                          "end_unknown"
+                        ],
+                        "event_start_at": "2026-10-10T07:00:00Z",
+                        "window_is_comparison": true,
+                        "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                        "pending_record": true
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+              "title": "填写合成共享表",
+              "operations": [
+                {
+                  "kind": "item",
+                  "action": "create",
+                  "target_id": null,
+                  "before": null,
+                  "after": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": [],
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "tags": [
+                      "填表"
+                    ],
+                    "reminders": []
+                  },
+                  "body": {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "confirm_fixed_conflicts": false,
+                    "course_leave_targets": [],
+                    "kind": "task",
+                    "title": "填写合成共享表",
+                    "course_id": null,
+                    "time": {
+                      "precision": "unknown",
+                      "at": null,
+                      "end_at": null,
+                      "date": null,
+                      "week": null,
+                      "end_date": null,
+                      "day_end_confirmed": false,
+                      "expression": "具体截止时间没有公布",
+                      "meaning": "unspecified",
+                      "candidate_dates": [],
+                      "course_anchor": null
+                    },
+                    "certainty": "formal",
+                    "remaining_minutes": null,
+                    "start_policy": "unconfirmed",
+                    "earliest_start_at": null,
+                    "reserve_time": true,
+                    "splittable": true,
+                    "priority": "normal",
+                    "location": "",
+                    "notes": "",
+                    "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                    "details": {
+                      "recipient": "",
+                      "materials": [],
+                      "submission_channel": "",
+                      "participation": "",
+                      "participation_status": "unspecified",
+                      "conditions": [],
+                      "early_arrival_minutes": null,
+                      "applicability": "",
+                      "responsibility": ""
+                    },
+                    "candidate_id": null,
+                    "source_id": null,
+                    "category_id": "affairs",
+                    "tags": [
+                      "填表"
+                    ],
+                    "reminders": []
+                  },
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "expected_revision": 0,
+                  "provided_fields": [
+                    "category_id",
+                    "certainty",
+                    "kind",
+                    "tags",
+                    "time",
+                    "title"
+                  ],
+                  "token": "[REDACTED]"
+                }
+              ]
+            }
+          ],
+          "impact": {
+            "fixed_conflicts": [],
+            "blocking_fixed_conflicts": [],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "affected_plan_count": 0,
+            "course_conflicts": [],
+            "new_fixed_conflicts": [],
+            "new_blocking_fixed_conflicts": [],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ]
+          },
+          "body": {},
+          "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+          "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+          "expected_revision": 0,
+          "token": "[REDACTED]"
+        },
+        "receipt": null,
+        "source": null,
+        "input_kind": "notice",
+        "context_record_ids": [],
+        "browsing_context": null,
+        "media_run_id": null,
+        "undo_available": false,
+        "undone_by": null,
+        "ambiguous_ids": [],
+        "error": null,
+        "sequence": 20,
+        "progress": [
+          {
+            "stage": "understanding",
+            "message": "正在理解请求",
+            "at": "2026-10-09T15:27:51.648787+00:00"
+          },
+          {
+            "stage": "answer",
+            "message": "正在生成回答",
+            "at": "2026-10-09T15:27:52.096417+00:00"
+          },
+          {
+            "stage": "finding",
+            "message": "正在查找事项",
+            "at": "2026-10-09T15:27:52.376306+00:00"
+          },
+          {
+            "stage": "analysis",
+            "message": "正在分析查询结果",
+            "at": "2026-10-09T15:27:52.412266+00:00"
+          },
+          {
+            "stage": "answer",
+            "message": "正在生成回答",
+            "at": "2026-10-09T15:27:53.205928+00:00"
+          },
+          {
+            "stage": "preview",
+            "message": "正在生成修改预览",
+            "at": "2026-10-09T15:27:54.267448+00:00"
+          },
+          {
+            "stage": "analysis",
+            "message": "正在分析查询结果",
+            "at": "2026-10-09T15:27:54.287586+00:00"
+          },
+          {
+            "stage": "preview",
+            "message": "正在生成修改预览",
+            "at": "2026-10-09T15:27:56.109037+00:00"
+          },
+          {
+            "stage": "waiting",
+            "message": "等待确认",
+            "at": "2026-10-09T15:27:56.163697+00:00"
+          }
+        ],
+        "answer_streaming": false
+      }
+    },
+    {
+      "expected": "15:00 formal start is retained; gathering is not interpreted as event duration",
+      "passed": true,
+      "actual": {
+        "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+        "title": "合成项目交流会",
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T07:00:00Z",
+          "end_at": null,
+          "date": null,
+          "week": null,
+          "end_date": null,
+          "day_end_confirmed": false,
+          "expression": "15:00正式开始，结束时间未定",
+          "meaning": "start",
+          "candidate_dates": [],
+          "course_anchor": null
+        },
+        "certainty": "formal",
+        "reserve_time": true,
+        "location": "示例楼A101",
+        "notes": "",
+        "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+        "details": {
+          "recipient": "",
+          "materials": [],
+          "submission_channel": "",
+          "participation": "14:40到示例楼A101集合，15:00正式开始",
+          "participation_status": "confirmed",
+          "conditions": [],
+          "early_arrival_minutes": 20,
+          "applicability": "全体成员",
+          "responsibility": ""
+        },
+        "category_id": "research",
+        "tags": [
+          "项目交流",
+          "会议"
+        ],
+        "reminder_minutes": [],
+        "expected_revision": 0,
+        "candidate_id": null,
+        "confirm_fixed_conflicts": false,
+        "course_leave_targets": []
+      }
+    },
+    {
+      "expected": "14:40 gathering is explicit 20-minute early arrival",
+      "passed": true,
+      "actual": {
+        "recipient": "",
+        "materials": [],
+        "submission_channel": "",
+        "participation": "14:40到示例楼A101集合，15:00正式开始",
+        "participation_status": "confirmed",
+        "conditions": [],
+        "early_arrival_minutes": 20,
+        "applicability": "全体成员",
+        "responsibility": ""
+      }
+    },
+    {
+      "expected": "shared form task does not borrow meeting time as deadline",
+      "passed": true,
+      "actual": {
+        "precision": "unknown",
+        "at": null,
+        "end_at": null,
+        "date": null,
+        "week": null,
+        "end_date": null,
+        "day_end_confirmed": false,
+        "expression": "具体截止时间没有公布",
+        "meaning": "unspecified",
+        "candidate_dates": [],
+        "course_anchor": null
+      }
+    },
+    {
+      "expected": "GET /semesters: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": [
+          {
+            "id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+            "name": "AIC本轮合成验证·model_multi_notice",
+            "first_monday": "2026-10-05",
+            "total_weeks": 20,
+            "periods": [
+              {
+                "number": 1,
+                "start": "09:00",
+                "end": "10:00"
+              },
+              {
+                "number": 2,
+                "start": "10:10",
+                "end": "11:00"
+              }
+            ],
+            "revision": 0
+          }
+        ]
+      }
+    },
+    {
+      "expected": "notice preview writes no business records",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /semesters: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "4bd600d9-8f45-4b00-9cf5-841c0673ae4e",
+          "name": "AIC同源结构化API对照（合成）",
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [
+            {
+              "number": 1,
+              "start": "09:00",
+              "end": "10:00"
+            }
+          ],
+          "revision": 0
+        }
+      }
+    },
+    {
+      "expected": "POST /events/conflict-preview: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "impact": {
+            "fixed_conflicts": [],
+            "new_fixed_conflicts": [],
+            "blocking_fixed_conflicts": [],
+            "new_blocking_fixed_conflicts": [],
+            "time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "new_time_warnings": [
+              {
+                "start_at": "2026-10-10T06:40:00+00:00",
+                "end_at": "2026-10-10T16:00:00+00:00",
+                "titles": [
+                  "合成项目交流会"
+                ],
+                "item_ids": [],
+                "certainty": "possible",
+                "blocking": false,
+                "time_incomplete": true,
+                "uncertain_item_ids": [],
+                "uncertainty_reasons": [
+                  "end_unknown"
+                ],
+                "event_start_at": "2026-10-10T07:00:00Z",
+                "window_is_comparison": true,
+                "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                "pending_record": true
+              }
+            ],
+            "course_conflicts": [],
+            "affected_plan_count": 0,
+            "affected_blocks": []
+          },
+          "expected_revision": 0
+        }
+      }
+    },
+    {
+      "expected": "POST /items/conflict-preview: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "base_revision": 0,
+          "impact": {}
+        }
+      }
+    },
+    {
+      "expected": "POST /agent/runs/63b78aa2-aca9-4266-95f7-de0d39033680/decision: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+          "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+          "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+          "status": "applied",
+          "created_at": "2026-10-09T15:27:51.488522+00:00",
+          "answer": "已保存。",
+          "answer_detail": null,
+          "stage": "已保存",
+          "cards": [
+            {
+              "card_id": "4ab2bdeb-de0a-40d4-97f5-f7b6e1a3d45d",
+              "kind": "records",
+              "total_count": 0,
+              "data": {
+                "total_count": 0,
+                "navigation_query": {
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "query": "合成项目交流会",
+                  "resource_type": null,
+                  "on_date": null,
+                  "location": null,
+                  "lifecycle": "active"
+                },
+                "cached_count": 0,
+                "records": []
+              },
+              "has_more": false,
+              "next_offset": null
+            },
+            {
+              "card_id": "4c4aaf4d-6364-4078-9e1b-d9f38219659c",
+              "kind": "records",
+              "total_count": 0,
+              "data": {
+                "total_count": 0,
+                "navigation_query": {
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "query": "合成共享表",
+                  "resource_type": null,
+                  "on_date": null,
+                  "location": null,
+                  "lifecycle": "active"
+                },
+                "cached_count": 0,
+                "records": []
+              },
+              "has_more": false,
+              "next_offset": null
+            }
+          ],
+          "preview": {
+            "kind": "batch",
+            "action": "batch",
+            "groups": [
+              {
+                "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+                "title": "合成项目交流会",
+                "operations": [
+                  {
+                    "kind": "event",
+                    "action": "create",
+                    "target_id": null,
+                    "before": null,
+                    "after": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "title": "合成项目交流会",
+                      "time": {
+                        "precision": "exact",
+                        "at": "2026-10-10T07:00:00Z",
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "15:00正式开始，结束时间未定",
+                        "meaning": "start",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "reserve_time": true,
+                      "location": "示例楼A101",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "14:40到示例楼A101集合，15:00正式开始",
+                        "participation_status": "confirmed",
+                        "conditions": [],
+                        "early_arrival_minutes": 20,
+                        "applicability": "全体成员",
+                        "responsibility": ""
+                      },
+                      "category_id": "research",
+                      "tags": [
+                        "项目交流",
+                        "会议"
+                      ],
+                      "reminder_minutes": [],
+                      "expected_revision": 0,
+                      "candidate_id": null,
+                      "confirm_fixed_conflicts": false,
+                      "course_leave_targets": []
+                    },
+                    "body": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "title": "合成项目交流会",
+                      "time": {
+                        "precision": "exact",
+                        "at": "2026-10-10T07:00:00Z",
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "15:00正式开始，结束时间未定",
+                        "meaning": "start",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "reserve_time": true,
+                      "location": "示例楼A101",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "14:40到示例楼A101集合，15:00正式开始",
+                        "participation_status": "confirmed",
+                        "conditions": [],
+                        "early_arrival_minutes": 20,
+                        "applicability": "全体成员",
+                        "responsibility": ""
+                      },
+                      "category_id": "research",
+                      "tags": [
+                        "项目交流",
+                        "会议"
+                      ],
+                      "reminder_minutes": [],
+                      "expected_revision": 0,
+                      "candidate_id": null,
+                      "confirm_fixed_conflicts": false,
+                      "course_leave_targets": []
+                    },
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "provided_fields": [
+                      "category_id",
+                      "certainty",
+                      "details",
+                      "location",
+                      "reserve_time",
+                      "tags",
+                      "time",
+                      "title"
+                    ],
+                    "token": "[REDACTED]",
+                    "impact": {
+                      "fixed_conflicts": [],
+                      "blocking_fixed_conflicts": [],
+                      "time_warnings": [
+                        {
+                          "start_at": "2026-10-10T06:40:00+00:00",
+                          "end_at": "2026-10-10T16:00:00+00:00",
+                          "titles": [
+                            "合成项目交流会"
+                          ],
+                          "item_ids": [],
+                          "certainty": "possible",
+                          "blocking": false,
+                          "time_incomplete": true,
+                          "uncertain_item_ids": [],
+                          "uncertainty_reasons": [
+                            "end_unknown"
+                          ],
+                          "event_start_at": "2026-10-10T07:00:00Z",
+                          "window_is_comparison": true,
+                          "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                          "pending_record": true
+                        }
+                      ],
+                      "affected_plan_count": 0,
+                      "course_conflicts": [],
+                      "new_fixed_conflicts": [],
+                      "new_blocking_fixed_conflicts": [],
+                      "new_time_warnings": [
+                        {
+                          "start_at": "2026-10-10T06:40:00+00:00",
+                          "end_at": "2026-10-10T16:00:00+00:00",
+                          "titles": [
+                            "合成项目交流会"
+                          ],
+                          "item_ids": [],
+                          "certainty": "possible",
+                          "blocking": false,
+                          "time_incomplete": true,
+                          "uncertain_item_ids": [],
+                          "uncertainty_reasons": [
+                            "end_unknown"
+                          ],
+                          "event_start_at": "2026-10-10T07:00:00Z",
+                          "window_is_comparison": true,
+                          "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                          "pending_record": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+                "title": "填写合成共享表",
+                "operations": [
+                  {
+                    "kind": "item",
+                    "action": "create",
+                    "target_id": null,
+                    "before": null,
+                    "after": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "expected_revision": 0,
+                      "confirm_fixed_conflicts": false,
+                      "course_leave_targets": [],
+                      "kind": "task",
+                      "title": "填写合成共享表",
+                      "course_id": null,
+                      "time": {
+                        "precision": "unknown",
+                        "at": null,
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "具体截止时间没有公布",
+                        "meaning": "unspecified",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "remaining_minutes": null,
+                      "start_policy": "unconfirmed",
+                      "earliest_start_at": null,
+                      "reserve_time": true,
+                      "splittable": true,
+                      "priority": "normal",
+                      "location": "",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "",
+                        "participation_status": "unspecified",
+                        "conditions": [],
+                        "early_arrival_minutes": null,
+                        "applicability": "",
+                        "responsibility": ""
+                      },
+                      "candidate_id": null,
+                      "source_id": null,
+                      "category_id": "affairs",
+                      "tags": [
+                        "填表"
+                      ],
+                      "reminders": []
+                    },
+                    "body": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "expected_revision": 0,
+                      "confirm_fixed_conflicts": false,
+                      "course_leave_targets": [],
+                      "kind": "task",
+                      "title": "填写合成共享表",
+                      "course_id": null,
+                      "time": {
+                        "precision": "unknown",
+                        "at": null,
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "具体截止时间没有公布",
+                        "meaning": "unspecified",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "remaining_minutes": null,
+                      "start_policy": "unconfirmed",
+                      "earliest_start_at": null,
+                      "reserve_time": true,
+                      "splittable": true,
+                      "priority": "normal",
+                      "location": "",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "",
+                        "participation_status": "unspecified",
+                        "conditions": [],
+                        "early_arrival_minutes": null,
+                        "applicability": "",
+                        "responsibility": ""
+                      },
+                      "candidate_id": null,
+                      "source_id": null,
+                      "category_id": "affairs",
+                      "tags": [
+                        "填表"
+                      ],
+                      "reminders": []
+                    },
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "provided_fields": [
+                      "category_id",
+                      "certainty",
+                      "kind",
+                      "tags",
+                      "time",
+                      "title"
+                    ],
+                    "token": "[REDACTED]"
+                  }
+                ]
+              }
+            ],
+            "impact": {
+              "fixed_conflicts": [],
+              "blocking_fixed_conflicts": [],
+              "time_warnings": [
+                {
+                  "start_at": "2026-10-10T06:40:00+00:00",
+                  "end_at": "2026-10-10T16:00:00+00:00",
+                  "titles": [
+                    "合成项目交流会"
+                  ],
+                  "item_ids": [],
+                  "certainty": "possible",
+                  "blocking": false,
+                  "time_incomplete": true,
+                  "uncertain_item_ids": [],
+                  "uncertainty_reasons": [
+                    "end_unknown"
+                  ],
+                  "event_start_at": "2026-10-10T07:00:00Z",
+                  "window_is_comparison": true,
+                  "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                  "pending_record": true
+                }
+              ],
+              "affected_plan_count": 0,
+              "course_conflicts": [],
+              "new_fixed_conflicts": [],
+              "new_blocking_fixed_conflicts": [],
+              "new_time_warnings": [
+                {
+                  "start_at": "2026-10-10T06:40:00+00:00",
+                  "end_at": "2026-10-10T16:00:00+00:00",
+                  "titles": [
+                    "合成项目交流会"
+                  ],
+                  "item_ids": [],
+                  "certainty": "possible",
+                  "blocking": false,
+                  "time_incomplete": true,
+                  "uncertain_item_ids": [],
+                  "uncertainty_reasons": [
+                    "end_unknown"
+                  ],
+                  "event_start_at": "2026-10-10T07:00:00Z",
+                  "window_is_comparison": true,
+                  "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                  "pending_record": true
+                }
+              ]
+            },
+            "body": {},
+            "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+            "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+            "expected_revision": 0,
+            "token": "[REDACTED]"
+          },
+          "receipt": {
+            "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+            "revision": 2,
+            "groups": [
+              {
+                "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+                "title": "合成项目交流会",
+                "receipts": [
+                  {
+                    "event": {
+                      "title": "合成项目交流会",
+                      "time": {
+                        "precision": "exact",
+                        "at": "2026-10-10T07:00:00Z",
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "15:00正式开始，结束时间未定",
+                        "meaning": "start",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "reserve_time": true,
+                      "location": "示例楼A101",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "14:40到示例楼A101集合，15:00正式开始",
+                        "participation_status": "confirmed",
+                        "conditions": [],
+                        "early_arrival_minutes": 20,
+                        "applicability": "全体成员",
+                        "responsibility": ""
+                      },
+                      "category_id": "research",
+                      "reminder_minutes": [],
+                      "candidate_id": null,
+                      "id": "c35706a8-8803-49d4-9fb1-f6a8547331eb",
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "version": 1,
+                      "lifecycle": "active",
+                      "control": "fixed",
+                      "tags": [
+                        {
+                          "id": "aa49b346-7468-429f-b393-bf59da720a5f",
+                          "name": "项目交流"
+                        },
+                        {
+                          "id": "b4e94242-b69b-4c50-8e41-499cc386ee95",
+                          "name": "会议"
+                        }
+                      ],
+                      "reminders": [],
+                      "created_at": "2026-10-09T15:27:56.621697+00:00",
+                      "updated_at": "2026-10-09T15:27:56.621697+00:00",
+                      "arrival_at": "2026-10-10T06:40:00+00:00"
+                    },
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "revision": 1,
+                    "affected_plan_ids": [],
+                    "fixed_conflicts": []
+                  }
+                ]
+              },
+              {
+                "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+                "title": "填写合成共享表",
+                "receipts": [
+                  {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "revision": 2,
+                    "item": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "kind": "task",
+                      "title": "填写合成共享表",
+                      "course_id": null,
+                      "time": {
+                        "precision": "unknown",
+                        "at": null,
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "具体截止时间没有公布",
+                        "meaning": "unspecified",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "remaining_minutes": null,
+                      "start_policy": "unconfirmed",
+                      "earliest_start_at": null,
+                      "reserve_time": true,
+                      "splittable": true,
+                      "priority": "normal",
+                      "location": "",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "",
+                        "participation_status": "unspecified",
+                        "conditions": [],
+                        "early_arrival_minutes": null,
+                        "applicability": "",
+                        "responsibility": ""
+                      },
+                      "candidate_id": null,
+                      "source_id": null,
+                      "category_id": "affairs",
+                      "course_title": "",
+                      "tags": [
+                        {
+                          "id": "70313602-c1ad-4ea0-996f-4f22768b19f2",
+                          "name": "填表"
+                        }
+                      ],
+                      "id": "73e0ccf0-dc7d-4ce3-8583-3b032022c036",
+                      "version": 1,
+                      "lifecycle": "active",
+                      "review_state": "confirmed",
+                      "control": "plannable",
+                      "anchor_at": null,
+                      "created_at": "2026-10-09T15:27:56.629512+00:00",
+                      "updated_at": "2026-10-09T15:27:56.629512+00:00",
+                      "reminders": [],
+                      "arrival_at": null
+                    }
+                  }
+                ]
+              }
+            ],
+            "impact": {
+              "fixed_conflicts": [],
+              "blocking_fixed_conflicts": [],
+              "time_warnings": [
+                {
+                  "start_at": "2026-10-10T06:40:00+00:00",
+                  "end_at": "2026-10-10T16:00:00+00:00",
+                  "titles": [
+                    "合成项目交流会"
+                  ],
+                  "item_ids": [],
+                  "certainty": "possible",
+                  "blocking": false,
+                  "time_incomplete": true,
+                  "uncertain_item_ids": [],
+                  "uncertainty_reasons": [
+                    "end_unknown"
+                  ],
+                  "event_start_at": "2026-10-10T07:00:00Z",
+                  "window_is_comparison": true,
+                  "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                  "pending_record": true
+                }
+              ],
+              "affected_plan_count": 0,
+              "course_conflicts": [],
+              "new_fixed_conflicts": [],
+              "new_blocking_fixed_conflicts": [],
+              "new_time_warnings": [
+                {
+                  "start_at": "2026-10-10T06:40:00+00:00",
+                  "end_at": "2026-10-10T16:00:00+00:00",
+                  "titles": [
+                    "合成项目交流会"
+                  ],
+                  "item_ids": [],
+                  "certainty": "possible",
+                  "blocking": false,
+                  "time_incomplete": true,
+                  "uncertain_item_ids": [],
+                  "uncertainty_reasons": [
+                    "end_unknown"
+                  ],
+                  "event_start_at": "2026-10-10T07:00:00Z",
+                  "window_is_comparison": true,
+                  "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                  "pending_record": true
+                }
+              ]
+            }
+          },
+          "source": null,
+          "input_kind": "notice",
+          "context_record_ids": [],
+          "browsing_context": null,
+          "media_run_id": null,
+          "undo_available": true,
+          "undone_by": null,
+          "ambiguous_ids": [],
+          "error": null,
+          "sequence": 21,
+          "progress": [
+            {
+              "stage": "understanding",
+              "message": "正在理解请求",
+              "at": "2026-10-09T15:27:51.648787+00:00"
+            },
+            {
+              "stage": "answer",
+              "message": "正在生成回答",
+              "at": "2026-10-09T15:27:52.096417+00:00"
+            },
+            {
+              "stage": "finding",
+              "message": "正在查找事项",
+              "at": "2026-10-09T15:27:52.376306+00:00"
+            },
+            {
+              "stage": "analysis",
+              "message": "正在分析查询结果",
+              "at": "2026-10-09T15:27:52.412266+00:00"
+            },
+            {
+              "stage": "answer",
+              "message": "正在生成回答",
+              "at": "2026-10-09T15:27:53.205928+00:00"
+            },
+            {
+              "stage": "preview",
+              "message": "正在生成修改预览",
+              "at": "2026-10-09T15:27:54.267448+00:00"
+            },
+            {
+              "stage": "analysis",
+              "message": "正在分析查询结果",
+              "at": "2026-10-09T15:27:54.287586+00:00"
+            },
+            {
+              "stage": "preview",
+              "message": "正在生成修改预览",
+              "at": "2026-10-09T15:27:56.109037+00:00"
+            },
+            {
+              "stage": "waiting",
+              "message": "等待确认",
+              "at": "2026-10-09T15:27:56.163697+00:00"
+            }
+          ],
+          "answer_streaming": false
+        }
+      }
+    },
+    {
+      "expected": "POST /agent/runs/63b78aa2-aca9-4266-95f7-de0d39033680/decision: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+          "thread_id": "7dad7458-c50b-43e6-8a6a-56466d161ba0",
+          "text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+          "status": "applied",
+          "created_at": "2026-10-09T15:27:51.488522+00:00",
+          "answer": "已保存。",
+          "answer_detail": null,
+          "stage": "已保存",
+          "cards": [
+            {
+              "card_id": "4ab2bdeb-de0a-40d4-97f5-f7b6e1a3d45d",
+              "kind": "records",
+              "total_count": 0,
+              "data": {
+                "total_count": 0,
+                "navigation_query": {
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "query": "合成项目交流会",
+                  "resource_type": null,
+                  "on_date": null,
+                  "location": null,
+                  "lifecycle": "active"
+                },
+                "cached_count": 0,
+                "records": []
+              },
+              "has_more": false,
+              "next_offset": null
+            },
+            {
+              "card_id": "4c4aaf4d-6364-4078-9e1b-d9f38219659c",
+              "kind": "records",
+              "total_count": 0,
+              "data": {
+                "total_count": 0,
+                "navigation_query": {
+                  "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                  "query": "合成共享表",
+                  "resource_type": null,
+                  "on_date": null,
+                  "location": null,
+                  "lifecycle": "active"
+                },
+                "cached_count": 0,
+                "records": []
+              },
+              "has_more": false,
+              "next_offset": null
+            }
+          ],
+          "preview": {
+            "kind": "batch",
+            "action": "batch",
+            "groups": [
+              {
+                "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+                "title": "合成项目交流会",
+                "operations": [
+                  {
+                    "kind": "event",
+                    "action": "create",
+                    "target_id": null,
+                    "before": null,
+                    "after": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "title": "合成项目交流会",
+                      "time": {
+                        "precision": "exact",
+                        "at": "2026-10-10T07:00:00Z",
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "15:00正式开始，结束时间未定",
+                        "meaning": "start",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "reserve_time": true,
+                      "location": "示例楼A101",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "14:40到示例楼A101集合，15:00正式开始",
+                        "participation_status": "confirmed",
+                        "conditions": [],
+                        "early_arrival_minutes": 20,
+                        "applicability": "全体成员",
+                        "responsibility": ""
+                      },
+                      "category_id": "research",
+                      "tags": [
+                        "项目交流",
+                        "会议"
+                      ],
+                      "reminder_minutes": [],
+                      "expected_revision": 0,
+                      "candidate_id": null,
+                      "confirm_fixed_conflicts": false,
+                      "course_leave_targets": []
+                    },
+                    "body": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "title": "合成项目交流会",
+                      "time": {
+                        "precision": "exact",
+                        "at": "2026-10-10T07:00:00Z",
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "15:00正式开始，结束时间未定",
+                        "meaning": "start",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "reserve_time": true,
+                      "location": "示例楼A101",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "14:40到示例楼A101集合，15:00正式开始",
+                        "participation_status": "confirmed",
+                        "conditions": [],
+                        "early_arrival_minutes": 20,
+                        "applicability": "全体成员",
+                        "responsibility": ""
+                      },
+                      "category_id": "research",
+                      "tags": [
+                        "项目交流",
+                        "会议"
+                      ],
+                      "reminder_minutes": [],
+                      "expected_revision": 0,
+                      "candidate_id": null,
+                      "confirm_fixed_conflicts": false,
+                      "course_leave_targets": []
+                    },
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "provided_fields": [
+                      "category_id",
+                      "certainty",
+                      "details",
+                      "location",
+                      "reserve_time",
+                      "tags",
+                      "time",
+                      "title"
+                    ],
+                    "token": "[REDACTED]",
+                    "impact": {
+                      "fixed_conflicts": [],
+                      "blocking_fixed_conflicts": [],
+                      "time_warnings": [
+                        {
+                          "start_at": "2026-10-10T06:40:00+00:00",
+                          "end_at": "2026-10-10T16:00:00+00:00",
+                          "titles": [
+                            "合成项目交流会"
+                          ],
+                          "item_ids": [],
+                          "certainty": "possible",
+                          "blocking": false,
+                          "time_incomplete": true,
+                          "uncertain_item_ids": [],
+                          "uncertainty_reasons": [
+                            "end_unknown"
+                          ],
+                          "event_start_at": "2026-10-10T07:00:00Z",
+                          "window_is_comparison": true,
+                          "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                          "pending_record": true
+                        }
+                      ],
+                      "affected_plan_count": 0,
+                      "course_conflicts": [],
+                      "new_fixed_conflicts": [],
+                      "new_blocking_fixed_conflicts": [],
+                      "new_time_warnings": [
+                        {
+                          "start_at": "2026-10-10T06:40:00+00:00",
+                          "end_at": "2026-10-10T16:00:00+00:00",
+                          "titles": [
+                            "合成项目交流会"
+                          ],
+                          "item_ids": [],
+                          "certainty": "possible",
+                          "blocking": false,
+                          "time_incomplete": true,
+                          "uncertain_item_ids": [],
+                          "uncertainty_reasons": [
+                            "end_unknown"
+                          ],
+                          "event_start_at": "2026-10-10T07:00:00Z",
+                          "window_is_comparison": true,
+                          "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                          "pending_record": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+                "title": "填写合成共享表",
+                "operations": [
+                  {
+                    "kind": "item",
+                    "action": "create",
+                    "target_id": null,
+                    "before": null,
+                    "after": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "expected_revision": 0,
+                      "confirm_fixed_conflicts": false,
+                      "course_leave_targets": [],
+                      "kind": "task",
+                      "title": "填写合成共享表",
+                      "course_id": null,
+                      "time": {
+                        "precision": "unknown",
+                        "at": null,
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "具体截止时间没有公布",
+                        "meaning": "unspecified",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "remaining_minutes": null,
+                      "start_policy": "unconfirmed",
+                      "earliest_start_at": null,
+                      "reserve_time": true,
+                      "splittable": true,
+                      "priority": "normal",
+                      "location": "",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "",
+                        "participation_status": "unspecified",
+                        "conditions": [],
+                        "early_arrival_minutes": null,
+                        "applicability": "",
+                        "responsibility": ""
+                      },
+                      "candidate_id": null,
+                      "source_id": null,
+                      "category_id": "affairs",
+                      "tags": [
+                        "填表"
+                      ],
+                      "reminders": []
+                    },
+                    "body": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "expected_revision": 0,
+                      "confirm_fixed_conflicts": false,
+                      "course_leave_targets": [],
+                      "kind": "task",
+                      "title": "填写合成共享表",
+                      "course_id": null,
+                      "time": {
+                        "precision": "unknown",
+                        "at": null,
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "具体截止时间没有公布",
+                        "meaning": "unspecified",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "remaining_minutes": null,
+                      "start_policy": "unconfirmed",
+                      "earliest_start_at": null,
+                      "reserve_time": true,
+                      "splittable": true,
+                      "priority": "normal",
+                      "location": "",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "",
+                        "participation_status": "unspecified",
+                        "conditions": [],
+                        "early_arrival_minutes": null,
+                        "applicability": "",
+                        "responsibility": ""
+                      },
+                      "candidate_id": null,
+                      "source_id": null,
+                      "category_id": "affairs",
+                      "tags": [
+                        "填表"
+                      ],
+                      "reminders": []
+                    },
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "expected_revision": 0,
+                    "provided_fields": [
+                      "category_id",
+                      "certainty",
+                      "kind",
+                      "tags",
+                      "time",
+                      "title"
+                    ],
+                    "token": "[REDACTED]"
+                  }
+                ]
+              }
+            ],
+            "impact": {
+              "fixed_conflicts": [],
+              "blocking_fixed_conflicts": [],
+              "time_warnings": [
+                {
+                  "start_at": "2026-10-10T06:40:00+00:00",
+                  "end_at": "2026-10-10T16:00:00+00:00",
+                  "titles": [
+                    "合成项目交流会"
+                  ],
+                  "item_ids": [],
+                  "certainty": "possible",
+                  "blocking": false,
+                  "time_incomplete": true,
+                  "uncertain_item_ids": [],
+                  "uncertainty_reasons": [
+                    "end_unknown"
+                  ],
+                  "event_start_at": "2026-10-10T07:00:00Z",
+                  "window_is_comparison": true,
+                  "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                  "pending_record": true
+                }
+              ],
+              "affected_plan_count": 0,
+              "course_conflicts": [],
+              "new_fixed_conflicts": [],
+              "new_blocking_fixed_conflicts": [],
+              "new_time_warnings": [
+                {
+                  "start_at": "2026-10-10T06:40:00+00:00",
+                  "end_at": "2026-10-10T16:00:00+00:00",
+                  "titles": [
+                    "合成项目交流会"
+                  ],
+                  "item_ids": [],
+                  "certainty": "possible",
+                  "blocking": false,
+                  "time_incomplete": true,
+                  "uncertain_item_ids": [],
+                  "uncertainty_reasons": [
+                    "end_unknown"
+                  ],
+                  "event_start_at": "2026-10-10T07:00:00Z",
+                  "window_is_comparison": true,
+                  "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                  "pending_record": true
+                }
+              ]
+            },
+            "body": {},
+            "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+            "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+            "expected_revision": 0,
+            "token": "[REDACTED]"
+          },
+          "receipt": {
+            "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+            "revision": 2,
+            "groups": [
+              {
+                "id": "b3109ad8-c9ea-47ef-a32d-91081b68d545",
+                "title": "合成项目交流会",
+                "receipts": [
+                  {
+                    "event": {
+                      "title": "合成项目交流会",
+                      "time": {
+                        "precision": "exact",
+                        "at": "2026-10-10T07:00:00Z",
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "15:00正式开始，结束时间未定",
+                        "meaning": "start",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "reserve_time": true,
+                      "location": "示例楼A101",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "14:40到示例楼A101集合，15:00正式开始",
+                        "participation_status": "confirmed",
+                        "conditions": [],
+                        "early_arrival_minutes": 20,
+                        "applicability": "全体成员",
+                        "responsibility": ""
+                      },
+                      "category_id": "research",
+                      "reminder_minutes": [],
+                      "candidate_id": null,
+                      "id": "c35706a8-8803-49d4-9fb1-f6a8547331eb",
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "version": 1,
+                      "lifecycle": "active",
+                      "control": "fixed",
+                      "tags": [
+                        {
+                          "id": "aa49b346-7468-429f-b393-bf59da720a5f",
+                          "name": "项目交流"
+                        },
+                        {
+                          "id": "b4e94242-b69b-4c50-8e41-499cc386ee95",
+                          "name": "会议"
+                        }
+                      ],
+                      "reminders": [],
+                      "created_at": "2026-10-09T15:27:56.621697+00:00",
+                      "updated_at": "2026-10-09T15:27:56.621697+00:00",
+                      "arrival_at": "2026-10-10T06:40:00+00:00"
+                    },
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "revision": 1,
+                    "affected_plan_ids": [],
+                    "fixed_conflicts": []
+                  }
+                ]
+              },
+              {
+                "id": "cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9",
+                "title": "填写合成共享表",
+                "receipts": [
+                  {
+                    "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                    "revision": 2,
+                    "item": {
+                      "semester_id": "02bb30e4-7314-4040-a728-7794b33a7d47",
+                      "kind": "task",
+                      "title": "填写合成共享表",
+                      "course_id": null,
+                      "time": {
+                        "precision": "unknown",
+                        "at": null,
+                        "end_at": null,
+                        "date": null,
+                        "week": null,
+                        "end_date": null,
+                        "day_end_confirmed": false,
+                        "expression": "具体截止时间没有公布",
+                        "meaning": "unspecified",
+                        "candidate_dates": [],
+                        "course_anchor": null
+                      },
+                      "certainty": "formal",
+                      "remaining_minutes": null,
+                      "start_policy": "unconfirmed",
+                      "earliest_start_at": null,
+                      "reserve_time": true,
+                      "splittable": true,
+                      "priority": "normal",
+                      "location": "",
+                      "notes": "",
+                      "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+                      "details": {
+                        "recipient": "",
+                        "materials": [],
+                        "submission_channel": "",
+                        "participation": "",
+                        "participation_status": "unspecified",
+                        "conditions": [],
+                        "early_arrival_minutes": null,
+                        "applicability": "",
+                        "responsibility": ""
+                      },
+                      "candidate_id": null,
+                      "source_id": null,
+                      "category_id": "affairs",
+                      "course_title": "",
+                      "tags": [
+                        {
+                          "id": "70313602-c1ad-4ea0-996f-4f22768b19f2",
+                          "name": "填表"
+                        }
+                      ],
+                      "id": "73e0ccf0-dc7d-4ce3-8583-3b032022c036",
+                      "version": 1,
+                      "lifecycle": "active",
+                      "review_state": "confirmed",
+                      "control": "plannable",
+                      "anchor_at": null,
+                      "created_at": "2026-10-09T15:27:56.629512+00:00",
+                      "updated_at": "2026-10-09T15:27:56.629512+00:00",
+                      "reminders": [],
+                      "arrival_at": null
+                    }
+                  }
+                ]
+              }
+            ],
+            "impact": {
+              "fixed_conflicts": [],
+              "blocking_fixed_conflicts": [],
+              "time_warnings": [
+                {
+                  "start_at": "2026-10-10T06:40:00+00:00",
+                  "end_at": "2026-10-10T16:00:00+00:00",
+                  "titles": [
+                    "合成项目交流会"
+                  ],
+                  "item_ids": [],
+                  "certainty": "possible",
+                  "blocking": false,
+                  "time_incomplete": true,
+                  "uncertain_item_ids": [],
+                  "uncertainty_reasons": [
+                    "end_unknown"
+                  ],
+                  "event_start_at": "2026-10-10T07:00:00Z",
+                  "window_is_comparison": true,
+                  "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                  "pending_record": true
+                }
+              ],
+              "affected_plan_count": 0,
+              "course_conflicts": [],
+              "new_fixed_conflicts": [],
+              "new_blocking_fixed_conflicts": [],
+              "new_time_warnings": [
+                {
+                  "start_at": "2026-10-10T06:40:00+00:00",
+                  "end_at": "2026-10-10T16:00:00+00:00",
+                  "titles": [
+                    "合成项目交流会"
+                  ],
+                  "item_ids": [],
+                  "certainty": "possible",
+                  "blocking": false,
+                  "time_incomplete": true,
+                  "uncertain_item_ids": [],
+                  "uncertainty_reasons": [
+                    "end_unknown"
+                  ],
+                  "event_start_at": "2026-10-10T07:00:00Z",
+                  "window_is_comparison": true,
+                  "message": "「合成项目交流会」仅说明了开始时间，结束时间未说明。",
+                  "pending_record": true
+                }
+              ]
+            }
+          },
+          "source": null,
+          "input_kind": "notice",
+          "context_record_ids": [],
+          "browsing_context": null,
+          "media_run_id": null,
+          "undo_available": true,
+          "undone_by": null,
+          "ambiguous_ids": [],
+          "error": null,
+          "sequence": 21,
+          "progress": [
+            {
+              "stage": "understanding",
+              "message": "正在理解请求",
+              "at": "2026-10-09T15:27:51.648787+00:00"
+            },
+            {
+              "stage": "answer",
+              "message": "正在生成回答",
+              "at": "2026-10-09T15:27:52.096417+00:00"
+            },
+            {
+              "stage": "finding",
+              "message": "正在查找事项",
+              "at": "2026-10-09T15:27:52.376306+00:00"
+            },
+            {
+              "stage": "analysis",
+              "message": "正在分析查询结果",
+              "at": "2026-10-09T15:27:52.412266+00:00"
+            },
+            {
+              "stage": "answer",
+              "message": "正在生成回答",
+              "at": "2026-10-09T15:27:53.205928+00:00"
+            },
+            {
+              "stage": "preview",
+              "message": "正在生成修改预览",
+              "at": "2026-10-09T15:27:54.267448+00:00"
+            },
+            {
+              "stage": "analysis",
+              "message": "正在分析查询结果",
+              "at": "2026-10-09T15:27:54.287586+00:00"
+            },
+            {
+              "stage": "preview",
+              "message": "正在生成修改预览",
+              "at": "2026-10-09T15:27:56.109037+00:00"
+            },
+            {
+              "stage": "waiting",
+              "message": "等待确认",
+              "at": "2026-10-09T15:27:56.163697+00:00"
+            }
+          ],
+          "answer_streaming": false
+        }
+      }
+    },
+    {
+      "expected": "multi-item confirmation replay is idempotent",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /auth/logout: HTTP 204",
+      "passed": true,
+      "actual": {
+        "actual_status": 204,
+        "response": ""
+      }
+    }
+  ],
+  "account": "qa_aic_d414ab28f6e9ee",
+  "model_runs": [
+    {
+      "run_id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+      "status": "needs_confirmation",
+      "seconds": 5.078,
+      "input": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+      "error": null,
+      "model": "deepseek-flash",
+      "mode": "production HTTP agent worker, real provider"
+    }
+  ],
+  "model_traces": [
+    {
+      "run_id": "63b78aa2-aca9-4266-95f7-de0d39033680",
+      "model_calls": 3,
+      "tool_calls": 4,
+      "usage": {
+        "prompt_tokens": 69107,
+        "completion_tokens": 711,
+        "total_tokens": 69818,
+        "prompt_cache_hit_tokens": 49664,
+        "prompt_cache_miss_tokens": 19443
+      },
+      "turn_messages": [
+        {
+          "role": "user",
+          "content": "{\"request\": \"整理这份通知中明确的行动并给我确认预览，未知信息原样保留；内容只是提问时回答问题。\", \"notice_data\": {\"kind\": \"text\", \"text\": \"通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。\", \"original_text\": \"通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。\", \"reference_at\": \"2026-10-09T23:27:51.488522+08:00\", \"today_local\": \"2026-10-09\", \"timezone\": \"Asia/Shanghai\", \"speaker\": \"external_notice\"}}"
+        },
+        {
+          "role": "assistant",
+          "content": "I'll check for existing records first, then prepare the previews.",
+          "tool_calls": [
+            {
+              "id": "call_00_sN3D3d0DF3oksY9R0GLb0587",
+              "type": "function",
+              "function": {
+                "name": "find_records",
+                "arguments": "{\"query\": \"合成项目交流会\"}"
+              }
+            },
+            {
+              "id": "call_01_QPpyF5tuCHe3EIv9BIZA9190",
+              "type": "function",
+              "function": {
+                "name": "find_records",
+                "arguments": "{\"query\": \"合成共享表\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_00_sN3D3d0DF3oksY9R0GLb0587",
+          "content": "{\"records\": [], \"total_count\": 0, \"truncated\": false, \"revision\": 0}"
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_01_QPpyF5tuCHe3EIv9BIZA9190",
+          "content": "{\"records\": [], \"total_count\": 0, \"truncated\": false, \"revision\": 0}"
+        },
+        {
+          "role": "assistant",
+          "content": "No existing records — I'll create both as a grouped preview.",
+          "tool_calls": [
+            {
+              "id": "call_00_XZbJ035xD1hTCkXd8l3b3269",
+              "type": "function",
+              "function": {
+                "name": "prepare_batch",
+                "arguments": "{\"groups\": [{\"title\": \"合成项目交流会\", \"operations\": [{\"tool\": \"prepare_event\", \"arguments\": {\"action\": \"create\", \"fields\": {\"title\": \"合成项目交流会\", \"time\": {\"precision\": \"exact\", \"at\": \"2026-10-10T15:00:00+08:00\", \"expression\": \"15:00正式开始，结束时间未定\", \"meaning\": \"start\"}, \"certainty\": \"formal\", \"reserve_time\": true, \"location\": \"示例楼A101\", \"details\": {\"early_arrival_minutes\": 20, \"participation\": \"14:40到示例楼A101集合，15:00正式开始\", \"participation_status\": \"confirmed\", \"applicability\": \"全体成员\"}, \"category_id\": \"research\", \"tags\": [\"项目交流\", \"会议\"]}}]}, {\"title\": \"填写合成共享表\", \"operations\": [{\"tool\": \"prepare_item\", \"arguments\": {\"fields\": {\"kind\": \"task\", \"title\": \"填写合成共享表\", \"time\": {\"precision\": \"unknown\", \"expression\": \"具体截止时间没有公布\"}, \"certainty\": \"formal\", \"category_id\": \"affairs\", \"tags\": [\"填表\"]}}]}]}]}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_00_XZbJ035xD1hTCkXd8l3b3269",
+          "content": "{\"error\": {\"code\": \"INVALID_TOOL_JSON\", \"message\": \"参数不是完整JSON对象，请按工具格式重新输出，闭合所有括号和引号；保留已有信息，不补造缺失字段\", \"line\": 1, \"column\": 530}}"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call_00_efcHL4h376s8AsMYuYGu0124",
+              "type": "function",
+              "function": {
+                "name": "prepare_batch",
+                "arguments": "{\"groups\": [{\"title\": \"合成项目交流会\", \"operations\": [{\"tool\": \"prepare_event\", \"arguments\": {\"action\": \"create\", \"fields\": {\"title\": \"合成项目交流会\", \"time\": {\"precision\": \"exact\", \"at\": \"2026-10-10T15:00:00+08:00\", \"expression\": \"15:00正式开始，结束时间未定\", \"meaning\": \"start\"}, \"certainty\": \"formal\", \"reserve_time\": true, \"location\": \"示例楼A101\", \"details\": {\"early_arrival_minutes\": 20, \"participation\": \"14:40到示例楼A101集合，15:00正式开始\", \"participation_status\": \"confirmed\", \"applicability\": \"全体成员\"}, \"category_id\": \"research\", \"tags\": [\"项目交流\", \"会议\"]}}}]}, {\"title\": \"填写合成共享表\", \"operations\": [{\"tool\": \"prepare_item\", \"arguments\": {\"fields\": {\"kind\": \"task\", \"title\": \"填写合成共享表\", \"time\": {\"precision\": \"unknown\", \"expression\": \"具体截止时间没有公布\"}, \"certainty\": \"formal\", \"category_id\": \"affairs\", \"tags\": [\"填表\"]}}}]}]}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_00_efcHL4h376s8AsMYuYGu0124",
+          "content": "{\"status\": \"needs_confirmation\", \"preview\": {\"kind\": \"batch\", \"action\": \"batch\", \"groups\": [{\"id\": \"b3109ad8-c9ea-47ef-a32d-91081b68d545\", \"title\": \"合成项目交流会\", \"operations\": [{\"kind\": \"event\", \"action\": \"create\", \"target_id\": null, \"before\": null, \"after\": {\"semester_id\": \"02bb30e4-7314-4040-a728-7794b33a7d47\", \"title\": \"合成项目交流会\", \"time\": {\"precision\": \"exact\", \"at\": \"2026-10-10T07:00:00Z\", \"end_at\": null, \"date\": null, \"week\": null, \"end_date\": null, \"day_end_confirmed\": false, \"expression\": \"15:00正式开始，结束时间未定\", \"meaning\": \"start\", \"candidate_dates\": [], \"course_anchor\": null}, \"certainty\": \"formal\", \"reserve_time\": true, \"location\": \"示例楼A101\", \"notes\": \"\", \"source_text\": \"通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。\", \"details\": {\"recipient\": \"\", \"materials\": [], \"submission_channel\": \"\", \"participation\": \"14:40到示例楼A101集合，15:00正式开始\", \"participation_status\": \"confirmed\", \"conditions\": [], \"early_arrival_minutes\": 20, \"applicability\": \"全体成员\", \"responsibility\": \"\"}, \"category_id\": \"research\", \"tags\": [\"项目交流\", \"会议\"], \"reminder_minutes\": [], \"expected_revision\": 0, \"candidate_id\": null, \"confirm_fixed_conflicts\": false, \"course_leave_targets\": []}, \"body\": {\"semester_id\": \"02bb30e4-7314-4040-a728-7794b33a7d47\", \"title\": \"合成项目交流会\", \"time\": {\"precision\": \"exact\", \"at\": \"2026-10-10T07:00:00Z\", \"end_at\": null, \"date\": null, \"week\": null, \"end_date\": null, \"day_end_confirmed\": false, \"expression\": \"15:00正式开始，结束时间未定\", \"meaning\": \"start\", \"candidate_dates\": [], \"course_anchor\": null}, \"certainty\": \"formal\", \"reserve_time\": true, \"location\": \"示例楼A101\", \"notes\": \"\", \"source_text\": \"通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。\", \"details\": {\"recipient\": \"\", \"materials\": [], \"submission_channel\": \"\", \"participation\": \"14:40到示例楼A101集合，15:00正式开始\", \"participation_status\": \"confirmed\", \"conditions\": [], \"early_arrival_minutes\": 20, \"applicability\": \"全体成员\", \"responsibility\": \"\"}, \"category_id\": \"research\", \"tags\": [\"项目交流\", \"会议\"], \"reminder_minutes\": [], \"expected_revision\": 0, \"candidate_id\": null, \"confirm_fixed_conflicts\": false, \"course_leave_targets\": []}, \"semester_id\": \"02bb30e4-7314-4040-a728-7794b33a7d47\", \"expected_revision\": 0, \"provided_fields\": [\"category_id\", \"certainty\", \"details\", \"location\", \"reserve_time\", \"tags\", \"time\", \"title\"], \"token\": \"[REDACTED]\", \"impact\": {\"fixed_conflicts\": [], \"blocking_fixed_conflicts\": [], \"time_warnings\": [{\"start_at\": \"2026-10-10T06:40:00+00:00\", \"end_at\": \"2026-10-10T16:00:00+00:00\", \"titles\": [\"合成项目交流会\"], \"item_ids\": [], \"certainty\": \"possible\", \"blocking\": false, \"time_incomplete\": true, \"uncertain_item_ids\": [], \"uncertainty_reasons\": [\"end_unknown\"], \"event_start_at\": \"2026-10-10T07:00:00Z\", \"window_is_comparison\": true, \"message\": \"「合成项目交流会」仅说明了开始时间，结束时间未说明。\", \"pending_record\": true}], \"affected_plan_count\": 0, \"course_conflicts\": [], \"new_fixed_conflicts\": [], \"new_blocking_fixed_conflicts\": [], \"new_time_warnings\": [{\"start_at\": \"2026-10-10T06:40:00+00:00\", \"end_at\": \"2026-10-10T16:00:00+00:00\", \"titles\": [\"合成项目交流会\"], \"item_ids\": [], \"certainty\": \"possible\", \"blocking\": false, \"time_incomplete\": true, \"uncertain_item_ids\": [], \"uncertainty_reasons\": [\"end_unknown\"], \"event_start_at\": \"2026-10-10T07:00:00Z\", \"window_is_comparison\": true, \"message\": \"「合成项目交流会」仅说明了开始时间，结束时间未说明。\", \"pending_record\": true}]}}]}, {\"id\": \"cebe87ac-7e3e-465f-90c9-c2f8c5ae5ae9\", \"title\": \"填写合成共享表\", \"operations\": [{\"kind\": \"item\", \"action\": \"create\", \"target_id\": null, \"before\": null, \"after\": {\"semester_id\": \"02bb30e4-7314-4040-a728-7794b33a7d47\", \"expected_revision\": 0, \"confirm_fixed_conflicts\": false, \"course_leave_targets\": [], \"kind\": \"task\", \"title\": \"填写合成共享表\", \"course_id\": null, \"time\": {\"precision\": \"unknown\", \"at\": null, \"end_at\": null, \"date\": null, \"week\": null, \"end_date\": null, \"day_end_confirmed\": false, \"expression\": \"具体截止时间没有公布\", \"meaning\": \"unspecified\", \"candidate_dates\": [], \"course_anchor\": null}, \"certainty\": \"formal\", \"remaining_minutes\": null, \"start_policy\": \"unconfirmed\", \"earliest_start_at\": null, \"reserve_time\": true, \"splittable\": true, \"priority\": \"normal\", \"location\": \"\", \"notes\": \"\", \"source_text\": \"通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。\", \"details\": {\"recipient\": \"\", \"materials\": [], \"submission_channel\": \"\", \"participation\": \"\", \"participation_status\": \"unspecified\", \"conditions\": [], \"early_arrival_minutes\": null, \"applicability\": \"\", \"responsibility\": \"\"}, \"candidate_id\": null, \"source_id\": null, \"category_id\": \"affairs\", \"tags\": [\"填表\"], \"reminders\": []}, \"body\": {\"semester_id\": \"02bb30e4-7314-4040-a728-7794b33a7d47\", \"expected_revision\": 0, \"confirm_fixed_conflicts\": false, \"course_leave_targets\": [], \"kind\": \"task\", \"title\": \"填写合成共享表\", \"course_id\": null, \"time\": {\"precision\": \"unknown\", \"at\": null, \"end_at\": null, \"date\": null, \"week\": null, \"end_date\": null, \"day_end_confirmed\": false, \"expression\": \"具体截止时间没有公布\", \"meaning\": \"unspecified\", \"candidate_dates\": [], \"course_anchor\": null}, \"certainty\": \"formal\", \"remaining_minutes\": null, \"start_policy\": \"unconfirmed\", \"earliest_start_at\": null, \"reserve_time\": true, \"splittable\": true, \"priority\": \"normal\", \"location\": \"\", \"notes\": \"\", \"source_text\": \"通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。\", \"details\": {\"recipient\": \"\", \"materials\": [], \"submission_channel\": \"\", \"participation\": \"\", \"participation_status\": \"unspecified\", \"conditions\": [], \"early_arrival_minutes\": null, \"applicability\": \"\", \"responsibility\": \"\"}, \"candidate_id\": null, \"source_id\": null, \"category_id\": \"affairs\", \"tags\": [\"填表\"], \"reminders\": []}, \"semester_id\": \"02bb30e4-7314-4040-a728-7794b33a7d47\", \"expected_revision\": 0, \"provided_fields\": [\"category_id\", \"certainty\", \"kind\", \"tags\", \"time\", \"title\"], \"token\": \"[REDACTED]\"}]}], \"impact\": {\"fixed_conflicts\": [], \"blocking_fixed_conflicts\": [], \"time_warnings\": [{\"start_at\": \"2026-10-10T06:40:00+00:00\", \"end_at\": \"2026-10-10T16:00:00+00:00\", \"titles\": [\"合成项目交流会\"], \"item_ids\": [], \"certainty\": \"possible\", \"blocking\": false, \"time_incomplete\": true, \"uncertain_item_ids\": [], \"uncertainty_reasons\": [\"end_unknown\"], \"event_start_at\": \"2026-10-10T07:00:00Z\", \"window_is_comparison\": true, \"message\": \"「合成项目交流会」仅说明了开始时间，结束时间未说明。\", \"pending_record\": true}], \"affected_plan_count\": 0, \"course_conflicts\": [], \"new_fixed_conflicts\": [], \"new_blocking_fixed_conflicts\": [], \"new_time_warnings\": [{\"start_at\": \"2026-10-10T06:40:00+00:00\", \"end_at\": \"2026-10-10T16:00:00+00:00\", \"titles\": [\"合成项目交流会\"], \"item_ids\": [], \"certainty\": \"possible\", \"blocking\": false, \"time_incomplete\": true, \"uncertain_item_ids\": [], \"uncertainty_reasons\": [\"end_unknown\"], \"event_start_at\": \"2026-10-10T07:00:00Z\", \"window_is_comparison\": true, \"message\": \"「合成项目交流会」仅说明了开始时间，结束时间未说明。\", \"pending_record\": true}]}, \"body\": {}, \"source_text\": \"通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。\", \"semester_id\": \"02bb30e4-7314-4040-a728-7794b33a7d47\", \"expected_revision\": 0, \"token\": \"[REDACTED]\"}, \"message\": \"尚未保存，请用户核对预览后点击确认。\"}"
+        }
+      ]
+    }
+  ],
+  "automation_comparison": {
+    "same_source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。",
+    "sample_count_each": 1,
+    "known_ground_truth": {
+      "formal_start": "2026-10-10T15:00:00+08:00",
+      "early_arrival_minutes": 20,
+      "event_end_at": null,
+      "task_deadline_precision": "unknown"
+    },
+    "structured_api_supplied_fields": {
+      "event": {
+        "semester_id": "4bd600d9-8f45-4b00-9cf5-841c0673ae4e",
+        "expected_revision": 0,
+        "title": "合成项目交流会",
+        "certainty": "formal",
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T15:00:00+08:00"
+        },
+        "details": {
+          "early_arrival_minutes": 20
+        },
+        "location": "示例楼A101",
+        "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。"
+      },
+      "task": {
+        "semester_id": "4bd600d9-8f45-4b00-9cf5-841c0673ae4e",
+        "expected_revision": 0,
+        "kind": "task",
+        "title": "填写合成共享表",
+        "certainty": "formal",
+        "time": {
+          "precision": "unknown"
+        },
+        "source_text": "通知：2026年10月10日14:40到示例楼A101集合，15:00正式开始合成项目交流会，结束时间未定，参会同学为全体成员。另外请填写合成共享表，具体截止时间没有公布。"
+      }
+    },
+    "structured_api_preview_seconds": 0.015,
+    "real_model_preview_seconds": 5.078,
+    "limitations": [
+      "structured fields supplied beforehand; excludes field entry and extraction time",
+      "automated service-call samples only; different input methods and endpoints",
+      "not a human efficiency comparison or overall accuracy statistic"
+    ]
+  },
+  "actual_summary": {
+    "operations": 2,
+    "event_start": "2026-10-10T07:00:00Z",
+    "event_end": null,
+    "arrival_lead": 20,
+    "task_deadline_precision": "unknown"
+  },
+  "seconds": 5.266
+}

@@ -1,0 +1,163 @@
+{
+  "protocol": {
+    "registered_before_execution": true,
+    "scenario": "请新增待办：整理实验资料，确实要完成，预计还需30分钟，现在起就能开始，截止时间还没确定。",
+    "environment": "Same Android 13 emulator, same QA build and local backend, distinct initially empty synthetic accounts with equivalent semester and learning preferences",
+    "groups": [
+      "manual native form",
+      "real model via native assistant"
+    ],
+    "primary_criteria": [
+      "title=整理实验资料",
+      "kind=task",
+      "remaining_minutes=30",
+      "start_policy=now",
+      "time.precision=unknown",
+      "lifecycle=active",
+      "no invented at/end/date/week"
+    ],
+    "extra_fields": "category, notes, source_text and tags are shown but not primary criteria; no performance or user-efficiency claim",
+    "action_metric": "UI tap and field-input macros after logged-in initial screen; exclude setup, login, keyboard dismissal, state dumps and screenshots; no real person timing",
+    "design_limit": "One pair, manual first then AI, automation delays and unbalanced order; no generalization or percent time saving"
+  },
+  "passed": true,
+  "same_primary_fields": true,
+  "ai_preview_readonly": true,
+  "results": {
+    "manual": {
+      "title": "整理实验资料",
+      "kind": "task",
+      "remaining_minutes": 30,
+      "start_policy": "now",
+      "lifecycle": "active",
+      "time": {
+        "precision": "unknown",
+        "at": null,
+        "end_at": null,
+        "date": null,
+        "week": null,
+        "end_date": null,
+        "day_end_confirmed": false,
+        "expression": "",
+        "meaning": "unspecified",
+        "candidate_dates": [],
+        "course_anchor": null
+      },
+      "category_id": null,
+      "notes": ""
+    },
+    "ai": {
+      "title": "整理实验资料",
+      "kind": "task",
+      "remaining_minutes": 30,
+      "start_policy": "now",
+      "lifecycle": "active",
+      "time": {
+        "precision": "unknown",
+        "at": null,
+        "end_at": null,
+        "date": null,
+        "week": null,
+        "end_date": null,
+        "day_end_confirmed": false,
+        "expression": "截止时间未确定",
+        "meaning": "unspecified",
+        "candidate_dates": [],
+        "course_anchor": null
+      },
+      "category_id": "study",
+      "notes": ""
+    }
+  },
+  "steps": {
+    "manual": {
+      "macro_steps": 9,
+      "taps": 8,
+      "inputs": 1,
+      "actions": [
+        {
+          "at": "2026-10-10T00:31:28.278855+08:00",
+          "kind": "tap",
+          "value": "任务"
+        },
+        {
+          "at": "2026-10-10T00:31:31.049480+08:00",
+          "kind": "tap",
+          "value": "新建任务"
+        },
+        {
+          "at": "2026-10-10T00:33:13.730884+08:00",
+          "kind": "input",
+          "value": "整理实验资料"
+        },
+        {
+          "at": "2026-10-10T00:33:17.233182+08:00",
+          "kind": "tap",
+          "value": "安排学习时间"
+        },
+        {
+          "at": "2026-10-10T00:34:54.517740+08:00",
+          "kind": "tap",
+          "value": "个人任务"
+        },
+        {
+          "at": "2026-10-10T00:34:57.299342+08:00",
+          "kind": "tap",
+          "value": "30分钟"
+        },
+        {
+          "at": "2026-10-10T00:35:00.059075+08:00",
+          "kind": "tap",
+          "value": "未设置"
+        },
+        {
+          "at": "2026-10-10T00:38:27.254573+08:00",
+          "kind": "tap",
+          "value": "从现在起可开始"
+        },
+        {
+          "at": "2026-10-10T00:38:32.629157+08:00",
+          "kind": "tap",
+          "value": "保存"
+        }
+      ]
+    },
+    "ai": {
+      "macro_steps": 5,
+      "taps": 4,
+      "inputs": 1,
+      "actions": [
+        {
+          "at": "2026-10-10T00:40:37.629088+08:00",
+          "kind": "tap",
+          "value": "输入通知或日程问题"
+        },
+        {
+          "at": "2026-10-10T00:40:42.984886+08:00",
+          "kind": "input",
+          "value": "请新增待办：整理实验资料，确实要完成，预计还需30分钟，现在起就能开始，截止时间还没确定。"
+        },
+        {
+          "at": "2026-10-10T00:40:45.824538+08:00",
+          "kind": "tap",
+          "value": "发送"
+        },
+        {
+          "at": "2026-10-10T00:43:03.799241+08:00",
+          "kind": "tap",
+          "value": "更多信息"
+        },
+        {
+          "at": "2026-10-10T00:43:09.149699+08:00",
+          "kind": "tap",
+          "value": "确认添加"
+        }
+      ]
+    }
+  },
+  "limits": [
+    "Single pair, manual before AI",
+    "Automation input and inspection gaps; not human efficiency or performance",
+    "Extra fields retained but not primary criteria"
+  ]
+}

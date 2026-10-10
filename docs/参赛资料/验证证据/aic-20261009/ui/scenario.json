@@ -1,0 +1,328 @@
+{
+  "data": "anonymous synthetic",
+  "seed_at": "2026-10-09T23:34:31.013560+08:00",
+  "day": "2026-10-10",
+  "semester": {
+    "id": "c8d0c75a-e9fb-443b-8688-5a60fc09c47e",
+    "name": "演示学期（合成数据）",
+    "first_monday": "2026-09-14",
+    "total_weeks": 20,
+    "periods": [
+      {
+        "number": 1,
+        "start": "09:00",
+        "end": "10:00"
+      },
+      {
+        "number": 2,
+        "start": "10:10",
+        "end": "11:00"
+      },
+      {
+        "number": 3,
+        "start": "14:00",
+        "end": "14:50"
+      },
+      {
+        "number": 4,
+        "start": "15:00",
+        "end": "15:50"
+      },
+      {
+        "number": 5,
+        "start": "19:00",
+        "end": "19:50"
+      },
+      {
+        "number": 6,
+        "start": "20:00",
+        "end": "20:50"
+      }
+    ],
+    "revision": 0
+  },
+  "courses": [
+    {
+      "title": "算法设计",
+      "weekday": 6,
+      "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "sections": [
+        1
+      ],
+      "teacher": "",
+      "location": "A301"
+    },
+    {
+      "title": "线性代数",
+      "weekday": 6,
+      "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "sections": [
+        2
+      ],
+      "teacher": "",
+      "location": "B202"
+    }
+  ],
+  "tasks": [
+    {
+      "semester_id": "c8d0c75a-e9fb-443b-8688-5a60fc09c47e",
+      "kind": "task",
+      "title": "整理实验数据",
+      "course_id": null,
+      "time": {
+        "precision": "exact",
+        "at": "2026-10-10T13:00:00Z",
+        "end_at": null,
+        "date": null,
+        "week": null,
+        "end_date": null,
+        "day_end_confirmed": false,
+        "expression": "",
+        "meaning": "deadline",
+        "candidate_dates": [],
+        "course_anchor": null
+      },
+      "certainty": "formal",
+      "remaining_minutes": 30,
+      "start_policy": "at",
+      "earliest_start_at": "2026-10-10T11:00:00Z",
+      "reserve_time": true,
+      "splittable": false,
+      "priority": "normal",
+      "location": "",
+      "notes": "",
+      "source_text": "",
+      "details": {
+        "recipient": "",
+        "materials": [],
+        "submission_channel": "",
+        "participation": "",
+        "participation_status": "unspecified",
+        "conditions": [],
+        "early_arrival_minutes": null,
+        "applicability": "",
+        "responsibility": ""
+      },
+      "candidate_id": null,
+      "source_id": null,
+      "category_id": "study",
+      "course_title": "",
+      "tags": [
+        {
+          "id": "6f9c296f-06f9-4697-9499-d7ffc5c6300f",
+          "name": "合成数据"
+        }
+      ],
+      "id": "0eb36070-b143-4cb7-80d3-8666d2294ab7",
+      "version": 1,
+      "lifecycle": "active",
+      "review_state": "confirmed",
+      "control": "plannable",
+      "anchor_at": "2026-10-10T13:00:00+00:00",
+      "created_at": "2026-10-09T15:34:30.972520+00:00",
+      "updated_at": "2026-10-09T15:34:30.972520+00:00",
+      "reminders": [],
+      "arrival_at": null
+    },
+    {
+      "semester_id": "c8d0c75a-e9fb-443b-8688-5a60fc09c47e",
+      "kind": "task",
+      "title": "复习概率论",
+      "course_id": null,
+      "time": {
+        "precision": "exact",
+        "at": "2026-10-10T13:00:00Z",
+        "end_at": null,
+        "date": null,
+        "week": null,
+        "end_date": null,
+        "day_end_confirmed": false,
+        "expression": "",
+        "meaning": "deadline",
+        "candidate_dates": [],
+        "course_anchor": null
+      },
+      "certainty": "formal",
+      "remaining_minutes": 30,
+      "start_policy": "at",
+      "earliest_start_at": "2026-10-10T11:00:00Z",
+      "reserve_time": true,
+      "splittable": false,
+      "priority": "normal",
+      "location": "",
+      "notes": "",
+      "source_text": "",
+      "details": {
+        "recipient": "",
+        "materials": [],
+        "submission_channel": "",
+        "participation": "",
+        "participation_status": "unspecified",
+        "conditions": [],
+        "early_arrival_minutes": null,
+        "applicability": "",
+        "responsibility": ""
+      },
+      "candidate_id": null,
+      "source_id": null,
+      "category_id": "study",
+      "course_title": "",
+      "tags": [
+        {
+          "id": "6f9c296f-06f9-4697-9499-d7ffc5c6300f",
+          "name": "合成数据"
+        }
+      ],
+      "id": "290ff280-36ef-4a9a-9a7a-a7d53f5dbe23",
+      "version": 1,
+      "lifecycle": "active",
+      "review_state": "confirmed",
+      "control": "plannable",
+      "anchor_at": "2026-10-10T13:00:00+00:00",
+      "created_at": "2026-10-09T15:34:30.982390+00:00",
+      "updated_at": "2026-10-09T15:34:30.982390+00:00",
+      "reminders": [],
+      "arrival_at": null
+    },
+    {
+      "semester_id": "c8d0c75a-e9fb-443b-8688-5a60fc09c47e",
+      "kind": "task",
+      "title": "完成实验报告",
+      "course_id": null,
+      "time": {
+        "precision": "exact",
+        "at": "2026-10-10T13:00:00Z",
+        "end_at": null,
+        "date": null,
+        "week": null,
+        "end_date": null,
+        "day_end_confirmed": false,
+        "expression": "",
+        "meaning": "deadline",
+        "candidate_dates": [],
+        "course_anchor": null
+      },
+      "certainty": "formal",
+      "remaining_minutes": 30,
+      "start_policy": "at",
+      "earliest_start_at": "2026-10-10T11:00:00Z",
+      "reserve_time": true,
+      "splittable": false,
+      "priority": "normal",
+      "location": "",
+      "notes": "",
+      "source_text": "",
+      "details": {
+        "recipient": "",
+        "materials": [],
+        "submission_channel": "",
+        "participation": "",
+        "participation_status": "unspecified",
+        "conditions": [],
+        "early_arrival_minutes": null,
+        "applicability": "",
+        "responsibility": ""
+      },
+      "candidate_id": null,
+      "source_id": null,
+      "category_id": "study",
+      "course_title": "",
+      "tags": [
+        {
+          "id": "6f9c296f-06f9-4697-9499-d7ffc5c6300f",
+          "name": "合成数据"
+        }
+      ],
+      "id": "69c094ba-68a9-4c71-b9fa-84b1aeed19e3",
+      "version": 1,
+      "lifecycle": "active",
+      "review_state": "confirmed",
+      "control": "plannable",
+      "anchor_at": "2026-10-10T13:00:00+00:00",
+      "created_at": "2026-10-09T15:34:30.990353+00:00",
+      "updated_at": "2026-10-09T15:34:30.990353+00:00",
+      "reminders": [],
+      "arrival_at": null
+    }
+  ],
+  "learning_windows": [
+    {
+      "weekday": 1,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 2,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 3,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 4,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 5,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 6,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 7,
+      "start": "19:00",
+      "end": "21:00"
+    }
+  ],
+  "method": "course fixtures imported through real local API; no school login performed"
+}

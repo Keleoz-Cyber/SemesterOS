@@ -1,0 +1,1021 @@
+{
+  "generated_at": "2026-10-09T23:28:16.175898+08:00",
+  "source": "synthetic candidate-only comparison",
+  "production_file": "D:\\study\\Contest\\AIC\\SemesterOS\\services\\api\\app\\replanner.py",
+  "production_file_sha256": "9de63d15dbe6f42c1c237ff3db63df4cf87214568d235eeca3f6c8494053b7b5",
+  "generate_sha256": "523a55a1bd1ba62bf90cf23e83763b561857b8e1f590d83e9b01931eeef15bc8",
+  "baseline_generate_sha256": "233a0f4d1c2dfb52512dd13df54e3f43f0c4e2c2470c7f28d336e433ab05a6a3",
+  "unique_difference": {
+    "before": "objectives=[('moved_tasks',sum(task_moves)),('shift_minutes',sum(offsets)),('earlier',sum(variables))]",
+    "after": "objectives=[('earlier',sum(variables))]"
+  },
+  "preserved": [
+    "same frozen snapshot for both candidates",
+    "all production constraints",
+    "all block identities and work amounts",
+    "locked blocks",
+    "deadlines and releases",
+    "10-second total solver budget",
+    "4 workers",
+    "production validator"
+  ],
+  "caveats": [
+    "3 small synthetic scenes are illustrative; not a large statistical benchmark",
+    "only objective function differs; earlier-only remains a legitimate baseline",
+    "one repetition does not support a runtime advantage; 4-worker timings vary",
+    "no database writes; no human efficiency claim"
+  ],
+  "cases": [
+    {
+      "scenario": "conflict_at_09_locked_late",
+      "repetition": 1,
+      "input": {
+        "name": "conflict_at_09_locked_late",
+        "calendar": {
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [],
+          "fixed_events": [
+            {
+              "id": "activity",
+              "title": "合成新增固定活动",
+              "certainty": "formal",
+              "reserve_time": true,
+              "time": {
+                "precision": "exact",
+                "at": "2026-10-10T09:00:00+08:00",
+                "end_at": "2026-10-10T10:00:00+08:00"
+              }
+            }
+          ]
+        },
+        "preferences": {
+          "configured": true,
+          "weekly": [
+            {
+              "weekday": 6,
+              "start": "09:00",
+              "end": "17:00"
+            }
+          ],
+          "exclusions": []
+        },
+        "courses": [],
+        "items": [
+          {
+            "id": "a",
+            "kind": "task",
+            "title": "合成任务a",
+            "lifecycle": "active",
+            "certainty": "formal",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T17:00:00+08:00"
+            },
+            "remaining_minutes": 60,
+            "splittable": false,
+            "start_policy": "at",
+            "earliest_start_at": "2026-10-10T09:00:00+08:00"
+          },
+          {
+            "id": "b",
+            "kind": "task",
+            "title": "合成任务b",
+            "lifecycle": "active",
+            "certainty": "formal",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T17:00:00+08:00"
+            },
+            "remaining_minutes": 60,
+            "splittable": false,
+            "start_policy": "at",
+            "earliest_start_at": "2026-10-10T09:00:00+08:00"
+          },
+          {
+            "id": "c",
+            "kind": "task",
+            "title": "合成任务c",
+            "lifecycle": "active",
+            "certainty": "formal",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T17:00:00+08:00"
+            },
+            "remaining_minutes": 60,
+            "splittable": false,
+            "start_policy": "at",
+            "earliest_start_at": "2026-10-10T09:00:00+08:00"
+          }
+        ],
+        "plans": [
+          {
+            "id": "block-a",
+            "item_id": "a",
+            "title": "合成任务a",
+            "start_at": "2026-10-10T09:00:00+08:00",
+            "end_at": "2026-10-10T10:00:00+08:00",
+            "minutes": 60,
+            "status": "active",
+            "version": 1,
+            "locked": false
+          },
+          {
+            "id": "block-b",
+            "item_id": "b",
+            "title": "合成任务b",
+            "start_at": "2026-10-10T12:00:00+08:00",
+            "end_at": "2026-10-10T13:00:00+08:00",
+            "minutes": 60,
+            "status": "active",
+            "version": 1,
+            "locked": false
+          },
+          {
+            "id": "block-c",
+            "item_id": "c",
+            "title": "合成任务c",
+            "start_at": "2026-10-10T14:00:00+08:00",
+            "end_at": "2026-10-10T15:00:00+08:00",
+            "minutes": 60,
+            "status": "active",
+            "version": 1,
+            "locked": true
+          }
+        ],
+        "request": {
+          "lead_minutes": 0
+        },
+        "now": "2026-10-10T08:00:00+08:00"
+      },
+      "snapshot_sha256": "a3b69397b0ae5b194fa1d3ceaccb8b6a1fe68150b876b1fce9f3cece45f6e70a",
+      "candidates": {
+        "minimum_disruption": {
+          "seconds": 0.313,
+          "result": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": true,
+            "blocks": [
+              {
+                "id": "block-a",
+                "item_id": "a",
+                "title": "合成任务a",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T09:00:00+08:00",
+                "before_end_at": "2026-10-10T10:00:00+08:00"
+              },
+              {
+                "id": "block-b",
+                "item_id": "b",
+                "title": "合成任务b",
+                "start_at": "2026-10-10T04:00:00+00:00",
+                "end_at": "2026-10-10T05:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T12:00:00+08:00",
+                "before_end_at": "2026-10-10T13:00:00+08:00"
+              },
+              {
+                "id": "block-c",
+                "item_id": "c",
+                "title": "合成任务c",
+                "start_at": "2026-10-10T06:00:00+00:00",
+                "end_at": "2026-10-10T07:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": true,
+                "before_start_at": "2026-10-10T14:00:00+08:00",
+                "before_end_at": "2026-10-10T15:00:00+08:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-10T00:00:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "moved_tasks": 1,
+            "moved_blocks": 1,
+            "shift_minutes": 60,
+            "phases": [
+              {
+                "name": "moved_tasks",
+                "status": "OPTIMAL",
+                "objective": 1.0,
+                "bound": 1.0
+              },
+              {
+                "name": "shift_minutes",
+                "status": "OPTIMAL",
+                "objective": 60.0,
+                "bound": 60.0
+              },
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 89580240.0,
+                "bound": 89580240.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 313
+          },
+          "validation": {
+            "passed": true,
+            "checks": {
+              "complete_feasible": true,
+              "same_block_set": true,
+              "conserved_payload_and_duration": true,
+              "locked_unchanged": true,
+              "all_hard_time_rules": true,
+              "reported_metrics_match": true
+            },
+            "issues": [],
+            "recomputed": {
+              "moved_tasks": 1,
+              "moved_blocks": 1,
+              "shift_minutes": 60,
+              "total_start_minutes": 89580240,
+              "work_minutes": 180
+            }
+          }
+        },
+        "earlier_only": {
+          "seconds": 0.015,
+          "result": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": true,
+            "blocks": [
+              {
+                "id": "block-a",
+                "item_id": "a",
+                "title": "合成任务a",
+                "start_at": "2026-10-10T03:00:00+00:00",
+                "end_at": "2026-10-10T04:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T09:00:00+08:00",
+                "before_end_at": "2026-10-10T10:00:00+08:00"
+              },
+              {
+                "id": "block-b",
+                "item_id": "b",
+                "title": "合成任务b",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T12:00:00+08:00",
+                "before_end_at": "2026-10-10T13:00:00+08:00"
+              },
+              {
+                "id": "block-c",
+                "item_id": "c",
+                "title": "合成任务c",
+                "start_at": "2026-10-10T06:00:00+00:00",
+                "end_at": "2026-10-10T07:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": true,
+                "before_start_at": "2026-10-10T14:00:00+08:00",
+                "before_end_at": "2026-10-10T15:00:00+08:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-10T00:00:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "moved_tasks": 2,
+            "moved_blocks": 2,
+            "shift_minutes": 240,
+            "phases": [
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 89580180.0,
+                "bound": 89580180.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 15
+          },
+          "validation": {
+            "passed": true,
+            "checks": {
+              "complete_feasible": true,
+              "same_block_set": true,
+              "conserved_payload_and_duration": true,
+              "locked_unchanged": true,
+              "all_hard_time_rules": true,
+              "reported_metrics_match": true
+            },
+            "issues": [],
+            "recomputed": {
+              "moved_tasks": 2,
+              "moved_blocks": 2,
+              "shift_minutes": 240,
+              "total_start_minutes": 89580180,
+              "work_minutes": 180
+            }
+          }
+        }
+      },
+      "comparison": {
+        "minimum_disruption_moved_tasks": 1,
+        "earlier_only_moved_tasks": 2,
+        "minimum_disruption_shift_minutes": 60,
+        "earlier_only_shift_minutes": 240,
+        "same_work_minutes": true,
+        "lexicographic_dominance": true,
+        "both_optimal": true
+      },
+      "passed": true
+    },
+    {
+      "scenario": "conflict_at_11_locked_last",
+      "repetition": 1,
+      "input": {
+        "name": "conflict_at_11_locked_last",
+        "calendar": {
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [],
+          "fixed_events": [
+            {
+              "id": "activity",
+              "title": "合成新增固定活动",
+              "certainty": "formal",
+              "reserve_time": true,
+              "time": {
+                "precision": "exact",
+                "at": "2026-10-10T11:00:00+08:00",
+                "end_at": "2026-10-10T12:00:00+08:00"
+              }
+            }
+          ]
+        },
+        "preferences": {
+          "configured": true,
+          "weekly": [
+            {
+              "weekday": 6,
+              "start": "09:00",
+              "end": "17:00"
+            }
+          ],
+          "exclusions": []
+        },
+        "courses": [],
+        "items": [
+          {
+            "id": "a",
+            "kind": "task",
+            "title": "合成任务a",
+            "lifecycle": "active",
+            "certainty": "formal",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T17:00:00+08:00"
+            },
+            "remaining_minutes": 60,
+            "splittable": false,
+            "start_policy": "at",
+            "earliest_start_at": "2026-10-10T09:00:00+08:00"
+          },
+          {
+            "id": "b",
+            "kind": "task",
+            "title": "合成任务b",
+            "lifecycle": "active",
+            "certainty": "formal",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T17:00:00+08:00"
+            },
+            "remaining_minutes": 60,
+            "splittable": false,
+            "start_policy": "at",
+            "earliest_start_at": "2026-10-10T09:00:00+08:00"
+          },
+          {
+            "id": "c",
+            "kind": "task",
+            "title": "合成任务c",
+            "lifecycle": "active",
+            "certainty": "formal",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T17:00:00+08:00"
+            },
+            "remaining_minutes": 60,
+            "splittable": false,
+            "start_policy": "at",
+            "earliest_start_at": "2026-10-10T09:00:00+08:00"
+          }
+        ],
+        "plans": [
+          {
+            "id": "block-a",
+            "item_id": "a",
+            "title": "合成任务a",
+            "start_at": "2026-10-10T11:00:00+08:00",
+            "end_at": "2026-10-10T12:00:00+08:00",
+            "minutes": 60,
+            "status": "active",
+            "version": 1,
+            "locked": false
+          },
+          {
+            "id": "block-b",
+            "item_id": "b",
+            "title": "合成任务b",
+            "start_at": "2026-10-10T13:00:00+08:00",
+            "end_at": "2026-10-10T14:00:00+08:00",
+            "minutes": 60,
+            "status": "active",
+            "version": 1,
+            "locked": false
+          },
+          {
+            "id": "block-c",
+            "item_id": "c",
+            "title": "合成任务c",
+            "start_at": "2026-10-10T15:00:00+08:00",
+            "end_at": "2026-10-10T16:00:00+08:00",
+            "minutes": 60,
+            "status": "active",
+            "version": 1,
+            "locked": true
+          }
+        ],
+        "request": {
+          "lead_minutes": 0
+        },
+        "now": "2026-10-10T08:00:00+08:00"
+      },
+      "snapshot_sha256": "b2203343ff2f521f0e25d6b1a8f22ca302fb441b78450e56064a23107b10e69b",
+      "candidates": {
+        "minimum_disruption": {
+          "seconds": 0.047,
+          "result": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": true,
+            "blocks": [
+              {
+                "id": "block-a",
+                "item_id": "a",
+                "title": "合成任务a",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T11:00:00+08:00",
+                "before_end_at": "2026-10-10T12:00:00+08:00"
+              },
+              {
+                "id": "block-b",
+                "item_id": "b",
+                "title": "合成任务b",
+                "start_at": "2026-10-10T05:00:00+00:00",
+                "end_at": "2026-10-10T06:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T13:00:00+08:00",
+                "before_end_at": "2026-10-10T14:00:00+08:00"
+              },
+              {
+                "id": "block-c",
+                "item_id": "c",
+                "title": "合成任务c",
+                "start_at": "2026-10-10T07:00:00+00:00",
+                "end_at": "2026-10-10T08:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": true,
+                "before_start_at": "2026-10-10T15:00:00+08:00",
+                "before_end_at": "2026-10-10T16:00:00+08:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-10T00:00:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T02:00:00+00:00",
+            "moved_tasks": 1,
+            "moved_blocks": 1,
+            "shift_minutes": 60,
+            "phases": [
+              {
+                "name": "moved_tasks",
+                "status": "OPTIMAL",
+                "objective": 1.0,
+                "bound": 1.0
+              },
+              {
+                "name": "shift_minutes",
+                "status": "OPTIMAL",
+                "objective": 60.0,
+                "bound": 60.0
+              },
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 89580360.0,
+                "bound": 89580360.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 47
+          },
+          "validation": {
+            "passed": true,
+            "checks": {
+              "complete_feasible": true,
+              "same_block_set": true,
+              "conserved_payload_and_duration": true,
+              "locked_unchanged": true,
+              "all_hard_time_rules": true,
+              "reported_metrics_match": true
+            },
+            "issues": [],
+            "recomputed": {
+              "moved_tasks": 1,
+              "moved_blocks": 1,
+              "shift_minutes": 60,
+              "total_start_minutes": 89580360,
+              "work_minutes": 180
+            }
+          }
+        },
+        "earlier_only": {
+          "seconds": 0.016,
+          "result": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": true,
+            "blocks": [
+              {
+                "id": "block-a",
+                "item_id": "a",
+                "title": "合成任务a",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T11:00:00+08:00",
+                "before_end_at": "2026-10-10T12:00:00+08:00"
+              },
+              {
+                "id": "block-b",
+                "item_id": "b",
+                "title": "合成任务b",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T13:00:00+08:00",
+                "before_end_at": "2026-10-10T14:00:00+08:00"
+              },
+              {
+                "id": "block-c",
+                "item_id": "c",
+                "title": "合成任务c",
+                "start_at": "2026-10-10T07:00:00+00:00",
+                "end_at": "2026-10-10T08:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": true,
+                "before_start_at": "2026-10-10T15:00:00+08:00",
+                "before_end_at": "2026-10-10T16:00:00+08:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-10T00:00:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "moved_tasks": 2,
+            "moved_blocks": 2,
+            "shift_minutes": 300,
+            "phases": [
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 89580120.0,
+                "bound": 89580120.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 16
+          },
+          "validation": {
+            "passed": true,
+            "checks": {
+              "complete_feasible": true,
+              "same_block_set": true,
+              "conserved_payload_and_duration": true,
+              "locked_unchanged": true,
+              "all_hard_time_rules": true,
+              "reported_metrics_match": true
+            },
+            "issues": [],
+            "recomputed": {
+              "moved_tasks": 2,
+              "moved_blocks": 2,
+              "shift_minutes": 300,
+              "total_start_minutes": 89580120,
+              "work_minutes": 180
+            }
+          }
+        }
+      },
+      "comparison": {
+        "minimum_disruption_moved_tasks": 1,
+        "earlier_only_moved_tasks": 2,
+        "minimum_disruption_shift_minutes": 60,
+        "earlier_only_shift_minutes": 300,
+        "same_work_minutes": true,
+        "lexicographic_dominance": true,
+        "both_optimal": true
+      },
+      "passed": true
+    },
+    {
+      "scenario": "valid_plan_retention",
+      "repetition": 1,
+      "input": {
+        "name": "valid_plan_retention",
+        "calendar": {
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [],
+          "fixed_events": []
+        },
+        "preferences": {
+          "configured": true,
+          "weekly": [
+            {
+              "weekday": 6,
+              "start": "09:00",
+              "end": "17:00"
+            }
+          ],
+          "exclusions": []
+        },
+        "courses": [],
+        "items": [
+          {
+            "id": "a",
+            "kind": "task",
+            "title": "合成任务a",
+            "lifecycle": "active",
+            "certainty": "formal",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T17:00:00+08:00"
+            },
+            "remaining_minutes": 60,
+            "splittable": false,
+            "start_policy": "at",
+            "earliest_start_at": "2026-10-10T09:00:00+08:00"
+          },
+          {
+            "id": "b",
+            "kind": "task",
+            "title": "合成任务b",
+            "lifecycle": "active",
+            "certainty": "formal",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T17:00:00+08:00"
+            },
+            "remaining_minutes": 60,
+            "splittable": false,
+            "start_policy": "at",
+            "earliest_start_at": "2026-10-10T09:00:00+08:00"
+          },
+          {
+            "id": "c",
+            "kind": "task",
+            "title": "合成任务c",
+            "lifecycle": "active",
+            "certainty": "formal",
+            "time": {
+              "precision": "exact",
+              "at": "2026-10-10T17:00:00+08:00"
+            },
+            "remaining_minutes": 60,
+            "splittable": false,
+            "start_policy": "at",
+            "earliest_start_at": "2026-10-10T09:00:00+08:00"
+          }
+        ],
+        "plans": [
+          {
+            "id": "block-a",
+            "item_id": "a",
+            "title": "合成任务a",
+            "start_at": "2026-10-10T12:00:00+08:00",
+            "end_at": "2026-10-10T13:00:00+08:00",
+            "minutes": 60,
+            "status": "active",
+            "version": 1,
+            "locked": false
+          },
+          {
+            "id": "block-b",
+            "item_id": "b",
+            "title": "合成任务b",
+            "start_at": "2026-10-10T14:00:00+08:00",
+            "end_at": "2026-10-10T15:00:00+08:00",
+            "minutes": 60,
+            "status": "active",
+            "version": 1,
+            "locked": false
+          },
+          {
+            "id": "block-c",
+            "item_id": "c",
+            "title": "合成任务c",
+            "start_at": "2026-10-10T16:00:00+08:00",
+            "end_at": "2026-10-10T17:00:00+08:00",
+            "minutes": 60,
+            "status": "active",
+            "version": 1,
+            "locked": true
+          }
+        ],
+        "request": {
+          "lead_minutes": 0
+        },
+        "now": "2026-10-10T08:00:00+08:00"
+      },
+      "snapshot_sha256": "0080585543ce9bf908f122c7ba7a771799f0b74dc070b208051f080b44015d6c",
+      "candidates": {
+        "minimum_disruption": {
+          "seconds": 0.047,
+          "result": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": false,
+            "blocks": [
+              {
+                "id": "block-a",
+                "item_id": "a",
+                "title": "合成任务a",
+                "start_at": "2026-10-10T04:00:00+00:00",
+                "end_at": "2026-10-10T05:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T12:00:00+08:00",
+                "before_end_at": "2026-10-10T13:00:00+08:00"
+              },
+              {
+                "id": "block-b",
+                "item_id": "b",
+                "title": "合成任务b",
+                "start_at": "2026-10-10T06:00:00+00:00",
+                "end_at": "2026-10-10T07:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T14:00:00+08:00",
+                "before_end_at": "2026-10-10T15:00:00+08:00"
+              },
+              {
+                "id": "block-c",
+                "item_id": "c",
+                "title": "合成任务c",
+                "start_at": "2026-10-10T08:00:00+00:00",
+                "end_at": "2026-10-10T09:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": true,
+                "before_start_at": "2026-10-10T16:00:00+08:00",
+                "before_end_at": "2026-10-10T17:00:00+08:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-10T00:00:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T04:00:00+00:00",
+            "moved_tasks": 0,
+            "moved_blocks": 0,
+            "shift_minutes": 0,
+            "phases": [
+              {
+                "name": "moved_tasks",
+                "status": "OPTIMAL",
+                "objective": 0.0,
+                "bound": 0.0
+              },
+              {
+                "name": "shift_minutes",
+                "status": "OPTIMAL",
+                "objective": 0.0,
+                "bound": 0.0
+              },
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 89580600.0,
+                "bound": 89580600.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 47
+          },
+          "validation": {
+            "passed": true,
+            "checks": {
+              "complete_feasible": true,
+              "same_block_set": true,
+              "conserved_payload_and_duration": true,
+              "locked_unchanged": true,
+              "all_hard_time_rules": true,
+              "reported_metrics_match": true
+            },
+            "issues": [],
+            "recomputed": {
+              "moved_tasks": 0,
+              "moved_blocks": 0,
+              "shift_minutes": 0,
+              "total_start_minutes": 89580600,
+              "work_minutes": 180
+            }
+          }
+        },
+        "earlier_only": {
+          "seconds": 0.015,
+          "result": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": true,
+            "blocks": [
+              {
+                "id": "block-a",
+                "item_id": "a",
+                "title": "合成任务a",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T12:00:00+08:00",
+                "before_end_at": "2026-10-10T13:00:00+08:00"
+              },
+              {
+                "id": "block-b",
+                "item_id": "b",
+                "title": "合成任务b",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": false,
+                "before_start_at": "2026-10-10T14:00:00+08:00",
+                "before_end_at": "2026-10-10T15:00:00+08:00"
+              },
+              {
+                "id": "block-c",
+                "item_id": "c",
+                "title": "合成任务c",
+                "start_at": "2026-10-10T08:00:00+00:00",
+                "end_at": "2026-10-10T09:00:00+00:00",
+                "minutes": 60,
+                "status": "active",
+                "version": 1,
+                "locked": true,
+                "before_start_at": "2026-10-10T16:00:00+08:00",
+                "before_end_at": "2026-10-10T17:00:00+08:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-10T00:00:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "moved_tasks": 2,
+            "moved_blocks": 2,
+            "shift_minutes": 420,
+            "phases": [
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 89580180.0,
+                "bound": 89580180.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 15
+          },
+          "validation": {
+            "passed": true,
+            "checks": {
+              "complete_feasible": true,
+              "same_block_set": true,
+              "conserved_payload_and_duration": true,
+              "locked_unchanged": true,
+              "all_hard_time_rules": true,
+              "reported_metrics_match": true
+            },
+            "issues": [],
+            "recomputed": {
+              "moved_tasks": 2,
+              "moved_blocks": 2,
+              "shift_minutes": 420,
+              "total_start_minutes": 89580180,
+              "work_minutes": 180
+            }
+          }
+        }
+      },
+      "comparison": {
+        "minimum_disruption_moved_tasks": 0,
+        "earlier_only_moved_tasks": 2,
+        "minimum_disruption_shift_minutes": 0,
+        "earlier_only_shift_minutes": 420,
+        "same_work_minutes": true,
+        "lexicographic_dominance": true,
+        "both_optimal": true
+      },
+      "passed": true
+    }
+  ],
+  "passed": true
+}

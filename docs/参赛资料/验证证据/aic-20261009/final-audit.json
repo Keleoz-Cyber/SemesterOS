@@ -1,0 +1,31 @@
+{
+  "recorded_at": "2026-10-10T01:10:05.720139+08:00",
+  "read_only_ui_reverification": {
+    "passed": true,
+    "groups": 9,
+    "behavior_assertions": 39,
+    "readback_assertions": 52
+  },
+  "raw_evidence_original_hashes_unchanged": true,
+  "json_parsed": 46,
+  "xml_parsed": 32,
+  "sensitive_fields_scan_passed": true,
+  "local_markdown_links_checked": 163,
+  "missing_links": [],
+  "release_apk_unchanged": true,
+  "business_source_unchanged": true,
+  "cleanup": {
+    "isolated_server_stopped": true,
+    "temporary_input_package_uninstalled": true,
+    "qa_package_uninstalled": true,
+    "gboard_restored": true,
+    "normal_package_still_installed": true,
+    "private_test_db_and_sessions_removed": true,
+    "restored_venv_and_build_caches_removed": true,
+    "two_python_cache_files": "Deletion review returned blocked by policy; moved out of deliverable into ignored .local-data/verification-cache; retained, not deleted"
+  },
+  "limits": [
+    "No full Flutter or API regression suite rerun in this documentation/experiment task",
+    "No physical device, real school login, OCR/ASR, OEM reminder arrival or human efficiency measurement"
+  ]
+}

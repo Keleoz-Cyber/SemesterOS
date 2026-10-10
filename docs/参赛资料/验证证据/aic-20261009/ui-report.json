@@ -1,0 +1,1167 @@
+{
+  "generated_at": "2026-10-10T00:20:17.397490+08:00",
+  "source_directory": "D:\\study\\Contest\\AIC\\SemesterOS\\output\\verification\\aic-20261009\\ui",
+  "method": "read-only emulator screen XML and same-account API/agent readbacks",
+  "data": "synthetic",
+  "source_files": {
+    "scenario.json": {
+      "sha256": "756d0e743ab4fa1ef2ae8b63d190a764668fb20d223b061337b1dae3a30a10b9",
+      "bytes": 7823
+    },
+    "05-after-meeting-save.json": {
+      "sha256": "6c6ac45abac8faba06d5ae6d272df6a8e4ebf3fba42615a4b5b2e5d510321ee9",
+      "bytes": 100625
+    },
+    "08-known-meeting-end.json": {
+      "sha256": "241467f939c8776f1782a61e375d67dfe3a976cfa283e88e9f54c86b71266665",
+      "bytes": 196303
+    },
+    "10-location-edited.json": {
+      "sha256": "33bdaf1a4238537a8a9901bbd45032ee784ef32b9ef29f4b1188a03087ba28fb",
+      "bytes": 293723
+    },
+    "12-location-undo-readback.json": {
+      "sha256": "bf3004333607b7ea1e1e9c6b9bbdbaf0a424790605688f8817548cff52800f3f",
+      "bytes": 211262
+    },
+    "13-free-query-readback.json": {
+      "sha256": "a7aea31ae5e3b4801a9b852c7fdd2d4897fc54d3af458011bae10904f3d2a32f",
+      "bytes": 187871
+    },
+    "15-plan-before-confirm.json": {
+      "sha256": "14371df535f47d2ea8851d66de45c65772e49740c03bd8c7117d699a90089165",
+      "bytes": 217469
+    },
+    "16-plan-applied.json": {
+      "sha256": "ad2ba55cd342196a9ea92185583b7c3d7adbf3a34aa22204090519050c5cbe57",
+      "bytes": 262011
+    },
+    "19-lock-state.json": {
+      "sha256": "321b7a6d9c2089799758b4ca5df715a9b49940d643ec19702e3e502100fa8912",
+      "bytes": 262010
+    },
+    "20b-before-new-activity-save.json": {
+      "sha256": "2e1af2b43cce959e67f6472729721572505e6dbb8dd8763b50b543ad85394f6e",
+      "bytes": 343336
+    },
+    "21-new-activity-saved.json": {
+      "sha256": "e0eacde6d37f81bebc27d5ab5c6d8ee216950a2edc0e31ac5fadb797bbaed162",
+      "bytes": 382767
+    },
+    "22-replan-before-confirm.json": {
+      "sha256": "48b3a2961acc58d0a4d0f9bd3166bbc9e34bd4df1c7e11acc8c60f7644b5aead",
+      "bytes": 406031
+    },
+    "24-replan-applied.json": {
+      "sha256": "cec770656e7b7e5a05964433f851ea2345fc4a3e5bd5b1cf9052e46376029ed8",
+      "bytes": 455587
+    },
+    "25-unsafe-undo-readback.json": {
+      "sha256": "74dda6d17054392e8923290fd6708b04e67a30f9d964f25a20d276aff0cc1eb1",
+      "bytes": 455587
+    },
+    "04-selected-course-only.xml": {
+      "sha256": "521a85567b4be7ea1567b4166891451699bddafd1973267ffaa20044f9e22281",
+      "bytes": 14412
+    },
+    "04-selected-course-only.png": {
+      "sha256": "377e2d8b9d397a1e9273e6fa7f5bbb56223ef1d608d7c562acc42dd645db61e1",
+      "bytes": 250171
+    },
+    "05-event-and-leave-saved.xml": {
+      "sha256": "9dcb693fbbfcda60cb1e766bbd154c36e3bb2a7a07b729e40d737689d3f8b7a4",
+      "bytes": 12782
+    },
+    "05-event-and-leave-saved.png": {
+      "sha256": "4e70e25a7d3fe13a5c23fa57b31bd5eae907eca70ab1a6788bcb419447c5db86",
+      "bytes": 145795
+    },
+    "06-leave-hidden-course-retained.xml": {
+      "sha256": "d25501fa1f7b74791e2e289752fd6cf22dec96c79af768434768d6f44983d098",
+      "bytes": 22974
+    },
+    "06-leave-hidden-course-retained.png": {
+      "sha256": "e3e707a87d30f9e05bd9f315445970b6120b7c52405f70d22181fd14a442d596",
+      "bytes": 168664
+    },
+    "07-end-time-correction-preview.xml": {
+      "sha256": "4a26bf9f93d2d34eb1ed11ca4b0da26ac7c136eca4490a1d51d07729bb3b93a3",
+      "bytes": 15515
+    },
+    "07-end-time-correction-preview.png": {
+      "sha256": "30ffcaab1602a1a910057e6b576fa3cb7a18417b80326d7b068dfbc563ac522b",
+      "bytes": 192688
+    },
+    "11-undo-location-preview.xml": {
+      "sha256": "3a71db28a158bb4020348ba335c64312c6c28451305eae15c6aae26732b2cb31",
+      "bytes": 15447
+    },
+    "11-undo-location-preview.png": {
+      "sha256": "64bde5135f8d07191ea072713afbc7ecbdb2364d58be86ba02e366e0a5d8f2ed",
+      "bytes": 184063
+    },
+    "12-location-undo-saved.xml": {
+      "sha256": "c8d592748cda3bb63fe44d1d315d484a836434ec54fd34ed1801e31b0315b69e",
+      "bytes": 15809
+    },
+    "12-location-undo-saved.png": {
+      "sha256": "b70a0ea3c951081146e3091b90b3f60a5d79e77d574ca6a0b41d257f08adf843",
+      "bytes": 158427
+    },
+    "14-learning-windows-19-21.xml": {
+      "sha256": "e96711e09469baff01e983efdb4c6ec104044250da7873db6f453ef73e5e65bf",
+      "bytes": 11376
+    },
+    "14-learning-windows-19-21.png": {
+      "sha256": "05b224a4c4227bd3fc9b4f997e3ddee55e05d7273b5dfb4544b860dca033f400",
+      "bytes": 119626
+    },
+    "15-plan-preview.xml": {
+      "sha256": "0d35867641ce7f0b0043bbf08f1c84a2c0a7d8f87e7945d3624c32d7b2c5084a",
+      "bytes": 14669
+    },
+    "15-plan-preview.png": {
+      "sha256": "7a953198d408477b1f447eff38b6ba07ebb569990480afd2b63556a367d3eb3d",
+      "bytes": 180601
+    },
+    "16-plan-applied.xml": {
+      "sha256": "7cd9db8c965e104eebded4320d63148faa6f84089be7236ebc4128b2b75a070b",
+      "bytes": 14598
+    },
+    "16-plan-applied.png": {
+      "sha256": "f62ec04c1f4fdcb6146f1a9d3c3bcbcc5394f3a0d5191839073f4925aaf02b3f",
+      "bytes": 201980
+    },
+    "19-plan-fixed.xml": {
+      "sha256": "afd1f364b51b5849ec9436351ccfe8cb42869c6ebbbd9765f49d6420a750489e",
+      "bytes": 7878
+    },
+    "19-plan-fixed.png": {
+      "sha256": "12e134e1f9273cecdf22d96e2cdd8661c9bf1819ec9f69ae6fb4b8a6226d46c6",
+      "bytes": 142108
+    },
+    "22-replan-preview.xml": {
+      "sha256": "43a239a80303322c72be540fe1118d76be819a5cbb9d38654372d52875e80909",
+      "bytes": 15074
+    },
+    "22-replan-preview.png": {
+      "sha256": "7a839bf284e1f321d19422dea1b74cfbe2c55b832ae15c96ea8534e30faf1301",
+      "bytes": 203926
+    },
+    "22b-replan-ready.xml": {
+      "sha256": "3eda6b9554e06e1a5900377ae6b9ef15786adf6845c028d39e06eac840ad82ea",
+      "bytes": 13956
+    },
+    "22b-replan-ready.png": {
+      "sha256": "fa86d24b5690f7510898ec1aeb0a3db0b7215ecd37d97f3037a0189cbdafbdf8",
+      "bytes": 231413
+    },
+    "24-replan-applied.xml": {
+      "sha256": "de879b7b5b6843da3d13045b15c1edeac7d2bdb7c065440b97a817a78d591aac",
+      "bytes": 15276
+    },
+    "24-replan-applied.png": {
+      "sha256": "914602b8f34a86035f3689fe464836eae05419d82d2b4372f992bbdfbc6e08cd",
+      "bytes": 201584
+    },
+    "25-unsafe-undo-refused.xml": {
+      "sha256": "20a452e82265501a397ff389207670d2ab23e0ab8ef34c7865a46430e7a9f700",
+      "bytes": 14972
+    },
+    "25-unsafe-undo-refused.png": {
+      "sha256": "b4006832d27fee71f09cbacaa29e61d7a0be7f4576030612bc0459e8fa23c689",
+      "bytes": 221130
+    }
+  },
+  "checks": [
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "05-after-meeting-save.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "05-after-meeting-save.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "05-after-meeting-save.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "05-after-meeting-save.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "08-known-meeting-end.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "08-known-meeting-end.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "08-known-meeting-end.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "08-known-meeting-end.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "10-location-edited.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "10-location-edited.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "10-location-edited.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "10-location-edited.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "12-location-undo-readback.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "12-location-undo-readback.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "12-location-undo-readback.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "12-location-undo-readback.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "13-free-query-readback.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "13-free-query-readback.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "13-free-query-readback.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "13-free-query-readback.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "15-plan-before-confirm.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "15-plan-before-confirm.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "15-plan-before-confirm.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "15-plan-before-confirm.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "16-plan-applied.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "16-plan-applied.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "16-plan-applied.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "16-plan-applied.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "19-lock-state.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "19-lock-state.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "19-lock-state.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "19-lock-state.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "20b-before-new-activity-save.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "20b-before-new-activity-save.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "20b-before-new-activity-save.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "20b-before-new-activity-save.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "21-new-activity-saved.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "21-new-activity-saved.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "21-new-activity-saved.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "21-new-activity-saved.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "22-replan-before-confirm.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "22-replan-before-confirm.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "22-replan-before-confirm.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "22-replan-before-confirm.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "24-replan-applied.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "24-replan-applied.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "24-replan-applied.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "24-replan-applied.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "calendar readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "25-unsafe-undo-readback.json:calendar.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "items readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "25-unsafe-undo-readback.json:items.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "plans readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "25-unsafe-undo-readback.json:plans.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "readbacks",
+      "expected": "courses readback HTTP 200",
+      "passed": true,
+      "source_fields": [
+        "25-unsafe-undo-readback.json:courses.status"
+      ],
+      "actual": null
+    },
+    {
+      "case": "start_only_meeting_and_selected_leave",
+      "expected": "09:15 start-only event preserves unknown end",
+      "passed": true,
+      "source_fields": [
+        "05-after-meeting-save.json"
+      ],
+      "actual": {
+        "start": "09:15",
+        "end": null
+      }
+    },
+    {
+      "case": "start_only_meeting_and_selected_leave",
+      "expected": "only A occurrence conflicts; later B is not requested for leave",
+      "passed": true,
+      "source_fields": [
+        "05-after-meeting-save.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "start_only_meeting_and_selected_leave",
+      "expected": "event and exactly selected occurrence leave share applied receipt",
+      "passed": true,
+      "source_fields": [
+        "05-after-meeting-save.json"
+      ],
+      "actual": [
+        {
+          "occurrence_id": "05f6af61-51e9-4f1e-ae24-c96f46a35880:2026-10-10:1",
+          "title": "算法设计",
+          "start_at": "2026-10-10T09:00:00+08:00",
+          "end_at": "2026-10-10T10:00:00+08:00",
+          "location": "A301",
+          "attendance_status": "leave"
+        }
+      ]
+    },
+    {
+      "case": "start_only_meeting_and_selected_leave",
+      "expected": "API source retains both courses; A occupancy exempted, B retained",
+      "passed": true,
+      "source_fields": [
+        "05-after-meeting-save.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "start_only_meeting_and_selected_leave",
+      "expected": "UI selects only A and default calendar hides leave A while showing B and meeting",
+      "passed": true,
+      "source_fields": [
+        "04-selected-course-only.xml",
+        "06-leave-hidden-course-retained.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "start_only_meeting_and_selected_leave",
+      "expected": "UI confirms one leave saved",
+      "passed": true,
+      "source_fields": [
+        "05-event-and-leave-saved.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "end_supplement_preserves_attendance",
+      "expected": "09:40 correction updates same event, retaining start",
+      "passed": true,
+      "source_fields": [
+        "08-known-meeting-end.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "end_supplement_preserves_attendance",
+      "expected": "A leave and B attendance retained",
+      "passed": true,
+      "source_fields": [
+        "08-known-meeting-end.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "end_supplement_preserves_attendance",
+      "expected": "UI shows explicit end correction",
+      "passed": true,
+      "source_fields": [
+        "07-end-time-correction-preview.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "location_edit_and_scoped_undo",
+      "expected": "same event changes location to A302, then restores A301",
+      "passed": true,
+      "source_fields": [
+        "10-location-edited.json",
+        "12-location-undo-readback.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "location_edit_and_scoped_undo",
+      "expected": "location undo preserves 09:15–09:40 and specific attendance states",
+      "passed": true,
+      "source_fields": [
+        "08-known-meeting-end.json",
+        "10-location-edited.json",
+        "12-location-undo-readback.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "location_edit_and_scoped_undo",
+      "expected": "undo targets location edit run",
+      "passed": true,
+      "source_fields": [
+        "12-location-undo-readback.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "location_edit_and_scoped_undo",
+      "expected": "UI previews location-only scope and confirms undo",
+      "passed": true,
+      "source_fields": [
+        "11-undo-location-preview.xml",
+        "12-location-undo-saved.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "ordinary_gap_vs_saved_study_window",
+      "expected": "ordinary query returns 12:00–14:00 calendar gap without write preview",
+      "passed": true,
+      "source_fields": [
+        "13-free-query-readback.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "ordinary_gap_vs_saved_study_window",
+      "expected": "ordinary query keeps business state unchanged",
+      "passed": true,
+      "source_fields": [
+        "13-free-query-readback.json",
+        "12-location-undo-readback.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "ordinary_gap_vs_saved_study_window",
+      "expected": "UI shows separate 19:00–21:00 study preference and 12:00–14:00 gap",
+      "passed": true,
+      "source_fields": [
+        "scenario.json:learning_windows",
+        "14-learning-windows-19-21.xml",
+        "16-plan-applied.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "candidate_then_plan_confirmation",
+      "expected": "candidate has three 30-minute blocks; formal blocks remain zero",
+      "passed": true,
+      "source_fields": [
+        "15-plan-before-confirm.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "candidate_then_plan_confirmation",
+      "expected": "confirmation stores exactly three blocks and 90 minutes",
+      "passed": true,
+      "source_fields": [
+        "16-plan-applied.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "candidate_then_plan_confirmation",
+      "expected": "scheduling does not reduce remaining work",
+      "passed": true,
+      "source_fields": [
+        "15-plan-before-confirm.json",
+        "16-plan-applied.json",
+        "scenario.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "candidate_then_plan_confirmation",
+      "expected": "UI shows saved-plan receipt",
+      "passed": true,
+      "source_fields": [
+        "16-plan-applied.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "lock_preserves_plan_times",
+      "expected": "only report block locked at 19:00–19:30",
+      "passed": true,
+      "source_fields": [
+        "19-lock-state.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "lock_preserves_plan_times",
+      "expected": "lock preserves ids, times, work",
+      "passed": true,
+      "source_fields": [
+        "16-plan-applied.json",
+        "19-lock-state.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "lock_preserves_plan_times",
+      "expected": "UI shows locked block detail",
+      "passed": true,
+      "source_fields": [
+        "19-plan-fixed.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "new_reality_does_not_silently_replan",
+      "expected": "new 19:30–20:00 activity stays unsaved in preview",
+      "passed": true,
+      "source_fields": [
+        "20b-before-new-activity-save.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "new_reality_does_not_silently_replan",
+      "expected": "new fixed activity saved",
+      "passed": true,
+      "source_fields": [
+        "21-new-activity-saved.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "new_reality_does_not_silently_replan",
+      "expected": "activity preview and save keep original plans and lock unchanged",
+      "passed": true,
+      "source_fields": [
+        "19-lock-state.json",
+        "20b-before-new-activity-save.json",
+        "21-new-activity-saved.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "new_reality_does_not_silently_replan",
+      "expected": "only probability block is identified as affected",
+      "passed": true,
+      "source_fields": [
+        "21-new-activity-saved.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "new_reality_does_not_silently_replan",
+      "expected": "later UI screen shows saved activity receipt",
+      "passed": true,
+      "source_fields": [
+        "22-replan-preview.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "minimal_replan_confirmation",
+      "expected": "replan candidate keeps saved blocks unchanged",
+      "passed": true,
+      "source_fields": [
+        "22-replan-before-confirm.json",
+        "21-new-activity-saved.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "minimal_replan_confirmation",
+      "expected": "optimal candidate moves one task by 60 minutes",
+      "passed": true,
+      "source_fields": [
+        "22-replan-before-confirm.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "minimal_replan_confirmation",
+      "expected": "ready UI candidate shows one-block change and asks confirmation",
+      "passed": true,
+      "source_fields": [
+        "22b-replan-ready.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "minimal_replan_confirmation",
+      "expected": "confirmed replan keeps all ids and 90 minutes",
+      "passed": true,
+      "source_fields": [
+        "24-replan-applied.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "minimal_replan_confirmation",
+      "expected": "only probability moves 19:30→20:30",
+      "passed": true,
+      "source_fields": [
+        "19-lock-state.json",
+        "24-replan-applied.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "minimal_replan_confirmation",
+      "expected": "confirmed times match candidate; locked block unchanged entirely",
+      "passed": true,
+      "source_fields": [
+        "22-replan-before-confirm.json",
+        "24-replan-applied.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "minimal_replan_confirmation",
+      "expected": "remaining work retained and plan conflicts removed",
+      "passed": true,
+      "source_fields": [
+        "24-replan-applied.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "minimal_replan_confirmation",
+      "expected": "UI shows confirmed replan result",
+      "passed": true,
+      "source_fields": [
+        "24-replan-applied.xml"
+      ],
+      "actual": null
+    },
+    {
+      "case": "unsafe_undo_refused",
+      "expected": "UI/readback describes rejected restoration of conflicting old plan",
+      "passed": true,
+      "source_fields": [
+        "25-unsafe-undo-refused.xml",
+        "25-unsafe-undo-readback.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "unsafe_undo_refused",
+      "expected": "refused undo leaves plan blocks and business revision unchanged",
+      "passed": true,
+      "source_fields": [
+        "25-unsafe-undo-readback.json",
+        "24-replan-applied.json"
+      ],
+      "actual": null
+    },
+    {
+      "case": "unsafe_undo_refused",
+      "expected": "conflicting reality remains after refusal",
+      "passed": true,
+      "source_fields": [
+        "25-unsafe-undo-readback.json"
+      ],
+      "actual": null
+    }
+  ],
+  "cases": [
+    {
+      "case": "start_only_meeting_and_selected_leave",
+      "passed": true,
+      "check_count": 6,
+      "summary": {
+        "start": "09:15",
+        "end": null,
+        "leave": "算法设计",
+        "later_course": "线性代数",
+        "API_source_retained": true,
+        "client_projection_hides_leave": true
+      },
+      "evidence_kind": "emulator screen + readback"
+    },
+    {
+      "case": "end_supplement_preserves_attendance",
+      "passed": true,
+      "check_count": 3,
+      "summary": {
+        "same_event": true,
+        "end": "09:40",
+        "leave_retained": true
+      },
+      "evidence_kind": "emulator screen + readback"
+    },
+    {
+      "case": "location_edit_and_scoped_undo",
+      "passed": true,
+      "check_count": 4,
+      "summary": {
+        "locations": [
+          "A301",
+          "A302",
+          "A301"
+        ],
+        "end": "09:40",
+        "leave_preserved": true
+      },
+      "evidence_kind": "emulator screen + readback"
+    },
+    {
+      "case": "ordinary_gap_vs_saved_study_window",
+      "passed": true,
+      "check_count": 3,
+      "summary": {
+        "ordinary_gap": "12:00–14:00",
+        "study_preference": "19:00–21:00",
+        "query_writes": false
+      },
+      "evidence_kind": "emulator screen + readback"
+    },
+    {
+      "case": "candidate_then_plan_confirmation",
+      "passed": true,
+      "check_count": 4,
+      "summary": {
+        "formal_before": 0,
+        "formal_after": 3,
+        "total_minutes": 90,
+        "remaining_minutes_each": 30
+      },
+      "evidence_kind": "candidate JSON readback + confirmed UI receipt/readback"
+    },
+    {
+      "case": "lock_preserves_plan_times",
+      "passed": true,
+      "check_count": 3,
+      "summary": {
+        "task": "完成实验报告",
+        "locked_time": "19:00–19:30"
+      },
+      "evidence_kind": "emulator screen + readback"
+    },
+    {
+      "case": "new_reality_does_not_silently_replan",
+      "passed": true,
+      "check_count": 5,
+      "summary": {
+        "activity": "19:30–20:00",
+        "affected_task": "复习概率论",
+        "plans_unchanged": true
+      },
+      "evidence_kind": "emulator action followed by candidate/applied readback"
+    },
+    {
+      "case": "minimal_replan_confirmation",
+      "passed": true,
+      "check_count": 8,
+      "summary": {
+        "moved_task": "复习概率论",
+        "before": "19:30–20:00",
+        "after": "20:30–21:00",
+        "moved_tasks": 1,
+        "shift_minutes": 60,
+        "work_minutes": 90,
+        "locked_retained": true
+      },
+      "evidence_kind": "emulator screen + readback"
+    },
+    {
+      "case": "unsafe_undo_refused",
+      "passed": true,
+      "check_count": 3,
+      "summary": {
+        "undo_refused": true,
+        "plans_unchanged": true,
+        "fixed_reality_retained": true,
+        "http_status_claimed": null
+      },
+      "evidence_kind": "emulator screen + readback"
+    }
+  ],
+  "boundaries": [
+    "No HTTP, device actions or original-file edits by verifier",
+    "JSON proves candidate/stored state; XML proves visible screen semantics",
+    "API retains leave course; hiding is client calendar projection",
+    "No real-device/OEM delivery or human-efficiency conclusion"
+  ],
+  "capture_notes": [
+    {
+      "file": "15-plan-preview.xml",
+      "actual_screen": "request still processing",
+      "boundary": "candidate is proven by JSON readback; this screenshot does not yet show rendered candidate"
+    },
+    {
+      "file": "22-replan-preview.xml",
+      "actual_screen": "request still processing",
+      "boundary": "candidate is proven by JSON readback; this screenshot does not yet show rendered candidate"
+    }
+  ],
+  "summary": {
+    "cases": 9,
+    "passed_cases": 9,
+    "assertions": 91,
+    "readback_assertions": 52,
+    "behavior_assertions": 39,
+    "all_assertions_passed": true
+  },
+  "passed": true
+}

@@ -1,0 +1,81 @@
+{
+  "recorded_at": "2026-10-10T01:03:36.828924+08:00",
+  "source": {
+    "version": "1.0.0+8",
+    "git_commit": "98f503428b65af6ede66b268bd6df39636615b3f",
+    "branch": "main",
+    "replanner_sha256": "9de63d15dbe6f42c1c237ff3db63df4cf87214568d235eeca3f6c8494053b7b5",
+    "requirements_lock_sha256": "e3eff330c96e3797b15efec2d2bb8d1ec0fac061939651fc99a4b04fe6126bb9",
+    "business_source_changes_this_experiment": false
+  },
+  "device": {
+    "serial": "emulator-5554",
+    "os": "13",
+    "abi": "x86_64",
+    "size": "Physical size: 1080x2400",
+    "density": "Physical density: 420",
+    "font_scale": "1.0",
+    "timezone_after_display_setup": "Asia/Shanghai",
+    "epoch_override_used": false,
+    "app_debugSchoolClock_override_used": false,
+    "setup_note": "Emulator display changed from GMT/12-hour to Asia/Shanghai/24-hour; app uses school time UTC+8"
+  },
+  "app": {
+    "entrypoint": "lib/main.dart",
+    "mode": "debug",
+    "package": "cn.semesteros.semester_os.qa",
+    "qa_apk_sha256": "84a8869b252a4fc7284d593c4844ee565875879d0bb105b5801af3e01c20ab06",
+    "qa_apk_bytes": 103844640,
+    "build_command": "flutter build apk --debug --target-platform=android-x64 -PsemesterosQa=true --dart-define=API_BASE_URL=http://10.0.2.2:8874",
+    "installed_versions": {
+      "cn.semesteros.semester_os.qa": [
+        "versionCode=8 minSdk=24 targetSdk=36",
+        "versionName=1.0.0"
+      ],
+      "cn.semesteros.semester_os": [
+        "versionCode=8 minSdk=24 targetSdk=36",
+        "versionName=1.0.0"
+      ]
+    },
+    "normal_package_business_data_written": false,
+    "release_apk_sha256": "cbd521de5257c067da2186032fb6fdfce4e7df1b7876b50fd94c5f5823d02ecb",
+    "release_apk_bytes": 81991743
+  },
+  "service": {
+    "local_base": "http://127.0.0.1:8874",
+    "emulator_base": "http://10.0.2.2:8874",
+    "health": {
+      "status": "ok",
+      "version": "1.0.0",
+      "database": "sqlite"
+    },
+    "database": "isolated SQLite; synthetic random accounts",
+    "real_agent_worker": true,
+    "model": "deepseek-flash",
+    "model_key_ready": true,
+    "model_stubbed": false,
+    "media_worker_tested": false,
+    "production_business_api_used": false,
+    "dependencies": {
+      "fastapi": "0.141.1",
+      "httpx": "0.28.1",
+      "sqlalchemy": "2.0.54",
+      "ortools": "9.15.6755",
+      "langgraph": "1.2.12",
+      "uvicorn": "0.53.0"
+    }
+  },
+  "runtime_observation": {
+    "qa_fatal_android_runtime_entries_in_current_log_buffer": 0,
+    "limit": "Bounded current log buffer observation; not a guarantee of no errors on all devices"
+  },
+  "instrumentation": {
+    "input_helper": "temporary QA-only InputConnection IME; no network permission",
+    "private_db_and_session_files_delivered": false,
+    "path_adaptation": "Evidence helper path discovery and SDK/JDK environment paths only; no case/constraint/criterion changes"
+  },
+  "limits": [
+    "Text inputs and emulator only; no real-school login, OCR/ASR or OEM reminder arrival measured",
+    "No overall accuracy, human efficiency or Release latency claim"
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "data": "anonymous synthetic",
+  "seed_at": "2026-10-10T00:40:22.077347+08:00",
+  "day": "2026-10-11",
+  "semester": {
+    "id": "34257f61-342b-42c7-a1ff-847dc12b56ed",
+    "name": "演示学期（合成数据）",
+    "first_monday": "2026-09-14",
+    "total_weeks": 20,
+    "periods": [
+      {
+        "number": 1,
+        "start": "09:00",
+        "end": "10:00"
+      },
+      {
+        "number": 2,
+        "start": "10:10",
+        "end": "11:00"
+      },
+      {
+        "number": 3,
+        "start": "14:00",
+        "end": "14:50"
+      },
+      {
+        "number": 4,
+        "start": "15:00",
+        "end": "15:50"
+      },
+      {
+        "number": 5,
+        "start": "19:00",
+        "end": "19:50"
+      },
+      {
+        "number": 6,
+        "start": "20:00",
+        "end": "20:50"
+      }
+    ],
+    "revision": 0
+  },
+  "courses": [],
+  "tasks": [],
+  "learning_windows": [
+    {
+      "weekday": 1,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 2,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 3,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 4,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 5,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 6,
+      "start": "19:00",
+      "end": "21:00"
+    },
+    {
+      "weekday": 7,
+      "start": "19:00",
+      "end": "21:00"
+    }
+  ],
+  "method": "course fixtures imported through real local API; no school login performed"
+}

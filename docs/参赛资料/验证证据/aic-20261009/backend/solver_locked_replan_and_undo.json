@@ -1,0 +1,5098 @@
+{
+  "case": "solver_locked_replan_and_undo",
+  "expected": "one affected task moves minimally; lock and identities/work preserved; unsafe undo rejected, explicit reality cancellation enables undo",
+  "passed": true,
+  "data": "synthetic disposable local account",
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "input": {
+        "username": "qa_aic_86ec54fccd6eba",
+        "password": "[REDACTED]"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.062,
+      "actual": {
+        "user": {
+          "id": "b18ec8bb-a9fb-4181-8dd5-b8301552b354",
+          "username": "qa_aic_86ec54fccd6eba",
+          "is_demo": false
+        },
+        "access_token": "[REDACTED]",
+        "refresh_token": "[REDACTED]",
+        "expires_in": 900,
+        "logout_token": "[REDACTED]",
+        "recovery_code": "[REDACTED]"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters",
+      "input": {
+        "name": "AIC本轮合成验证·solver_locked_replan_and_undo",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "number": 2,
+            "start": "10:10",
+            "end": "11:00"
+          }
+        ]
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.016,
+      "actual": {
+        "id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "name": "AIC本轮合成验证·solver_locked_replan_and_undo",
+        "first_monday": "2026-10-05",
+        "total_weeks": 20,
+        "periods": [
+          {
+            "number": 1,
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "number": 2,
+            "start": "10:10",
+            "end": "11:00"
+          }
+        ],
+        "revision": 0
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/availability/preview",
+      "input": {
+        "expected_version": 0,
+        "weekly": [
+          {
+            "weekday": 6,
+            "start": "09:00",
+            "end": "13:00"
+          }
+        ],
+        "exclusions": []
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "before": {
+          "weekly": [],
+          "exclusions": [],
+          "configured": false,
+          "version": 0,
+          "revision": 0,
+          "timezone": "Asia/Shanghai"
+        },
+        "after": {
+          "weekly": [
+            {
+              "weekday": 6,
+              "start": "09:00",
+              "end": "13:00"
+            }
+          ],
+          "exclusions": []
+        },
+        "base_revision": 0,
+        "settings_version": 0,
+        "affected_plan_count": 0,
+        "affected_blocks": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/availability",
+      "input": {
+        "expected_version": 0,
+        "weekly": [
+          {
+            "weekday": 6,
+            "start": "09:00",
+            "end": "13:00"
+          }
+        ],
+        "exclusions": [],
+        "expected_revision": 0
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "weekly": [
+          {
+            "weekday": 6,
+            "start": "09:00",
+            "end": "13:00"
+          }
+        ],
+        "exclusions": [],
+        "configured": true,
+        "version": 1,
+        "revision": 1,
+        "timezone": "Asia/Shanghai"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/items",
+      "input": {
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "kind": "task",
+        "title": "合成重排任务A",
+        "certainty": "formal",
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T13:00:00+08:00"
+        },
+        "remaining_minutes": 60,
+        "splittable": false,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T09:00:00+08:00"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.015,
+      "actual": {
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "kind": "task",
+        "title": "合成重排任务A",
+        "course_id": null,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T05:00:00Z",
+          "end_at": null,
+          "date": null,
+          "week": null,
+          "end_date": null,
+          "day_end_confirmed": false,
+          "expression": "",
+          "meaning": "unspecified",
+          "candidate_dates": [],
+          "course_anchor": null
+        },
+        "certainty": "formal",
+        "remaining_minutes": 60,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T01:00:00Z",
+        "reserve_time": true,
+        "splittable": false,
+        "priority": "normal",
+        "location": "",
+        "notes": "",
+        "source_text": "",
+        "details": {
+          "recipient": "",
+          "materials": [],
+          "submission_channel": "",
+          "participation": "",
+          "participation_status": "unspecified",
+          "conditions": [],
+          "early_arrival_minutes": null,
+          "applicability": "",
+          "responsibility": ""
+        },
+        "candidate_id": null,
+        "source_id": null,
+        "category_id": null,
+        "course_title": "",
+        "tags": [],
+        "id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+        "version": 1,
+        "lifecycle": "active",
+        "review_state": "confirmed",
+        "control": "plannable",
+        "anchor_at": "2026-10-10T05:00:00+00:00",
+        "created_at": "2026-10-09T15:28:02.922254+00:00",
+        "updated_at": "2026-10-09T15:28:02.922254+00:00",
+        "reminders": [],
+        "arrival_at": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/items",
+      "input": {
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "kind": "task",
+        "title": "合成重排任务B",
+        "certainty": "formal",
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T13:00:00+08:00"
+        },
+        "remaining_minutes": 60,
+        "splittable": false,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T09:00:00+08:00"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.0,
+      "actual": {
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "kind": "task",
+        "title": "合成重排任务B",
+        "course_id": null,
+        "time": {
+          "precision": "exact",
+          "at": "2026-10-10T05:00:00Z",
+          "end_at": null,
+          "date": null,
+          "week": null,
+          "end_date": null,
+          "day_end_confirmed": false,
+          "expression": "",
+          "meaning": "unspecified",
+          "candidate_dates": [],
+          "course_anchor": null
+        },
+        "certainty": "formal",
+        "remaining_minutes": 60,
+        "start_policy": "at",
+        "earliest_start_at": "2026-10-10T01:00:00Z",
+        "reserve_time": true,
+        "splittable": false,
+        "priority": "normal",
+        "location": "",
+        "notes": "",
+        "source_text": "",
+        "details": {
+          "recipient": "",
+          "materials": [],
+          "submission_channel": "",
+          "participation": "",
+          "participation_status": "unspecified",
+          "conditions": [],
+          "early_arrival_minutes": null,
+          "applicability": "",
+          "responsibility": ""
+        },
+        "candidate_id": null,
+        "source_id": null,
+        "category_id": null,
+        "course_title": "",
+        "tags": [],
+        "id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+        "version": 1,
+        "lifecycle": "active",
+        "review_state": "confirmed",
+        "control": "plannable",
+        "anchor_at": "2026-10-10T05:00:00+00:00",
+        "created_at": "2026-10-09T15:28:02.930327+00:00",
+        "updated_at": "2026-10-09T15:28:02.930327+00:00",
+        "reminders": [],
+        "arrival_at": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plan-proposals",
+      "input": {
+        "days": 7,
+        "lead_minutes": 0,
+        "chunk_minutes": 60,
+        "allow_partial": false,
+        "tasks": [
+          {
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b"
+          },
+          {
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d"
+          }
+        ],
+        "window_start_at": "2026-10-10T09:00:00+08:00",
+        "window_end_at": "2026-10-10T13:00:00+08:00"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.016,
+      "actual": {
+        "window_start": "2026-10-10T01:00:00+00:00",
+        "window_end": "2026-10-10T05:00:00+00:00",
+        "blocks": [
+          {
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "title": "合成重排任务B",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60
+          },
+          {
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "title": "合成重排任务A",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60
+          }
+        ],
+        "tasks": [
+          {
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "title": "合成重排任务A",
+            "remaining_minutes": 60,
+            "target_minutes": 60,
+            "existing_minutes": 0,
+            "outside_minutes": 0,
+            "new_minutes": 60,
+            "unarranged_minutes": 0,
+            "later_minutes": 0
+          },
+          {
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "title": "合成重排任务B",
+            "remaining_minutes": 60,
+            "target_minutes": 60,
+            "existing_minutes": 0,
+            "outside_minutes": 0,
+            "new_minutes": 60,
+            "unarranged_minutes": 0,
+            "later_minutes": 0
+          }
+        ],
+        "status": "FEASIBLE_COMPLETE",
+        "messages": [
+          "保留已有计划，只为尚未安排的工作补充时间"
+        ],
+        "solver_status": "OPTIMAL",
+        "optimal": true,
+        "unarranged_minutes": 0,
+        "can_apply": true,
+        "existing_conflict_count": 0,
+        "uncertainty_warnings": [],
+        "solver_version": "9.15.6755",
+        "valid_until": "2026-10-10T01:00:00+00:00",
+        "phases": [
+          {
+            "status": "OPTIMAL",
+            "objective": 360.0,
+            "bound": 360.0
+          }
+        ],
+        "elapsed_ms": 16,
+        "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+        "version": 1,
+        "phase": "ready",
+        "base_revision": 3,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "created_at": "2026-10-09T15:28:02.950261+00:00",
+        "request": {
+          "days": 7,
+          "lead_minutes": 0,
+          "chunk_minutes": 60,
+          "allow_partial": false,
+          "tasks": [
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "target_minutes": null
+            },
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "target_minutes": null
+            }
+          ],
+          "window_start_at": "2026-10-10T01:00:00Z",
+          "window_end_at": "2026-10-10T05:00:00Z"
+        },
+        "receipt": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/plan-proposals/466f9ed6-1a11-41c0-9391-7fad8634dd0d/accept",
+      "input": {
+        "expected_version": 1,
+        "expected_revision": 3
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.015,
+      "actual": {
+        "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+        "proposal_version": 2,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "revision": 4,
+        "block_ids": [
+          "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+          "087efb04-6ffa-44e2-812a-79953a20e744"
+        ],
+        "unarranged_minutes": 0
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "revision": 4,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "blocks": [
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成重排任务B"
+          },
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成重排任务A"
+          }
+        ],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": false,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 360.0,
+              "bound": 360.0
+            }
+          ],
+          "elapsed_ms": 16,
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2,
+          "phase": "applied",
+          "base_revision": 3,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:02.950261+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "target_minutes": null
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": {
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "proposal_version": 2,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "revision": 4,
+            "block_ids": [
+              "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "087efb04-6ffa-44e2-812a-79953a20e744"
+            ],
+            "unarranged_minutes": 0
+          }
+        },
+        "latest_applied": {
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/plan-blocks/087efb04-6ffa-44e2-812a-79953a20e744/lock",
+      "input": {
+        "expected_version": 1,
+        "locked": true
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "revision": 5,
+        "block": {
+          "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+          "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+          "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "start_at": "2026-10-10T02:00:00+00:00",
+          "end_at": "2026-10-10T03:00:00+00:00",
+          "minutes": 60,
+          "locked": true,
+          "status": "active",
+          "version": 2,
+          "title": ""
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "revision": 5,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "blocks": [
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成重排任务B"
+          },
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A"
+          }
+        ],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": false,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 360.0,
+              "bound": 360.0
+            }
+          ],
+          "elapsed_ms": 16,
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2,
+          "phase": "applied",
+          "base_revision": 3,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:02.950261+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "target_minutes": null
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": {
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "proposal_version": 2,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "revision": 4,
+            "block_ids": [
+              "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "087efb04-6ffa-44e2-812a-79953a20e744"
+            ],
+            "unarranged_minutes": 0
+          }
+        },
+        "latest_applied": {
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/plan-blocks/087efb04-6ffa-44e2-812a-79953a20e744/cancel",
+      "input": {
+        "expected_version": 2
+      },
+      "params": null,
+      "expected_status": 422,
+      "actual_status": 422,
+      "seconds": 0.015,
+      "actual": {
+        "code": "LOCKED_CONFIRMATION",
+        "message": "需明确确认解锁并取消"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/changes",
+      "input": {
+        "kind": "block",
+        "title": "合成临时活动",
+        "source_text": "确认在原任务时段参加活动",
+        "start_at": "2026-10-10T01:00:00+00:00",
+        "end_at": "2026-10-10T02:00:00+00:00"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.016,
+      "actual": {
+        "id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "base_revision": 5,
+        "phase": "ready",
+        "request": {
+          "kind": "block",
+          "targets": [],
+          "title": "合成临时活动",
+          "source_text": "确认在原任务时段参加活动",
+          "source_id": null,
+          "start_at": "2026-10-10T01:00:00Z",
+          "end_at": "2026-10-10T02:00:00Z",
+          "location": ""
+        },
+        "patch": {
+          "before": [],
+          "after": [
+            {
+              "id": "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70",
+              "course_id": null,
+              "teacher": "",
+              "sections": [],
+              "weeks": [],
+              "weekday": 6,
+              "source_batch_id": null,
+              "reality_kind": "activity",
+              "title": "合成临时活动",
+              "start_at": "2026-10-10T09:00:00+08:00",
+              "end_at": "2026-10-10T10:00:00+08:00",
+              "location": "",
+              "changed": true
+            }
+          ]
+        },
+        "impact": {
+          "affected_blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B"
+            }
+          ],
+          "risk_changes": [
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "before_slack": 120,
+              "after_slack": 60,
+              "before_level": "low",
+              "after_level": "high"
+            }
+          ],
+          "before_summary": {
+            "level": "low",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 0,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "after_summary": {
+            "level": "high",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 1,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "fixed_conflicts": [],
+          "new_fixed_conflicts": []
+        },
+        "base_calendar": {
+          "first_monday": "2026-10-05"
+        },
+        "receipt": null,
+        "created_at": "2026-10-09T15:28:03.015257+00:00"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "revision": 5,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "blocks": [
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成重排任务B"
+          },
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A"
+          }
+        ],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": false,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 360.0,
+              "bound": 360.0
+            }
+          ],
+          "elapsed_ms": 16,
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2,
+          "phase": "applied",
+          "base_revision": 3,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:02.950261+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "target_minutes": null
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": {
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "proposal_version": 2,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "revision": 4,
+            "block_ids": [
+              "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "087efb04-6ffa-44e2-812a-79953a20e744"
+            ],
+            "unarranged_minutes": 0
+          }
+        },
+        "latest_applied": {
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/changes/4b2228c2-9021-450c-b372-42ea6b9dfaef/apply",
+      "input": {
+        "expected_revision": 5
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "change_id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "revision": 6,
+        "impact": {
+          "affected_blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B"
+            }
+          ],
+          "risk_changes": [
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "before_slack": 120,
+              "after_slack": 60,
+              "before_level": "low",
+              "after_level": "high"
+            }
+          ],
+          "before_summary": {
+            "level": "low",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 0,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "after_summary": {
+            "level": "high",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 1,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "fixed_conflicts": [],
+          "new_fixed_conflicts": []
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/changes/4b2228c2-9021-450c-b372-42ea6b9dfaef/apply",
+      "input": {
+        "expected_revision": 5
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "change_id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "revision": 6,
+        "impact": {
+          "affected_blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B"
+            }
+          ],
+          "risk_changes": [
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "before_slack": 120,
+              "after_slack": 60,
+              "before_level": "low",
+              "after_level": "high"
+            }
+          ],
+          "before_summary": {
+            "level": "low",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 0,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "after_summary": {
+            "level": "high",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 1,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "fixed_conflicts": [],
+          "new_fixed_conflicts": []
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.015,
+      "actual": {
+        "revision": 6,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "blocks": [
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成重排任务B"
+          },
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A"
+          }
+        ],
+        "invalid_blocks": [
+          {
+            "block_id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "reason_codes": [
+              "outside_free_time"
+            ]
+          }
+        ],
+        "history_days": 7,
+        "latest_proposal": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": false,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 360.0,
+              "bound": 360.0
+            }
+          ],
+          "elapsed_ms": 16,
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2,
+          "phase": "applied",
+          "base_revision": 3,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:02.950261+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "target_minutes": null
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": {
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "proposal_version": 2,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "revision": 4,
+            "block_ids": [
+              "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "087efb04-6ffa-44e2-812a-79953a20e744"
+            ],
+            "unarranged_minutes": 0
+          }
+        },
+        "latest_applied": {
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/replan-proposals",
+      "input": {
+        "lead_minutes": 0
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.047,
+      "actual": {
+        "mode": "replan",
+        "status": "FEASIBLE_COMPLETE",
+        "can_apply": true,
+        "blocks": [
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T03:00:00+00:00",
+            "end_at": "2026-10-10T04:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成重排任务B",
+            "before_start_at": "2026-10-10T01:00:00+00:00",
+            "before_end_at": "2026-10-10T02:00:00+00:00"
+          },
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A",
+            "before_start_at": "2026-10-10T02:00:00+00:00",
+            "before_end_at": "2026-10-10T03:00:00+00:00"
+          }
+        ],
+        "tasks": [],
+        "messages": [
+          "已检查本学期的后续个人计划，只调整允许移动的部分。"
+        ],
+        "window_start": "2026-10-09T15:29:00+00:00",
+        "window_end": "2027-02-21T16:00:00+00:00",
+        "optimal": true,
+        "unarranged_minutes": 0,
+        "existing_conflict_count": 0,
+        "solver_version": "9.15.6755",
+        "uncertainty_warnings": [],
+        "valid_until": "2026-10-10T01:00:00+00:00",
+        "moved_tasks": 1,
+        "moved_blocks": 1,
+        "shift_minutes": 120,
+        "phases": [
+          {
+            "name": "moved_tasks",
+            "status": "OPTIMAL",
+            "objective": 1.0,
+            "bound": 1.0
+          },
+          {
+            "name": "shift_minutes",
+            "status": "OPTIMAL",
+            "objective": 120.0,
+            "bound": 120.0
+          },
+          {
+            "name": "earlier",
+            "status": "OPTIMAL",
+            "objective": 59719980.0,
+            "bound": 59719980.0
+          }
+        ],
+        "solver_status": "OPTIMAL",
+        "elapsed_ms": 47,
+        "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+        "version": 1,
+        "phase": "ready",
+        "base_revision": 6,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "created_at": "2026-10-09T15:28:03.102719+00:00",
+        "request": {
+          "mode": "replan",
+          "lead_minutes": 0,
+          "task_ids": null
+        },
+        "receipt": null
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "revision": 6,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "blocks": [
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成重排任务B"
+          },
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A"
+          }
+        ],
+        "invalid_blocks": [
+          {
+            "block_id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "reason_codes": [
+              "outside_free_time"
+            ]
+          }
+        ],
+        "history_days": 7,
+        "latest_proposal": {
+          "mode": "replan",
+          "status": "FEASIBLE_COMPLETE",
+          "can_apply": true,
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T04:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B",
+              "before_start_at": "2026-10-10T01:00:00+00:00",
+              "before_end_at": "2026-10-10T02:00:00+00:00"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A",
+              "before_start_at": "2026-10-10T02:00:00+00:00",
+              "before_end_at": "2026-10-10T03:00:00+00:00"
+            }
+          ],
+          "tasks": [],
+          "messages": [
+            "已检查本学期的后续个人计划，只调整允许移动的部分。"
+          ],
+          "window_start": "2026-10-09T15:29:00+00:00",
+          "window_end": "2027-02-21T16:00:00+00:00",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "existing_conflict_count": 0,
+          "solver_version": "9.15.6755",
+          "uncertainty_warnings": [],
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "moved_tasks": 1,
+          "moved_blocks": 1,
+          "shift_minutes": 120,
+          "phases": [
+            {
+              "name": "moved_tasks",
+              "status": "OPTIMAL",
+              "objective": 1.0,
+              "bound": 1.0
+            },
+            {
+              "name": "shift_minutes",
+              "status": "OPTIMAL",
+              "objective": 120.0,
+              "bound": 120.0
+            },
+            {
+              "name": "earlier",
+              "status": "OPTIMAL",
+              "objective": 59719980.0,
+              "bound": 59719980.0
+            }
+          ],
+          "solver_status": "OPTIMAL",
+          "elapsed_ms": 47,
+          "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "version": 1,
+          "phase": "ready",
+          "base_revision": 6,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:03.102719+00:00",
+          "request": {
+            "mode": "replan",
+            "lead_minutes": 0,
+            "task_ids": null
+          },
+          "receipt": null
+        },
+        "latest_applied": {
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/plan-proposals/0ddc4569-2656-4d4b-bbae-1e87dd731484/accept",
+      "input": {
+        "expected_version": 1,
+        "expected_revision": 6
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+        "proposal_version": 2,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "revision": 7,
+        "block_ids": [
+          "aac56007-eb4f-4e74-bf1f-cccad9aaec52"
+        ],
+        "moved_tasks": 1,
+        "shift_minutes": 120,
+        "unarranged_minutes": 0
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.015,
+      "actual": {
+        "revision": 7,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "blocks": [
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A"
+          },
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T03:00:00+00:00",
+            "end_at": "2026-10-10T04:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务B"
+          }
+        ],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "mode": "replan",
+          "status": "FEASIBLE_COMPLETE",
+          "can_apply": false,
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T04:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B",
+              "before_start_at": "2026-10-10T01:00:00+00:00",
+              "before_end_at": "2026-10-10T02:00:00+00:00"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A",
+              "before_start_at": "2026-10-10T02:00:00+00:00",
+              "before_end_at": "2026-10-10T03:00:00+00:00"
+            }
+          ],
+          "tasks": [],
+          "messages": [
+            "已检查本学期的后续个人计划，只调整允许移动的部分。"
+          ],
+          "window_start": "2026-10-09T15:29:00+00:00",
+          "window_end": "2027-02-21T16:00:00+00:00",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "existing_conflict_count": 0,
+          "solver_version": "9.15.6755",
+          "uncertainty_warnings": [],
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "moved_tasks": 1,
+          "moved_blocks": 1,
+          "shift_minutes": 120,
+          "phases": [
+            {
+              "name": "moved_tasks",
+              "status": "OPTIMAL",
+              "objective": 1.0,
+              "bound": 1.0
+            },
+            {
+              "name": "shift_minutes",
+              "status": "OPTIMAL",
+              "objective": 120.0,
+              "bound": 120.0
+            },
+            {
+              "name": "earlier",
+              "status": "OPTIMAL",
+              "objective": 59719980.0,
+              "bound": 59719980.0
+            }
+          ],
+          "solver_status": "OPTIMAL",
+          "elapsed_ms": 47,
+          "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "version": 2,
+          "phase": "applied",
+          "base_revision": 6,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:03.102719+00:00",
+          "request": {
+            "mode": "replan",
+            "lead_minutes": 0,
+            "task_ids": null
+          },
+          "receipt": {
+            "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "proposal_version": 2,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "revision": 7,
+            "block_ids": [
+              "aac56007-eb4f-4e74-bf1f-cccad9aaec52"
+            ],
+            "moved_tasks": 1,
+            "shift_minutes": 120,
+            "unarranged_minutes": 0
+          }
+        },
+        "latest_applied": {
+          "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "version": 2
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/plan-proposals/0ddc4569-2656-4d4b-bbae-1e87dd731484/undo",
+      "input": {
+        "expected_version": 2,
+        "expected_revision": 7
+      },
+      "params": null,
+      "expected_status": 409,
+      "actual_status": 409,
+      "seconds": 0.0,
+      "actual": {
+        "code": "UNDO_REALITY_CONFLICT",
+        "message": "旧计划已不符合最新现实安排，不能恢复；请重新规划"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "revision": 7,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "blocks": [
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A"
+          },
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T03:00:00+00:00",
+            "end_at": "2026-10-10T04:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务B"
+          }
+        ],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "mode": "replan",
+          "status": "FEASIBLE_COMPLETE",
+          "can_apply": false,
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T04:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B",
+              "before_start_at": "2026-10-10T01:00:00+00:00",
+              "before_end_at": "2026-10-10T02:00:00+00:00"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A",
+              "before_start_at": "2026-10-10T02:00:00+00:00",
+              "before_end_at": "2026-10-10T03:00:00+00:00"
+            }
+          ],
+          "tasks": [],
+          "messages": [
+            "已检查本学期的后续个人计划，只调整允许移动的部分。"
+          ],
+          "window_start": "2026-10-09T15:29:00+00:00",
+          "window_end": "2027-02-21T16:00:00+00:00",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "existing_conflict_count": 0,
+          "solver_version": "9.15.6755",
+          "uncertainty_warnings": [],
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "moved_tasks": 1,
+          "moved_blocks": 1,
+          "shift_minutes": 120,
+          "phases": [
+            {
+              "name": "moved_tasks",
+              "status": "OPTIMAL",
+              "objective": 1.0,
+              "bound": 1.0
+            },
+            {
+              "name": "shift_minutes",
+              "status": "OPTIMAL",
+              "objective": 120.0,
+              "bound": 120.0
+            },
+            {
+              "name": "earlier",
+              "status": "OPTIMAL",
+              "objective": 59719980.0,
+              "bound": 59719980.0
+            }
+          ],
+          "solver_status": "OPTIMAL",
+          "elapsed_ms": 47,
+          "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "version": 2,
+          "phase": "applied",
+          "base_revision": 6,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:03.102719+00:00",
+          "request": {
+            "mode": "replan",
+            "lead_minutes": 0,
+            "task_ids": null
+          },
+          "receipt": {
+            "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "proposal_version": 2,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "revision": 7,
+            "block_ids": [
+              "aac56007-eb4f-4e74-bf1f-cccad9aaec52"
+            ],
+            "moved_tasks": 1,
+            "shift_minutes": 120,
+            "unarranged_minutes": 0
+          }
+        },
+        "latest_applied": {
+          "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "version": 2
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/changes",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "revision": 7,
+        "changes": [
+          {
+            "id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "base_revision": 5,
+            "phase": "applied",
+            "request": {
+              "kind": "block",
+              "targets": [],
+              "title": "合成临时活动",
+              "source_text": "确认在原任务时段参加活动",
+              "source_id": null,
+              "start_at": "2026-10-10T01:00:00Z",
+              "end_at": "2026-10-10T02:00:00Z",
+              "location": ""
+            },
+            "patch": {
+              "before": [],
+              "after": [
+                {
+                  "id": "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70",
+                  "course_id": null,
+                  "teacher": "",
+                  "sections": [],
+                  "weeks": [],
+                  "weekday": 6,
+                  "source_batch_id": null,
+                  "reality_kind": "activity",
+                  "title": "合成临时活动",
+                  "start_at": "2026-10-10T09:00:00+08:00",
+                  "end_at": "2026-10-10T10:00:00+08:00",
+                  "location": "",
+                  "changed": true
+                }
+              ]
+            },
+            "impact": {
+              "affected_blocks": [
+                {
+                  "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                  "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                  "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                  "start_at": "2026-10-10T01:00:00+00:00",
+                  "end_at": "2026-10-10T02:00:00+00:00",
+                  "minutes": 60,
+                  "locked": false,
+                  "status": "active",
+                  "version": 1,
+                  "title": "合成重排任务B"
+                }
+              ],
+              "risk_changes": [
+                {
+                  "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                  "title": "合成重排任务B",
+                  "before_slack": 120,
+                  "after_slack": 60,
+                  "before_level": "low",
+                  "after_level": "high"
+                }
+              ],
+              "before_summary": {
+                "level": "low",
+                "active_task_count": 2,
+                "incomplete_count": 0,
+                "window_gap_minutes": 0,
+                "critical_window": null,
+                "fixed_conflict_count": 0,
+                "possible_fixed_conflict_count": 0,
+                "configured": true,
+                "uncertain_exam_count": 0,
+                "uncertain_event_count": 0,
+                "plan_conflict_count": 0,
+                "analysis_limited": false,
+                "is_schedule": false
+              },
+              "after_summary": {
+                "level": "high",
+                "active_task_count": 2,
+                "incomplete_count": 0,
+                "window_gap_minutes": 0,
+                "critical_window": null,
+                "fixed_conflict_count": 0,
+                "possible_fixed_conflict_count": 0,
+                "configured": true,
+                "uncertain_exam_count": 0,
+                "uncertain_event_count": 0,
+                "plan_conflict_count": 1,
+                "analysis_limited": false,
+                "is_schedule": false
+              },
+              "fixed_conflicts": [],
+              "new_fixed_conflicts": []
+            },
+            "base_calendar": {
+              "first_monday": "2026-10-05"
+            },
+            "receipt": {
+              "change_id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+              "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+              "revision": 6,
+              "impact": {
+                "affected_blocks": [
+                  {
+                    "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                    "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                    "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                    "start_at": "2026-10-10T01:00:00+00:00",
+                    "end_at": "2026-10-10T02:00:00+00:00",
+                    "minutes": 60,
+                    "locked": false,
+                    "status": "active",
+                    "version": 1,
+                    "title": "合成重排任务B"
+                  }
+                ],
+                "risk_changes": [
+                  {
+                    "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                    "title": "合成重排任务B",
+                    "before_slack": 120,
+                    "after_slack": 60,
+                    "before_level": "low",
+                    "after_level": "high"
+                  }
+                ],
+                "before_summary": {
+                  "level": "low",
+                  "active_task_count": 2,
+                  "incomplete_count": 0,
+                  "window_gap_minutes": 0,
+                  "critical_window": null,
+                  "fixed_conflict_count": 0,
+                  "possible_fixed_conflict_count": 0,
+                  "configured": true,
+                  "uncertain_exam_count": 0,
+                  "uncertain_event_count": 0,
+                  "plan_conflict_count": 0,
+                  "analysis_limited": false,
+                  "is_schedule": false
+                },
+                "after_summary": {
+                  "level": "high",
+                  "active_task_count": 2,
+                  "incomplete_count": 0,
+                  "window_gap_minutes": 0,
+                  "critical_window": null,
+                  "fixed_conflict_count": 0,
+                  "possible_fixed_conflict_count": 0,
+                  "configured": true,
+                  "uncertain_exam_count": 0,
+                  "uncertain_event_count": 0,
+                  "plan_conflict_count": 1,
+                  "analysis_limited": false,
+                  "is_schedule": false
+                },
+                "fixed_conflicts": [],
+                "new_fixed_conflicts": []
+              }
+            },
+            "created_at": "2026-10-09T15:28:03.015257+00:00"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70",
+            "course_id": null,
+            "teacher": "",
+            "sections": [],
+            "weeks": [],
+            "weekday": 6,
+            "source_batch_id": null,
+            "reality_kind": "activity",
+            "title": "合成临时活动",
+            "start_at": "2026-10-10T09:00:00+08:00",
+            "end_at": "2026-10-10T10:00:00+08:00",
+            "location": "",
+            "changed": true
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/changes",
+      "input": {
+        "kind": "cancel",
+        "targets": [
+          "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70"
+        ],
+        "title": "合成临时活动",
+        "source_text": "合成新通知取消活动"
+      },
+      "params": null,
+      "expected_status": 201,
+      "actual_status": 201,
+      "seconds": 0.0,
+      "actual": {
+        "id": "8901b9cf-c788-4edf-b5d6-d2bafeb441bf",
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "base_revision": 7,
+        "phase": "ready",
+        "request": {
+          "kind": "cancel",
+          "targets": [
+            "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70"
+          ],
+          "title": "合成临时活动",
+          "source_text": "合成新通知取消活动",
+          "source_id": null,
+          "start_at": null,
+          "end_at": null,
+          "location": ""
+        },
+        "patch": {
+          "before": [
+            {
+              "id": "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70",
+              "course_id": null,
+              "teacher": "",
+              "sections": [],
+              "weeks": [],
+              "weekday": 6,
+              "source_batch_id": null,
+              "reality_kind": "activity",
+              "title": "合成临时活动",
+              "start_at": "2026-10-10T09:00:00+08:00",
+              "end_at": "2026-10-10T10:00:00+08:00",
+              "location": "",
+              "changed": true
+            }
+          ],
+          "after": []
+        },
+        "impact": {
+          "affected_blocks": [],
+          "risk_changes": [
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "before_slack": 60,
+              "after_slack": 120,
+              "before_level": "low",
+              "after_level": "low"
+            },
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "before_slack": 60,
+              "after_slack": 120,
+              "before_level": "low",
+              "after_level": "low"
+            }
+          ],
+          "before_summary": {
+            "level": "low",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 0,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "after_summary": {
+            "level": "low",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 0,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "fixed_conflicts": [],
+          "new_fixed_conflicts": []
+        },
+        "base_calendar": {
+          "first_monday": "2026-10-05"
+        },
+        "receipt": null,
+        "created_at": "2026-10-09T15:28:03.151083+00:00"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/changes/8901b9cf-c788-4edf-b5d6-d2bafeb441bf/apply",
+      "input": {
+        "expected_revision": 7
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.016,
+      "actual": {
+        "change_id": "8901b9cf-c788-4edf-b5d6-d2bafeb441bf",
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "revision": 8,
+        "impact": {
+          "affected_blocks": [],
+          "risk_changes": [
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "before_slack": 60,
+              "after_slack": 120,
+              "before_level": "low",
+              "after_level": "low"
+            },
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "before_slack": 60,
+              "after_slack": 120,
+              "before_level": "low",
+              "after_level": "low"
+            }
+          ],
+          "before_summary": {
+            "level": "low",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 0,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "after_summary": {
+            "level": "low",
+            "active_task_count": 2,
+            "incomplete_count": 0,
+            "window_gap_minutes": 0,
+            "critical_window": null,
+            "fixed_conflict_count": 0,
+            "possible_fixed_conflict_count": 0,
+            "configured": true,
+            "uncertain_exam_count": 0,
+            "uncertain_event_count": 0,
+            "plan_conflict_count": 0,
+            "analysis_limited": false,
+            "is_schedule": false
+          },
+          "fixed_conflicts": [],
+          "new_fixed_conflicts": []
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/plan-proposals/0ddc4569-2656-4d4b-bbae-1e87dd731484/undo",
+      "input": {
+        "expected_version": 2,
+        "expected_revision": 8
+      },
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.015,
+      "actual": {
+        "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+        "proposal_version": 3,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "revision": 9,
+        "undone": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans",
+      "input": null,
+      "params": null,
+      "expected_status": 200,
+      "actual_status": 200,
+      "seconds": 0.0,
+      "actual": {
+        "revision": 9,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "blocks": [
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 3,
+            "title": "合成重排任务B"
+          },
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A"
+          }
+        ],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "mode": "replan",
+          "status": "FEASIBLE_COMPLETE",
+          "can_apply": false,
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T04:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B",
+              "before_start_at": "2026-10-10T01:00:00+00:00",
+              "before_end_at": "2026-10-10T02:00:00+00:00"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A",
+              "before_start_at": "2026-10-10T02:00:00+00:00",
+              "before_end_at": "2026-10-10T03:00:00+00:00"
+            }
+          ],
+          "tasks": [],
+          "messages": [
+            "已检查本学期的后续个人计划，只调整允许移动的部分。"
+          ],
+          "window_start": "2026-10-09T15:29:00+00:00",
+          "window_end": "2027-02-21T16:00:00+00:00",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "existing_conflict_count": 0,
+          "solver_version": "9.15.6755",
+          "uncertainty_warnings": [],
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "moved_tasks": 1,
+          "moved_blocks": 1,
+          "shift_minutes": 120,
+          "phases": [
+            {
+              "name": "moved_tasks",
+              "status": "OPTIMAL",
+              "objective": 1.0,
+              "bound": 1.0
+            },
+            {
+              "name": "shift_minutes",
+              "status": "OPTIMAL",
+              "objective": 120.0,
+              "bound": 120.0
+            },
+            {
+              "name": "earlier",
+              "status": "OPTIMAL",
+              "objective": 59719980.0,
+              "bound": 59719980.0
+            }
+          ],
+          "solver_status": "OPTIMAL",
+          "elapsed_ms": 47,
+          "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "version": 3,
+          "phase": "undone",
+          "base_revision": 6,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:03.102719+00:00",
+          "request": {
+            "mode": "replan",
+            "lead_minutes": 0,
+            "task_ids": null
+          },
+          "receipt": {
+            "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "proposal_version": 3,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "revision": 9,
+            "undone": true
+          }
+        },
+        "latest_applied": {
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 2
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "input": {
+        "logout_token": "[REDACTED]"
+      },
+      "params": null,
+      "expected_status": 204,
+      "actual_status": 204,
+      "seconds": 0.0,
+      "actual": ""
+    }
+  ],
+  "checks": [
+    {
+      "expected": "POST /auth/register: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "user": {
+            "id": "b18ec8bb-a9fb-4181-8dd5-b8301552b354",
+            "username": "qa_aic_86ec54fccd6eba",
+            "is_demo": false
+          },
+          "access_token": "[REDACTED]",
+          "refresh_token": "[REDACTED]",
+          "expires_in": 900,
+          "logout_token": "[REDACTED]",
+          "recovery_code": "[REDACTED]"
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "name": "AIC本轮合成验证·solver_locked_replan_and_undo",
+          "first_monday": "2026-10-05",
+          "total_weeks": 20,
+          "periods": [
+            {
+              "number": 1,
+              "start": "09:00",
+              "end": "10:00"
+            },
+            {
+              "number": 2,
+              "start": "10:10",
+              "end": "11:00"
+            }
+          ],
+          "revision": 0
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/availability/preview: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "before": {
+            "weekly": [],
+            "exclusions": [],
+            "configured": false,
+            "version": 0,
+            "revision": 0,
+            "timezone": "Asia/Shanghai"
+          },
+          "after": {
+            "weekly": [
+              {
+                "weekday": 6,
+                "start": "09:00",
+                "end": "13:00"
+              }
+            ],
+            "exclusions": []
+          },
+          "base_revision": 0,
+          "settings_version": 0,
+          "affected_plan_count": 0,
+          "affected_blocks": []
+        }
+      }
+    },
+    {
+      "expected": "PUT /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/availability: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "weekly": [
+            {
+              "weekday": 6,
+              "start": "09:00",
+              "end": "13:00"
+            }
+          ],
+          "exclusions": [],
+          "configured": true,
+          "version": 1,
+          "revision": 1,
+          "timezone": "Asia/Shanghai"
+        }
+      }
+    },
+    {
+      "expected": "POST /items: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "kind": "task",
+          "title": "合成重排任务A",
+          "course_id": null,
+          "time": {
+            "precision": "exact",
+            "at": "2026-10-10T05:00:00Z",
+            "end_at": null,
+            "date": null,
+            "week": null,
+            "end_date": null,
+            "day_end_confirmed": false,
+            "expression": "",
+            "meaning": "unspecified",
+            "candidate_dates": [],
+            "course_anchor": null
+          },
+          "certainty": "formal",
+          "remaining_minutes": 60,
+          "start_policy": "at",
+          "earliest_start_at": "2026-10-10T01:00:00Z",
+          "reserve_time": true,
+          "splittable": false,
+          "priority": "normal",
+          "location": "",
+          "notes": "",
+          "source_text": "",
+          "details": {
+            "recipient": "",
+            "materials": [],
+            "submission_channel": "",
+            "participation": "",
+            "participation_status": "unspecified",
+            "conditions": [],
+            "early_arrival_minutes": null,
+            "applicability": "",
+            "responsibility": ""
+          },
+          "candidate_id": null,
+          "source_id": null,
+          "category_id": null,
+          "course_title": "",
+          "tags": [],
+          "id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+          "version": 1,
+          "lifecycle": "active",
+          "review_state": "confirmed",
+          "control": "plannable",
+          "anchor_at": "2026-10-10T05:00:00+00:00",
+          "created_at": "2026-10-09T15:28:02.922254+00:00",
+          "updated_at": "2026-10-09T15:28:02.922254+00:00",
+          "reminders": [],
+          "arrival_at": null
+        }
+      }
+    },
+    {
+      "expected": "POST /items: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "kind": "task",
+          "title": "合成重排任务B",
+          "course_id": null,
+          "time": {
+            "precision": "exact",
+            "at": "2026-10-10T05:00:00Z",
+            "end_at": null,
+            "date": null,
+            "week": null,
+            "end_date": null,
+            "day_end_confirmed": false,
+            "expression": "",
+            "meaning": "unspecified",
+            "candidate_dates": [],
+            "course_anchor": null
+          },
+          "certainty": "formal",
+          "remaining_minutes": 60,
+          "start_policy": "at",
+          "earliest_start_at": "2026-10-10T01:00:00Z",
+          "reserve_time": true,
+          "splittable": false,
+          "priority": "normal",
+          "location": "",
+          "notes": "",
+          "source_text": "",
+          "details": {
+            "recipient": "",
+            "materials": [],
+            "submission_channel": "",
+            "participation": "",
+            "participation_status": "unspecified",
+            "conditions": [],
+            "early_arrival_minutes": null,
+            "applicability": "",
+            "responsibility": ""
+          },
+          "candidate_id": null,
+          "source_id": null,
+          "category_id": null,
+          "course_title": "",
+          "tags": [],
+          "id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+          "version": 1,
+          "lifecycle": "active",
+          "review_state": "confirmed",
+          "control": "plannable",
+          "anchor_at": "2026-10-10T05:00:00+00:00",
+          "created_at": "2026-10-09T15:28:02.930327+00:00",
+          "updated_at": "2026-10-09T15:28:02.930327+00:00",
+          "reminders": [],
+          "arrival_at": null
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plan-proposals: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "window_start": "2026-10-10T01:00:00+00:00",
+          "window_end": "2026-10-10T05:00:00+00:00",
+          "blocks": [
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60
+            },
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60
+            }
+          ],
+          "tasks": [
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "title": "合成重排任务A",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            },
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "title": "合成重排任务B",
+              "remaining_minutes": 60,
+              "target_minutes": 60,
+              "existing_minutes": 0,
+              "outside_minutes": 0,
+              "new_minutes": 60,
+              "unarranged_minutes": 0,
+              "later_minutes": 0
+            }
+          ],
+          "status": "FEASIBLE_COMPLETE",
+          "messages": [
+            "保留已有计划，只为尚未安排的工作补充时间"
+          ],
+          "solver_status": "OPTIMAL",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "can_apply": true,
+          "existing_conflict_count": 0,
+          "uncertainty_warnings": [],
+          "solver_version": "9.15.6755",
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "phases": [
+            {
+              "status": "OPTIMAL",
+              "objective": 360.0,
+              "bound": 360.0
+            }
+          ],
+          "elapsed_ms": 16,
+          "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "version": 1,
+          "phase": "ready",
+          "base_revision": 3,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:02.950261+00:00",
+          "request": {
+            "days": 7,
+            "lead_minutes": 0,
+            "chunk_minutes": 60,
+            "allow_partial": false,
+            "tasks": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "target_minutes": null
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "target_minutes": null
+              }
+            ],
+            "window_start_at": "2026-10-10T01:00:00Z",
+            "window_end_at": "2026-10-10T05:00:00Z"
+          },
+          "receipt": null
+        }
+      }
+    },
+    {
+      "expected": "initial two-task proposal is complete",
+      "passed": true,
+      "actual": {
+        "window_start": "2026-10-10T01:00:00+00:00",
+        "window_end": "2026-10-10T05:00:00+00:00",
+        "blocks": [
+          {
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "title": "合成重排任务B",
+            "start_at": "2026-10-10T01:00:00+00:00",
+            "end_at": "2026-10-10T02:00:00+00:00",
+            "minutes": 60
+          },
+          {
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "title": "合成重排任务A",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60
+          }
+        ],
+        "tasks": [
+          {
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "title": "合成重排任务A",
+            "remaining_minutes": 60,
+            "target_minutes": 60,
+            "existing_minutes": 0,
+            "outside_minutes": 0,
+            "new_minutes": 60,
+            "unarranged_minutes": 0,
+            "later_minutes": 0
+          },
+          {
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "title": "合成重排任务B",
+            "remaining_minutes": 60,
+            "target_minutes": 60,
+            "existing_minutes": 0,
+            "outside_minutes": 0,
+            "new_minutes": 60,
+            "unarranged_minutes": 0,
+            "later_minutes": 0
+          }
+        ],
+        "status": "FEASIBLE_COMPLETE",
+        "messages": [
+          "保留已有计划，只为尚未安排的工作补充时间"
+        ],
+        "solver_status": "OPTIMAL",
+        "optimal": true,
+        "unarranged_minutes": 0,
+        "can_apply": true,
+        "existing_conflict_count": 0,
+        "uncertainty_warnings": [],
+        "solver_version": "9.15.6755",
+        "valid_until": "2026-10-10T01:00:00+00:00",
+        "phases": [
+          {
+            "status": "OPTIMAL",
+            "objective": 360.0,
+            "bound": 360.0
+          }
+        ],
+        "elapsed_ms": 16,
+        "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+        "version": 1,
+        "phase": "ready",
+        "base_revision": 3,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "created_at": "2026-10-09T15:28:02.950261+00:00",
+        "request": {
+          "days": 7,
+          "lead_minutes": 0,
+          "chunk_minutes": 60,
+          "allow_partial": false,
+          "tasks": [
+            {
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "target_minutes": null
+            },
+            {
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "target_minutes": null
+            }
+          ],
+          "window_start_at": "2026-10-10T01:00:00Z",
+          "window_end_at": "2026-10-10T05:00:00Z"
+        },
+        "receipt": null
+      }
+    },
+    {
+      "expected": "POST /plan-proposals/466f9ed6-1a11-41c0-9391-7fad8634dd0d/accept: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "proposal_version": 2,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "revision": 4,
+          "block_ids": [
+            "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "087efb04-6ffa-44e2-812a-79953a20e744"
+          ],
+          "unarranged_minutes": 0
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 4,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务A"
+            }
+          ],
+          "invalid_blocks": [],
+          "history_days": 7,
+          "latest_proposal": {
+            "window_start": "2026-10-10T01:00:00+00:00",
+            "window_end": "2026-10-10T05:00:00+00:00",
+            "blocks": [
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60
+              },
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60
+              }
+            ],
+            "tasks": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              }
+            ],
+            "status": "FEASIBLE_COMPLETE",
+            "messages": [
+              "保留已有计划，只为尚未安排的工作补充时间"
+            ],
+            "solver_status": "OPTIMAL",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "can_apply": false,
+            "existing_conflict_count": 0,
+            "uncertainty_warnings": [],
+            "solver_version": "9.15.6755",
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "phases": [
+              {
+                "status": "OPTIMAL",
+                "objective": 360.0,
+                "bound": 360.0
+              }
+            ],
+            "elapsed_ms": 16,
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2,
+            "phase": "applied",
+            "base_revision": 3,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "created_at": "2026-10-09T15:28:02.950261+00:00",
+            "request": {
+              "days": 7,
+              "lead_minutes": 0,
+              "chunk_minutes": 60,
+              "allow_partial": false,
+              "tasks": [
+                {
+                  "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                  "target_minutes": null
+                },
+                {
+                  "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                  "target_minutes": null
+                }
+              ],
+              "window_start_at": "2026-10-10T01:00:00Z",
+              "window_end_at": "2026-10-10T05:00:00Z"
+            },
+            "receipt": {
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "proposal_version": 2,
+              "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+              "revision": 4,
+              "block_ids": [
+                "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "087efb04-6ffa-44e2-812a-79953a20e744"
+              ],
+              "unarranged_minutes": 0
+            }
+          },
+          "latest_applied": {
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "expected": "two unsplittable tasks produce two blocks",
+      "passed": true,
+      "actual": [
+        {
+          "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+          "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+          "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "start_at": "2026-10-10T01:00:00+00:00",
+          "end_at": "2026-10-10T02:00:00+00:00",
+          "minutes": 60,
+          "locked": false,
+          "status": "active",
+          "version": 1,
+          "title": "合成重排任务B"
+        },
+        {
+          "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+          "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+          "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+          "start_at": "2026-10-10T02:00:00+00:00",
+          "end_at": "2026-10-10T03:00:00+00:00",
+          "minutes": 60,
+          "locked": false,
+          "status": "active",
+          "version": 1,
+          "title": "合成重排任务A"
+        }
+      ]
+    },
+    {
+      "expected": "PATCH /plan-blocks/087efb04-6ffa-44e2-812a-79953a20e744/lock: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "revision": 5,
+          "block": {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": ""
+          }
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 5,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A"
+            }
+          ],
+          "invalid_blocks": [],
+          "history_days": 7,
+          "latest_proposal": {
+            "window_start": "2026-10-10T01:00:00+00:00",
+            "window_end": "2026-10-10T05:00:00+00:00",
+            "blocks": [
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60
+              },
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60
+              }
+            ],
+            "tasks": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              }
+            ],
+            "status": "FEASIBLE_COMPLETE",
+            "messages": [
+              "保留已有计划，只为尚未安排的工作补充时间"
+            ],
+            "solver_status": "OPTIMAL",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "can_apply": false,
+            "existing_conflict_count": 0,
+            "uncertainty_warnings": [],
+            "solver_version": "9.15.6755",
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "phases": [
+              {
+                "status": "OPTIMAL",
+                "objective": 360.0,
+                "bound": 360.0
+              }
+            ],
+            "elapsed_ms": 16,
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2,
+            "phase": "applied",
+            "base_revision": 3,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "created_at": "2026-10-09T15:28:02.950261+00:00",
+            "request": {
+              "days": 7,
+              "lead_minutes": 0,
+              "chunk_minutes": 60,
+              "allow_partial": false,
+              "tasks": [
+                {
+                  "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                  "target_minutes": null
+                },
+                {
+                  "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                  "target_minutes": null
+                }
+              ],
+              "window_start_at": "2026-10-10T01:00:00Z",
+              "window_end_at": "2026-10-10T05:00:00Z"
+            },
+            "receipt": {
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "proposal_version": 2,
+              "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+              "revision": 4,
+              "block_ids": [
+                "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "087efb04-6ffa-44e2-812a-79953a20e744"
+              ],
+              "unarranged_minutes": 0
+            }
+          },
+          "latest_applied": {
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "expected": "POST /plan-blocks/087efb04-6ffa-44e2-812a-79953a20e744/cancel: HTTP 422",
+      "passed": true,
+      "actual": {
+        "actual_status": 422,
+        "response": {
+          "code": "LOCKED_CONFIRMATION",
+          "message": "需明确确认解锁并取消"
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/changes: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "base_revision": 5,
+          "phase": "ready",
+          "request": {
+            "kind": "block",
+            "targets": [],
+            "title": "合成临时活动",
+            "source_text": "确认在原任务时段参加活动",
+            "source_id": null,
+            "start_at": "2026-10-10T01:00:00Z",
+            "end_at": "2026-10-10T02:00:00Z",
+            "location": ""
+          },
+          "patch": {
+            "before": [],
+            "after": [
+              {
+                "id": "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70",
+                "course_id": null,
+                "teacher": "",
+                "sections": [],
+                "weeks": [],
+                "weekday": 6,
+                "source_batch_id": null,
+                "reality_kind": "activity",
+                "title": "合成临时活动",
+                "start_at": "2026-10-10T09:00:00+08:00",
+                "end_at": "2026-10-10T10:00:00+08:00",
+                "location": "",
+                "changed": true
+              }
+            ]
+          },
+          "impact": {
+            "affected_blocks": [
+              {
+                "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60,
+                "locked": false,
+                "status": "active",
+                "version": 1,
+                "title": "合成重排任务B"
+              }
+            ],
+            "risk_changes": [
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "before_slack": 120,
+                "after_slack": 60,
+                "before_level": "low",
+                "after_level": "high"
+              }
+            ],
+            "before_summary": {
+              "level": "low",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 0,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "after_summary": {
+              "level": "high",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 1,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "fixed_conflicts": [],
+            "new_fixed_conflicts": []
+          },
+          "base_calendar": {
+            "first_monday": "2026-10-05"
+          },
+          "receipt": null,
+          "created_at": "2026-10-09T15:28:03.015257+00:00"
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 5,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A"
+            }
+          ],
+          "invalid_blocks": [],
+          "history_days": 7,
+          "latest_proposal": {
+            "window_start": "2026-10-10T01:00:00+00:00",
+            "window_end": "2026-10-10T05:00:00+00:00",
+            "blocks": [
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60
+              },
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60
+              }
+            ],
+            "tasks": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              }
+            ],
+            "status": "FEASIBLE_COMPLETE",
+            "messages": [
+              "保留已有计划，只为尚未安排的工作补充时间"
+            ],
+            "solver_status": "OPTIMAL",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "can_apply": false,
+            "existing_conflict_count": 0,
+            "uncertainty_warnings": [],
+            "solver_version": "9.15.6755",
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "phases": [
+              {
+                "status": "OPTIMAL",
+                "objective": 360.0,
+                "bound": 360.0
+              }
+            ],
+            "elapsed_ms": 16,
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2,
+            "phase": "applied",
+            "base_revision": 3,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "created_at": "2026-10-09T15:28:02.950261+00:00",
+            "request": {
+              "days": 7,
+              "lead_minutes": 0,
+              "chunk_minutes": 60,
+              "allow_partial": false,
+              "tasks": [
+                {
+                  "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                  "target_minutes": null
+                },
+                {
+                  "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                  "target_minutes": null
+                }
+              ],
+              "window_start_at": "2026-10-10T01:00:00Z",
+              "window_end_at": "2026-10-10T05:00:00Z"
+            },
+            "receipt": {
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "proposal_version": 2,
+              "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+              "revision": 4,
+              "block_ids": [
+                "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "087efb04-6ffa-44e2-812a-79953a20e744"
+              ],
+              "unarranged_minutes": 0
+            }
+          },
+          "latest_applied": {
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "expected": "reality preview preserves saved plans",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /changes/4b2228c2-9021-450c-b372-42ea6b9dfaef/apply: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "change_id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "revision": 6,
+          "impact": {
+            "affected_blocks": [
+              {
+                "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60,
+                "locked": false,
+                "status": "active",
+                "version": 1,
+                "title": "合成重排任务B"
+              }
+            ],
+            "risk_changes": [
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "before_slack": 120,
+                "after_slack": 60,
+                "before_level": "low",
+                "after_level": "high"
+              }
+            ],
+            "before_summary": {
+              "level": "low",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 0,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "after_summary": {
+              "level": "high",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 1,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "fixed_conflicts": [],
+            "new_fixed_conflicts": []
+          }
+        }
+      }
+    },
+    {
+      "expected": "POST /changes/4b2228c2-9021-450c-b372-42ea6b9dfaef/apply: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "change_id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "revision": 6,
+          "impact": {
+            "affected_blocks": [
+              {
+                "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60,
+                "locked": false,
+                "status": "active",
+                "version": 1,
+                "title": "合成重排任务B"
+              }
+            ],
+            "risk_changes": [
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "before_slack": 120,
+                "after_slack": 60,
+                "before_level": "low",
+                "after_level": "high"
+              }
+            ],
+            "before_summary": {
+              "level": "low",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 0,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "after_summary": {
+              "level": "high",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 1,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "fixed_conflicts": [],
+            "new_fixed_conflicts": []
+          }
+        }
+      }
+    },
+    {
+      "expected": "reality acceptance is idempotent",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "GET /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 6,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A"
+            }
+          ],
+          "invalid_blocks": [
+            {
+              "block_id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "reason_codes": [
+                "outside_free_time"
+              ]
+            }
+          ],
+          "history_days": 7,
+          "latest_proposal": {
+            "window_start": "2026-10-10T01:00:00+00:00",
+            "window_end": "2026-10-10T05:00:00+00:00",
+            "blocks": [
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "start_at": "2026-10-10T01:00:00+00:00",
+                "end_at": "2026-10-10T02:00:00+00:00",
+                "minutes": 60
+              },
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60
+              }
+            ],
+            "tasks": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "remaining_minutes": 60,
+                "target_minutes": 60,
+                "existing_minutes": 0,
+                "outside_minutes": 0,
+                "new_minutes": 60,
+                "unarranged_minutes": 0,
+                "later_minutes": 0
+              }
+            ],
+            "status": "FEASIBLE_COMPLETE",
+            "messages": [
+              "保留已有计划，只为尚未安排的工作补充时间"
+            ],
+            "solver_status": "OPTIMAL",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "can_apply": false,
+            "existing_conflict_count": 0,
+            "uncertainty_warnings": [],
+            "solver_version": "9.15.6755",
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "phases": [
+              {
+                "status": "OPTIMAL",
+                "objective": 360.0,
+                "bound": 360.0
+              }
+            ],
+            "elapsed_ms": 16,
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2,
+            "phase": "applied",
+            "base_revision": 3,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "created_at": "2026-10-09T15:28:02.950261+00:00",
+            "request": {
+              "days": 7,
+              "lead_minutes": 0,
+              "chunk_minutes": 60,
+              "allow_partial": false,
+              "tasks": [
+                {
+                  "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                  "target_minutes": null
+                },
+                {
+                  "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                  "target_minutes": null
+                }
+              ],
+              "window_start_at": "2026-10-10T01:00:00Z",
+              "window_end_at": "2026-10-10T05:00:00Z"
+            },
+            "receipt": {
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "proposal_version": 2,
+              "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+              "revision": 4,
+              "block_ids": [
+                "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "087efb04-6ffa-44e2-812a-79953a20e744"
+              ],
+              "unarranged_minutes": 0
+            }
+          },
+          "latest_applied": {
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "expected": "reality confirmation does not silently replan",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/replan-proposals: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "mode": "replan",
+          "status": "FEASIBLE_COMPLETE",
+          "can_apply": true,
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T04:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B",
+              "before_start_at": "2026-10-10T01:00:00+00:00",
+              "before_end_at": "2026-10-10T02:00:00+00:00"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A",
+              "before_start_at": "2026-10-10T02:00:00+00:00",
+              "before_end_at": "2026-10-10T03:00:00+00:00"
+            }
+          ],
+          "tasks": [],
+          "messages": [
+            "已检查本学期的后续个人计划，只调整允许移动的部分。"
+          ],
+          "window_start": "2026-10-09T15:29:00+00:00",
+          "window_end": "2027-02-21T16:00:00+00:00",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "existing_conflict_count": 0,
+          "solver_version": "9.15.6755",
+          "uncertainty_warnings": [],
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "moved_tasks": 1,
+          "moved_blocks": 1,
+          "shift_minutes": 120,
+          "phases": [
+            {
+              "name": "moved_tasks",
+              "status": "OPTIMAL",
+              "objective": 1.0,
+              "bound": 1.0
+            },
+            {
+              "name": "shift_minutes",
+              "status": "OPTIMAL",
+              "objective": 120.0,
+              "bound": 120.0
+            },
+            {
+              "name": "earlier",
+              "status": "OPTIMAL",
+              "objective": 59719980.0,
+              "bound": 59719980.0
+            }
+          ],
+          "solver_status": "OPTIMAL",
+          "elapsed_ms": 47,
+          "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "version": 1,
+          "phase": "ready",
+          "base_revision": 6,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:03.102719+00:00",
+          "request": {
+            "mode": "replan",
+            "lead_minutes": 0,
+            "task_ids": null
+          },
+          "receipt": null
+        }
+      }
+    },
+    {
+      "expected": "minimal replan moves exactly one affected task",
+      "passed": true,
+      "actual": {
+        "mode": "replan",
+        "status": "FEASIBLE_COMPLETE",
+        "can_apply": true,
+        "blocks": [
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T03:00:00+00:00",
+            "end_at": "2026-10-10T04:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 1,
+            "title": "合成重排任务B",
+            "before_start_at": "2026-10-10T01:00:00+00:00",
+            "before_end_at": "2026-10-10T02:00:00+00:00"
+          },
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A",
+            "before_start_at": "2026-10-10T02:00:00+00:00",
+            "before_end_at": "2026-10-10T03:00:00+00:00"
+          }
+        ],
+        "tasks": [],
+        "messages": [
+          "已检查本学期的后续个人计划，只调整允许移动的部分。"
+        ],
+        "window_start": "2026-10-09T15:29:00+00:00",
+        "window_end": "2027-02-21T16:00:00+00:00",
+        "optimal": true,
+        "unarranged_minutes": 0,
+        "existing_conflict_count": 0,
+        "solver_version": "9.15.6755",
+        "uncertainty_warnings": [],
+        "valid_until": "2026-10-10T01:00:00+00:00",
+        "moved_tasks": 1,
+        "moved_blocks": 1,
+        "shift_minutes": 120,
+        "phases": [
+          {
+            "name": "moved_tasks",
+            "status": "OPTIMAL",
+            "objective": 1.0,
+            "bound": 1.0
+          },
+          {
+            "name": "shift_minutes",
+            "status": "OPTIMAL",
+            "objective": 120.0,
+            "bound": 120.0
+          },
+          {
+            "name": "earlier",
+            "status": "OPTIMAL",
+            "objective": 59719980.0,
+            "bound": 59719980.0
+          }
+        ],
+        "solver_status": "OPTIMAL",
+        "elapsed_ms": 47,
+        "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+        "version": 1,
+        "phase": "ready",
+        "base_revision": 6,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "created_at": "2026-10-09T15:28:03.102719+00:00",
+        "request": {
+          "mode": "replan",
+          "lead_minutes": 0,
+          "task_ids": null
+        },
+        "receipt": null
+      }
+    },
+    {
+      "expected": "minimum offset is 120 minutes with adjacent task locked",
+      "passed": true,
+      "actual": 120
+    },
+    {
+      "expected": "GET /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 6,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A"
+            }
+          ],
+          "invalid_blocks": [
+            {
+              "block_id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "reason_codes": [
+                "outside_free_time"
+              ]
+            }
+          ],
+          "history_days": 7,
+          "latest_proposal": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": true,
+            "blocks": [
+              {
+                "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T03:00:00+00:00",
+                "end_at": "2026-10-10T04:00:00+00:00",
+                "minutes": 60,
+                "locked": false,
+                "status": "active",
+                "version": 1,
+                "title": "合成重排任务B",
+                "before_start_at": "2026-10-10T01:00:00+00:00",
+                "before_end_at": "2026-10-10T02:00:00+00:00"
+              },
+              {
+                "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60,
+                "locked": true,
+                "status": "active",
+                "version": 2,
+                "title": "合成重排任务A",
+                "before_start_at": "2026-10-10T02:00:00+00:00",
+                "before_end_at": "2026-10-10T03:00:00+00:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-09T15:29:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "moved_tasks": 1,
+            "moved_blocks": 1,
+            "shift_minutes": 120,
+            "phases": [
+              {
+                "name": "moved_tasks",
+                "status": "OPTIMAL",
+                "objective": 1.0,
+                "bound": 1.0
+              },
+              {
+                "name": "shift_minutes",
+                "status": "OPTIMAL",
+                "objective": 120.0,
+                "bound": 120.0
+              },
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 59719980.0,
+                "bound": 59719980.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 47,
+            "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "version": 1,
+            "phase": "ready",
+            "base_revision": 6,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "created_at": "2026-10-09T15:28:03.102719+00:00",
+            "request": {
+              "mode": "replan",
+              "lead_minutes": 0,
+              "task_ids": null
+            },
+            "receipt": null
+          },
+          "latest_applied": {
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "expected": "replan preview preserves saved blocks",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /plan-proposals/0ddc4569-2656-4d4b-bbae-1e87dd731484/accept: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "proposal_version": 2,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "revision": 7,
+          "block_ids": [
+            "aac56007-eb4f-4e74-bf1f-cccad9aaec52"
+          ],
+          "moved_tasks": 1,
+          "shift_minutes": 120,
+          "unarranged_minutes": 0
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 7,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "blocks": [
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A"
+            },
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T04:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务B"
+            }
+          ],
+          "invalid_blocks": [],
+          "history_days": 7,
+          "latest_proposal": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": false,
+            "blocks": [
+              {
+                "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T03:00:00+00:00",
+                "end_at": "2026-10-10T04:00:00+00:00",
+                "minutes": 60,
+                "locked": false,
+                "status": "active",
+                "version": 1,
+                "title": "合成重排任务B",
+                "before_start_at": "2026-10-10T01:00:00+00:00",
+                "before_end_at": "2026-10-10T02:00:00+00:00"
+              },
+              {
+                "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60,
+                "locked": true,
+                "status": "active",
+                "version": 2,
+                "title": "合成重排任务A",
+                "before_start_at": "2026-10-10T02:00:00+00:00",
+                "before_end_at": "2026-10-10T03:00:00+00:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-09T15:29:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "moved_tasks": 1,
+            "moved_blocks": 1,
+            "shift_minutes": 120,
+            "phases": [
+              {
+                "name": "moved_tasks",
+                "status": "OPTIMAL",
+                "objective": 1.0,
+                "bound": 1.0
+              },
+              {
+                "name": "shift_minutes",
+                "status": "OPTIMAL",
+                "objective": 120.0,
+                "bound": 120.0
+              },
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 59719980.0,
+                "bound": 59719980.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 47,
+            "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "version": 2,
+            "phase": "applied",
+            "base_revision": 6,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "created_at": "2026-10-09T15:28:03.102719+00:00",
+            "request": {
+              "mode": "replan",
+              "lead_minutes": 0,
+              "task_ids": null
+            },
+            "receipt": {
+              "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+              "proposal_version": 2,
+              "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+              "revision": 7,
+              "block_ids": [
+                "aac56007-eb4f-4e74-bf1f-cccad9aaec52"
+              ],
+              "moved_tasks": 1,
+              "shift_minutes": 120,
+              "unarranged_minutes": 0
+            }
+          },
+          "latest_applied": {
+            "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "expected": "replan preserves block identities",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "locked task retains time and lock",
+      "passed": true,
+      "actual": {
+        "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+        "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+        "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+        "start_at": "2026-10-10T02:00:00+00:00",
+        "end_at": "2026-10-10T03:00:00+00:00",
+        "minutes": 60,
+        "locked": true,
+        "status": "active",
+        "version": 2,
+        "title": "合成重排任务A"
+      }
+    },
+    {
+      "expected": "replan conserves work and removes conflicts",
+      "passed": true,
+      "actual": {
+        "revision": 7,
+        "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+        "blocks": [
+          {
+            "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+            "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T02:00:00+00:00",
+            "end_at": "2026-10-10T03:00:00+00:00",
+            "minutes": 60,
+            "locked": true,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务A"
+          },
+          {
+            "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+            "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+            "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "start_at": "2026-10-10T03:00:00+00:00",
+            "end_at": "2026-10-10T04:00:00+00:00",
+            "minutes": 60,
+            "locked": false,
+            "status": "active",
+            "version": 2,
+            "title": "合成重排任务B"
+          }
+        ],
+        "invalid_blocks": [],
+        "history_days": 7,
+        "latest_proposal": {
+          "mode": "replan",
+          "status": "FEASIBLE_COMPLETE",
+          "can_apply": false,
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T04:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 1,
+              "title": "合成重排任务B",
+              "before_start_at": "2026-10-10T01:00:00+00:00",
+              "before_end_at": "2026-10-10T02:00:00+00:00"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A",
+              "before_start_at": "2026-10-10T02:00:00+00:00",
+              "before_end_at": "2026-10-10T03:00:00+00:00"
+            }
+          ],
+          "tasks": [],
+          "messages": [
+            "已检查本学期的后续个人计划，只调整允许移动的部分。"
+          ],
+          "window_start": "2026-10-09T15:29:00+00:00",
+          "window_end": "2027-02-21T16:00:00+00:00",
+          "optimal": true,
+          "unarranged_minutes": 0,
+          "existing_conflict_count": 0,
+          "solver_version": "9.15.6755",
+          "uncertainty_warnings": [],
+          "valid_until": "2026-10-10T01:00:00+00:00",
+          "moved_tasks": 1,
+          "moved_blocks": 1,
+          "shift_minutes": 120,
+          "phases": [
+            {
+              "name": "moved_tasks",
+              "status": "OPTIMAL",
+              "objective": 1.0,
+              "bound": 1.0
+            },
+            {
+              "name": "shift_minutes",
+              "status": "OPTIMAL",
+              "objective": 120.0,
+              "bound": 120.0
+            },
+            {
+              "name": "earlier",
+              "status": "OPTIMAL",
+              "objective": 59719980.0,
+              "bound": 59719980.0
+            }
+          ],
+          "solver_status": "OPTIMAL",
+          "elapsed_ms": 47,
+          "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "version": 2,
+          "phase": "applied",
+          "base_revision": 6,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "created_at": "2026-10-09T15:28:03.102719+00:00",
+          "request": {
+            "mode": "replan",
+            "lead_minutes": 0,
+            "task_ids": null
+          },
+          "receipt": {
+            "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "proposal_version": 2,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "revision": 7,
+            "block_ids": [
+              "aac56007-eb4f-4e74-bf1f-cccad9aaec52"
+            ],
+            "moved_tasks": 1,
+            "shift_minutes": 120,
+            "unarranged_minutes": 0
+          }
+        },
+        "latest_applied": {
+          "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "version": 2
+        }
+      }
+    },
+    {
+      "expected": "POST /plan-proposals/0ddc4569-2656-4d4b-bbae-1e87dd731484/undo: HTTP 409",
+      "passed": true,
+      "actual": {
+        "actual_status": 409,
+        "response": {
+          "code": "UNDO_REALITY_CONFLICT",
+          "message": "旧计划已不符合最新现实安排，不能恢复；请重新规划"
+        }
+      }
+    },
+    {
+      "expected": "GET /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 7,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "blocks": [
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A"
+            },
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T03:00:00+00:00",
+              "end_at": "2026-10-10T04:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务B"
+            }
+          ],
+          "invalid_blocks": [],
+          "history_days": 7,
+          "latest_proposal": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": false,
+            "blocks": [
+              {
+                "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T03:00:00+00:00",
+                "end_at": "2026-10-10T04:00:00+00:00",
+                "minutes": 60,
+                "locked": false,
+                "status": "active",
+                "version": 1,
+                "title": "合成重排任务B",
+                "before_start_at": "2026-10-10T01:00:00+00:00",
+                "before_end_at": "2026-10-10T02:00:00+00:00"
+              },
+              {
+                "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60,
+                "locked": true,
+                "status": "active",
+                "version": 2,
+                "title": "合成重排任务A",
+                "before_start_at": "2026-10-10T02:00:00+00:00",
+                "before_end_at": "2026-10-10T03:00:00+00:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-09T15:29:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "moved_tasks": 1,
+            "moved_blocks": 1,
+            "shift_minutes": 120,
+            "phases": [
+              {
+                "name": "moved_tasks",
+                "status": "OPTIMAL",
+                "objective": 1.0,
+                "bound": 1.0
+              },
+              {
+                "name": "shift_minutes",
+                "status": "OPTIMAL",
+                "objective": 120.0,
+                "bound": 120.0
+              },
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 59719980.0,
+                "bound": 59719980.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 47,
+            "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "version": 2,
+            "phase": "applied",
+            "base_revision": 6,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "created_at": "2026-10-09T15:28:03.102719+00:00",
+            "request": {
+              "mode": "replan",
+              "lead_minutes": 0,
+              "task_ids": null
+            },
+            "receipt": {
+              "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+              "proposal_version": 2,
+              "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+              "revision": 7,
+              "block_ids": [
+                "aac56007-eb4f-4e74-bf1f-cccad9aaec52"
+              ],
+              "moved_tasks": 1,
+              "shift_minutes": 120,
+              "unarranged_minutes": 0
+            }
+          },
+          "latest_applied": {
+            "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "expected": "unsafe undo is rejected without changing blocks",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "GET /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/changes: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 7,
+          "changes": [
+            {
+              "id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+              "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+              "base_revision": 5,
+              "phase": "applied",
+              "request": {
+                "kind": "block",
+                "targets": [],
+                "title": "合成临时活动",
+                "source_text": "确认在原任务时段参加活动",
+                "source_id": null,
+                "start_at": "2026-10-10T01:00:00Z",
+                "end_at": "2026-10-10T02:00:00Z",
+                "location": ""
+              },
+              "patch": {
+                "before": [],
+                "after": [
+                  {
+                    "id": "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70",
+                    "course_id": null,
+                    "teacher": "",
+                    "sections": [],
+                    "weeks": [],
+                    "weekday": 6,
+                    "source_batch_id": null,
+                    "reality_kind": "activity",
+                    "title": "合成临时活动",
+                    "start_at": "2026-10-10T09:00:00+08:00",
+                    "end_at": "2026-10-10T10:00:00+08:00",
+                    "location": "",
+                    "changed": true
+                  }
+                ]
+              },
+              "impact": {
+                "affected_blocks": [
+                  {
+                    "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                    "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                    "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                    "start_at": "2026-10-10T01:00:00+00:00",
+                    "end_at": "2026-10-10T02:00:00+00:00",
+                    "minutes": 60,
+                    "locked": false,
+                    "status": "active",
+                    "version": 1,
+                    "title": "合成重排任务B"
+                  }
+                ],
+                "risk_changes": [
+                  {
+                    "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                    "title": "合成重排任务B",
+                    "before_slack": 120,
+                    "after_slack": 60,
+                    "before_level": "low",
+                    "after_level": "high"
+                  }
+                ],
+                "before_summary": {
+                  "level": "low",
+                  "active_task_count": 2,
+                  "incomplete_count": 0,
+                  "window_gap_minutes": 0,
+                  "critical_window": null,
+                  "fixed_conflict_count": 0,
+                  "possible_fixed_conflict_count": 0,
+                  "configured": true,
+                  "uncertain_exam_count": 0,
+                  "uncertain_event_count": 0,
+                  "plan_conflict_count": 0,
+                  "analysis_limited": false,
+                  "is_schedule": false
+                },
+                "after_summary": {
+                  "level": "high",
+                  "active_task_count": 2,
+                  "incomplete_count": 0,
+                  "window_gap_minutes": 0,
+                  "critical_window": null,
+                  "fixed_conflict_count": 0,
+                  "possible_fixed_conflict_count": 0,
+                  "configured": true,
+                  "uncertain_exam_count": 0,
+                  "uncertain_event_count": 0,
+                  "plan_conflict_count": 1,
+                  "analysis_limited": false,
+                  "is_schedule": false
+                },
+                "fixed_conflicts": [],
+                "new_fixed_conflicts": []
+              },
+              "base_calendar": {
+                "first_monday": "2026-10-05"
+              },
+              "receipt": {
+                "change_id": "4b2228c2-9021-450c-b372-42ea6b9dfaef",
+                "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+                "revision": 6,
+                "impact": {
+                  "affected_blocks": [
+                    {
+                      "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                      "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                      "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                      "start_at": "2026-10-10T01:00:00+00:00",
+                      "end_at": "2026-10-10T02:00:00+00:00",
+                      "minutes": 60,
+                      "locked": false,
+                      "status": "active",
+                      "version": 1,
+                      "title": "合成重排任务B"
+                    }
+                  ],
+                  "risk_changes": [
+                    {
+                      "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                      "title": "合成重排任务B",
+                      "before_slack": 120,
+                      "after_slack": 60,
+                      "before_level": "low",
+                      "after_level": "high"
+                    }
+                  ],
+                  "before_summary": {
+                    "level": "low",
+                    "active_task_count": 2,
+                    "incomplete_count": 0,
+                    "window_gap_minutes": 0,
+                    "critical_window": null,
+                    "fixed_conflict_count": 0,
+                    "possible_fixed_conflict_count": 0,
+                    "configured": true,
+                    "uncertain_exam_count": 0,
+                    "uncertain_event_count": 0,
+                    "plan_conflict_count": 0,
+                    "analysis_limited": false,
+                    "is_schedule": false
+                  },
+                  "after_summary": {
+                    "level": "high",
+                    "active_task_count": 2,
+                    "incomplete_count": 0,
+                    "window_gap_minutes": 0,
+                    "critical_window": null,
+                    "fixed_conflict_count": 0,
+                    "possible_fixed_conflict_count": 0,
+                    "configured": true,
+                    "uncertain_exam_count": 0,
+                    "uncertain_event_count": 0,
+                    "plan_conflict_count": 1,
+                    "analysis_limited": false,
+                    "is_schedule": false
+                  },
+                  "fixed_conflicts": [],
+                  "new_fixed_conflicts": []
+                }
+              },
+              "created_at": "2026-10-09T15:28:03.015257+00:00"
+            }
+          ],
+          "occurrences": [
+            {
+              "id": "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70",
+              "course_id": null,
+              "teacher": "",
+              "sections": [],
+              "weeks": [],
+              "weekday": 6,
+              "source_batch_id": null,
+              "reality_kind": "activity",
+              "title": "合成临时活动",
+              "start_at": "2026-10-10T09:00:00+08:00",
+              "end_at": "2026-10-10T10:00:00+08:00",
+              "location": "",
+              "changed": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "expected": "POST /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/changes: HTTP 201",
+      "passed": true,
+      "actual": {
+        "actual_status": 201,
+        "response": {
+          "id": "8901b9cf-c788-4edf-b5d6-d2bafeb441bf",
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "base_revision": 7,
+          "phase": "ready",
+          "request": {
+            "kind": "cancel",
+            "targets": [
+              "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70"
+            ],
+            "title": "合成临时活动",
+            "source_text": "合成新通知取消活动",
+            "source_id": null,
+            "start_at": null,
+            "end_at": null,
+            "location": ""
+          },
+          "patch": {
+            "before": [
+              {
+                "id": "extra:0e9858b4-dd6e-43d1-81f1-9ab2c36dbf70",
+                "course_id": null,
+                "teacher": "",
+                "sections": [],
+                "weeks": [],
+                "weekday": 6,
+                "source_batch_id": null,
+                "reality_kind": "activity",
+                "title": "合成临时活动",
+                "start_at": "2026-10-10T09:00:00+08:00",
+                "end_at": "2026-10-10T10:00:00+08:00",
+                "location": "",
+                "changed": true
+              }
+            ],
+            "after": []
+          },
+          "impact": {
+            "affected_blocks": [],
+            "risk_changes": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "before_slack": 60,
+                "after_slack": 120,
+                "before_level": "low",
+                "after_level": "low"
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "before_slack": 60,
+                "after_slack": 120,
+                "before_level": "low",
+                "after_level": "low"
+              }
+            ],
+            "before_summary": {
+              "level": "low",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 0,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "after_summary": {
+              "level": "low",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 0,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "fixed_conflicts": [],
+            "new_fixed_conflicts": []
+          },
+          "base_calendar": {
+            "first_monday": "2026-10-05"
+          },
+          "receipt": null,
+          "created_at": "2026-10-09T15:28:03.151083+00:00"
+        }
+      }
+    },
+    {
+      "expected": "POST /changes/8901b9cf-c788-4edf-b5d6-d2bafeb441bf/apply: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "change_id": "8901b9cf-c788-4edf-b5d6-d2bafeb441bf",
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "revision": 8,
+          "impact": {
+            "affected_blocks": [],
+            "risk_changes": [
+              {
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "title": "合成重排任务A",
+                "before_slack": 60,
+                "after_slack": 120,
+                "before_level": "low",
+                "after_level": "low"
+              },
+              {
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "title": "合成重排任务B",
+                "before_slack": 60,
+                "after_slack": 120,
+                "before_level": "low",
+                "after_level": "low"
+              }
+            ],
+            "before_summary": {
+              "level": "low",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 0,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "after_summary": {
+              "level": "low",
+              "active_task_count": 2,
+              "incomplete_count": 0,
+              "window_gap_minutes": 0,
+              "critical_window": null,
+              "fixed_conflict_count": 0,
+              "possible_fixed_conflict_count": 0,
+              "configured": true,
+              "uncertain_exam_count": 0,
+              "uncertain_event_count": 0,
+              "plan_conflict_count": 0,
+              "analysis_limited": false,
+              "is_schedule": false
+            },
+            "fixed_conflicts": [],
+            "new_fixed_conflicts": []
+          }
+        }
+      }
+    },
+    {
+      "expected": "POST /plan-proposals/0ddc4569-2656-4d4b-bbae-1e87dd731484/undo: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+          "proposal_version": 3,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "revision": 9,
+          "undone": true
+        }
+      }
+    },
+    {
+      "expected": "undo succeeds once conflicting reality is explicitly cancelled",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "GET /semesters/99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3/plans: HTTP 200",
+      "passed": true,
+      "actual": {
+        "actual_status": 200,
+        "response": {
+          "revision": 9,
+          "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+          "blocks": [
+            {
+              "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+              "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T01:00:00+00:00",
+              "end_at": "2026-10-10T02:00:00+00:00",
+              "minutes": 60,
+              "locked": false,
+              "status": "active",
+              "version": 3,
+              "title": "合成重排任务B"
+            },
+            {
+              "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+              "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+              "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+              "start_at": "2026-10-10T02:00:00+00:00",
+              "end_at": "2026-10-10T03:00:00+00:00",
+              "minutes": 60,
+              "locked": true,
+              "status": "active",
+              "version": 2,
+              "title": "合成重排任务A"
+            }
+          ],
+          "invalid_blocks": [],
+          "history_days": 7,
+          "latest_proposal": {
+            "mode": "replan",
+            "status": "FEASIBLE_COMPLETE",
+            "can_apply": false,
+            "blocks": [
+              {
+                "id": "aac56007-eb4f-4e74-bf1f-cccad9aaec52",
+                "item_id": "fb3d608d-1f3c-4ad7-826e-602ba8c48a3d",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T03:00:00+00:00",
+                "end_at": "2026-10-10T04:00:00+00:00",
+                "minutes": 60,
+                "locked": false,
+                "status": "active",
+                "version": 1,
+                "title": "合成重排任务B",
+                "before_start_at": "2026-10-10T01:00:00+00:00",
+                "before_end_at": "2026-10-10T02:00:00+00:00"
+              },
+              {
+                "id": "087efb04-6ffa-44e2-812a-79953a20e744",
+                "item_id": "ee15cedc-9c5d-475b-a366-2b7efa75bc2b",
+                "proposal_id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+                "start_at": "2026-10-10T02:00:00+00:00",
+                "end_at": "2026-10-10T03:00:00+00:00",
+                "minutes": 60,
+                "locked": true,
+                "status": "active",
+                "version": 2,
+                "title": "合成重排任务A",
+                "before_start_at": "2026-10-10T02:00:00+00:00",
+                "before_end_at": "2026-10-10T03:00:00+00:00"
+              }
+            ],
+            "tasks": [],
+            "messages": [
+              "已检查本学期的后续个人计划，只调整允许移动的部分。"
+            ],
+            "window_start": "2026-10-09T15:29:00+00:00",
+            "window_end": "2027-02-21T16:00:00+00:00",
+            "optimal": true,
+            "unarranged_minutes": 0,
+            "existing_conflict_count": 0,
+            "solver_version": "9.15.6755",
+            "uncertainty_warnings": [],
+            "valid_until": "2026-10-10T01:00:00+00:00",
+            "moved_tasks": 1,
+            "moved_blocks": 1,
+            "shift_minutes": 120,
+            "phases": [
+              {
+                "name": "moved_tasks",
+                "status": "OPTIMAL",
+                "objective": 1.0,
+                "bound": 1.0
+              },
+              {
+                "name": "shift_minutes",
+                "status": "OPTIMAL",
+                "objective": 120.0,
+                "bound": 120.0
+              },
+              {
+                "name": "earlier",
+                "status": "OPTIMAL",
+                "objective": 59719980.0,
+                "bound": 59719980.0
+              }
+            ],
+            "solver_status": "OPTIMAL",
+            "elapsed_ms": 47,
+            "id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+            "version": 3,
+            "phase": "undone",
+            "base_revision": 6,
+            "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+            "created_at": "2026-10-09T15:28:03.102719+00:00",
+            "request": {
+              "mode": "replan",
+              "lead_minutes": 0,
+              "task_ids": null
+            },
+            "receipt": {
+              "proposal_id": "0ddc4569-2656-4d4b-bbae-1e87dd731484",
+              "proposal_version": 3,
+              "semester_id": "99a09cdc-f9b7-4eae-a4bd-04a7ab7cabd3",
+              "revision": 9,
+              "undone": true
+            }
+          },
+          "latest_applied": {
+            "id": "466f9ed6-1a11-41c0-9391-7fad8634dd0d",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "expected": "safe replan undo restores original block times",
+      "passed": true,
+      "actual": null
+    },
+    {
+      "expected": "POST /auth/logout: HTTP 204",
+      "passed": true,
+      "actual": {
+        "actual_status": 204,
+        "response": ""
+      }
+    }
+  ],
+  "account": "qa_aic_86ec54fccd6eba",
+  "actual_summary": {
+    "moved_tasks": 1,
+    "shift_minutes": 120,
+    "locked_unchanged": true,
+    "unsafe_undo_status": 409,
+    "cancel_then_safe_undo": true,
+    "optimal": true,
+    "phases": [
+      {
+        "name": "moved_tasks",
+        "status": "OPTIMAL",
+        "objective": 1.0,
+        "bound": 1.0
+      },
+      {
+        "name": "shift_minutes",
+        "status": "OPTIMAL",
+        "objective": 120.0,
+        "bound": 120.0
+      },
+      {
+        "name": "earlier",
+        "status": "OPTIMAL",
+        "objective": 59719980.0,
+        "bound": 59719980.0
+      }
+    ]
+  },
+  "seconds": 0.359
+}

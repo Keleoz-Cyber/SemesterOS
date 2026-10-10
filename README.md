@@ -1,56 +1,69 @@
-# 拾日（SemesterOS）
+# 拾日
 
-大学生学期事务 App：统一管理课表、通知、任务、考试和个人学习安排，助手查询真实记录，修改先预览、确认后保存。
+拾日是一个面向大学生的日程和任务管理 App。它把课表、临时通知、待办和学习安排放在一起，帮助用户看清接下来要做什么，以及哪些事情在时间上有冲突。
 
-## 1.0.0 发行
+例如，收到“明天9:15到A301开会，结束时间待定”的通知后，可以交给助手整理。软件会保留“结束时间待定”，检查9:15是否正在上课，再让用户决定怎么处理。它不会因为不知道散会时间，就要求用户把一天的课程都请假。
 
-Android **1.0.0+8**，源码以 `main` / `v1.0.0` 为准。[GitHub Release](https://github.com/Keleoz-Cyber/SemesterOS/releases/tag/v1.0.0) 提供 APK 和校验文件。本机唯一交付包为 `output/apk/拾日-1.0.0.apk`，构建信息与最终检查在 `output/release/`。正式 API 为 `https://semesteros.keleoz.com`；实际发布、哈希和验收边界统一见 [交付说明](docs/交付说明.md)。
+当前版本为 **1.0.0，Android 构建号为8**。客户端使用Flutter，后端使用Python和FastAPI，正式数据库使用PostgreSQL。文字助手调用DeepSeek；学习时间安排使用OR-Tools求解。
 
-四个入口为今日、日程、任务、学期。支持河南工业大学和黑龙江大学本科教务导入及文字、图片、语音来源。未知时间按原精度保留；仅按已知时间事实核对冲突，不强迫整天请假。已请假课次在日常视图隐藏，原课和恢复入口保留。对话删除后不可恢复，已保存业务保留。
+## 可以做什么
 
-## 开发运行（PowerShell）
+- 查看今天的安排、周课表和按天排列的日程。
+- 从已适配的教务页面导入课表，也可以手工录入。
+- 记录任务、考试、临时活动和课程调整。
+- 将文字、图片或语音中的通知整理成可核对的内容。
+- 查询空闲时间，按学习偏好为任务安排时间。
+- 临时活动影响原计划后，重新安排个人学习时间，尽量保留原来的安排。
+- 设置本地提醒，查看修改结果，并在允许的情况下撤销操作。
 
-需要 Docker Desktop、Python 3.12、Flutter/Android SDK、JDK 21、Node.js 18+。版本以 lock 文件为准。
+这些功能依赖不同条件。助手需要后端和模型服务；图片与语音识别还需要服务器上的识别组件和模型。Android提醒需要相应系统权限。具体操作见[使用说明](docs/产品规则.md)，学校和识别功能的范围见[导入与识别说明](docs/学校与媒体接入.md)。
 
-```powershell
-pwsh -File scripts/dev.ps1 -Action Api
-pwsh -File scripts/dev.ps1 -Action Android
-pwsh -File scripts/dev.ps1 -Action Test
-```
+## 先运行起来
 
-API 为 `127.0.0.1:8871`，模拟器使用 `10.0.2.2:8871`，本机数据库端口为 `55439`。首次运行会重建虚拟环境和锁定依赖。本机媒体模型按 [接入手册](docs/学校与媒体接入.md) 重新安装；云端客户端不依赖本机模型。
+下面的命令在Windows PowerShell中执行，先进入仓库根目录。
 
-连接正式服务：
+准备Python 3.12、Docker Desktop、Flutter、Android SDK和JDK 21。Flutter需要支持项目声明的Dart 3.12.2。首次运行时，复制[配置示例](.env.example)为`.env`，填写数据库密码和DeepSeek密钥；已有`.env`时直接修改需要的项。
 
-```powershell
-. ./scripts/android-device.ps1
-Set-SemesterGradleJava
-$device = Resolve-SemesterAndroidDevice -ProjectRoot (Get-Location).Path -Device auto
-Set-Location apps/mobile
-flutter pub get
-flutter run -d $device --dart-define=API_BASE_URL=https://semesteros.keleoz.com
-```
-
-## 构建与清理
+启动后端：
 
 ```powershell
-python scripts/build_release.py --build
-# 不加 -Apply 只显示目标
-pwsh -File scripts/clean.ps1
-pwsh -File scripts/clean.ps1 -Apply -DeveloperCaches
+.\scripts\dev.ps1 -Action Api
 ```
 
-发布工具在 Windows 上使用 JDK 21、Android SDK 和已有证书，检查三架构、签名及16KB对齐；默认沿用开发证书以兼容已安装版本，不生成或提交私钥。自有证书可通过参数指定，密码从环境变量读取。清理保留当前 APK、小体积发行记录、Git、源码、配置和原始媒体；删除历史输出、构建缓存及可重建本机依赖，不建立备份目录。
+另开一个PowerShell窗口，启动模拟器和App：
 
-## 项目入口
+```powershell
+.\scripts\dev.ps1 -Action Android
+```
 
-| 内容 | 入口 |
+脚本会优先使用已连接的Android设备；没有设备时会尝试启动`Medium_Phone_33`。有多台设备时可以明确指定：
+
+```powershell
+.\scripts\dev.ps1 -Action Android -Device emulator-5554
+```
+
+开发版App默认连接`http://10.0.2.2:8871`，即Android模拟器访问电脑上的8871端口。使用手机或修改端口时，需要另设`API_BASE_URL`，方法见[移动端开发说明](apps/mobile/README.md)。安装已生成APK则不需要Flutter开发环境。
+
+完整环境准备、容器部署、打包和备份方法见[部署与维护](docs/部署与维护.md)。
+
+## 项目结构
+
+| 目录 | 内容 |
 | --- | --- |
-| 当前手册、技术契约、部署与验收 | [docs/README](docs/README.md) |
-| 产品、数据与无障碍规则 | [产品规则](docs/产品规则.md)、[MASTER](design-system/shiri/MASTER.md) |
-| 视觉规范与生产组件 | [设计规范](design-system/shiri-v2/README.md)、`apps/mobile/lib/ui/v2/` |
-| Flutter客户端与宣传工具 | `apps/mobile/lib/`、`apps/mobile/tool/` |
-| API、规划、助手与迁移 | `services/api/app/`、`services/api/alembic/versions/` |
-| 本机开发/隔离验证与云端运维 | `scripts/`、`deploy/` |
+| `apps/mobile` | Flutter客户端、页面、Android配置和界面测试 |
+| `services/api` | 后端接口、数据库模型、通知处理、排程算法和后端测试 |
+| `scripts` | 开发启动、打包、验证、模型下载和清理工具 |
+| `deploy` | Docker Compose部署配置 |
+| `design-system` | 当前界面的颜色、布局和动效说明及相关资源 |
+| `docs` | 使用、开发、运维和参赛文档 |
+| `output/apk` | 本地生成的安装包；不提交到Git |
 
-旧计划、重复参考实现和阶段报告已合并清理，历史变更可从 Git 查询。私有配置、凭据、课表及原始媒体不进入 Git；验证限制以交付说明为准。
+## 文档与安装包
+
+第一次了解项目，从[文档目录](docs/README.md)开始。接手开发可直接看[后端开发说明](docs/技术契约.md)和[移动端开发说明](apps/mobile/README.md)。参赛介绍见[作品方案](docs/参赛资料/拾日作品方案初稿.md)。
+
+本地安装包是[拾日1.0.0](output/apk/拾日-1.0.0.apk)。发行记录中的下载入口是[GitHub v1.0.0](https://github.com/Keleoz-Cyber/SemesterOS/releases/tag/v1.0.0)。包的信息和校验值见[版本与交付说明](docs/交付说明.md)。
+
+## 测试到什么程度
+
+项目包含后端、Flutter和教务页面解析测试。2026年10月9—10日还用隔离账号完成了模拟器操作和真实文字模型测试，结果见[测试报告](docs/参赛资料/拾日模拟器验证与算法测试报告.md)。测试使用合成课程和任务，不能当作学生试用数据。物理手机的厂商省电限制、所有学校页面和真人使用效率仍需另行验证。
