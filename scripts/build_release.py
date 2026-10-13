@@ -49,6 +49,7 @@ def sources():
              and (ROOT / name).is_file()}
     paths.update(p.relative_to(ROOT).as_posix() for folder in ('lib', 'assets', 'tool')
                  for p in (MOBILE / folder).rglob('*') if p.is_file())
+    paths.update(p.relative_to(ROOT).as_posix() for p in (MOBILE / 'android/app/src').rglob('*') if p.is_file())
     paths.add('scripts/build_release.py')
     paths.add('services/api/app/version.py')
     files = {name: digest(ROOT / name) for name in sorted(paths)}

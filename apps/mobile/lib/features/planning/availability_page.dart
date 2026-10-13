@@ -23,7 +23,8 @@ class AvailabilityPage extends StatefulWidget {
 }
 
 class _AvailabilityPageState extends State<AvailabilityPage> {
-  List<Map<String, dynamic>> weekly = [], exclusions = [];
+  List<Map<String, dynamic>> weekly = [], exclusions = [], restWeekly = [];
+  int bufferBefore = 0, bufferAfter = 0;
   int? version;
   bool busy = false;
   int selectedDay = 1;
@@ -55,6 +56,11 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
           version = data['version'];
           weekly = List<Map<String, dynamic>>.from(data['weekly']);
           exclusions = List<Map<String, dynamic>>.from(data['exclusions']);
+          restWeekly = List<Map<String, dynamic>>.from(
+            data['rest_weekly'] ?? [],
+          );
+          bufferBefore = data['buffer_before_minutes'] ?? 0;
+          bufferAfter = data['buffer_after_minutes'] ?? 0;
         });
       }
     } catch (e) {
@@ -65,6 +71,24 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
   int minuteOf(String value) {
     final parts = value.split(':');
     return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+  }
+
+  Future<void> addRest() async {
+    final range = await showAppClockRangePicker(
+      context: context,
+      title: '周${'一二三四五六日'[selectedDay - 1]}休息时间',
+      initialStartMinutes: 12 * 60,
+      initialEndMinutes: 13 * 60,
+      allowEndOfDay: true,
+    );
+    if (range == null || !mounted || !sameContext) return;
+    setState(
+      () => restWeekly.add({
+        'weekday': selectedDay,
+        'start': range.startText,
+        'end': range.endText,
+      }),
+    );
   }
 
   Future<void> editWindow(int day, [Map<String, dynamic>? original]) async {
@@ -180,6 +204,13 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
 
     final excluded = List<Map<String, dynamic>>.from(data['exclusions']);
     return [
+      Text(
+        '安排前留出${data['buffer_before_minutes'] ?? 0}分钟，结束后留出${data['buffer_after_minutes'] ?? 0}分钟',
+      ),
+      for (final rest in (data['rest_weekly'] as List? ?? []))
+        Text(
+          '周${'一二三四五六日'[rest['weekday'] - 1]} ${rest['start']}—${rest['end']}休息',
+        ),
       for (final entry in groups.entries)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -219,6 +250,9 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
         'expected_version': version,
         'weekly': weekly,
         'exclusions': exclusions,
+        'rest_weekly': restWeekly,
+        'buffer_before_minutes': bufferBefore,
+        'buffer_after_minutes': bufferAfter,
       };
       final preview = await widget.controller.previewAvailability(input);
       if (!mounted) return;
@@ -418,6 +452,71 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                         ),
                       ),
                   ],
+                ],
+              ),
+              EditorSection(
+                title: '休息与往返缓冲',
+                icon: Icons.coffee_outlined,
+                children: [
+                  const Text('只影响学习安排，不改变课程、会议的实际时间。'),
+                  const SizedBox(height: 12),
+                  for (final before in [true, false])
+                    DropdownButtonFormField<int>(
+                      isExpanded: true,
+                      initialValue: before ? bufferBefore : bufferAfter,
+                      decoration: InputDecoration(
+                        labelText: before ? '固定安排开始前' : '固定安排结束后',
+                      ),
+                      items:
+                          ({
+                                0,
+                                5,
+                                10,
+                                15,
+                                20,
+                                30,
+                                45,
+                                60,
+                                90,
+                                120,
+                                bufferBefore,
+                                bufferAfter,
+                              }.toList()..sort())
+                              .map(
+                                (m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(m == 0 ? '不留缓冲' : '留出$m分钟'),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: busy
+                          ? null
+                          : (value) => setState(() {
+                              if (before) {
+                                bufferBefore = value!;
+                              } else {
+                                bufferAfter = value!;
+                              }
+                            }),
+                    ),
+                  AppTextButton.icon(
+                    onPressed: busy ? null : addRest,
+                    icon: const Icon(Icons.add_rounded),
+                    label: Text('添加周${'一二三四五六日'[selectedDay - 1]}休息时间'),
+                  ),
+                  for (final rest in restWeekly)
+                    AppTile(
+                      title: Text(
+                        '周${'一二三四五六日'[rest['weekday'] - 1]} ${rest['start']}—${rest['end']}',
+                      ),
+                      trailing: AppIconButton(
+                        tooltip: '移除休息时间',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: busy
+                            ? null
+                            : () => setState(() => restWeekly.remove(rest)),
+                      ),
+                    ),
                 ],
               ),
               EditorSection(

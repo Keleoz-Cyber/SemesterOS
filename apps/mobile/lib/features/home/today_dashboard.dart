@@ -865,7 +865,16 @@ class TodayDashboardState extends State<TodayDashboard>
         (tomorrow.isNotEmpty || tomorrowPreviewTasks.isNotEmpty);
     final stockOrder =
         preferences.order.join('|') == homeModules.keys.join('|');
-    final earlyGap = stockOrder && preferences.enabled.contains('windows');
+    final opportunityStart = brief.data?['study_opportunity']?['start_at'];
+    final earlyGap =
+        stockOrder &&
+        preferences.enabled.contains('windows') &&
+        (opportunityStart is String &&
+                !schoolTime(
+                  opportunityStart,
+                ).isAfter(now.add(const Duration(minutes: 5))) ||
+            _opportunityPreview != null ||
+            _opportunityReceipt != null);
     return frame(
       Padding(
         padding: EdgeInsets.symmetric(
@@ -1385,7 +1394,12 @@ class TodayDashboardState extends State<TodayDashboard>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (hasReceipt && !savedCurrent) opportunityHistory(savedStatus),
-          if (opportunity is Map)
+          if (opportunity is Map &&
+              (hasReceipt ||
+                  preferences.dismissedDay != calendarDate(day) ||
+                  !preferences.dismissedOpportunities.contains(
+                    opportunity['item_id'],
+                  )))
             StudyOpportunityCard(
               value: Map<String, dynamic>.from(opportunity),
               now: now,
@@ -1394,6 +1408,20 @@ class TodayDashboardState extends State<TodayDashboard>
               onArrange: () =>
                   arrangeOpportunity(Map<String, dynamic>.from(opportunity)),
               onOpen: () => context.push('/items/${opportunity['item_id']}'),
+              onDismiss: () async {
+                try {
+                  await preferences.dismissOpportunity(
+                    calendarDate(day),
+                    opportunity['item_id'],
+                  );
+                } catch (_) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('本机偏好未保存，请重试')),
+                    );
+                  }
+                }
+              },
               saved: savedCurrent,
               preview: _opportunityPreview != null
                   ? OpportunityInlinePreview(

@@ -26,6 +26,7 @@ import 'agent_receipt.dart';
 import 'conversation_session.dart';
 import '../notices/notice_fields.dart';
 import 'change_confirmation.dart';
+import 'preview_quick_edit.dart';
 import '../media/inline_capture_controller.dart';
 import '../media/media_input.dart';
 import '../planning/date_time_picker.dart';
@@ -1459,6 +1460,27 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                 child: showingHistory ? historyList() : conversationList(),
               ),
             ),
+            if (c.saveMessage != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 6,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cloud_sync_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        c.saveMessage!,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    if (c.uncertainDecisions.isNotEmpty && !c.busy)
+                      AppTextButton(onPressed: c.poll, child: const Text('核实')),
+                  ],
+                ),
+              ),
             if (c.error != null)
               AssistantInlineError(
                 text: c.error!,
@@ -1466,7 +1488,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
                     ? null
                     : () => showingHistory
                           ? c.loadHistory(reset: true)
-                          : c.processing
+                          : c.processing || c.uncertainDecisions.isNotEmpty
                           ? c.poll()
                           : c.open(id: c.threadId, fresh: c.threadId == null),
               ),
@@ -3076,6 +3098,7 @@ class _AgentPageState extends State<AgentPage> with WidgetsBindingObserver {
               ],
             ),
           if (p['_compact'] != true) const SizedBox(height: 14),
+          if (pending) PreviewQuickEdit(controller: c, run: run),
           if (p['_hide_title'] != true)
             Text(
               title,

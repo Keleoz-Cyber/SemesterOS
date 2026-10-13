@@ -10,7 +10,7 @@ from .database import get_db
 from .media_files import path_for
 from .reminder_rules import utcnow
 from .models import (
-    AgentRun, AgentThread, AvailabilityRevision, CalendarEvent,
+    AccountErasure, AgentRun, AgentThread, AvailabilityRevision, CalendarEvent,
     CalendarEventRevision, CourseMeeting, ImportBatch, ItemRevision,
     MediaCleanupJob, MediaSource, OperationProposal, PlanBlock, PlanProposal, PlanRevision,
     ProgressEntry, RealityChange, ReminderRule, StudyAvailability,
@@ -34,6 +34,18 @@ def drain_media_cleanup(db, media_root, user_id=None):
             pending += 1
         else:
             db.delete(job)
+    for erasure in db.scalars(select(AccountErasure)).all():
+        remaining = []
+        for key in erasure.storage_keys:
+            try:
+                path_for(media_root, key).unlink(missing_ok=True)
+            except OSError:
+                remaining.append(key)
+        if remaining:
+            erasure.storage_keys = remaining
+            pending += len(remaining)
+        else:
+            db.delete(erasure)
     db.commit()
     return pending
 

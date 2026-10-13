@@ -2,12 +2,12 @@ import '../../ui/app_loading.dart';
 import 'package:flutter/material.dart';
 import '../../core/api.dart';
 import 'items_controller.dart';
-import 'reminder_preferences.dart';
 import 'reminder_sync.dart';
 import '../../ui/app_controls.dart';
 import '../../ui/app_picker_field.dart';
 import '../../ui/campus_theme.dart';
 import '../../ui/detail_widgets.dart';
+import 'package:go_router/go_router.dart';
 
 class ReminderSettingsPage extends StatefulWidget {
   final ItemsController controller;
@@ -135,6 +135,13 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
+            AppTile(
+              title: const Text('桌面卡片与实时提醒'),
+              subtitle: const Text('测试提醒、检查后台设置、查看已设置的提醒'),
+              leading: const Icon(Icons.widgets_outlined),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => context.push('/device-surfaces'),
+            ),
             EditorSection(
               title: '课程提醒',
               icon: Icons.school_outlined,
@@ -150,7 +157,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                       ? null
                       : (enabled) => _run(() async {
                           await controller.saveReminderPreferences(
-                            ReminderPreferences(
+                            settings.copyWith(
                               classReminders: enabled,
                               classLeadMinutes: settings.classLeadMinutes,
                             ),
@@ -180,7 +187,7 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                             if (lead != null) {
                               _run(
                                 () => controller.saveReminderPreferences(
-                                  ReminderPreferences(
+                                  settings.copyWith(
                                     classReminders: true,
                                     classLeadMinutes: lead,
                                   ),
@@ -189,6 +196,59 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                             }
                           },
                   ),
+              ],
+            ),
+            EditorSection(
+              title: '静默时段',
+              icon: Icons.nights_stay_outlined,
+              children: [
+                AppSwitchRow(
+                  title: const Text('在指定时段静音'),
+                  subtitle: const Text('仍按原时间显示通知，不延后提醒；仅本机生效'),
+                  value: settings.quietEnabled,
+                  onChanged: busy
+                      ? null
+                      : (value) => _run(
+                          () => controller.saveReminderPreferences(
+                            settings.copyWith(quietEnabled: value),
+                          ),
+                        ),
+                ),
+                if (settings.quietEnabled)
+                  for (final start in [true, false])
+                    AppTile(
+                      title: Text(start ? '静音开始' : '静音结束'),
+                      trailing: Text(
+                        '${((start ? settings.quietStart : settings.quietEnd) ~/ 60).toString().padLeft(2, '0')}:${((start ? settings.quietStart : settings.quietEnd) % 60).toString().padLeft(2, '0')}',
+                      ),
+                      onTap: busy
+                          ? null
+                          : () async {
+                              final minutes = start
+                                  ? settings.quietStart
+                                  : settings.quietEnd;
+                              final result = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay(
+                                  hour: minutes ~/ 60,
+                                  minute: minutes % 60,
+                                ),
+                              );
+                              if (result == null || !mounted) return;
+                              await _run(
+                                () => controller.saveReminderPreferences(
+                                  settings.copyWith(
+                                    quietStart: start
+                                        ? result.hour * 60 + result.minute
+                                        : null,
+                                    quietEnd: start
+                                        ? null
+                                        : result.hour * 60 + result.minute,
+                                  ),
+                                ),
+                              );
+                            },
+                    ),
               ],
             ),
             EditorSection(

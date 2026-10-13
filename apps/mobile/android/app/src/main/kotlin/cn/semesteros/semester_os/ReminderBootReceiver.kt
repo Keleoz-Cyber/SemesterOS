@@ -35,7 +35,7 @@ class ReminderBootReceiver : ScheduledNotificationBootReceiver() {
                 val future = JSONArray()
                 for (index in 0 until records.length()) {
                     val record = records.getJSONObject(index)
-                    if (record.optString("channelId") != "semester_items_v1") {
+                    if (record.optString("channelId") !in setOf("semester_items_v1", "semester_items_quiet_v1")) {
                         future.put(record)
                         continue
                     }

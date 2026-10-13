@@ -6,6 +6,7 @@ import '../changes/course_change_display.dart';
 import '../calendar/event_conflict_review.dart';
 import 'agent_controller.dart';
 import 'agent_surfaces.dart';
+import 'preview_quick_edit.dart';
 
 /// Confirmation authority stays with the visible selection, never model prose.
 class ChangeConfirmation extends StatefulWidget {
@@ -38,6 +39,19 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
   void initState() {
     super.initState();
     selected.addAll(rows(preview['groups']).map((g) => g['id'] as String));
+  }
+
+  @override
+  void didUpdateWidget(covariant ChangeConfirmation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.run['preview']?['token'] != widget.run['preview']?['token']) {
+      selectionEpoch++;
+      selectedImpact = null;
+      selectionError = null;
+      checking = false;
+      conflictAcknowledged = false;
+      leaveTargets.clear();
+    }
   }
 
   Future<void> checkSelection() async {
@@ -150,6 +164,7 @@ class _ChangeConfirmationState extends State<ChangeConfirmation> {
               ],
             ),
             const SizedBox(height: 12),
+            PreviewQuickEdit(controller: c, run: widget.run),
             if (batch) ...[
               for (final group in rows(p['groups'])) ...[
                 AppCheckRow(

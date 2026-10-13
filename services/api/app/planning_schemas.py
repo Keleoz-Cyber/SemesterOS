@@ -43,6 +43,9 @@ class AvailabilityInput(Input):
     expected_version: int = Field(ge=0)
     weekly: list[LearningWindow] = Field(default_factory=list,max_length=70)
     exclusions: list[Exclusion] = Field(default_factory=list,max_length=200)
+    rest_weekly: list[LearningWindow] = Field(default_factory=list,max_length=70)
+    buffer_before_minutes: int = Field(default=0, ge=0, le=120)
+    buffer_after_minutes: int = Field(default=0, ge=0, le=120)
 
     def normalized(self):
         weekly=[]
@@ -51,7 +54,9 @@ class AvailabilityInput(Input):
         for day in range(1,8):
             for a,b in merge([(minute(r.start),minute(r.end)) for r in self.weekly if r.weekday==day]):
                 weekly.append({'weekday':day,'start':hhmm(a),'end':hhmm(b)})
-        return {'weekly':weekly,'exclusions':[e.model_dump(mode='json') for e in self.exclusions]}
+        return {'weekly':weekly,'exclusions':[e.model_dump(mode='json') for e in self.exclusions],
+                'rest_weekly': [w.model_dump() for w in self.rest_weekly],
+                'buffer_before_minutes': self.buffer_before_minutes, 'buffer_after_minutes': self.buffer_after_minutes}
 
 
 class AvailabilityApply(AvailabilityInput):

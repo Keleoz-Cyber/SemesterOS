@@ -76,6 +76,14 @@ def validate_preferences(db,user,sid,body):
     return s,row
 
 
+def normalized_preferences(body, row):
+    value = body.normalized()
+    for field in ('rest_weekly', 'buffer_before_minutes', 'buffer_after_minutes'):
+        if row is not None and field not in body.model_fields_set:
+            value[field] = row.payload.get(field, [] if field == 'rest_weekly' else 0)
+    return value
+
+
 @router.get('/semesters/{sid}/availability')
 def get_availability(sid:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
     s=owned_semester(db,user,sid,lock=True)
@@ -85,8 +93,9 @@ def get_availability(sid:str,user:User=Depends(current_user),db:Session=Depends(
 @router.post('/semesters/{sid}/availability/preview')
 def preview_availability(sid:str,body:AvailabilityInput,user:User=Depends(current_user),db:Session=Depends(get_db)):
     s,row=validate_preferences(db,user,sid,body)
-    conflicts=preference_conflicts(db,user,s,body.normalized())
-    return {'before':availability_value(row,s.revision),'after':body.normalized(),'base_revision':s.revision,
+    payload = normalized_preferences(body, row)
+    conflicts=preference_conflicts(db,user,s,payload)
+    return {'before':availability_value(row,s.revision),'after':payload,'base_revision':s.revision,
             'settings_version':body.expected_version,'affected_plan_count':len(conflicts),'affected_blocks':conflicts}
 
 
@@ -113,15 +122,16 @@ def put_availability(sid:str,body:AvailabilityApply,user:User=Depends(current_us
     s,row=validate_preferences(db,user,sid,body)
     if s.revision!=body.expected_revision:
         error(409,'SNAPSHOT_STALE','学期安排已变化，请重新核对学习时间')
-    if preference_conflicts(db,user,s,body.normalized()) and not body.confirm_plan_conflicts:
+    payload = normalized_preferences(body, row)
+    if preference_conflicts(db,user,s,payload) and not body.confirm_plan_conflicts:
         error(422,'CONFIRM_PLAN_CONFLICTS','新设置会使已有计划冲突，请明确确认；计划不会自动移动')
     before=availability_value(row,s.revision)
     now=utcnow().isoformat()
     if row is None:
-        row=StudyAvailability(user_id=user.id,semester_id=sid,payload=body.normalized(),version=1,updated_at=now)
+        row=StudyAvailability(user_id=user.id,semester_id=sid,payload=payload,version=1,updated_at=now)
         db.add(row)
     else:
-        row.payload=body.normalized();row.version+=1;row.updated_at=now
+        row.payload=payload;row.version+=1;row.updated_at=now
     s.revision+=1
     result=availability_value(row,s.revision)
     db.add(AvailabilityRevision(user_id=user.id,semester_id=sid,payload={'before':before,'after':result},created_at=now))

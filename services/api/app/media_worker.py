@@ -25,8 +25,16 @@ def parent_alive():
 
 def main():
     engine=make_engine()
+    last_cleanup = 0
     try:
         while parent_alive():
+            if time.monotonic() - last_cleanup > 60:
+                from sqlalchemy.orm import Session
+                from .semester_management import drain_media_cleanup
+                try:
+                    with Session(engine) as db: drain_media_cleanup(db, root())
+                except Exception: pass  # Durable jobs remain for the next attempt.
+                last_cleanup = time.monotonic()
             # Agent state lives in the same durable DB queue; no API request waits
             # on model I/O. Alternate with media jobs so neither queue is starved.
             from .agent_runtime import work_once

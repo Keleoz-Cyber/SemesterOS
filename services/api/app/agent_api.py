@@ -545,11 +545,11 @@ def selection_preview(rid:str,body:SelectionPreview,user:User=Depends(current_us
     row=owned_run(db,user,rid,True);preview=row.state.get('preview') or {}
     if row.status!='needs_confirmation' or preview.get('kind')!='batch' or preview.get('token')!=body.token:
         error(409,'PREVIEW_STALE','分组预览已更新，请重新打开')
-    from .agent_tools import source_guard
+    from .agent_tools import preview_source_guard
     from .agent_batches import selected_groups,guard_dependencies,simulate
     s=owned_semester(db,user,preview['semester_id'],lock=True)
     if s.revision!=preview['expected_revision']:error(409,'PREVIEW_STALE','安排已变化，请重新整理通知')
-    source_guard(db,user,s.id,preview.get('source'),True)
+    preview_source_guard(db,user,s.id,preview)
     groups=selected_groups(preview,body.selected_group_ids)
     guard_dependencies(db,user,s,[p for g in groups for p in g['operations']])
     result=simulate(db,user,s,groups,preview['expected_revision'])

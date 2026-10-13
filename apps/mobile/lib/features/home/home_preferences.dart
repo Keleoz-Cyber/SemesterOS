@@ -29,6 +29,8 @@ class HomePreferences extends ChangeNotifier {
   Set<String> enabled = {...defaultHomeModules};
   TodayViewMode? todayView;
   List<String> taskOrder = [];
+  String? dismissedDay;
+  Set<String> dismissedOpportunities = {};
   int _epoch = 0;
   bool _closed = false;
   Future<void> _writes = Future.value();
@@ -59,6 +61,10 @@ class HomePreferences extends ChangeNotifier {
       'tasks' => TodayViewMode.tasks,
       _ => null,
     };
+    dismissedDay = data['dismissed_day'] as String?;
+    dismissedOpportunities = (data['dismissed_opportunities'] as List? ?? [])
+        .whereType<String>()
+        .toSet();
     taskOrder = data['task_order'] is List
         ? (data['task_order'] as List).whereType<String>().toSet().toList()
         : [];
@@ -89,12 +95,21 @@ class HomePreferences extends ChangeNotifier {
       'enabled': this.enabled.toList(),
       if (this.todayView != null) 'today_view': this.todayView!.name,
       'task_order': [...this.taskOrder],
+      'dismissed_day': dismissedDay,
+      'dismissed_opportunities': dismissedOpportunities.toList(),
     };
     notifyListeners();
     _writes = _writes.catchError((Object _) {}).then((_) async {
       if (valid() && !_closed) await cache.write(key, data);
     });
     await _writes;
+  }
+
+  Future<void> dismissOpportunity(String day, String id) async {
+    if (dismissedDay != day) dismissedOpportunities.clear();
+    dismissedDay = day;
+    dismissedOpportunities.add(id);
+    await change();
   }
 
   @override

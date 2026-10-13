@@ -12,6 +12,22 @@ class Base(DeclarativeBase):
     pass
 
 
+class AccountErasure(Base):
+    """Only random storage keys survive until attachments are physically removed."""
+    __tablename__ = 'account_erasures'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    storage_keys: Mapped[list] = mapped_column(JSON)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class UserFeedback(Base):
+    __tablename__ = 'user_feedback'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
 class CalendarTag(Base):
     __tablename__ = 'calendar_tags'
     __table_args__ = (UniqueConstraint('user_id', 'normalized'), UniqueConstraint('user_id', 'id'),

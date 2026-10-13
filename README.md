@@ -4,7 +4,7 @@
 
 例如，收到“明天9:15到A301开会，结束时间待定”的通知后，可以交给助手整理。软件会保留“结束时间待定”，检查9:15是否正在上课，再让用户决定怎么处理。它不会因为不知道散会时间，就要求用户把一天的课程都请假。
 
-当前版本为 **1.0.0，Android 构建号为9**。客户端使用Flutter，后端使用Python和FastAPI，正式数据库使用PostgreSQL。文字助手调用DeepSeek；学习时间安排使用OR-Tools求解。
+当前版本为 **1.1.0，Android 构建号为11**。客户端使用Flutter，后端使用Python和FastAPI，正式数据库使用PostgreSQL。文字助手调用DeepSeek；学习时间安排使用OR-Tools求解。
 
 ## 可以做什么
 
@@ -62,7 +62,7 @@
 
 第一次了解项目，从[文档目录](docs/README.md)开始。接手开发可直接看[后端开发说明](docs/技术契约.md)和[移动端开发说明](apps/mobile/README.md)。参赛介绍见[作品方案](docs/参赛资料/拾日作品方案初稿.md)。
 
-本地安装包是[拾日1.0.0](output/apk/拾日-1.0.0.apk)。发行记录中的下载入口是[GitHub v1.0.0](https://github.com/Keleoz-Cyber/SemesterOS/releases/tag/v1.0.0)。包的信息和校验值见[版本与交付说明](docs/交付说明.md)。
+最新版安装包见[GitHub v1.1.0发行版](https://github.com/Keleoz-Cyber/SemesterOS/releases/tag/v1.1.0)，本地文件是[拾日1.1.0](output/apk/拾日-1.1.0.apk)。历史发行记录见[GitHub v1.0.0](https://github.com/Keleoz-Cyber/SemesterOS/releases/tag/v1.0.0)。包的信息和校验值见[版本与交付说明](docs/交付说明.md)。
 
 ## 测试到什么程度
 

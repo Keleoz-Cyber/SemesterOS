@@ -220,6 +220,9 @@ def calendar_context(semester, availability, courses, items, now, *, query_dates
             school.append((a, b, eid, event['title']))
         if not complete or event.get('certainty') != 'formal':
             note_uncertainty(event,a,b,not complete,eid)
+    before = availability.get('buffer_before_minutes', 0) * 60
+    after = availability.get('buffer_after_minutes', 0) * 60
+    buffered_school = [(a-before, b+after) for a,b,_,_ in school]
     school = sorted(r for r in school if r[1] > begin and r[0] < available_end)
     conflicts, active = [], []
     for row in school:
@@ -254,8 +257,18 @@ def calendar_context(semester, availability, courses, items, now, *, query_dates
                 'uncertainty_reasons':list(dict.fromkeys(r[4]['reason'] for r in unknown)),
                 'event_start_at':info['start_at'],'overlap_at_start':at_start,
                 'overlap_at_arrival':arrival_overlap,'window_is_comparison':False})
-    blocked = [(a, b) for a, b, _, _ in school]
+    blocked = buffered_school
     blocked += [(a,b) for a,b,_,_,_ in obligations if b>a]
+    # User-selected breathing/travel buffers affect study availability only,
+    # never the event's facts or the fixed-conflict evidence above.
+    blocked += [(a-before, b) for a,b,_,_,_ in obligations if b>a and before]
+    blocked += [(point-before, point) for _,point,_,_,_ in obligations if before]
+    for day in range(round((available_end - available_start) / 86400)):
+        base = available_start + day * 86400
+        weekday = datetime.fromtimestamp(base, SHANGHAI).isoweekday()
+        for rest in availability.get('rest_weekly', []):
+            if rest['weekday'] == weekday:
+                blocked.append((base + minute(rest['start'])*60, base + minute(rest['end'])*60))
     blocked += [(instant(r['start_at']).timestamp(), instant(r['end_at']).timestamp()) for r in availability.get('exclusions', [])]
     total = CapacityIndex(available)
     points = [point for _,point,_,_,_ in obligations]

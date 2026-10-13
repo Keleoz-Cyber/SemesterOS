@@ -1,0 +1,44 @@
+name: App quality
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: tests
+          POSTGRES_PASSWORD: isolated-tests-only
+          POSTGRES_DB: semesteros_test
+        ports: ['55439:5432']
+        options: >-
+          --health-cmd "pg_isready -U tests -d semesteros_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r services/api/requirements.lock
+      - run: python -m pytest -q
+        working-directory: services/api
+        env:
+          POSTGRES_TEST_URL: postgresql+psycopg://tests:isolated-tests-only@localhost:55439/semesteros_test
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.2'
+          cache: true
+      - run: flutter pub get
+        working-directory: apps/mobile
+      - run: flutter analyze --no-pub
+        working-directory: apps/mobile
+      - run: flutter test --no-pub
+        working-directory: apps/mobile

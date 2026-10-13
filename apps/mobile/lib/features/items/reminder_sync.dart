@@ -32,6 +32,7 @@ String reminderFingerprint(
   DateTime.parse(rule['trigger_at']).toUtc().toIso8601String(),
   rule['title'],
   rule['purpose'],
+  if (rule['quiet'] == true) 'quiet',
   // Preserve the legacy form only for genuinely legacy feeds; enriched
   // resources invalidate old time/place/action text when their contents change.
   if (rule.containsKey('resource_type')) ...[

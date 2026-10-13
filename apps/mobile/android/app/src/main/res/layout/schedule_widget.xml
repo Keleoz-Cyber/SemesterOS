@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_body" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="16dp" android:background="@drawable/widget_background">
+    <TextView android:id="@+id/widget_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#526985" android:textSize="13sp" />
+    <TextView android:id="@+id/widget_next" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="#152840" android:textSize="20sp" android:textStyle="bold" android:maxLines="2" android:ellipsize="end" />
+    <TextView android:id="@+id/widget_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#245DD0" android:textSize="14sp" android:maxLines="2" />
+    <TextView android:id="@+id/widget_other" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="8dp" android:textColor="#526985" android:textSize="13sp" android:maxLines="3" android:ellipsize="end" />
+    <TextView android:id="@+id/widget_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#526985" android:textSize="11sp" android:maxLines="1" />
+    <TextView android:id="@+id/widget_add" android:layout_width="match_parent" android:layout_height="48dp" android:gravity="center_vertical" android:text="＋ 记一件事" android:textColor="#245DD0" android:textSize="14sp" />
+</LinearLayout>

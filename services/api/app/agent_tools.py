@@ -60,6 +60,8 @@ class EventChange(Input):
     action: Literal['create', 'update', 'cancel','restore'] = Field(description='create新增，update修改，cancel取消，restore恢复已取消的个人日程；恢复仅传event_id，不同时修改字段。')
     event_id: str | None = Field(default=None, max_length=36)
     fields: EventPatch = Field(default_factory=EventPatch)
+    draft_run_id: str | None = Field(default=None, max_length=36,
+        description='补充或纠正尚未保存的同一日程时，填pending_draft.run_id；尚无预览则选unsaved_notice_contexts中最初提出此事的run_id。继续create保留最初原文。新事项不填；已保存事项用update。')
 
 
 class ItemDraft(Input):
@@ -85,6 +87,8 @@ class ItemDraft(Input):
 
 class ItemNew(Input):
     fields: ItemDraft
+    draft_run_id: str | None = Field(default=None, max_length=36,
+        description='补充未保存的同一事项时填pending_draft.run_id，尚无预览则选unsaved_notice_contexts中最初原文的run_id；新事项不填。')
 
 
 class ItemPatch(Input):
@@ -207,6 +211,8 @@ class BatchGroup(Input):
 
 class BatchRequest(Input):
     groups: list[BatchGroup] = Field(min_length=1, max_length=8)
+    draft_run_id: str | None = Field(default=None, max_length=36,
+        description='重新整理同一批通知时填pending_draft.run_id，尚无预览则选unsaved_notice_contexts中的最初原文run_id；新通知不填。')
 
     @model_validator(mode='after')
     def bounded(self):
@@ -217,6 +223,11 @@ class BatchRequest(Input):
 
 class RecentActions(Input):
     pass
+
+
+class ClassTimeQuery(Input):
+    expression: str = Field(min_length=1, max_length=200,
+        description='用户提到的节次原话，如下午第二节课、第7到8节，不根据当天有几门课改写编号。')
 
 
 class UndoAction(Input):
@@ -234,6 +245,7 @@ class ForwardingDraft(Input):
 
 
 SCHEMAS = {
+    'resolve_class_time': (ClassTimeQuery, '按当前学期每日节次表核对课节说法，独立于某天是否有课。学生日常“下午第二节/第几节课”按整节课（大节）计数，直接返回开始时间，不追问大小节；明确7到8节等编号按全日课表编号查询。节次末尾不是会议结束时间。'),
     'get_schedule_setup':(ScheduleSetup,'读取排程确认项和可修改建议：普通任务无等待条件可立即开始；未设置学习时间提供候选模板，未知耗时提供起步建议，均需用户确认后保存。返回排程设置卡，不能声称已经设置或安排。'),
     'prepare_forwarding_draft':(ForwardingDraft,'仅用户要求转达、发群文案或转发时生成可编辑草稿。按已查询事实或当前通知提炼对象、动作、日期、材料和渠道；不猜身份，不自动发送，不把别人分工写成用户已承接。'),
     'list_recent_actions': (RecentActions, '查询当前学期最近由助手确认保存的操作及是否已撤销。撤销前先查询，不猜run_id。'),
@@ -281,6 +293,14 @@ def source_guard(db, user, sid, ref, lock=False):
     version(row, ref['version'])
 
 
+def preview_source_guard(db, user, sid, preview):
+    refs = list(preview.get('input_sources', []))
+    if preview.get('source'):
+        refs.append(preview['source'])
+    for ref in sorted(refs, key=lambda p: (p['id'], p['version'])):
+        source_guard(db, user, sid, ref, True)
+
+
 def facts(db, user, sid, args):
     value = events.calendar(sid, args.from_date, args.to_date, user, db)
     if len(value['entries']) + len(value['undated']) > 1000:
@@ -317,6 +337,11 @@ def execute_tool(name, raw, db, user, thread, state, source):
     sid = thread.semester_id
     s = owned_semester(db, user, sid, lock=True)
     source_guard(db, user, sid, state.get('source'))
+    if name == 'resolve_class_time':
+        from .class_time import resolve_period_reference
+        result = resolve_period_reference(s.periods, args.expression)
+        state['class_time_resolution'] = result
+        return result
     if name=='get_schedule_setup':
         from .planning import schedule_setup_value
         result=schedule_setup_value(db,user,s,args.task_ids)
@@ -470,6 +495,14 @@ def execute_tool(name, raw, db, user, thread, state, source):
     if isinstance(args, (EventChange, ItemChange)):
         fields = {k:v for k,v in fields.items() if v is not None}
     provided_fields = sorted(fields)
+    origin_source, origin_ref, input_sources = source, state.get('source'), []
+    if getattr(args, 'draft_run_id', None):
+        if name == 'prepare_event' and args.action != 'create':
+            error(422, 'INVALID_DRAFT', '已保存日程用update，不引用未保存草稿。')
+        from .agent_provenance import draft_origin
+        kind = {'prepare_event': 'event', 'prepare_item': 'item', 'prepare_batch': 'batch'}[name]
+        origin_source, origin_ref, input_sources = draft_origin(db, user, thread, state, args.draft_run_id, kind, source)
+        source_guard(db, user, sid, origin_ref)
     if name == 'prepare_undo':
         if args.run_id not in state.get('known_action_ids',[]):error(422,'READ_FIRST','请先查询最近保存的操作')
         from .agent_undo import prepare_undo
@@ -525,7 +558,8 @@ def execute_tool(name, raw, db, user, thread, state, source):
             'affected_blocks': blocks, 'body': body.model_dump(mode='json')}
     elif name == 'prepare_batch':
         from .agent_batches import prepare_batch
-        preview=prepare_batch(db,user,thread,s,state,args,source)
+        batch_state = {**state, 'source': origin_ref}
+        preview=prepare_batch(db,user,thread,s,batch_state,args,origin_source)
     elif name == 'prepare_course_change':
         preview=prepare_course(db,user,s,state,args,source)
     elif name == 'prepare_exam_change':
@@ -566,9 +600,12 @@ def execute_tool(name, raw, db, user, thread, state, source):
         if set(fields)-allowed: error(422,'INVALID_FIELDS','请只填写日程本身的信息')
         from .notice_event_time import normalize_notice_event_time
         fields=normalize_notice_event_time(fields,source)
+        from .class_time import guard_event_class_time, reference_evidence
+        evidence = reference_evidence(state.get('current_user_text') or source, source)
+        fields=guard_event_class_time(fields,s.periods,evidence)
         if args.action=='create':
             if args.event_id: error(422,'INVALID_TARGET','新增日程不需要已有日程编号')
-            body=EventFields.model_validate({**fields,'semester_id':sid,'expected_revision':s.revision,'source_text':source})
+            body=EventFields.model_validate({**fields,'semester_id':sid,'expected_revision':s.revision,'source_text':origin_source})
         else:
             row=events.owned_event(db,user,args.event_id)
             if row.semester_id!=sid: error(404,'NOT_FOUND','找不到本学期的这条日程')
@@ -591,7 +628,7 @@ def execute_tool(name, raw, db, user, thread, state, source):
                     if ('reserve_time' not in fields and 'participation_status' in args.fields.details.model_fields_set
                             and args.fields.details.participation_status != before.get('details', {}).get('participation_status', 'unspecified')):
                         existing.pop('reserve_time', None)
-                body=EventEdit.model_validate({**existing,**fields,'semester_id':sid,'expected_revision':s.revision,
+                body=EventEdit.model_validate({**existing,**fields,'source_text':before.get('source_text',''),'semester_id':sid,'expected_revision':s.revision,
                     'expected_version':row.version,'change_reason':source[:500]})
         data=body.model_dump(mode='json')
         if data.get('time',{}).get('week',0) and data['time']['week']>s.total_weeks: error(422,'INVALID_TIME','周次超出学期')
@@ -609,7 +646,7 @@ def execute_tool(name, raw, db, user, thread, state, source):
         allowed=set(ItemCreate.model_fields)-{'semester_id','source_id','candidate_id','source_text'}
         if set(fields)-allowed: error(422,'INVALID_FIELDS','请只填写事项本身的信息')
         body=ItemCreate.model_validate({**fields,'certainty':args.fields.certainty,
-            'semester_id':sid,'expected_revision':s.revision,'source_text':source})
+            'semester_id':sid,'expected_revision':s.revision,'source_text':origin_source})
         if 'category_id' not in fields and body.kind in ('assignment','exam'):
             body.category_id = 'study'
         if body.course_id:
@@ -617,13 +654,17 @@ def execute_tool(name, raw, db, user, thread, state, source):
             if course is None: error(422,'INVALID_COURSE','找不到关联课程，请先查询课程名称')
         data=body.model_dump(mode='json')
         preview={'kind':'item','action':'create','target_id':None,'before':None,'after':data,'body':data}
-    ref = state.get('source')
+    input_sources = input_sources + ([state['source']] if state.get('source') else [])
+    if input_sources:
+        preview['input_sources'] = list({(p['id'], p['version']): {'id': p['id'], 'version': p['version']}
+                                        for p in input_sources}.values())
+    ref = origin_ref
     if ref:
         preview['source'] = ref
         if preview['action'] == 'create' and preview['kind'] in ('event', 'item'):
             from .models import TextCandidate
             from .reminder_rules import utcnow
-            candidate = TextCandidate(user_id=user.id, semester_id=sid, source_text=source,
+            candidate = TextCandidate(user_id=user.id, semester_id=sid, source_text=origin_source,
                 payload={'intent': 'create_event' if preview['kind']=='event' else 'create_item', 'media_source': ref},
                 created_at=utcnow().isoformat())
             db.add(candidate); db.flush()
@@ -651,7 +692,7 @@ def execute_tool(name, raw, db, user, thread, state, source):
 
 def apply_preview(db,user,preview,*,confirm_fixed_conflicts=False,prepared_base_revision=None,selected_group_ids=None):
     s=owned_semester(db,user,preview['semester_id'],lock=True)
-    source_guard(db, user, s.id, preview.get('source'), True)
+    preview_source_guard(db, user, s.id, preview)
     if s.revision!=preview['expected_revision']:error(409,'PREVIEW_STALE','安排已有更新，请重新生成修改预览')
     if preview['kind']=='batch':
         from .agent_batches import apply_batch

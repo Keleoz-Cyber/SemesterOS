@@ -7,12 +7,72 @@ import 'notification_target.dart';
 import 'reminder_preferences.dart';
 import '../planning/risk_state.dart';
 import '../media/drafts.dart';
+import '../agent/decision_journal.dart';
 
 class ItemsController extends ChangeNotifier {
   final SemesterApi api;
   final CalendarStore cache;
   final ReminderSync reminders;
   ItemsController(this.api, this.cache, this.reminders);
+  DecisionJournal? _decisionJournal;
+  String? recoveryNotice, recoveryThread;
+  bool recoveringDecisions = false;
+  DecisionJournal get decisions {
+    final currentOwner = owner!;
+    final generation = api.generation;
+    return _decisionJournal ??= DecisionJournal(
+      cache,
+      currentOwner,
+      () =>
+          !_disposed &&
+          owner == currentOwner &&
+          _owner == currentOwner &&
+          api.generation == generation,
+    );
+  }
+
+  Future<void> recoverDecisions() async {
+    if (owner == null || semesterId == null || recoveringDecisions) return;
+    final epoch = _epoch, generation = api.generation;
+    recoveringDecisions = true;
+    try {
+      final attempts = await decisions.read();
+      for (final attempt in attempts) {
+        if (attempt['semester_id'] != semesterId) continue;
+        final run = await api.request('GET', '/agent/runs/${attempt['id']}');
+        if (!valid(epoch, generation)) return;
+        recoveryThread = attempt['thread_id'] as String?;
+        if (run['status'] == 'applied' && run['receipt'] is Map) {
+          recoveryNotice = '上次修改已保存，正在同步安排和提醒';
+          changed();
+          await onRealityChanged?.call(
+            Map<String, dynamic>.from(run['receipt']),
+          );
+          await refresh();
+          if (!valid(epoch, generation)) return;
+          if (offline || notice != null) throw ApiFailure('修改已保存，本机同步未完成');
+          await decisions.update(attempt['id'], null);
+          recoveryNotice = null;
+        } else if (run['status'] == 'needs_confirmation') {
+          // The server still has a preview: ask the user to review it again.
+          recoveryNotice = '上次修改尚未保存，可回到对话继续核对';
+        } else {
+          await decisions.update(attempt['id'], null);
+          recoveryNotice = null;
+        }
+      }
+    } catch (_) {
+      if (valid(epoch, generation)) {
+        recoveryNotice ??= '上次保存结果待核实，联网后将继续检查';
+      }
+    } finally {
+      if (valid(epoch, generation)) {
+        recoveringDecisions = false;
+        changed();
+      }
+    }
+  }
+
   List<Map<String, dynamic>> items = [];
   List<Map<String, dynamic>> courses = [], reminderFeed = [];
   bool offline = false;
@@ -107,6 +167,11 @@ class ItemsController extends ChangeNotifier {
       return;
     }
     final previous = _owner;
+    if (previous != owner || _boundGeneration != api.generation) {
+      _decisionJournal = null;
+    }
+    recoveryNotice = recoveryThread = null;
+    recoveringDecisions = false;
     if (previous != owner) _deletedSemesterIds.clear();
     _epoch++;
     invalidateRisk();
@@ -185,6 +250,7 @@ class ItemsController extends ChangeNotifier {
     syncedAt = saved?['synced_at'];
     changed();
     await refresh();
+    if (valid(epoch, generation)) await recoverDecisions();
   }
 
   Future<void> refresh() async {
@@ -260,7 +326,10 @@ class ItemsController extends ChangeNotifier {
       if (!valid(epoch, generation)) return;
       final state = await reminders.replace(
         _owner!,
-        reminderFeed.where(reminderPreferences.accepts).toList(),
+        reminderFeed
+            .where(reminderPreferences.accepts)
+            .map(reminderPreferences.notification)
+            .toList(),
       );
       if (valid(epoch, generation)) notificationStatus = state;
     } catch (_) {
@@ -354,6 +423,7 @@ class ItemsController extends ChangeNotifier {
         }
         final source = reminderFeed
             .where(reminderPreferences.accepts)
+            .map(reminderPreferences.notification)
             .where(
               (rule) =>
                   rule['enabled'] != false &&
@@ -402,6 +472,7 @@ class ItemsController extends ChangeNotifier {
       if (!valid(epoch, generation)) return false;
       final source = reminderFeed
           .where(reminderPreferences.accepts)
+          .map(reminderPreferences.notification)
           .where(
             (rule) =>
                 rule['enabled'] != false &&

@@ -1,4 +1,13 @@
 allprojects {
+    configurations.configureEach {
+        resolutionStrategy.eachDependency {
+            // Flutter integration_test declares a dynamic 1.2+ runner. Pin its
+            // stable matching version so builds don't depend on metadata lookups.
+            if (requested.group == "androidx.test" && requested.name == "runner" && requested.version == "1.2+") {
+                useVersion("1.2.0")
+            }
+        }
+    }
     buildscript {
         repositories {
             maven { url = uri("https://maven.aliyun.com/repository/google") }

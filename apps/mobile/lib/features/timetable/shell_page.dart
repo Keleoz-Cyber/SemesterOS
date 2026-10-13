@@ -428,6 +428,20 @@ class _ShellPageState extends State<ShellPage> with WidgetsBindingObserver {
               ],
               const SizedBox(height: 14),
               const Divider(height: 1),
+              for (final entry in const {
+                '/search': '搜索全部安排',
+                '/device-surfaces': '桌面卡片与实时提醒',
+                '/data': '数据与隐私',
+                '/feedback': '反馈问题',
+              }.entries)
+                AppTile(
+                  title: Text(entry.value),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.pop(sheet);
+                    context.push(entry.key);
+                  },
+                ),
               const SizedBox(height: 6),
               AppTextButton.icon(
                 onPressed: () {
@@ -687,6 +701,8 @@ class _ShellPageState extends State<ShellPage> with WidgetsBindingObserver {
                                                           now: skyNow,
                                                         ),
                                                     onProfile: account,
+                                                    onSearch: () =>
+                                                        context.push('/search'),
                                                     onSettings: () => todayKey
                                                         .currentState
                                                         ?.editModules(),
@@ -728,6 +744,45 @@ class _ShellPageState extends State<ShellPage> with WidgetsBindingObserver {
                                                           ],
                                                         ),
                                                       ),
+                                                    SliverToBoxAdapter(
+                                                      child: ListenableBuilder(
+                                                        listenable:
+                                                            widget.items,
+                                                        builder: (context, _) =>
+                                                            widget
+                                                                    .items
+                                                                    .recoveryNotice ==
+                                                                null
+                                                            ? const SizedBox.shrink()
+                                                            : AppTile(
+                                                                leading: const Icon(
+                                                                  Icons
+                                                                      .cloud_sync_outlined,
+                                                                ),
+                                                                title: Text(
+                                                                  widget
+                                                                      .items
+                                                                      .recoveryNotice!,
+                                                                ),
+                                                                trailing:
+                                                                    const Icon(
+                                                                      Icons
+                                                                          .chevron_right_rounded,
+                                                                    ),
+                                                                onTap: () =>
+                                                                    widget
+                                                                            .items
+                                                                            .recoveryThread ==
+                                                                        null
+                                                                    ? widget
+                                                                          .items
+                                                                          .recoverDecisions()
+                                                                    : context.push(
+                                                                        '/assistant?thread=${Uri.encodeQueryComponent(widget.items.recoveryThread!)}',
+                                                                      ),
+                                                              ),
+                                                      ),
+                                                    ),
                                                     if (c.notice != null &&
                                                         (!c.notice!.startsWith(
                                                               '正在同步',
@@ -871,6 +926,7 @@ class _TodayHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.extent,
     required this.onProfile,
     required this.onSettings,
+    this.onSearch,
     required this.active,
     required this.entryEpoch,
   });
@@ -878,6 +934,7 @@ class _TodayHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Map<String, dynamic> semester;
   final double extent;
   final VoidCallback onProfile, onSettings;
+  final VoidCallback? onSearch;
   final bool active;
   final int entryEpoch;
   @override
@@ -896,6 +953,7 @@ class _TodayHeaderDelegate extends SliverPersistentHeaderDelegate {
     semester: semester,
     onProfile: onProfile,
     onSettings: onSettings,
+    onSearch: onSearch,
     collapse: (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0),
     layoutExtent: (maxExtent - shrinkOffset).clamp(minExtent, maxExtent),
   );

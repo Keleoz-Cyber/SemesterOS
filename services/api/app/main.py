@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from . import calendar_events
+from . import personal_data
+from . import preview_editing
 from . import agent_api
 from . import agent_media
 from . import user_profiles
@@ -64,7 +66,7 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
     @app.middleware("http")
     async def limit_auth(request: Request, call_next):
         path = request.url.path
-        high_risk = {'/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/recover', '/api/v1/auth/demo'}
+        high_risk = {'/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/recover', '/api/v1/auth/demo', '/api/v1/me/erase'}
         # A coarse, separate maintenance limit still bounds invalid-token abuse,
         # without making a whole campus share the login quota.
         limit = 30 if path in high_risk else 3000 if path in {
@@ -93,6 +95,8 @@ def create_app(database_url: str | None = None, *, initialize: bool = False) -> 
         return {"status": "ok", "version": VERSION, "database": engine.dialect.name}
 
     app.include_router(calendar_events.router, prefix="/api/v1")
+    app.include_router(personal_data.router, prefix="/api/v1")
+    app.include_router(preview_editing.router, prefix="/api/v1")
     app.include_router(agent_api.router, prefix="/api/v1")
     app.include_router(agent_media.router, prefix="/api/v1")
     app.include_router(user_profiles.router, prefix="/api/v1")

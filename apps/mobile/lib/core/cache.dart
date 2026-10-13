@@ -11,7 +11,12 @@ abstract interface class CalendarStore {
   Future<void> close();
 }
 
-class CalendarCache extends GeneratedDatabase implements CalendarStore {
+abstract interface class OwnerCacheCleaner {
+  Future<void> clearOwner(String owner);
+}
+
+class CalendarCache extends GeneratedDatabase
+    implements CalendarStore, OwnerCacheCleaner {
   CalendarCache()
     : super(
         LazyDatabase(() async {
@@ -59,4 +64,15 @@ class CalendarCache extends GeneratedDatabase implements CalendarStore {
   @override
   Future<void> clear(String owner) =>
       customStatement('DELETE FROM calendar_cache WHERE owner = ?', [owner]);
+
+  @override
+  Future<void> clearOwner(String owner) async {
+    final keys = await customSelect('SELECT owner FROM calendar_cache').get();
+    await transaction(() async {
+      for (final row in keys) {
+        final key = row.read<String>('owner');
+        if (key.split(':').contains(owner)) await clear(key);
+      }
+    });
+  }
 }

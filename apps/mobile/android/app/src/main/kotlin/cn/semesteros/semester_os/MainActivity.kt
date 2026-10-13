@@ -19,6 +19,7 @@ import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
     private var incomingChannel: MethodChannel? = null
+    private var surfaceBridge: SurfaceBridge? = null
     private val inputWorker = Executors.newSingleThreadExecutor()
     private val inboxLock = Any()
     private val inboxPreferences by lazy { getSharedPreferences("incoming_notice", MODE_PRIVATE) }
@@ -26,6 +27,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        surfaceBridge = SurfaceBridge(this, MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "cn.semesteros/device_surfaces"))
         flutterEngine.plugins.add(SchoolBrowserCompatibility())
         incomingChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "cn.semesteros/incoming_notice")
         incomingChannel?.setMethodCallHandler { call, result ->
@@ -81,6 +83,11 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         captureIncoming(intent)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (surfaceBridge?.activityResult(requestCode, resultCode, data) == true) return
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     @Suppress("DEPRECATION")

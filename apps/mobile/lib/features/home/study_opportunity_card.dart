@@ -11,6 +11,7 @@ class StudyOpportunityCard extends StatelessWidget {
   final DateTime now;
   final bool ready, busy;
   final VoidCallback onArrange, onOpen;
+  final VoidCallback? onDismiss;
   final Widget? preview;
   final bool saved;
   const StudyOpportunityCard({
@@ -23,6 +24,7 @@ class StudyOpportunityCard extends StatelessWidget {
     required this.onOpen,
     this.preview,
     this.saved = false,
+    this.onDismiss,
   });
 
   @override
@@ -145,6 +147,11 @@ class StudyOpportunityCard extends StatelessWidget {
                     onPressed: busy ? null : onOpen,
                     child: const Text('查看任务'),
                   ),
+                  if (onDismiss != null)
+                    AppTextButton(
+                      onPressed: busy ? null : onDismiss,
+                      child: const Text('今天不推荐这项'),
+                    ),
                 ],
               ),
           ],

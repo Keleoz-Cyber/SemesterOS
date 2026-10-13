@@ -31,6 +31,17 @@ class AgentController extends ChangeNotifier {
   String? _pendingText, _pendingId;
   final Set<String> _syncedReceipts = {};
   Future<void>? _receiptSync;
+  final Set<String> uncertainDecisions = {};
+  String? savingRunId;
+  String? saveMessage;
+  int _recoveryAttempts = 0;
+  bool get needsReceiptSync => runs.any(
+    (r) =>
+        r['status'] == 'applied' &&
+        r['receipt'] is Map &&
+        r['context_only'] != true &&
+        !_syncedReceipts.contains(r['id']),
+  );
   Map<String, dynamic>? mediaRun;
   late final String _owner = items.owner ?? '';
   late final ConversationDeletions _deletions;
@@ -145,6 +156,8 @@ class AgentController extends ChangeNotifier {
     loading = true;
     error = null;
     mediaRun = null;
+    uncertainDecisions.clear();
+    saveMessage = null;
     emit();
     if (fresh) {
       mediaRun = null;
@@ -462,14 +475,24 @@ class AgentController extends ChangeNotifier {
 
   void schedulePoll() {
     _poll?.cancel();
-    if (active && processing) _poll = Timer(const Duration(seconds: 2), poll);
+    if (active &&
+        (processing ||
+            ((uncertainDecisions.isNotEmpty || needsReceiptSync) &&
+                _recoveryAttempts < 3))) {
+      _poll = Timer(
+        Duration(seconds: processing ? 2 : 4 << _recoveryAttempts),
+        poll,
+      );
+    }
   }
 
   Future<void> poll() async {
     final stamp = _epoch;
     final pending = runs
         .where(
-          (r) => {'queued', 'running', 'recognizing'}.contains(r['status']),
+          (r) =>
+              {'queued', 'running', 'recognizing'}.contains(r['status']) ||
+              uncertainDecisions.contains(r['id']),
         )
         .toList();
     try {
@@ -486,10 +509,21 @@ class AgentController extends ChangeNotifier {
         );
         check(stamp);
         replace(value);
+        if (uncertainDecisions.remove(row['id'])) {
+          saveMessage = value['status'] == 'applied'
+              ? '已保存，正在同步安排和提醒'
+              : '修改尚未保存，请核对后重试';
+          if (value['status'] != 'applied') {
+            await items.decisions.update(row['id'], null);
+          }
+        }
       }
       if (mediaRun?['status'] != 'failed') error = null;
       await reconcileReceipts(stamp);
     } catch (e) {
+      if (uncertainDecisions.isNotEmpty || needsReceiptSync) {
+        _recoveryAttempts++;
+      }
       if (active && stamp == _epoch) error = userError(e);
     } finally {
       if (active && stamp == _epoch) {
@@ -804,8 +838,22 @@ class AgentController extends ChangeNotifier {
     final stamp = _epoch;
     busy = true;
     error = null;
+    savingRunId = run['id'];
+    saveMessage = confirm ? '正在保存' : null;
     emit();
     try {
+      if (confirm && uncertainDecisions.contains(run['id'])) {
+        await poll();
+        return;
+      }
+      if (confirm) {
+        await items.decisions.update(run['id'], {
+          'semester_id': semesterId,
+          'thread_id': threadId,
+        });
+        check(stamp);
+        uncertainDecisions.add(run['id']);
+      }
       final value = Map<String, dynamic>.from(
         await request(
           'POST',
@@ -822,8 +870,60 @@ class AgentController extends ChangeNotifier {
       );
       check(stamp);
       replace(value);
+      uncertainDecisions.remove(run['id']);
+      saveMessage = confirm ? '已保存，正在同步安排和提醒' : null;
       emit();
       await reconcileReceipts(stamp);
+    } catch (e) {
+      if (active && stamp == _epoch) {
+        error = userError(e);
+        if (!uncertainDecisions.contains(run['id']) &&
+            !runs.any(
+              (r) => r['id'] == run['id'] && r['status'] == 'applied',
+            )) {
+          saveMessage = '修改尚未保存，请重试';
+        }
+        if (e is ApiFailure &&
+            e.statusCode != null &&
+            e.statusCode! >= 400 &&
+            e.statusCode! < 500) {
+          uncertainDecisions.remove(run['id']);
+          saveMessage = '修改未保存，请核对提示后重试';
+          await items.decisions.update(run['id'], null);
+        }
+        if (uncertainDecisions.contains(run['id'])) {
+          saveMessage = '保存结果待核实，正在检查';
+          _recoveryAttempts = 0;
+          await poll();
+        }
+      }
+    } finally {
+      if (active && stamp == _epoch) {
+        busy = false;
+        savingRunId = null;
+        emit();
+        schedulePoll();
+      }
+    }
+  }
+
+  Future<void> editPreview(
+    Map<String, dynamic> run,
+    Map<String, dynamic> fields,
+  ) async {
+    if (busy || processing || !active || uncertainDecisions.isNotEmpty) return;
+    final stamp = _epoch;
+    busy = true;
+    error = null;
+    emit();
+    try {
+      final result = await request(
+        'PATCH',
+        '/agent/runs/${run['id']}/preview',
+        data: {'token': run['preview']['token'], ...fields},
+      );
+      check(stamp);
+      replace(Map<String, dynamic>.from(result));
     } catch (e) {
       if (active && stamp == _epoch) error = userError(e);
     } finally {
@@ -944,9 +1044,15 @@ class AgentController extends ChangeNotifier {
         await items.refresh();
         check(stamp);
         if (items.offline) throw ApiFailure('暂时无法同步');
+        for (final run in unsynced) {
+          await items.decisions.update(run['id'], null);
+        }
         _syncedReceipts.addAll(unsynced.map((r) => r['id'] as String));
+        saveMessage = null;
+        _recoveryAttempts = 0;
       } catch (_) {
         check(stamp);
+        saveMessage = '修改已保存，等待本机同步';
         throw ApiFailure('修改已保存，本机安排和提醒尚未同步，请刷新。');
       }
     }();
@@ -960,6 +1066,7 @@ class AgentController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (uncertainDecisions.isNotEmpty) unawaited(items.recoverDecisions());
     _closed = true;
     _deletions.removeListener(_retireDeletedThreads);
     _epoch++;

@@ -132,9 +132,8 @@ def save_media_run(request, owner_id, sid, key, instruction, kind, tid, parts, h
         try:
             path.write_bytes(stored);db.add(source);db.flush()
             thread.updated_at=now
-            from .agent_api import invalidate_preview
-            for pending in db.scalars(select(AgentRun).where(AgentRun.thread_id==thread.id,AgentRun.status=='needs_confirmation')):
-                invalidate_preview(db,pending);pending.status='superseded'
+            # Recognition and questions cannot discard a pending draft. The
+            # worker replaces it only after preparing a valid new preview.
             response=result(db,user,source);db.commit();return response
         except Exception:
             path.unlink(missing_ok=True);raise

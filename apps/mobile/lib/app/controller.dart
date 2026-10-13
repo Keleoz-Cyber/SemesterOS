@@ -357,11 +357,18 @@ class AppController extends ChangeNotifier {
       if (credentialsError != null) failures.add(credentialsError);
       await clean(clearSchoolSession, '学校登录信息清理失败');
       if (owner != null) {
+        if (cache is OwnerCacheCleaner) {
+          await clean(
+            () => (cache as OwnerCacheCleaner).clearOwner(owner),
+            '本机缓存清理失败',
+          );
+        }
         for (final key in [
           owner,
           'items:$owner',
           'capture:$owner',
           'profile:$owner',
+          'agent-decisions:$owner',
         ]) {
           await clean(() => cache.clear(key), '本机缓存清理失败');
         }

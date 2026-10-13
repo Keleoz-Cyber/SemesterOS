@@ -15,6 +15,7 @@ class TodaySkyHeader extends StatelessWidget {
     required this.semester,
     required this.onProfile,
     required this.onSettings,
+    this.onSearch,
     this.collapse = 0,
     this.layoutExtent,
     this.active = true,
@@ -23,6 +24,7 @@ class TodaySkyHeader extends StatelessWidget {
   final DateTime now;
   final Map<String, dynamic> semester;
   final VoidCallback onProfile, onSettings;
+  final VoidCallback? onSearch;
   final double collapse;
   final double? layoutExtent;
   final bool active;
@@ -159,6 +161,13 @@ class TodaySkyHeader extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (onSearch != null)
+                    AppIconButton(
+                      tooltip: '搜索安排',
+                      onPressed: onSearch,
+                      color: ink,
+                      icon: const Icon(Icons.search_rounded),
+                    ),
                   AppIconButton(
                     tooltip: '调整首页内容',
                     onPressed: onSettings,

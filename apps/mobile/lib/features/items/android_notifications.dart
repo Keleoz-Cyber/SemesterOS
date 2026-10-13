@@ -190,11 +190,16 @@ class AndroidNotifications
       scheduledDate: tz.TZDateTime.from(when, tz.UTC),
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          'semester_items_v1',
-          '学期事项提醒',
+          data['quiet'] == true
+              ? 'semester_items_quiet_v1'
+              : 'semester_items_v1',
+          data['quiet'] == true ? '静默时段提醒' : '学期事项提醒',
           channelDescription: '作业、考试和个人任务的已确认提醒',
-          importance: Importance.high,
-          priority: Priority.high,
+          importance: data['quiet'] == true ? Importance.low : Importance.high,
+          priority: data['quiet'] == true ? Priority.low : Priority.high,
+          playSound: data['quiet'] != true,
+          enableVibration: data['quiet'] != true,
+          groupKey: 'shiri_reminders',
           visibility: NotificationVisibility.private,
           styleInformation: BigTextStyleInformation(reminderBody(data)),
           actions: [

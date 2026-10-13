@@ -40,6 +40,11 @@ import '../features/operations/operation_page.dart';
 import '../features/profile/profile_controller.dart';
 import '../features/profile/profile_page.dart';
 import '../features/profile/profile_scope.dart';
+import '../core/device_surfaces.dart';
+import '../features/calendar/calendar_repository.dart';
+import '../features/search/search_page.dart';
+import '../features/accounts/personal_data_page.dart';
+import '../features/items/device_surfaces_page.dart';
 
 class SemesterApp extends ConsumerStatefulWidget {
   const SemesterApp({super.key});
@@ -64,6 +69,9 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
   bool notificationReady = false, incomingScheduled = false;
   final navigator = GlobalKey<NavigatorState>();
   Timer? riskClock;
+  Timer? surfaceTimer;
+  String? surfaceKey;
+  int surfaceEpoch = 0;
   bool foreground = true;
   bool routeRebuildScheduled = false;
   @override
@@ -81,7 +89,11 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
       ReminderSync(notifications),
     );
     items.onUnauthorized = () => controller.logout(remote: false);
-    controller.clearNotifications = items.reminders.clear;
+    controller.clearNotifications = () async {
+      await DeviceSurfaces.clear();
+      await items.reminders.clear();
+    };
+    items.addListener(scheduleSurfaces);
     items.onRealityChanged = (receipt) async {
       await controller.acknowledgeImport(receipt);
       if (controller.semester?['id'] == receipt['semester_id']) {
@@ -100,6 +112,22 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
         return null;
       },
       routes: [
+        GoRoute(
+          path: '/search',
+          builder: (_, _) => SearchPage(controller: items),
+        ),
+        GoRoute(
+          path: '/data',
+          builder: (_, _) => PersonalDataPage(controller: controller),
+        ),
+        GoRoute(
+          path: '/feedback',
+          builder: (_, _) => FeedbackPage(controller: controller),
+        ),
+        GoRoute(
+          path: '/device-surfaces',
+          builder: (_, _) => DeviceSurfacesPage(controller: items),
+        ),
         GoRoute(
           path: '/calendar',
           builder: (_, _) => controller.semester == null
@@ -134,6 +162,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
                     controller: items,
                     semester: controller.semester!,
                     initialMediaKind: state.uri.queryParameters['input'],
+                    initialThreadId: state.uri.queryParameters['thread'],
                     initialText: draft?.text,
                     initialImagePaths: draft?.imagePaths ?? const [],
                     initialDraftId: draft?.id,
@@ -369,6 +398,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
   }
 
   void appChanged() {
+    scheduleSurfaces();
     unawaited(
       profile.bind(
         controller.ready && controller.loggedIn
@@ -387,7 +417,7 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
         semester != null &&
         items.observeRevision(semester['id'], semester['revision']) &&
         !items.busy) {
-      items.refresh();
+      unawaited(items.refresh().then((_) => items.recoverDecisions()));
     }
     if (controller.ready) {
       if (controller.loggedIn && !controller.sessionLoading) {
@@ -395,8 +425,109 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
       }
       openNotification();
       openIncoming();
+      unawaited(openSurfaceRoute());
     }
     if (mounted) setState(() {});
+  }
+
+  void scheduleSurfaces() {
+    if (!mounted) return;
+    if (!controller.ready || controller.sessionLoading) return;
+    final owner = controller.api.session?['user']?['id'];
+    final sid = controller.semester?['id'];
+    if (owner == null || sid == null) {
+      surfaceTimer?.cancel();
+      surfaceEpoch++;
+      surfaceKey = null;
+      unawaited(DeviceSurfaces.clear().catchError((Object _) {}));
+      return;
+    }
+    final now = schoolNow();
+    final key =
+        '$owner:$sid:${controller.semester?['revision']}:${items.itemsRevision}:${calendarDate(now)}';
+    if (surfaceKey == key || items.busy) return;
+    surfaceTimer?.cancel();
+    final stamp = ++surfaceEpoch, generation = controller.api.generation;
+    surfaceTimer = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final value = await controller.api.request(
+          'GET',
+          '/semesters/$sid/calendar',
+          queryParameters: {
+            'from_date': calendarDate(now),
+            'to_date': calendarDate(now.add(const Duration(days: 7))),
+          },
+        );
+        if (!mounted ||
+            stamp != surfaceEpoch ||
+            generation != controller.api.generation ||
+            sid != controller.semester?['id']) {
+          return;
+        }
+        final entries =
+            calendarScheduleEntries(
+                  (value['entries'] as List).map(
+                    (r) => Map<String, dynamic>.from(r),
+                  ),
+                )
+                .where((r) => r['start_at'] != null && calendarReservesTime(r))
+                .map(
+                  (r) => {
+                    'id': r['id'],
+                    'title': r['title'],
+                    'start_at': r['start_at'],
+                    'end_at': r['end_at'],
+                    'location': r['location'] ?? '',
+                    'route':
+                        '/${const {'course': 'courses', 'event': 'events', 'exam': 'exams', 'deadline': 'items', 'plan': 'items'}[r['resource_type']] ?? 'items'}/${r['resource_id'] ?? r['id']}',
+                  },
+                )
+                .toList();
+        await DeviceSurfaces.sync({
+          'owner': owner,
+          'semester': sid,
+          'entries': entries,
+          'deadlines': items.items
+              .where(
+                (r) =>
+                    r['lifecycle'] == 'active' &&
+                    r['time'] is Map &&
+                    (r['time']['at'] != null || r['time']['date'] != null),
+              )
+              .take(3)
+              .map((r) => {'title': r['title'], 'time': r['time']})
+              .toList(),
+          'synced_at': DateTime.now().millisecondsSinceEpoch,
+        });
+        if (stamp == surfaceEpoch) surfaceKey = key;
+      } catch (_) {
+        /* Keep the dated native snapshot until connectivity returns. */
+      }
+    });
+  }
+
+  Future<void> openSurfaceRoute() async {
+    if (!controller.ready ||
+        !controller.loggedIn ||
+        controller.semester == null) {
+      return;
+    }
+    try {
+      final route = await DeviceSurfaces.channel.invokeMethod<String>(
+        'consumeRoute',
+      );
+      if (!mounted || !controller.loggedIn || route == null) return;
+      if (route == '/assistant' ||
+          route == '/' ||
+          route == '/reminders' ||
+          RegExp(
+            r'^/(events|courses|items|exams)/[a-zA-Z0-9-]+$',
+          ).hasMatch(route)) {
+        router.push(route);
+      }
+    } catch (_) {
+      /* No native pending route on non-Android platforms. */
+    }
   }
 
   void closeProfile() {
@@ -530,7 +661,10 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
     if (state == AppLifecycleState.resumed &&
         controller.ready &&
         controller.loggedIn) {
-      items.refresh();
+      unawaited(openSurfaceRoute());
+      surfaceKey = null;
+      scheduleSurfaces();
+      unawaited(items.refresh().then((_) => items.recoverDecisions()));
       unawaited(items.refreshOwnerReminders().catchError((Object _) {}));
     }
   }
@@ -614,6 +748,9 @@ class _SemesterAppState extends ConsumerState<SemesterApp>
 
   @override
   void dispose() {
+    surfaceTimer?.cancel();
+    surfaceEpoch++;
+    items.removeListener(scheduleSurfaces);
     riskClock?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     controller.removeListener(appChanged);
