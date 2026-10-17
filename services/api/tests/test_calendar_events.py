@@ -28,7 +28,7 @@ def test_event_is_fixed_scoped_versioned_and_idempotent(client):
     assert first.status_code == 201, first.text
     saved = first.json(); event = saved['event']; url = '/api/v1/events/' + event['id']
     assert event['control'] == 'fixed'
-    assert [tag['name'] for tag in event['tags']] == ['组会', '项目讨论']
+    assert [tag['name'] for tag in event['tags']] == ['会议', '项目讨论']
     assert client.post('/api/v1/events', headers=headers, json=data).json() == saved
     assert revision(client, h, s['id']) == s['revision'] + 1
     assert client.get(url, headers=other).status_code == 404

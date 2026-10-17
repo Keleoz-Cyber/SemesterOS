@@ -413,6 +413,9 @@ void main() {
       final previous = f.api.dio.httpClientAdapter as ControlledTransport;
       var applies = 0;
       f.api.dio.httpClientAdapter = ControlledTransport((request) async {
+        if (request.path.endsWith('/tags/organize')) {
+          return body({'owner_id': 'preview', 'merged': 0, 'renamed': 0});
+        }
         if (request.path.endsWith('/tags')) {
           return body({'owner_id': 'preview', 'tags': tagRows});
         }
@@ -430,7 +433,9 @@ void main() {
       await tester.runAsync(() => f.c.bind('s'));
       await _open(tester, TagManagementPage(controller: f.c), scale);
       await _shot(tester, 'tags-list', size);
-      await _to(tester, find.text('重命名').first);
+      await _to(tester, find.byTooltip('管理论文'));
+      await tester.tap(find.byTooltip('管理论文'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('重命名').first);
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(AppFormField), '学术论文阅读与笔记');
@@ -440,7 +445,9 @@ void main() {
       await _shot(tester, 'tags-rename-impact', size);
       await tester.tap(find.text('取消预览'));
       await tester.pumpAndSettle();
-      await _to(tester, find.text('合并到').first);
+      await _to(tester, find.byTooltip('管理论文'));
+      await tester.tap(find.byTooltip('管理论文'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('合并到').first);
       await tester.pumpAndSettle();
       await ioTap(tester, find.text('科研').last);

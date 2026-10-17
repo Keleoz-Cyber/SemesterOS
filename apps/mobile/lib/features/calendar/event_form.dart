@@ -678,6 +678,10 @@ class _EventFormPageState extends State<EventFormPage> {
                           key: const Key('event-tags'),
                           controller: widget.controller,
                           values: tags,
+                          contextData: () => {
+                            'title': title.text,
+                            'notes': notes.text,
+                          },
                           enabled: !busy && same,
                           onChanged: (values) => setState(() => tags = values),
                         ),

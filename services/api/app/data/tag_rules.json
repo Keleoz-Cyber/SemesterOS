@@ -1,0 +1,823 @@
+{
+  "version": 2,
+  "groups": [
+    {
+      "id": "study",
+      "name": "课程与学习"
+    },
+    {
+      "id": "research",
+      "name": "科研与竞赛"
+    },
+    {
+      "id": "meetings",
+      "name": "会议与交流"
+    },
+    {
+      "id": "arts",
+      "name": "文体活动"
+    },
+    {
+      "id": "campus",
+      "name": "校园事务"
+    },
+    {
+      "id": "career",
+      "name": "求职与实习"
+    },
+    {
+      "id": "life",
+      "name": "生活日常"
+    },
+    {
+      "id": "other",
+      "name": "其他标签"
+    }
+  ],
+  "rules": [
+    {
+      "name": "Python",
+      "aliases": [
+        "python",
+        "python语言",
+        "python程序设计"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "JavaScript",
+      "aliases": [
+        "javascript",
+        "js",
+        "前端开发"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80,
+      "suppresses": [
+        "Java"
+      ]
+    },
+    {
+      "name": "Java",
+      "aliases": [
+        "java"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "C++",
+      "aliases": [
+        "c++",
+        "cpp"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "C语言",
+      "aliases": [
+        "c语言",
+        "c程序设计"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "高等数学",
+      "aliases": [
+        "高等数学",
+        "高数"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "线性代数",
+      "aliases": [
+        "线性代数",
+        "线代"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "概率论",
+      "aliases": [
+        "概率论",
+        "概率统计"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "英语",
+      "aliases": [
+        "英语",
+        "四六级",
+        "四级",
+        "六级",
+        "雅思",
+        "托福"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 70
+    },
+    {
+      "name": "数据结构",
+      "aliases": [
+        "数据结构"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "操作系统",
+      "aliases": [
+        "操作系统"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "软件工程",
+      "aliases": [
+        "软件工程"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 80
+    },
+    {
+      "name": "实验作业",
+      "aliases": [
+        "实验作业",
+        "实验报告",
+        "实验课作业",
+        "上机作业"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 65,
+      "suppresses": [
+        "作业"
+      ]
+    },
+    {
+      "name": "作业",
+      "aliases": [
+        "作业",
+        "习题",
+        "课后练习"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 60
+    },
+    {
+      "name": "考试",
+      "aliases": [
+        "考试",
+        "期末考",
+        "期中考",
+        "补考",
+        "测验"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 65
+    },
+    {
+      "name": "复习",
+      "aliases": [
+        "复习",
+        "备考"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 50
+    },
+    {
+      "name": "课程设计",
+      "aliases": [
+        "课程设计",
+        "课设"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 65
+    },
+    {
+      "name": "毕业设计",
+      "aliases": [
+        "毕业设计",
+        "毕设",
+        "毕业论文"
+      ],
+      "group": "study",
+      "category": "study",
+      "priority": 75,
+      "suppresses": [
+        "论文"
+      ]
+    },
+    {
+      "name": "论文",
+      "aliases": [
+        "论文",
+        "学术写作",
+        "文献综述"
+      ],
+      "group": "research",
+      "category": "research",
+      "priority": 65
+    },
+    {
+      "name": "文献阅读",
+      "aliases": [
+        "文献阅读",
+        "读文献",
+        "阅读文献"
+      ],
+      "group": "research",
+      "category": "research",
+      "priority": 60
+    },
+    {
+      "name": "科研实验",
+      "aliases": [
+        "科研实验",
+        "课题实验",
+        "研究实验"
+      ],
+      "group": "research",
+      "category": "research",
+      "priority": 65
+    },
+    {
+      "name": "学科竞赛",
+      "aliases": [
+        "学科竞赛",
+        "数学建模",
+        "数模",
+        "挑战杯",
+        "创新赛",
+        "程序设计竞赛",
+        "算法竞赛",
+        "学术竞赛"
+      ],
+      "group": "research",
+      "category": "research",
+      "priority": 65
+    },
+    {
+      "name": "组会",
+      "aliases": [
+        "组会",
+        "课题组例会",
+        "研究组例会"
+      ],
+      "group": "meetings",
+      "category": "research",
+      "priority": 65,
+      "suppresses": [
+        "会议"
+      ]
+    },
+    {
+      "name": "座谈会",
+      "aliases": [
+        "座谈会",
+        "座谈交流"
+      ],
+      "group": "meetings",
+      "category": null,
+      "priority": 60,
+      "suppresses": [
+        "会议"
+      ]
+    },
+    {
+      "name": "班会",
+      "aliases": [
+        "班会",
+        "主题班会"
+      ],
+      "group": "meetings",
+      "category": "affairs",
+      "priority": 65,
+      "suppresses": [
+        "会议"
+      ]
+    },
+    {
+      "name": "学术交流",
+      "aliases": [
+        "学术交流",
+        "学术讲座",
+        "学术报告",
+        "学术研讨"
+      ],
+      "group": "meetings",
+      "category": "research",
+      "priority": 65,
+      "suppresses": [
+        "讲座",
+        "会议"
+      ]
+    },
+    {
+      "name": "讲座",
+      "aliases": [
+        "讲座",
+        "分享会"
+      ],
+      "group": "meetings",
+      "category": null,
+      "priority": 50
+    },
+    {
+      "name": "会议",
+      "aliases": [
+        "会议",
+        "开会",
+        "例会",
+        "meeting"
+      ],
+      "group": "meetings",
+      "category": null,
+      "priority": 20
+    },
+    {
+      "name": "合唱",
+      "aliases": [
+        "合唱",
+        "合唱团"
+      ],
+      "group": "arts",
+      "category": "affairs",
+      "priority": 70
+    },
+    {
+      "name": "舞蹈",
+      "aliases": [
+        "舞蹈",
+        "舞蹈队"
+      ],
+      "group": "arts",
+      "category": "affairs",
+      "priority": 70
+    },
+    {
+      "name": "乐队",
+      "aliases": [
+        "乐队",
+        "器乐团",
+        "管弦乐"
+      ],
+      "group": "arts",
+      "category": "affairs",
+      "priority": 70
+    },
+    {
+      "name": "彩排",
+      "aliases": [
+        "彩排",
+        "带妆排练"
+      ],
+      "group": "arts",
+      "category": "affairs",
+      "priority": 60,
+      "suppresses": [
+        "排练"
+      ]
+    },
+    {
+      "name": "联排",
+      "aliases": [
+        "联排",
+        "联合排练"
+      ],
+      "group": "arts",
+      "category": "affairs",
+      "priority": 60,
+      "suppresses": [
+        "排练"
+      ]
+    },
+    {
+      "name": "排练",
+      "aliases": [
+        "排练",
+        "排演"
+      ],
+      "group": "arts",
+      "category": "affairs",
+      "priority": 55
+    },
+    {
+      "name": "演出",
+      "aliases": [
+        "演出",
+        "文艺汇演",
+        "音乐会",
+        "文艺晚会",
+        "迎新晚会"
+      ],
+      "group": "arts",
+      "category": "affairs",
+      "priority": 55
+    },
+    {
+      "name": "篮球",
+      "aliases": [
+        "篮球"
+      ],
+      "group": "arts",
+      "category": "life",
+      "priority": 65
+    },
+    {
+      "name": "足球",
+      "aliases": [
+        "足球"
+      ],
+      "group": "arts",
+      "category": "life",
+      "priority": 65
+    },
+    {
+      "name": "羽毛球",
+      "aliases": [
+        "羽毛球"
+      ],
+      "group": "arts",
+      "category": "life",
+      "priority": 65
+    },
+    {
+      "name": "运动",
+      "aliases": [
+        "健身",
+        "跑步",
+        "游泳",
+        "运动会",
+        "体育比赛"
+      ],
+      "group": "arts",
+      "category": "life",
+      "priority": 45
+    },
+    {
+      "name": "志愿服务",
+      "aliases": [
+        "志愿服务",
+        "志愿活动",
+        "志愿者活动",
+        "义工"
+      ],
+      "group": "campus",
+      "category": "affairs",
+      "priority": 60
+    },
+    {
+      "name": "学生工作",
+      "aliases": [
+        "学生会",
+        "班委工作",
+        "团委工作",
+        "学生工作"
+      ],
+      "group": "campus",
+      "category": "affairs",
+      "priority": 50
+    },
+    {
+      "name": "社团活动",
+      "aliases": [
+        "社团活动",
+        "社团招新",
+        "社团工作"
+      ],
+      "group": "campus",
+      "category": "affairs",
+      "priority": 45
+    },
+    {
+      "name": "材料办理",
+      "aliases": [
+        "申请材料",
+        "材料报送",
+        "材料提交",
+        "评奖评优",
+        "奖学金",
+        "助学金",
+        "报销",
+        "学籍办理"
+      ],
+      "group": "campus",
+      "category": "affairs",
+      "priority": 50
+    },
+    {
+      "name": "面试",
+      "aliases": [
+        "面试",
+        "面谈"
+      ],
+      "group": "career",
+      "category": "life",
+      "priority": 65
+    },
+    {
+      "name": "笔试",
+      "aliases": [
+        "笔试",
+        "招聘考试"
+      ],
+      "group": "career",
+      "category": "life",
+      "priority": 65,
+      "suppresses": [
+        "考试"
+      ]
+    },
+    {
+      "name": "实习",
+      "aliases": [
+        "实习",
+        "实训"
+      ],
+      "group": "career",
+      "category": "study",
+      "priority": 60
+    },
+    {
+      "name": "求职",
+      "aliases": [
+        "求职",
+        "校招",
+        "招聘会",
+        "投简历",
+        "修改简历"
+      ],
+      "group": "career",
+      "category": "life",
+      "priority": 55
+    },
+    {
+      "name": "就医",
+      "aliases": [
+        "就医",
+        "看病",
+        "看医生",
+        "挂号",
+        "复诊",
+        "牙科",
+        "体检"
+      ],
+      "group": "life",
+      "category": "life",
+      "priority": 60
+    },
+    {
+      "name": "聚餐",
+      "aliases": [
+        "聚餐",
+        "聚会",
+        "约饭"
+      ],
+      "group": "life",
+      "category": "life",
+      "priority": 55
+    },
+    {
+      "name": "出行",
+      "aliases": [
+        "出行",
+        "火车",
+        "高铁",
+        "航班",
+        "机票",
+        "旅游"
+      ],
+      "group": "life",
+      "category": "life",
+      "priority": 50
+    },
+    {
+      "name": "购物",
+      "aliases": [
+        "购物",
+        "买日用品",
+        "采购生活用品"
+      ],
+      "group": "life",
+      "category": "life",
+      "priority": 45
+    },
+    {
+      "name": "缴费",
+      "aliases": [
+        "缴费",
+        "交电费",
+        "交水费",
+        "交房租"
+      ],
+      "group": "life",
+      "category": "life",
+      "priority": 45
+    }
+  ],
+  "category_hints": {
+    "research": [
+      "导师",
+      "课题组",
+      "研究组",
+      "科研",
+      "实验室项目"
+    ],
+    "affairs": [
+      "班主任",
+      "辅导员",
+      "班委",
+      "学生会",
+      "团委",
+      "学院",
+      "社团"
+    ],
+    "study": [
+      "课程",
+      "老师布置",
+      "任课教师",
+      "上课",
+      "教学"
+    ],
+    "life": [
+      "家人",
+      "朋友",
+      "室友",
+      "个人预约"
+    ]
+  },
+  "equivalents": {
+    "JavaScript": [
+      "js"
+    ],
+    "C++": [
+      "cpp"
+    ],
+    "高等数学": [
+      "高数"
+    ],
+    "线性代数": [
+      "线代"
+    ],
+    "会议": [
+      "开会",
+      "座谈会",
+      "座谈交流",
+      "组会",
+      "课题组例会",
+      "研究组例会",
+      "班会",
+      "主题班会",
+      "例会",
+      "班委会",
+      "部门例会",
+      "项目例会",
+      "讨论会",
+      "研讨会",
+      "碰头会",
+      "meeting"
+    ],
+    "排练": [
+      "联排",
+      "彩排",
+      "排演",
+      "联合排练",
+      "带妆排练"
+    ],
+    "就医": [
+      "看病",
+      "看医生",
+      "挂号",
+      "复诊",
+      "牙科",
+      "体检"
+    ],
+    "聚餐": [
+      "约饭",
+      "聚会"
+    ],
+    "讲座": [
+      "分享会",
+      "报告会",
+      "学术交流",
+      "学术讲座",
+      "学术报告",
+      "学术研讨"
+    ],
+    "实验作业": [
+      "实验报告",
+      "实验课作业",
+      "上机作业"
+    ],
+    "作业": [
+      "习题",
+      "课后练习",
+      "课后作业"
+    ],
+    "复习": [
+      "备考"
+    ],
+    "课程设计": [
+      "课设"
+    ],
+    "毕业设计": [
+      "毕设",
+      "毕业论文"
+    ],
+    "学科竞赛": [
+      "数学建模",
+      "数模",
+      "挑战杯",
+      "创新赛",
+      "程序设计竞赛",
+      "算法竞赛",
+      "学术竞赛"
+    ],
+    "运动": [
+      "篮球",
+      "足球",
+      "羽毛球",
+      "健身",
+      "跑步",
+      "游泳",
+      "运动会",
+      "体育比赛"
+    ],
+    "演出": [
+      "文艺汇演",
+      "汇演",
+      "音乐会",
+      "文艺晚会",
+      "迎新晚会"
+    ],
+    "志愿服务": [
+      "志愿活动",
+      "志愿者活动",
+      "义工"
+    ],
+    "求职": [
+      "校招",
+      "招聘会",
+      "投简历",
+      "修改简历"
+    ],
+    "出行": [
+      "旅行",
+      "旅游"
+    ],
+    "合唱": [
+      "合唱团"
+    ],
+    "舞蹈": [
+      "舞蹈队"
+    ],
+    "乐队": [
+      "器乐团",
+      "管弦乐"
+    ],
+    "Python": [
+      "python语言",
+      "python程序设计"
+    ]
+  },
+  "generic": [
+    "集合",
+    "通知",
+    "活动",
+    "日程",
+    "任务",
+    "学习",
+    "提交",
+    "参加",
+    "安排",
+    "汇报",
+    "待办",
+    "其他"
+  ]
+}

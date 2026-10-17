@@ -6,6 +6,7 @@ import '../../ui/app_controls.dart';
 import '../../ui/app_sheet.dart';
 import '../../ui/campus_theme.dart';
 import '../items/items_controller.dart';
+import 'tag_intelligence.dart';
 
 /// Tags remain individual values from selection through submission.
 class TagPickerField extends StatelessWidget {
@@ -13,12 +14,14 @@ class TagPickerField extends StatelessWidget {
   final List<String> values;
   final ValueChanged<List<String>> onChanged;
   final bool enabled;
+  final Map<String, String> Function()? contextData;
   const TagPickerField({
     super.key,
     required this.controller,
     required this.values,
     required this.onChanged,
     this.enabled = true,
+    this.contextData,
   });
 
   Future<void> choose(BuildContext context) async {
@@ -27,7 +30,11 @@ class TagPickerField extends StatelessWidget {
     final result = await showAppSheet<List<String>>(
       context: context,
       heightFactor: .75,
-      builder: (_) => _TagPicker(controller: controller, initial: values),
+      builder: (_) => _TagPicker(
+        controller: controller,
+        initial: values,
+        contextData: contextData?.call() ?? {},
+      ),
     );
     if (result != null &&
         context.mounted &&
@@ -91,7 +98,12 @@ class TagPickerField extends StatelessWidget {
 class _TagPicker extends StatefulWidget {
   final ItemsController controller;
   final List<String> initial;
-  const _TagPicker({required this.controller, required this.initial});
+  final Map<String, String> contextData;
+  const _TagPicker({
+    required this.controller,
+    required this.initial,
+    required this.contextData,
+  });
   @override
   State<_TagPicker> createState() => _TagPickerState();
 }
@@ -100,6 +112,13 @@ class _TagPickerState extends State<_TagPicker> {
   final input = TextEditingController();
   late final List<String> selected = [...widget.initial];
   List<String> options = [];
+  final Map<String, String> optionGroups = {};
+  late final recommended = TagIntelligence.suggest(
+    title: widget.contextData['title'] ?? '',
+    notes: widget.contextData['notes'] ?? '',
+    kind: widget.contextData['kind'] ?? '',
+    courseTitle: widget.contextData['course_title'] ?? '',
+  ).tags;
   bool loading = true;
   String? loadError, fieldError;
   String get query => input.text.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -129,6 +148,14 @@ class _TagPickerState extends State<_TagPicker> {
           .map((tag) => '${tag['name'] ?? ''}')
           .where((name) => name.isNotEmpty);
       setState(() => options = {...selected, ...names}.toList());
+      for (final tag in TagIntelligence.organize(
+        (data['tags'] as List? ?? [])
+            .whereType<Map>()
+            .map((t) => Map<String, dynamic>.from(t))
+            .toList(),
+      )) {
+        optionGroups['${tag['name']}'] = '${tag['group_id']}';
+      }
     } catch (_) {
       if (mounted) setState(() => loadError = '已有标签暂未加载');
     } finally {
@@ -150,10 +177,14 @@ class _TagPickerState extends State<_TagPicker> {
   }
 
   void add() {
-    final name = query;
+    final name = TagIntelligence.standardName(query);
     if (name.isEmpty) return;
     final existing = options
-        .where((s) => s.toLowerCase() == name.toLowerCase())
+        .where(
+          (s) =>
+              TagIntelligence.canonicalName(s) ==
+              TagIntelligence.canonicalName(name),
+        )
         .firstOrNull;
     if (existing != null) {
       if (!selected.contains(existing)) toggle(existing);
@@ -187,12 +218,21 @@ class _TagPickerState extends State<_TagPicker> {
         .where(
           (name) =>
               (query.isNotEmpty || !selected.contains(name)) &&
-              name.toLowerCase().contains(query.toLowerCase()),
+              (TagIntelligence.normalize(
+                    name,
+                  ).contains(TagIntelligence.normalize(query)) ||
+                  (query.isNotEmpty &&
+                      TagIntelligence.canonicalName(name) ==
+                          TagIntelligence.canonicalName(query))),
         )
         .toList();
     final canAdd =
         query.isNotEmpty &&
-        !options.any((name) => name.toLowerCase() == query.toLowerCase());
+        !options.any(
+          (name) =>
+              TagIntelligence.canonicalName(name) ==
+              TagIntelligence.canonicalName(query),
+        );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -274,20 +314,63 @@ class _TagPickerState extends State<_TagPicker> {
                   AppTextButton.icon(
                     onPressed: add,
                     icon: const Icon(Icons.add_rounded),
-                    label: Text('添加“$query”'),
+                    label: Text('添加“${TagIntelligence.standardName(query)}”'),
                   ),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final name in matches)
-                      AppFilterChip(
-                        label: Text(name),
-                        selected: selected.contains(name),
-                        onSelected: (_) => toggle(name),
-                      ),
+                if (query.isEmpty &&
+                    recommended.any((name) => !selected.contains(name))) ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('根据内容推荐'),
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final name in recommended.where(
+                        (name) => !selected.contains(name),
+                      ))
+                        AppFilterChip(
+                          label: Text(name),
+                          selected: false,
+                          onSelected: (_) {
+                            if (!options.contains(name)) {
+                              setState(() => options.add(name));
+                            }
+                            toggle(name);
+                          },
+                        ),
+                    ],
+                  ),
+                ],
+                for (final group in TagIntelligence.groups)
+                  if (matches.any(
+                    (name) =>
+                        (optionGroups[name] ??
+                            TagIntelligence.groupFor(name)) ==
+                        group['id'],
+                  )) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 20, bottom: 10),
+                      child: Text(group['name']!),
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final name in matches.where(
+                          (name) =>
+                              (optionGroups[name] ??
+                                  TagIntelligence.groupFor(name)) ==
+                              group['id'],
+                        ))
+                          AppFilterChip(
+                            label: Text(name),
+                            selected: selected.contains(name),
+                            onSelected: (_) => toggle(name),
+                          ),
+                      ],
+                    ),
                   ],
-                ),
               ],
             ),
           ),

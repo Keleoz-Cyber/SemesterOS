@@ -49,10 +49,12 @@ def calendar_snapshot(db, user, s):
 
 
 def tag_ids(db, user, names):
+    from .tag_classifier import standard_name
     # Shared owner lock serializes label creation across distinct semesters.
     db.scalar(select(User).where(User.id == user.id).with_for_update())
     ids = []
     for name in names:
+        name = standard_name(name)
         row = tag_by_name(db, user.id, name)
         if row is None:
             row = CalendarTag(user_id=user.id, name=name, normalized=name.casefold()); db.add(row); db.flush()

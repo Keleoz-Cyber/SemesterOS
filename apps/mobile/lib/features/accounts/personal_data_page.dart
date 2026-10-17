@@ -146,7 +146,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
           'category': category,
           'description': description.text.trim(),
           'expected': expected.text.trim(),
-          'app_version': '1.1.0+11',
+          'app_version': '1.1.1+12',
         },
       );
       if (mounted && generation == widget.controller.api.generation) {

@@ -926,6 +926,11 @@ class _ItemFormPageState extends State<ItemFormPage> {
                   key: const Key('item-tags'),
                   controller: widget.controller,
                   values: tags,
+                  contextData: () => {
+                    'title': title.text,
+                    'notes': notes.text,
+                    'kind': kind,
+                  },
                   enabled: !busy && sameSession,
                   onChanged: (values) => setState(() => tags = values),
                 ),

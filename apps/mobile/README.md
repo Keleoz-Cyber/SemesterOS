@@ -1,6 +1,6 @@
 # 拾日 Flutter 客户端
 
-这里是拾日的移动端工程。当前版本为 `1.0.0+9`，Android 正常包名为 `cn.semesteros.semester_os`，最低 Android 版本为 7.0（API 24）。主要入口是今日、日程、任务、学期，助手以面板或独立页面打开。
+这里是拾日的移动端工程。当前版本为 `1.1.1+12`，Android 正常包名为 `cn.semesteros.semester_os`，最低 Android 版本为 7.0（API 24）。主要入口是今日、日程、任务、学期，助手以面板或独立页面打开。
 
 日常使用说明见 [产品规则](../../docs/产品规则.md)，学校导入和图片、录音限制见 [学校与媒体接入](../../docs/学校与媒体接入.md)。后端部署由仓库根目录的说明负责。
 
@@ -129,3 +129,18 @@ flutter build apk --debug --target-platform=android-x64 -PsemesterosQa=true --da
 至少检查静态分析和测试；动了相关交互，还要在模拟器走对应流程。重点包括窄屏和放大字号、减少动画、周次连续切换、键盘遮挡、按住说话、保存和撤销、账号切换后旧请求返回。
 
 正式 APK 的构建、签名和输出使用仓库 `scripts/build_release.py`，先查看脚本参数。不要把私钥、签名密码、教务凭据、`.env` 或临时 QA 数据库提交到仓库。正常构建和 QA 构建的包名用途不同，发行前核对版本、服务地址和签名。
+## 1.1.1补充：完整入口与标签维护
+
+产品操作见[完整使用说明](../../docs/产品规则.md)，逐项实现见[功能清单](../../docs/功能清单.md)。除前述主页面外，工程还包含 `features/accounts`（数据与反馈）、`profile`、`search`、`insights`、`tags`、`centers`（课程/考试/学期）、`changes`（课次调整）。账户及说明等路由集中在 `lib/app/semester_app.dart`。
+
+`features/tags/tag_intelligence.dart` 可在本机推断标签，不调用模型。共享词表来自 `services/api/app/data/tag_rules.json`，修改后运行：
+
+```powershell
+python scripts/generate-tag-rules.py
+```
+
+这条命令从仓库根目录执行，生成 `apps/mobile/lib/features/tags/tag_rules.g.dart`。两端一致性由后端测试检查。标签页自动整理旧标签，搜索支持旧称；名称行打开关联事项，右侧菜单提供手动重命名和合并。`tag_records_page.dart` 支持跨学期、分页和历史记录，并将其他学期的详情放在正确的编辑会话中。
+
+原生系统入口由 `lib/core/device_surfaces.dart` 和Android `DeviceSurfaces.kt` 协作实现，包括桌面日程卡、快速记录、进行中通知、系统设置与JSON导出；本地闹钟和提醒按钮仍使用 `features/items/android_notifications.dart` 及 `reminder_sync.dart`。改某一种入口后，应分别核对另外两种。
+
+发布时递增 `pubspec.yaml` 的构建号，保持后端 `version.py` 和 `personal_data_page.dart` 中反馈版本一致。本次为1.1.1+12。正式打包后复核包名、地址、签名和版本，再覆盖安装已有App确认账号数据保留。

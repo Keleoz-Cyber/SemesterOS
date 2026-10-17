@@ -1,7 +1,7 @@
 """Owner-scoped tag maintenance with a persisted, single-use confirmation preview."""
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from .models import (CalendarEvent, CalendarTag, CalendarTagAlias, CalendarTagCh
                      PlanBlock, ProgressEntry, Semester, StudyItem, User)
 from .reminder_rules import utcnow
 from .schemas import Input
+from .tag_classifier import GROUPS, group_for, standard_name
 
 router = APIRouter()
 
@@ -92,9 +93,142 @@ def checked_tags(db, user, body):
 
 @router.get('/tags')
 def list_tags(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    tags = db.scalars(select(CalendarTag).where(CalendarTag.user_id == user.id,
-        CalendarTag.merged_into.is_(None)).order_by(CalendarTag.name, CalendarTag.id))
-    return {'owner_id': user.id, 'tags': [tag_value(t) for t in tags]}
+    all_tags = list(db.scalars(select(CalendarTag).where(CalendarTag.user_id == user.id)
+        .order_by(CalendarTag.name, CalendarTag.id)))
+    by_id = {t.id: t for t in all_tags}
+    def canonical_id(tid):
+        seen = set()
+        while tid in by_id and tid not in seen:
+            seen.add(tid)
+            row = by_id[tid]
+            if row.merged_into is None: return tid
+            tid = row.merged_into
+        return None
+    usage = {t.id: [] for t in all_tags if t.merged_into is None}
+    counts = {tid: 0 for tid in usage}
+    # One pass over this account's resources; no per-tag resource queries.
+    for model in (StudyItem, CalendarEvent):
+        rows = db.scalars(select(model).where(model.user_id == user.id)
+            .order_by(model.created_at.desc(), model.id))
+        for row in rows:
+            ids = {canonical_id(tid) for tid in row.payload.get('tag_ids', [])}
+            for tid in ids & usage.keys():
+                counts[tid] += 1
+                if len(usage[tid]) < 32:
+                    usage[tid].append(row.payload.get('title', ''))
+    aliases = {tid: [] for tid in usage}
+    for alias in db.scalars(select(CalendarTagAlias).where(CalendarTagAlias.user_id == user.id)):
+        tid = canonical_id(alias.tag_id)
+        if tid in aliases: aliases[tid].append(alias.normalized)
+    values = []
+    for tag in all_tags:
+        if tag.merged_into is not None: continue
+        group = group_for(tag.name, usage[tag.id])
+        if group == 'other':
+            known = {group_for(name) for name in aliases[tag.id]} - {'other'}
+            if len(known) == 1: group = next(iter(known))
+        values.append({**tag_value(tag), 'group_id': group, 'usage_count': counts[tag.id],
+            'examples': list(dict.fromkeys(usage[tag.id]))[:3], 'aliases': aliases[tag.id]})
+    return {'owner_id': user.id, 'tags': values, 'groups': GROUPS}
+
+
+@router.post('/tags/organize')
+def organize_tags(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Automatically normalize old labels without changing titles or source text."""
+    semesters = lock_scope(db, user)
+    resources, _ = state(db, user, semesters)
+    tags = list(db.scalars(select(CalendarTag).where(CalendarTag.user_id == user.id,
+        CalendarTag.merged_into.is_(None)).order_by(CalendarTag.id)))
+    before = {id(row): canonical_tag_ids(db, user.id, row.payload.get('tag_ids', [])) for row in resources}
+    groups = {}
+    for tag in tags:
+        groups.setdefault(standard_name(tag.name), []).append(tag)
+    merged = renamed = 0
+    changed_ids = set()
+    for name, rows in groups.items():
+        # Follow user-created aliases, so an intentional custom rename wins.
+        target = tag_by_name(db, user.id, name)
+        if target is None:
+            target = next((t for t in rows if t.name == name), rows[0])
+        if target.name != name and standard_name(target.name) == name:
+            save_alias(db, user, target.normalized, target)
+            target.name = name; target.normalized = name.casefold(); target.version += 1
+            renamed += 1; changed_ids.add(target.id)
+        for source in rows:
+            if source.id == target.id: continue
+            save_alias(db, user, source.normalized, target)
+            for alias in db.scalars(select(CalendarTagAlias).where(CalendarTagAlias.user_id == user.id,
+                    CalendarTagAlias.tag_id == source.id)):
+                alias.tag_id = target.id
+            source.merged_into = target.id; source.normalized = '~merged:' + source.id; source.version += 1
+            target.version += 1
+            merged += 1; changed_ids.update((source.id, target.id))
+        db.flush()
+    changed_semesters = set()
+    if changed_ids:
+        from .items import audit
+        from .calendar_events import record
+        now = utcnow().isoformat()
+        for row in resources:
+            if not changed_ids.intersection(before[id(row)]): continue
+            ids = canonical_tag_ids(db, user.id, row.payload.get('tag_ids', []))
+            row.payload = {**row.payload, 'tag_ids': ids}
+            row.version += 1; row.updated_at = now
+            changed_semesters.add(row.semester_id)
+            if isinstance(row, StudyItem): audit(db, row, '系统统一标签名称')
+            else: record(db, row, '系统统一标签名称')
+        for semester in semesters:
+            if semester.id in changed_semesters: semester.revision += 1
+    result = {'owner_id': user.id, 'merged': merged, 'renamed': renamed,
+        'semesters': [{'id': s.id, 'revision': s.revision} for s in semesters if s.id in changed_semesters]}
+    db.commit()
+    return result
+
+
+@router.get('/tags/{tag_id}/records')
+def tag_records(tag_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100),
+                user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Browse actual tagged records, including history and other semesters."""
+    tag = canonical_tag(db, user.id, tag_id)
+    if tag is None:
+        error(404, 'NOT_FOUND', '标签已不存在，请返回刷新')
+    tags = {t.id: t for t in db.scalars(select(CalendarTag).where(CalendarTag.user_id == user.id))}
+    def belongs(tid):
+        seen = set()
+        while tid in tags and tid not in seen:
+            if tid == tag.id: return True
+            seen.add(tid)
+            tid = tags[tid].merged_into
+        return False
+    relevant = {tid for tid in tags if belongs(tid)}
+    semesters = {s.id: s for s in db.scalars(select(Semester).where(Semester.user_id == user.id))}
+    records = []
+    for resource_type, model in [('item', StudyItem), ('event', CalendarEvent)]:
+        for row in db.scalars(select(model).where(model.user_id == user.id)):
+            if row.semester_id not in semesters or not relevant.intersection(row.payload.get('tag_ids', [])):
+                continue
+            records.append({
+                **{k: row.payload.get(k) for k in ('title', 'kind', 'time', 'location')},
+                'id': row.id, 'resource_type': resource_type, 'semester_id': row.semester_id,
+                'version': row.version, 'lifecycle': row.lifecycle,
+            })
+    # Keep undated records visible, then upcoming dates, then recent history.
+    from .reminder_rules import instant, SHANGHAI
+    today = utcnow().astimezone(SHANGHAI).date().isoformat()
+    def ordering(row):
+        time = row.get('time') or {}
+        at = instant(time['at']).timestamp() if time.get('at') else None
+        day = (instant(time['at']).astimezone(SHANGHAI).date().isoformat() if at is not None else time.get('date'))
+        stamp = at if at is not None else (instant(day + 'T00:00:00+08:00').timestamp() if day else 0)
+        history = row['lifecycle'] != 'active' or day is not None and day < today
+        return (2 if history else 1 if day else 0, -stamp if history else stamp,
+                row['resource_type'], row['id'])
+    records.sort(key=ordering)
+    from .academics import serialize_semester
+    page = records[offset:offset + limit]
+    return {'owner_id': user.id, 'tag': tag_value(tag), 'records': page, 'total': len(records),
+            'has_more': offset + len(page) < len(records),
+            'semesters': [serialize_semester(semesters[sid]) for sid in sorted({r['semester_id'] for r in page})]}
 
 
 @router.post('/tags/preview')

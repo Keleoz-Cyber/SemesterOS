@@ -1,0 +1,47 @@
+{
+  "version": "1.1.1",
+  "android_version_code": 12,
+  "date": "2026-10-17",
+  "local_checks": {
+    "flutter_analyze": "no issues",
+    "flutter_tests_passed": 593,
+    "sqlite_api_tests_passed": 606,
+    "postgres_specific_tests_skipped_locally": 12,
+    "school_javascript_tests_passed": 8,
+    "maintained_markdown_files_link_checked": 22,
+    "api_routes_documented": 112,
+    "word_documents_read_back": 2
+  },
+  "artifact": {
+    "apk": "拾日-1.1.1.apk",
+    "bytes": 83933471,
+    "sha256": "b7f050004462f63797d45ca78dbeed2e754e564143bc45df13a861ecd814f8ff",
+    "certificate_sha256": "e19f8c3a6f68146814d9aebe08d98092aa7b724a54422e8d4ba89bd62a763b51",
+    "architectures": ["armeabi-v7a", "arm64-v8a", "x86_64"],
+    "release": true,
+    "debuggable": false,
+    "static_16kb_alignment_verified": true
+  },
+  "deployment": {
+    "health_status": "ok",
+    "health_version": "1.1.1",
+    "database": "postgresql",
+    "migration": "0018_personal_data",
+    "api_and_worker_healthy": true,
+    "release_directory": "/opt/semesteros/releases/v1.1.1-build12"
+  },
+  "device": {
+    "kind": "Android emulator",
+    "android_api": 33,
+    "architecture": "x86_64",
+    "installed_version_name": "1.1.1",
+    "installed_version_code": 12,
+    "upgrade_retained_session": true
+  },
+  "notes": [
+    "GitHub App quality runs PostgreSQL-specific tests in an isolated service; consult the release commit Actions result.",
+    "Tag production smoke used a disposable synthetic account; the account was deleted after validation.",
+    "Device screenshots with personal records remain local and are not included in this public report.",
+    "Physical OEM delivery, real school login and user efficiency were not re-measured for this release."
+  ]
+}

@@ -261,7 +261,7 @@ SCHEMAS = {
     'analyze_schedule': (Range, '计算安排数量、已安排时长、重叠时间的并集、截止事项和缺失信息；不是实际投入或效率评分。'),
     'query_insights': (InsightQuery, '读取与统计页面一致的汇总。全学期使用scope=semester，指定日期用scope=range+from_date/to_date；可按主分类、已查到的稳定标签ID筛选。明确区分安排时长、重叠去重占用、实际进度记录和未知值，不能生成效率评分。'),
     'find_free_windows': (FreeWindows, '查询连续空闲。普通日程问题默认calendar，扣除课程、考试、已预留活动、个人计划和临时不可用时段，不限于学习偏好；默认08:00—22:00，用户指定全天/其他钟点时改每日查询范围。明确查询可学习时间才用study，遵循已保存学习时段。按天返回真实空档，未知结束保留核对提示。'),
-    'prepare_event': (EventChange, '准备一般日程或参考通知的新增/修改/取消预览。fields可含title,time,certainty,reserve_time,details,location,notes,category_id,tags,reminder_minutes。仅作参考、自愿尚未报名、条件未确定或另选他人时reserve_time=false；details.participation_status用optional/conditional/other。本人已确定参加时confirmed及reserve_time=true，不从formal或时间完整推断参加。time遵循precision=exact/date/week/range/unknown；exact用含时区的at,end_at，不猜结束时间。修改时仅传需要改变的完整字段。分类study/research/affairs/life；建议1到3标签。不能改课程或考试；不能擅自移动固定安排。'),
+    'prepare_event': (EventChange, '准备一般日程或参考通知的新增/修改/取消预览。fields可含title,time,certainty,reserve_time,details,location,notes,category_id,tags,reminder_minutes。仅作参考、自愿尚未报名、条件未确定或另选他人时reserve_time=false；details.participation_status用optional/conditional/other。本人已确定参加时confirmed及reserve_time=true，不从formal或时间完整推断参加。time遵循precision=exact/date/week/range/unknown；exact用含时区的at,end_at，不猜结束时间。修改时仅传需要改变的完整字段。新增的分类和标签由程序生成，不自行编造。用户明确要求修改标签或分类时才提供对应字段，分类可用study/research/affairs/life。不能改课程或考试；不能擅自移动固定安排。'),
     'prepare_item': (ItemNew, '准备新增作业、个人任务或学校考试通知的确认预览。fields含kind(task或assignment或exam),title,time，可含course_id,remaining_minutes,priority,notes,reminders。日期只有天时precision=date，勿推断23:59；未说耗时不猜。'),
     'prepare_item_change': (ItemChange, '按用户请求更新已有任务/作业的截止、地点、材料、渠道、条件，以及start_policy/earliest_start_at。明确“从现在可以安排”用now，指定最早时刻用at。先find_records定位；fields只传修改字段，details合并其余细节。考试走prepare_exam_change，课程走prepare_course_change。'),
     'prepare_task_change': (TaskChange, '准备任务标题/剩余分钟/是否拆分，或任务考试提醒的修改预览。先find_records定位item_id；同名先问。update_task使用task_patch；update_reminder使用reminder_action和reminder(mode/lead_minutes/trigger_at/purpose)。有多条提醒时提供reminder_id。不更改课程或考试时间，不自行取消已有计划。'),
@@ -503,6 +503,7 @@ def execute_tool(name, raw, db, user, thread, state, source):
         kind = {'prepare_event': 'event', 'prepare_item': 'item', 'prepare_batch': 'batch'}[name]
         origin_source, origin_ref, input_sources = draft_origin(db, user, thread, state, args.draft_run_id, kind, source)
         source_guard(db, user, sid, origin_ref)
+    label_source = source if origin_source == source else origin_source + '\n' + source
     if name == 'prepare_undo':
         if args.run_id not in state.get('known_action_ids',[]):error(422,'READ_FIRST','请先查询最近保存的操作')
         from .agent_undo import prepare_undo
@@ -605,6 +606,8 @@ def execute_tool(name, raw, db, user, thread, state, source):
         fields=guard_event_class_time(fields,s.periods,evidence)
         if args.action=='create':
             if args.event_id: error(422,'INVALID_TARGET','新增日程不需要已有日程编号')
+            from .tag_classifier import automatic_fields
+            fields=automatic_fields(fields, label_source)
             body=EventFields.model_validate({**fields,'semester_id':sid,'expected_revision':s.revision,'source_text':origin_source})
         else:
             row=events.owned_event(db,user,args.event_id)
@@ -645,6 +648,10 @@ def execute_tool(name, raw, db, user, thread, state, source):
         fields=normalize_notice_task_time(fields,state,source)
         allowed=set(ItemCreate.model_fields)-{'semester_id','source_id','candidate_id','source_text'}
         if set(fields)-allowed: error(422,'INVALID_FIELDS','请只填写事项本身的信息')
+        from .tag_classifier import automatic_fields
+        linked = db.scalar(select(CourseMeeting).where(CourseMeeting.id==fields.get('course_id'),
+            CourseMeeting.user_id==user.id,CourseMeeting.semester_id==sid)) if fields.get('course_id') else None
+        fields=automatic_fields(fields, label_source, course_title=linked.payload['title'] if linked else '')
         body=ItemCreate.model_validate({**fields,'certainty':args.fields.certainty,
             'semester_id':sid,'expected_revision':s.revision,'source_text':origin_source})
         if 'category_id' not in fields and body.kind in ('assignment','exam'):

@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../../ui/app_loading.dart';
 import '../../ui/app_controls.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,8 @@ import '../../ui/empty_scene.dart';
 import '../../ui/v2/motion/skeleton.dart';
 import '../../ui/v2/motion/rolling_number.dart';
 import '../../ui/v2/shiri_tokens.dart' show ShiriRadius;
+import 'tag_intelligence.dart';
+import 'tag_records_page.dart';
 
 class TagManagementController extends ChangeNotifier {
   final ItemsController items;
@@ -56,7 +59,76 @@ class TagManagementController extends ChangeNotifier {
   Future<void> _fetchTags() async {
     final data = await items.api.request('GET', '/tags');
     if (!active) return;
-    tags = items.rows(owned(data)['tags']);
+    final result = owned(data);
+    tags = TagIntelligence.organize(items.rows(result['tags']));
+  }
+
+  void _observe(Map<String, dynamic> receipt) {
+    for (final row in items.rows(receipt['semesters'])) {
+      if (row['id'] == semesterId && row['revision'] is int) {
+        items.observeRevision(row['id'], row['revision']);
+      }
+    }
+  }
+
+  Future<void> _organize() async {
+    var changed = false;
+    try {
+      final value = await items.api.request('POST', '/tags/organize', data: {});
+      if (!active) return;
+      final result = owned(value);
+      changed =
+          (result['merged'] as int? ?? 0) + (result['renamed'] as int? ?? 0) >
+          0;
+      _observe(result);
+    } on ApiFailure catch (e) {
+      if (!active) return;
+      if (e.statusCode != 404 && e.statusCode != 405) rethrow;
+      // Older servers already have safe, version-checked rename/merge APIs.
+      // Run those automatically; no suggestion card or confirmation dialog.
+      final limit = tags.length * 2 + 1;
+      for (var attempt = 0; active && attempt < limit; attempt++) {
+        final source = tags
+            .where(
+              (t) => TagIntelligence.standardName('${t['name']}') != t['name'],
+            )
+            .firstOrNull;
+        if (source == null) break;
+        final name = TagIntelligence.standardName('${source['name']}');
+        final target = tags
+            .where((t) => t['id'] != source['id'] && t['name'] == name)
+            .firstOrNull;
+        final preview = owned(
+          await items.api.request(
+            'POST',
+            '/tags/preview',
+            data: {
+              'operation': target == null ? 'rename' : 'merge',
+              'source_id': source['id'],
+              if (target == null) 'name': name else 'target_id': target['id'],
+            },
+          ),
+        );
+        if (!active) return;
+        final receipt = owned(
+          await items.api.request(
+            'POST',
+            '/tags/changes/${preview['token']}/apply',
+            data: {},
+          ),
+        );
+        if (!active) return;
+        _observe(receipt);
+        changed = true;
+        await _fetchTags();
+      }
+    }
+    if (changed && active) {
+      // Refresh other views without making tag management wait for calendar,
+      // risk and notification synchronization to finish.
+      unawaited(items.refresh());
+      if (active) await _fetchTags();
+    }
   }
 
   Future<void> load() async {
@@ -66,6 +138,7 @@ class TagManagementController extends ChangeNotifier {
     emit();
     try {
       await _fetchTags();
+      if (active) await _organize();
     } catch (e) {
       if (active) error = userError(e);
     } finally {
@@ -171,6 +244,18 @@ class TagManagementPage extends StatefulWidget {
 
 class _TagManagementPageState extends State<TagManagementPage> {
   late final TagManagementController c;
+  String query = '';
+  List<Map<String, dynamic>> get visibleTags => c.tags.where((tag) {
+    final group = TagIntelligence.groups.firstWhere(
+      (g) => g['id'] == tag['group_id'],
+    );
+    return (query.isNotEmpty &&
+            TagIntelligence.canonicalName('${tag['name']}') ==
+                TagIntelligence.canonicalName(query)) ||
+        TagIntelligence.normalize(
+          '${tag['name']} ${group['name']} ${(tag['aliases'] as List? ?? []).join(' ')}',
+        ).contains(TagIntelligence.normalize(query));
+  }).toList();
   @override
   void initState() {
     super.initState();
@@ -180,6 +265,17 @@ class _TagManagementPageState extends State<TagManagementPage> {
 
   void _changed() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> openTag(Map<String, dynamic> tag) async {
+    if (!c.active || c.busy || c.preview != null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TagRecordsPage(controller: widget.controller, tag: tag),
+      ),
+    );
+    if (mounted && c.active) await c.load();
   }
 
   @override
@@ -398,16 +494,6 @@ class _TagManagementPageState extends State<TagManagementPage> {
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 20),
-                  child: Text(
-                    '所有学期共用 · ${c.tags.length}个标签',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: CampusColors.muted,
-                    ),
-                  ),
-                ),
                 if (c.error != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -451,12 +537,52 @@ class _TagManagementPageState extends State<TagManagementPage> {
                       ],
                     ),
                   ),
-                if (c.tags.isNotEmpty) const SectionHeading('现有标签'),
-                for (final tag in c.tags) tagRow(tag),
+                if (c.tags.isNotEmpty) ...[
+                  AppField(
+                    key: const Key('tag-management-search'),
+                    decoration: const InputDecoration(
+                      hintText: '搜索标签或分组',
+                      prefixIcon: Icon(Icons.search_rounded),
+                    ),
+                    onChanged: (value) => setState(() => query = value),
+                  ),
+                  for (final group in TagIntelligence.groups)
+                    if (visibleTags.any(
+                      (tag) => tag['group_id'] == group['id'],
+                    ))
+                      tagGroup(
+                        group,
+                        visibleTags
+                            .where((tag) => tag['group_id'] == group['id'])
+                            .toList(),
+                      ),
+                  if (visibleTags.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('没有匹配的标签'),
+                    ),
+                ],
               ],
             ),
           ),
   );
+
+  Widget tagGroup(Map<String, String> group, List<Map<String, dynamic>> tags) =>
+      Column(
+        key: ValueKey('tag-group-${group['id']}'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionHeading('${group['name']} · ${tags.length}'),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Column(children: [for (final tag in tags) tagRow(tag)]),
+          ),
+        ],
+      );
 
   Widget tagRow(Map<String, dynamic> tag) => Container(
     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -465,32 +591,57 @@ class _TagManagementPageState extends State<TagManagementPage> {
     ),
     child: LayoutBuilder(
       builder: (context, constraints) {
-        final name = Row(
-          children: [
-            const Icon(Icons.label_outline, size: 20, color: CampusColors.teal),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '${tag['name']}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+        final name = AppTile(
+          key: ValueKey('open-tag-${tag['id']}'),
+          onTap: c.busy || c.preview != null ? null : () => openTag(tag),
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: CampusColors.muted,
+            size: 18,
+          ),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.label_outline,
+                size: 20,
+                color: CampusColors.teal,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${tag['name']}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (tag['usage_count'] is int)
+                      Text(
+                        '${tag['usage_count']}项使用',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: CampusColors.muted,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
-        final actions = Wrap(
-          spacing: 4,
-          children: [
-            AppOutlineButton(
-              onPressed: c.busy || c.preview != null ? null : () => rename(tag),
-              child: const Text('重命名'),
-            ),
-            AppTextButton(
-              onPressed: c.busy || c.preview != null || c.tags.length < 2
-                  ? null
-                  : () => merge(tag),
+        final actions = PopupMenuButton<String>(
+          tooltip: '管理${tag['name']}',
+          enabled: !c.busy && c.preview == null,
+          icon: const Icon(Icons.more_horiz_rounded, color: CampusColors.muted),
+          onSelected: (value) => value == 'rename' ? rename(tag) : merge(tag),
+          itemBuilder: (_) => [
+            const PopupMenuItem(value: 'rename', child: Text('重命名')),
+            PopupMenuItem(
+              value: 'merge',
+              enabled: c.tags.length > 1,
               child: const Text('合并到'),
             ),
           ],

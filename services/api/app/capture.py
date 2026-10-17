@@ -69,20 +69,24 @@ def capture_text(body: CaptureInput, request: Request, user: User = Depends(curr
             raise ValueError('非固定日程不能附带活动字段')
         if parsed.intent == 'create_event':
             from .event_schemas import EventFields
+            from .tag_classifier import automatic_fields
             if parsed.item is not None or parsed.event is None:
                 raise ValueError('固定日程需要独立的活动字段')
-            event = EventFields.model_validate({**parsed.event, 'semester_id': s.id,
+            event = EventFields.model_validate({**automatic_fields(parsed.event, body.text), 'semester_id': s.id,
                                                'expected_revision': s.revision}).model_dump(mode='json', exclude={'expected_revision'})
             if event['time']['week'] and event['time']['week'] > s.total_weeks:
                 raise ValueError('周次越界')
             event['source_text'] = body.text
             event['candidate_id'] = None
         if parsed.intent == 'create_item':
+            from .tag_classifier import automatic_fields
             if parsed.item is None:
                 raise ValueError('新增缺少事项')
             if isinstance(parsed.item.get('time'), dict):
                 parsed.item['time']['day_end_confirmed'] = False
-            item = ItemFields.model_validate({**parsed.item, 'semester_id': s.id}).model_dump(mode='json')
+            course_title = next((c['title'] for c in courses if c['id'] == parsed.item.get('course_id')), '')
+            item = ItemFields.model_validate({**automatic_fields(parsed.item, body.text, course_title=course_title),
+                'semester_id': s.id}).model_dump(mode='json')
             if item['course_id'] and item['course_id'] not in {c['id'] for c in courses}:
                 raise ValueError('课程不在白名单')
             if item['time']['week'] and item['time']['week'] > s.total_weeks:

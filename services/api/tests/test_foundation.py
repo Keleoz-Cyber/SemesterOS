@@ -41,9 +41,9 @@ def register(client, username="student_a"):
 
 
 def test_public_release_version_matches_health_and_openapi(client):
-    assert client.app.version == '1.1.0'
-    assert client.get('/health').json()['version'] == '1.1.0'
-    assert client.get('/openapi.json').json()['info']['version'] == '1.1.0'
+    assert client.app.version == '1.1.1'
+    assert client.get('/health').json()['version'] == '1.1.1'
+    assert client.get('/openapi.json').json()['info']['version'] == '1.1.1'
 
 
 def test_eight_character_password_registration_login_and_recovery(client):
