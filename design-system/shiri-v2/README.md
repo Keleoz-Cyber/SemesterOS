@@ -1,53 +1,48 @@
 # 晴日界面资料
 
-“晴日”是拾日当前使用的界面样式：浅蓝灰背景、深色文字、蓝色主要操作，天空和波浪用于今日页头部，底部使用悬浮导航和助手入口。
+“晴日”就是拾日现在这套界面：浅蓝灰底、深色字、蓝色主操作，今日页头上是天空和波浪，底部是悬浮导航加助手入口。
 
-这份目录保存界面数值和说明。真正运行的 Flutter 代码在 `apps/mobile/lib/ui/v2`，页面在 `apps/mobile/lib/features`。当前目录没有独立原型、目标截图或另一份 Flutter 工程，不需要再执行一次“把参考实现复制进 App”的步骤。
+这个目录只放数值和说明。真正跑起来的代码在 `apps/mobile/lib/ui/v2`，页面在 `apps/mobile/lib/features`。这里没有独立原型，没有目标截图，也没有另一份 Flutter 工程，所以不存在“把参考实现同步进 App”这种步骤，以前写文档的人容易误会。
 
-## 从哪里看起
+## 从哪儿看起
 
-1. [界面维护规则](../shiri/MASTER.md)：保存、未知时间、请假、无障碍和截图等共同要求。
-2. [界面说明](DESIGN.md)：当前颜色、排版、组件和动画的具体做法。
-3. [tokens.json](tokens/tokens.json)：颜色、字体、间距、圆角、布局和动效参数，文件版本为 `2.0.0`。
-4. `apps/mobile/lib/ui/v2/shiri_tokens.dart`：Flutter 使用的对应数值和主题扩展。
+1. [界面维护规则](../shiri/MASTER.md)：保存、未知时间、请假、无障碍、截图这些共同要求。
+2. [界面说明](DESIGN.md)：现在颜色、排版、组件、动画具体怎么做的。
+3. [tokens.json](tokens/tokens.json)：颜色、字体、间距、圆角、布局、动效参数，文件版本 `2.0.0`。
+4. `apps/mobile/lib/ui/v2/shiri_tokens.dart`：Flutter 里对应的数值和主题扩展。
 5. `apps/mobile/lib/ui/v2/shiri_theme.dart`：Material 主题入口。
 
-应用版本与 tokens 版本是两回事。App 的版本由 `apps/mobile/pubspec.yaml` 管理，不能因为设计数值文件是 2.0.0 就把软件写成 2.0。
+应用版本和 tokens 版本是两码事。App 的版本在 `apps/mobile/pubspec.yaml` 里，现在是 1.1.1。设计数值文件是 2.0.0 不代表软件也是 2.0，别混着写。
 
-## 代码位置
+## 代码在哪
 
-| 内容 | 当前实现 |
+| 内容 | 现在的实现 |
 | --- | --- |
-| 浅色主题 | `shiriLightTheme()`，由 App 入口接入 |
-| 高对比主题 | `lib/ui/campus_theme.dart` 和 `lib/ui/accessibility.dart` |
+| 浅色主题 | `shiriLightTheme()`，App 入口接的就是它 |
+| 高对比主题 | `lib/ui/campus_theme.dart`、`lib/ui/accessibility.dart` |
 | Forui 控件适配 | `lib/ui/forui_theme.dart` |
-| 按钮、输入、列表和弹窗 | `lib/ui/app_controls.dart` |
-| 通用弹层与键盘避让 | `lib/ui/app_sheet.dart` |
+| 按钮、输入、列表、弹窗 | `lib/ui/app_controls.dart` |
+| 通用弹层和键盘避让 | `lib/ui/app_sheet.dart` |
 | 导航坞和助手胶囊 | `lib/ui/v2/widgets/glass_dock.dart`、`lib/ui/app_navigation.dart` |
-| 天空、太阳和波浪 | `lib/ui/v2/widgets/sky_header.dart`、`wave_edge.dart` |
+| 天空、太阳、波浪 | `lib/ui/v2/widgets/sky_header.dart`、`wave_edge.dart` |
 | 周课表块 | `lib/ui/v2/widgets/schedule_block.dart` |
-| 分段选择、完成勾选、数字和骨架 | `lib/ui/v2/motion/` |
+| 分段选择、完成勾选、数字、骨架 | `lib/ui/v2/motion/` |
 | 周课表滑动切周 | `lib/features/calendar/calendar_week_pager.dart` |
 
-表内的相对代码路径从 `apps/mobile` 开始。品牌标志、导航图标和空状态插画位于 `apps/mobile/assets`，使用 `flutter_svg` 加载。
+表里的路径从 `apps/mobile` 开始算。品牌标志、导航图标、空状态插画在 `apps/mobile/assets`，用 `flutter_svg` 读。
 
-## 当前实现的范围
+## 现在做到哪一步
 
-主入口接入浅色主题和高对比主题。tokens 和主题代码还提供深色数值，但 App 入口没有接入 `darkTheme` 或主题切换设置，因此不能把深色模式列为已经交付的用户功能。
+主入口接的是浅色主题和高对比主题。tokens 和主题代码里还有深色数值，但入口没接 `darkTheme`，也没有切换设置，所以深色模式不能算成已交付的功能。
 
-四个主页面保留各自状态和滚动位置。周课表使用横向分页；底部点击和任务状态选择取消大块灰色按压反馈。助手使用统一可拖动面板；当前不是从底部胶囊变形成面板的独立容器动画。
+四个主页面各自保留状态和滚动位置。周课表横向分页；底部点击和任务状态选择去掉了大块灰色按压反馈。助手是统一的可拖动面板，现在没有“从底部胶囊变形展开”那种容器动画。
 
-组件有可复用参数，页面也仍有局部布局数值。修改 tokens 不会自动更新全部局部样式；维护时要同时检查调用处，尤其是课表密集信息、表单和窄屏。
+组件留了可复用参数，但页面里仍有写死的局部数值。改 tokens 不会自动更新所有局部样式，得顺手看调用处，尤其是课表密集信息、表单和窄屏。
 
 ## 怎么维护
 
-改颜色、字体或通用尺寸时，同时更新 JSON 和 Flutter 数值，检查兼容的 `campus_theme.dart` 与 Forui 主题。改某一页的布局时，先调整该页；确实重复的部分再提到共用组件，避免为“统一”把不同内容都包成同一种卡片。
+改颜色、字体、通用尺寸时，JSON 和 Flutter 数值一起改，再看一眼 `campus_theme.dart` 和 Forui 主题有没有被带偏。改单页布局先改那一页；确实重复了再往共用组件提——为了“统一”把不同的东西都塞进同一种卡片，那不是统一，是偷懒。
 
-变更后运行 `flutter analyze` 和相关测试，使用模拟器检查普通字号、360 dp 宽加 1.6 倍字号、减少动画、高对比及键盘展开。截图应来自当前 App，并标明版本和状态。这里的说明描述实现和维护方法，不代替一次新的运行验收。
-## 1.1.1标签与关联列表
+改完跑 `flutter analyze` 和相关测试，再用模拟器看普通字号、360 dp 宽加 1.6 倍字号、减少动画、高对比、键盘弹开这几种。截图从当前 App 里取，标清版本和状态。这份说明讲的是实现思路和改法，代替不了一次新的运行验收。
 
-本版标签管理保持搜索框和按用途分组的列表。自动整理静默执行，不显示完成提示，不增加一排分类筛选选项。名称行可点击，展示关联事项数并打开实际记录；右侧更多菜单保留手动管理。
-
-关联列表显示事项标题、类型、时间、地点和完成或取消状态；其他学期补充学期名，点记录进入对应详情。加载、错误、重试和空状态分别呈现，切换账号后清除旧结果。标签合并只改变归属，标题、原文及时间保持原样。
-
-界面功能全貌见[使用说明](../../docs/产品规则.md)及[功能清单](../../docs/功能清单.md)，控件继续复用AppTile和现有主题。应用版本1.1.1与设计tokens版本独立。
+1.1.1 那轮标签页的变化（静默整理、点名称看关联记录、跨学期列表）写在[界面说明](DESIGN.md)里，这里不重复。
